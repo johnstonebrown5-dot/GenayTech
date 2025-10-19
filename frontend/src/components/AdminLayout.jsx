@@ -29,6 +29,7 @@ export default function AdminLayout({ children }){
   const [currentTerm, setCurrentTerm] = useState(null)
   const [currentYear, setCurrentYear] = useState(null)
   const [unreadCount, setUnreadCount] = useState(0)
+  const [selfActive, setSelfActive] = useState(undefined)
 
   // Close mobile drawer on route change
   useEffect(() => { setIsMobileOpen(false) }, [pathname])
@@ -45,6 +46,20 @@ export default function AdminLayout({ children }){
         }
       } catch (e) {
         if (mounted) { setSchoolName(''); setSchoolLogo('') }
+      }
+    })()
+    return () => { mounted = false }
+  }, [])
+
+  // Ensure we have an up-to-date active status for the current user
+  useEffect(() => {
+    let mounted = true
+    ;(async () => {
+      try {
+        const { data } = await api.get('/auth/me/')
+        if (mounted) setSelfActive(typeof data?.is_active === 'boolean' ? data.is_active : undefined)
+      } catch {
+        if (mounted) setSelfActive(undefined)
       }
     })()
     return () => { mounted = false }
@@ -185,6 +200,12 @@ export default function AdminLayout({ children }){
                   <span className="text-white text-xs font-medium">{(user.first_name || user.username || 'U')[0].toUpperCase()}</span>
                 </div>
                 <span className="text-sm text-gray-700 font-medium max-w-[10rem] truncate">{user.first_name || user.username}</span>
+                {typeof (selfActive ?? user.is_active) === 'boolean' && (
+                  <span className={`ml-1 inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full border ${(selfActive ?? user.is_active) ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
+                    <span className={`inline-block w-2 h-2 rounded-full ${(selfActive ?? user.is_active) ? 'bg-green-500' : 'bg-red-500'}`}></span>
+                    {(selfActive ?? user.is_active) ? 'Active' : 'Inactive'}
+                  </span>
+                )}
               </div>
             )}
             <button

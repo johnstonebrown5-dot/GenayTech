@@ -4,6 +4,7 @@ import api from '../api'
 import AdminLayout from '../components/AdminLayout'
 import Modal from '../components/Modal'
 import { useNotification } from '../components/NotificationContext'
+import LoadingOverlay from '../components/LoadingOverlay'
 
 export default function AdminClasses(){
   const [classes, setClasses] = useState([])
@@ -17,27 +18,51 @@ export default function AdminClasses(){
   const [showClassModal, setShowClassModal] = useState(false)
   const [showSubjectModal, setShowSubjectModal] = useState(false)
   const [showStreamModal, setShowStreamModal] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [busy, setBusy] = useState(false)
+  const [busyMessage, setBusyMessage] = useState('Processing...')
+  const [filterGrade, setFilterGrade] = useState('')
+  const [filterStream, setFilterStream] = useState('')
+  const [search, setSearch] = useState('')
+  const [streamStats, setStreamStats] = useState({}) // { [streamId]: { classes: number, students: number, loading: boolean } }
 
   const { showSuccess, showError } = useNotification()
 
   const load = async () => {
-    const [cl, sbj, st] = await Promise.all([
-      api.get('/academics/classes/'),
-      api.get('/academics/subjects/'),
-      api.get('/academics/streams/'),
-    ])
-    const clArr = Array.isArray(cl.data) ? cl.data : (Array.isArray(cl.data?.results) ? cl.data.results : [])
-    const sbjArr = Array.isArray(sbj.data) ? sbj.data : (Array.isArray(sbj.data?.results) ? sbj.data.results : [])
-    const stArr = Array.isArray(st.data) ? st.data : (Array.isArray(st.data?.results) ? st.data.results : [])
-    setClasses(clArr)
-    setSubjects(sbjArr)
-    setStreams(stArr)
+    setLoading(true)
+    try {
+      const [cl, sbj, st] = await Promise.all([
+        api.get('/academics/classes/'),
+        api.get('/academics/subjects/'),
+        api.get('/academics/streams/'),
+      ])
+      const clArr = Array.isArray(cl.data) ? cl.data : (Array.isArray(cl.data?.results) ? cl.data.results : [])
+      const sbjArr = Array.isArray(sbj.data) ? sbj.data : (Array.isArray(sbj.data?.results) ? sbj.data.results : [])
+      const stArr = Array.isArray(st.data) ? st.data : (Array.isArray(st.data?.results) ? st.data.results : [])
+      // Fetch full details for each class since list endpoint returns a lite serializer
+      const detailed = await Promise.all(
+        (clArr || []).map(async (c) => {
+          try {
+            const res = await api.get(`/academics/classes/${c.id}/`)
+            return res.data || c
+          } catch {
+            return c
+          }
+        })
+      )
+      setClasses(detailed)
+      setSubjects(sbjArr)
+      setStreams(stArr)
+    } finally {
+      setLoading(false)
+    }
   }
   useEffect(()=>{ load() },[])
 
   const submit = async (e) => {
     e.preventDefault()
     try {
+      setBusy(true); setBusyMessage(editing ? 'Updating class…' : 'Creating class…')
       if (editing) {
         await api.put(`/academics/classes/${editing}/`, form)
         showSuccess('Class Updated', 'Class has been successfully updated.')
@@ -49,6 +74,8 @@ export default function AdminClasses(){
       load()
     } catch (err) {
       showError('Failed to Save Class', 'There was an error saving the class. Please try again.')
+    } finally {
+      setBusy(false)
     }
   }
 
@@ -62,11 +89,14 @@ export default function AdminClasses(){
   const del = async (id) => {
     if (!confirm('Delete this class?')) return
     try {
+      setBusy(true); setBusyMessage('Deleting class…')
       await api.delete(`/academics/classes/${id}/`)
       load()
       showSuccess('Class Deleted', 'Class has been successfully deleted.')
     } catch (err) {
       showError('Failed to Delete Class', 'There was an error deleting the class. Please try again.')
+    } finally {
+      setBusy(false)
     }
   }
 
@@ -74,18 +104,22 @@ export default function AdminClasses(){
     e.preventDefault()
     if (!newSubject.code || !newSubject.name) return
     try {
+      setBusy(true); setBusyMessage('Creating subject…')
       await api.post('/academics/subjects/', newSubject)
       setNewSubject({ code:'', name:'' })
       load()
       showSuccess('Subject Created', `Subject ${newSubject.name} (${newSubject.code}) has been successfully created.`)
     } catch (err) {
       showError('Failed to Create Subject', 'There was an error creating the subject. Please try again.')
+    } finally {
+      setBusy(false)
     }
   }
 
   const saveStream = async () => {
     if (!newStream.name) return;
     try {
+      setBusy(true); setBusyMessage(editingStream ? 'Updating stream…' : 'Creating stream…')
       if (editingStream) {
         await api.put(`/academics/streams/${editingStream}/`, newStream);
         showSuccess('Stream Updated', 'Stream has been successfully updated.');
@@ -99,17 +133,22 @@ export default function AdminClasses(){
       load();
     } catch (err) {
       showError('Failed to Save Stream', 'There was an error saving the stream. Please try again.');
+    } finally {
+      setBusy(false)
     }
   };
 
   const delStream = async (id) => {
     if (!confirm('Delete this stream?')) return;
     try {
+      setBusy(true); setBusyMessage('Deleting stream…')
       await api.delete(`/academics/streams/${id}/`);
       load();
       showSuccess('Stream Deleted', 'Stream has been successfully deleted.');
     } catch (err) {
       showError('Failed to Delete Stream', 'There was an error deleting the stream. Please try again.');
+    } finally {
+      setBusy(false)
     }
   };
 
@@ -119,13 +158,187 @@ export default function AdminClasses(){
     setShowStreamModal(true)
   }
 
+  const normalizeGrade = (g) => {
+    try{
+      const m = String(g||'').match(/\d+/)
+      return m ? `Grade ${parseInt(m[0],10)}` : String(g||'')
+    }catch{ return String(g||'') }
+  }
+  const classMatches = (c) => {
+    const gradeOk = !filterGrade || normalizeGrade(c.grade_level) === normalizeGrade(filterGrade)
+    const streamId = c.stream_detail?.id ?? c.stream
+    const streamOk = !filterStream || String(streamId) === String(filterStream)
+    const q = search.trim().toLowerCase()
+    if (!q) return gradeOk && streamOk
+    const teacher = c.teacher_detail ? `${c.teacher_detail.first_name||''} ${c.teacher_detail.last_name||''} ${c.teacher_detail.username||''}`.toLowerCase() : ''
+    const subjectsTxt = Array.isArray(c.subjects) ? c.subjects.map(s=>`${s.code} ${s.name}`).join(' ').toLowerCase() : ''
+    const streamName = (c.stream_detail?.name || streams.find(s=>String(s.id)===String(streamId))?.name || '').toLowerCase()
+    const hay = `${c.name||''} ${normalizeGrade(c.grade_level)} ${teacher} ${streamName} ${subjectsTxt}`.toLowerCase()
+    return gradeOk && streamOk && hay.includes(q)
+  }
+  const filteredClasses = classes.filter(classMatches)
+
+  const gradeColor = (g) => {
+    const n = (() => { try { const m = String(g||'').match(/\d+/); return m ? parseInt(m[0],10) : null } catch { return null } })()
+    const palette = [
+      { border:'border-blue-200', badgeBg:'bg-blue-50', badgeText:'text-blue-700' },
+      { border:'border-emerald-200', badgeBg:'bg-emerald-50', badgeText:'text-emerald-700' },
+      { border:'border-amber-200', badgeBg:'bg-amber-50', badgeText:'text-amber-700' },
+      { border:'border-violet-200', badgeBg:'bg-violet-50', badgeText:'text-violet-700' },
+      { border:'border-rose-200', badgeBg:'bg-rose-50', badgeText:'text-rose-700' },
+      { border:'border-cyan-200', badgeBg:'bg-cyan-50', badgeText:'text-cyan-700' },
+      { border:'border-fuchsia-200', badgeBg:'bg-fuchsia-50', badgeText:'text-fuchsia-700' },
+      { border:'border-lime-200', badgeBg:'bg-lime-50', badgeText:'text-lime-700' },
+      { border:'border-sky-200', badgeBg:'bg-sky-50', badgeText:'text-sky-700' },
+    ]
+    const idx = n ? Math.max(1, Math.min(9, n)) - 1 : 0
+    return palette[idx]
+  }
+
+  const renderCard = (c) => {
+    const pal = gradeColor(c.grade_level)
+    const streamName = (() => {
+      const fromDetail = c?.stream_detail?.name
+      if (fromDetail) return fromDetail
+      const sid = c.stream_detail?.id ?? c.stream
+      return streams.find(s => String(s.id) === String(sid))?.name || '-'
+    })()
+    const teacherName = (() => {
+      const t = c?.teacher_detail
+      if (!t) return '-'
+      const full = [t.first_name, t.last_name].filter(Boolean).join(' ').trim()
+      return full || t.username || '-'
+    })()
+    return (
+      <div key={c.id} className={`group relative bg-white border ${pal.border} rounded-lg shadow-sm hover:shadow-md transition`}>
+        <div className="p-4">
+          <div className="flex items-start justify-between">
+            <Link to={`/admin/classes/${c.id}`} className="text-base font-semibold text-gray-900 hover:text-blue-700">
+              {c.name}
+            </Link>
+            <span className={`ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${pal.badgeBg} ${pal.badgeText}`}>
+              {c.grade_level}
+            </span>
+          </div>
+          <div className="mt-2 text-sm text-gray-600">Stream: {streamName}</div>
+          <div className="mt-1 text-sm text-gray-600">Class Teacher: {teacherName}</div>
+          <div className="mt-3 flex flex-wrap gap-1">
+            {Array.isArray(c.subjects) && c.subjects.length>0 ? (
+              <>
+                {c.subjects.slice(0,4).map(s => (
+                  <span key={s.id} className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-gray-100 text-gray-700">{s.code}</span>
+                ))}
+                {c.subjects.length>4 && (
+                  <span className="text-xs text-gray-500">+{c.subjects.length-4} more</span>
+                )}
+              </>
+            ) : (
+              <span className="text-xs text-gray-400">No subjects</span>
+            )}
+          </div>
+        </div>
+        <div className="px-4 py-3 border-t bg-gray-50 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <Link to={`/admin/classes/${c.id}?tab=results`} className="text-violet-700 hover:underline">View Results</Link>
+            <Link to={`/admin/classes/${c.id}?tab=subjects`} className="text-amber-700 hover:underline">Assign Subjects</Link>
+          </div>
+          <div className="flex items-center gap-3">
+            <button onClick={()=>edit(c)} className="text-blue-600 hover:underline">Edit</button>
+            <button onClick={()=>del(c.id)} className="text-red-600 hover:underline">Delete</button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Compute per-stream stats: number of classes and number of students
+  const fetchAllPaged = async (url) => {
+    try{
+      let out = []
+      let next = url
+      let guard = 0
+      while (next && guard < 50){
+        const res = await api.get(next)
+        const d = res?.data
+        if (Array.isArray(d)) { out = d; break }
+        if (d && Array.isArray(d.results)) { out = out.concat(d.results); next = d.next; guard++; continue }
+        break
+      }
+      return out
+    }catch{ return [] }
+  }
+
+  const countStudentsForKlass = async (klassId) => {
+    const list = await fetchAllPaged(`/academics/students/?klass=${klassId}`)
+    return Array.isArray(list) ? list.length : 0
+  }
+
+  useEffect(() => {
+    // Build classes count immediately; students count asynchronously
+    const byStream = {}
+    for (const s of streams){ byStream[String(s.id)] = { classes: 0, students: 0, loading: true } }
+    for (const c of classes){
+      const sid = String(c.stream_detail?.id ?? c.stream)
+      if (!byStream[sid]) byStream[sid] = { classes: 0, students: 0, loading: true }
+      byStream[sid].classes++
+    }
+    setStreamStats(byStream)
+    // Fetch students per class and aggregate
+    ;(async () => {
+      try{
+        const nextStats = { ...byStream }
+        for (const s of streams){
+          const sid = String(s.id)
+          const classIds = classes.filter(c => String(c.stream_detail?.id ?? c.stream) === sid).map(c => c.id)
+          let total = 0
+          for (const cid of classIds){ total += await countStudentsForKlass(cid) }
+          if (!nextStats[sid]) nextStats[sid] = { classes: classIds.length, students: 0, loading: false }
+          nextStats[sid].students = total
+          nextStats[sid].loading = false
+        }
+        setStreamStats(nextStats)
+      }catch{}
+    })()
+  }, [classes, streams])
+
   return (
     <AdminLayout>
       <div>
+        {busy && <LoadingOverlay message={busyMessage} transparent />}
         <div className="space-y-6">
           <div className="flex items-center justify-between">
             <h1 className="text-xl font-semibold tracking-tight">Manage Classes</h1>
             <div className="text-sm text-gray-500">Create and organize classes, subjects, and streams</div>
+          </div>
+
+          {/* Filters */}
+          <div className="bg-white rounded-lg shadow p-4 border border-gray-100 grid gap-3 md:grid-cols-4">
+            <label className="text-sm">
+              Grade
+              <select value={filterGrade} onChange={e=>setFilterGrade(e.target.value)} className="border p-2 rounded w-full mt-1">
+                <option value="">All Grades</option>
+                {Array.from({length:9}, (_,i)=>`Grade ${i+1}`).map(g => (
+                  <option key={g} value={g}>{g}</option>
+                ))}
+              </select>
+            </label>
+            <label className="text-sm">
+              Stream
+              <select value={filterStream} onChange={e=>setFilterStream(e.target.value)} className="border p-2 rounded w-full mt-1">
+                <option value="">All Streams</option>
+                {streams.map(s => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+              </select>
+            </label>
+            <label className="text-sm md:col-span-2">
+              Search
+              <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search class, teacher, stream, subject" className="border p-2 rounded w-full mt-1" />
+            </label>
+            <div className="md:col-span-4 flex items-center gap-2">
+              <div className="text-xs text-gray-500">Showing {filteredClasses.length} of {classes.length}</div>
+              <button onClick={()=>{ setFilterGrade(''); setFilterStream(''); setSearch('') }} className="ml-auto px-3 py-1.5 border rounded text-sm">Clear Filters</button>
+            </div>
           </div>
 
           <div className="grid gap-4 md:grid-cols-3">
@@ -168,72 +381,64 @@ export default function AdminClasses(){
 
           <div className="bg-white rounded-lg shadow border border-gray-100 overflow-hidden">
             <div className="px-4 py-3 border-b bg-gray-50"><h2 className="font-medium">Classes</h2></div>
-            {classes.length === 0 ? (
+            {loading ? (
+              <div className="p-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <div key={i} className="bg-white border rounded-lg shadow-sm p-4 animate-pulse">
+                    <div className="h-5 w-2/3 bg-gray-200 rounded" />
+                    <div className="mt-2 h-4 w-1/3 bg-gray-200 rounded" />
+                    <div className="mt-4 flex gap-2">
+                      <div className="h-5 w-12 bg-gray-200 rounded" />
+                      <div className="h-5 w-10 bg-gray-200 rounded" />
+                      <div className="h-5 w-14 bg-gray-200 rounded" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : filteredClasses.length === 0 ? (
               <div className="p-6 text-sm text-gray-500">No classes yet. Click "Add Class" to create your first class.</div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm">
-                  <thead>
-                    <tr className="bg-gray-50">
-                      <th className="px-3 py-2 text-xs font-semibold text-gray-600 uppercase tracking-wide">Name</th>
-                      <th className="px-3 py-2 text-xs font-semibold text-gray-600 uppercase tracking-wide">Grade</th>
-                      <th className="px-3 py-2 text-xs font-semibold text-gray-600 uppercase tracking-wide">Stream</th>
-                      <th className="px-3 py-2 text-xs font-semibold text-gray-600 uppercase tracking-wide">Subjects</th>
-                      <th className="px-3 py-2"></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {classes.map(c => (
-                      <tr key={c.id} className="border-t hover:bg-gray-50">
-                        <td className="px-3 py-2 font-medium text-gray-800">
-                          <Link to={`/admin/classes/${c.id}`} className="text-blue-700 hover:underline">
-                            {c.name}
-                          </Link>
-                        </td>
-                        <td className="px-3 py-2">{c.grade_level}</td>
-                        <td className="px-3 py-2">{c.stream_detail?.name || '-'}</td>
-                        <td className="px-3 py-2 max-w-[420px]">
-                          <span className="block truncate" title={Array.isArray(c.subjects) && c.subjects.length>0 ? c.subjects.map(s=>s.code).join(', ') : '-' }>
-                            {Array.isArray(c.subjects) && c.subjects.length>0 ? c.subjects.map(s=>s.code).join(', ') : '-'}
-                          </span>
-                        </td>
-                        <td className="px-3 py-2 space-x-3 text-right whitespace-nowrap">
-                          <button onClick={()=>edit(c)} className="text-blue-600 hover:underline">Edit</button>
-                          <button onClick={()=>del(c.id)} className="text-red-600 hover:underline">Delete</button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div className="p-4">
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 transition-opacity duration-300">
+                  {filteredClasses.map(renderCard)}
+                </div>
               </div>
             )}
           </div>
 
           <div className="bg-white rounded-lg shadow border border-gray-100 overflow-hidden">
             <div className="px-4 py-3 border-b bg-gray-50"><h2 className="font-medium">Streams</h2></div>
-            {streams.length === 0 ? (
+            {loading ? (
+              <div className="p-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <div key={i} className="bg-white border rounded-lg shadow-sm p-4 animate-pulse h-24" />
+                ))}
+              </div>
+            ) : streams.length === 0 ? (
               <div className="p-6 text-sm text-gray-500">No streams yet. Click "Add Stream" to create one.</div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm">
-                  <thead>
-                    <tr className="bg-gray-50">
-                      <th className="px-3 py-2 text-xs font-semibold text-gray-600 uppercase tracking-wide">Name</th>
-                      <th className="px-3 py-2"></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {streams.map(s => (
-                      <tr key={s.id} className="border-t hover:bg-gray-50">
-                        <td className="px-3 py-2">{s.name}</td>
-                        <td className="px-3 py-2 space-x-3 text-right">
+              <div className="p-4">
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                  {streams.map(s => {
+                    const st = streamStats[String(s.id)] || { classes: 0, students: 0, loading: true }
+                    return (
+                      <div key={s.id} className="bg-white border rounded-lg shadow-sm p-4 flex flex-col gap-2">
+                        <div className="flex items-center justify-between">
+                          <div className="text-base font-semibold text-gray-900">{s.name}</div>
+                          <div className="text-xs text-gray-500">ID: {s.id}</div>
+                        </div>
+                        <div className="text-sm text-gray-700 flex items-center gap-4">
+                          <span>Classes: <b>{st.classes}</b></span>
+                          <span>Students: <b>{st.loading ? '...' : st.students}</b></span>
+                        </div>
+                        <div className="mt-2 flex items-center gap-3 justify-end">
                           <button onClick={()=>editStream(s)} className="text-blue-600 hover:underline">Edit</button>
                           <button onClick={()=>delStream(s.id)} className="text-red-600 hover:underline">Delete</button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
               </div>
             )}
           </div>

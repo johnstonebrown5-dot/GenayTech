@@ -62,6 +62,19 @@ export default function AdminTimetable() {
   // Prevent initial autosave race that can overwrite server with {}
   const [assignmentsLoaded, setAssignmentsLoaded] = useState(false)
 
+  // Prefetch all subjects once so manual assignment isn't blocked when classes lack attached subjects
+  useEffect(()=>{ (async()=>{
+    try{
+      if(allSubjects.length===0 && !loadingSubjects){
+        setLoadingSubjects(true)
+        const { data } = await api.get('/academics/subjects/')
+        const list = Array.isArray(data) ? data : (data?.results || [])
+        setAllSubjects(list)
+      }
+    }catch{ setAllSubjects([]) }
+    finally{ setLoadingSubjects(false) }
+  })() }, [])
+
   // ===== Auto-generate (greedy, teacher no-conflict) =====
   const autoGenerate = ()=>{
     if(!selectedTemplate) return
@@ -78,7 +91,7 @@ export default function AdminTimetable() {
     // Build per-class subject cycle (ids only) and map to teacher ids
     const classSubjectsMap = new Map()
     for(const cls of classList){
-      const subs = Array.isArray(cls.subjects)? cls.subjects.map(s=>s.id) : []
+      const subs = getClassSubjects(cls).map(s=>s.id)
       const startIdx = subs.length ? Math.floor(Math.random()*subs.length) : 0
       classSubjectsMap.set(cls.id, { subjects: subs, idx: startIdx })
     }
@@ -121,7 +134,11 @@ export default function AdminTimetable() {
     }
     const subjectById = new Map()
     for(const cls of classList){
-      for(const s of (cls.subjects||[])) subjectById.set(s.id, s)
+      for(const s of getClassSubjects(cls)) subjectById.set(s.id, s)
+    }
+    // Also include global subjects so labels work even when classes have no attached subjects
+    for(const s of (allSubjects||[])){
+      if(!subjectById.has(s.id)) subjectById.set(s.id, s)
     }
 
     // Morning window = before first 'lunch' period (if none, use first half of lessons)
@@ -151,7 +168,7 @@ export default function AdminTimetable() {
         }
         const mapAugment = {}
         for(const cls of classList){
-          const ppi = (cls.subjects||[]).find(ppiMatch)
+          const ppi = getClassSubjects(cls).find(ppiMatch)
           if(!ppi) continue
           ppiByClass.set(cls.id, ppi.id)
           const key = `${friday}-${cls.id}-${firstLessonIdx}`
@@ -219,7 +236,7 @@ export default function AdminTimetable() {
           // Try priority subject first if within morning (no per-day cap now)
           const wantsPriority = morningLessonSet.has(p.period_index)
           if(wantsPriority){
-            const mathSubj = (cls.subjects||[]).find(isPrioritySubject)
+            const mathSubj = getClassSubjects(cls).find(isPrioritySubject)
             if(mathSubj){
               const sId = mathSubj.id
               const t = classSubjectTeacherMap[`${cls.id}-${sId}`]
@@ -286,7 +303,7 @@ export default function AdminTimetable() {
     // Ensure each class gets at least one priority subject per day
     for(const d of days){
       for(const cls of classList){
-        const prSubs = (cls.subjects||[]).filter(isPrioritySubject)
+        const prSubs = getClassSubjects(cls).filter(isPrioritySubject)
         if(prSubs.length===0) continue
         const hasAnyPriority = lessonPeriods.some(lp=> {
           const a = newAssign[`${d}-${cls.id}-${lp.period_index}`]
@@ -330,6 +347,49 @@ export default function AdminTimetable() {
             }
           }
           if(newAssign[`${d}-${cls.id}-${(ordered[0]||{}).period_index}`]) break
+        }
+      }
+    }
+
+    // Final pass: ensure no more than one free lesson per class per day.
+    // Try to fill additional empty slots greedily while respecting constraints.
+    for(const d of days){
+      for(const cls of classList){
+        const empties = lessonPeriods.filter(lp => !newAssign[`${d}-${cls.id}-${lp.period_index}`])
+        if(empties.length <= 1) continue
+        let freeLeft = empties.length
+        // Subject pool for this class (fallback to all subjects if none attached)
+        const poolIds = (classSubjectsMap.get(cls.id)?.subjects?.length
+          ? classSubjectsMap.get(cls.id).subjects
+          : getClassSubjects(cls).map(s=>s.id))
+        const ppiId = ppiByClass.get(cls.id)
+        for(const lp of empties){
+          if(freeLeft <= 1) break
+          const cellKey = `${d}-${cls.id}-${lp.period_index}`
+          if(newAssign[cellKey]) { freeLeft -= 1; continue }
+          let placed = false
+          // Try pool sequence deterministically to avoid infinite loops
+          for(const sId of poolIds){
+            if(ppiId && String(ppiId) === String(sId)) continue
+            const subjObj = subjectById.get(sId)
+            // Keep Mathematics in morning only
+            if(isMathSubject(subjObj) && !morningLessonSet.has(lp.period_index)) continue
+            const t = classSubjectTeacherMap[`${cls.id}-${sId}`]
+            const tid = t?.id || t?.user?.id
+            const kdp = keyDP(d, lp.period_index)
+            if(!busy.has(kdp)) busy.set(kdp, new Set())
+            const teacherFree = (!tid || !busy.get(kdp).has(String(tid)))
+            const underDailyMax = (!tid) || ((teacherDailyCount.get(keyTD(d, tid))||0) < (Number(maxTeacherLessonsPerDay)||5))
+            const okAdjacency = !violatesAdjacency(d, cls.id, lp.period_index, sId)
+            if(teacherFree && underDailyMax && okAdjacency){
+              newAssign[cellKey] = { subjectId: sId }
+              if(tid){ busy.get(kdp).add(String(tid)); const ktd = keyTD(d, tid); teacherDailyCount.set(ktd, (teacherDailyCount.get(ktd)||0) + 1) }
+              placed = true
+              freeLeft -= 1
+              break
+            }
+          }
+          // If nothing could be placed, keep it free and move on
         }
       }
     }
@@ -659,7 +719,10 @@ export default function AdminTimetable() {
     setSavingBlocks(false)
   }
 
-  const getClassSubjects = (cls)=> Array.isArray(cls?.subjects)? cls.subjects : []
+  const getClassSubjects = (cls)=>{
+    const subs = Array.isArray(cls?.subjects)? cls.subjects : []
+    return (subs && subs.length>0) ? subs : (allSubjects||[])
+  }
   const subjectLabel = (subj)=> subj?.code || subj?.name || ''
   const teacherNameFor = (classId, subjectId)=>{
     const t = classSubjectTeacherMap[`${classId}-${subjectId}`]

@@ -407,6 +407,33 @@ export default function LoginPage() {
             </div>
           </div>
 
+          {/* Verifying overlay - mobile */}
+          {formStep === 'verifying' && (
+            <div className="fixed inset-0 z-50 sm:hidden flex items-center justify-center">
+              <div className="absolute inset-0 bg-black/40 backdrop-blur-sm transition-opacity" />
+              <div className="relative bg-white/90 backdrop-blur-md rounded-2xl px-6 py-6 shadow-[0_16px_48px_rgba(0,0,0,0.3)] ring-1 ring-white/50 border-hairline flex flex-col items-center gap-3" role="status" aria-busy="true" aria-live="polite">
+                <div className="relative w-20 h-20">
+                  <div className="absolute inset-0 rounded-full border-2 border-black/10" />
+                  <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-indigo-600 animate-spin" />
+                  <div className="absolute inset-2 rounded-full border-2 border-transparent border-t-indigo-400 animate-spin" style={{ animationDuration: '800ms', animationDirection: 'reverse' }} />
+                  <div className="absolute inset-[18px] rounded-full bg-indigo-600/20 animate-pulse" />
+                </div>
+                <div className="text-center">
+                  <h3 className="text-indigo-700 text-sm font-extrabold tracking-wide">VERIFYING</h3>
+                  <p className="text-black/70 text-xs">Please wait…</p>
+                </div>
+                <div className="flex gap-1 items-end h-2.5" aria-hidden>
+                  <span className="w-1.5 h-1.5 rounded-full bg-indigo-600/80 animate-bounce" style={{ animationDelay: '0ms' }} />
+                  <span className="w-1.5 h-1.5 rounded-full bg-indigo-600/70 animate-bounce" style={{ animationDelay: '120ms' }} />
+                  <span className="w-1.5 h-1.5 rounded-full bg-indigo-600/60 animate-bounce" style={{ animationDelay: '240ms' }} />
+                </div>
+                <div className="w-44 h-1.5 bg-black/10 rounded-full overflow-hidden">
+                  <div className="h-full bg-gradient-to-r from-indigo-500 via-indigo-400 to-indigo-600 animate-pulse rounded-full" style={{ width: '70%' }} />
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Footer */}
           <div className="mt-4 text-center text-[11px] text-white/80">© {new Date().getFullYear()} EDU-TRACK</div>
         </div>

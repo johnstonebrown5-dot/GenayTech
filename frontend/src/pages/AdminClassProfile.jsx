@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { useParams, useNavigate, Link } from 'react-router-dom'
+import { useParams, useNavigate, Link, useSearchParams } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
 import Modal from '../components/Modal'
 import api from '../api'
@@ -11,12 +11,12 @@ export default function AdminClassProfile(){
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [activeTab, setActiveTab] = useState('class') // class | subjects | students | results
+  const [searchParams, setSearchParams] = useSearchParams()
   const [students, setStudents] = useState([])
   const [loadingStudents, setLoadingStudents] = useState(false)
   const [exams, setExams] = useState([])
   const [recentExam, setRecentExam] = useState(null)
   const [recentSummary, setRecentSummary] = useState({ subjects: [], students: [] })
-  const [loadingResults, setLoadingResults] = useState(false)
   const [gradePerf, setGradePerf] = useState([]) // [{klass, klass_name, mean}]
   const [loadingGradePerf, setLoadingGradePerf] = useState(false)
   const [teachers, setTeachers] = useState([])
@@ -26,11 +26,14 @@ export default function AdminClassProfile(){
   const [reassignTeacher, setReassignTeacher] = useState('')
   const availableCTs = useMemo(() => {
     const cid = String(id)
-    return (teachers || []).filter(t => {
+    const list = Array.isArray(teachers) ? teachers : []
+    const preferred = list.filter(t => {
       const tk = t?.klass
       // allow if unassigned OR already assigned to this class
       return tk === null || tk === '' || typeof tk === 'undefined' || String(tk) === cid
     })
+    // Fallback: if none match (e.g., everyone is assigned elsewhere), show all teachers
+    return preferred.length > 0 ? preferred : list
   }, [teachers, id])
 
   useEffect(() => {
@@ -49,6 +52,15 @@ export default function AdminClassProfile(){
     load()
     return () => { cancelled = true }
   }, [id])
+
+  useEffect(() => {
+    try{
+      const t = (searchParams.get('tab') || '').toLowerCase()
+      if (['class','subjects','students','results'].includes(t)) {
+        setActiveTab(t)
+      }
+    }catch{}
+  }, [searchParams])
 
   // Load students once for this page (then filter by class id)
   useEffect(() => {

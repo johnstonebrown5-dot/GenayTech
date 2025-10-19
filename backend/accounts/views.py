@@ -145,7 +145,7 @@ def create_user(request):
     except IntegrityError as e:
         # Most likely a duplicate username or school constraint
         return Response({"detail": "Username already exists or violates a constraint", "error": str(e)}, status=400)
-    return Response(UserSerializer(user).data, status=201)
+    return Response(UserSerializer(user, context={"request": request}).data, status=201)
 
 
 @api_view(["POST"])
@@ -170,7 +170,7 @@ def update_user_status(request):
             return Response({"detail": "Not allowed to modify staff/superuser accounts"}, status=403)
     u.is_active = bool(is_active)
     u.save(update_fields=['is_active'])
-    return Response(UserSerializer(u).data)
+    return Response(UserSerializer(u, context={"request": request}).data)
 
 
 @api_view(["POST"])
@@ -262,7 +262,7 @@ def update_user(request):
 
     # Explicitly ignore any 'password' in payload
     u.save(update_fields=[f for f in allowed_fields if f in request.data or f == 'role' and requested_role is not None])
-    return Response(UserSerializer(u).data)
+    return Response(UserSerializer(u, context={"request": request}).data)
 
 
 @api_view(["GET","PUT","PATCH"])
@@ -398,8 +398,8 @@ def trial_signup(request):
     payload = {
         "access": str(refresh.access_token),
         "refresh": str(refresh),
-        "user": UserSerializer(user).data,
-        "school": SchoolSerializer(school).data,
+        "user": UserSerializer(user, context={"request": request}).data,
+        "school": SchoolSerializer(school, context={"request": request}).data,
     }
     # Create verification token
     token = secrets.token_urlsafe(48)

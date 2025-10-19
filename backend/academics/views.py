@@ -2721,8 +2721,9 @@ class TeacherProfileViewSet(viewsets.ModelViewSet):
         school = getattr(getattr(self.request, 'user', None), 'school', None)
         if school:
             # TeacherProfile does not have a direct school field; scope by either the user's school
-            # or the assigned class's school
-            qs = qs.filter(Q(user__school=school) | Q(klass__school=school))
+            # or the assigned class's school. Additionally, include unscoped teachers (user.school is null)
+            # so admins can discover and assign them to classes in their school.
+            qs = qs.filter(Q(user__school=school) | Q(klass__school=school) | Q(user__school__isnull=True))
         # Optional filter: subject (id or code), matches teacher's subjects string by code or name
         subj_param = self.request.query_params.get('subject')
         if subj_param:

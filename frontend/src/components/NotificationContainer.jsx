@@ -99,11 +99,11 @@ export default function NotificationContainer() {
   }
 
   return (
-    <div className="fixed bottom-4 right-4 z-50 space-y-2 max-h-screen overflow-y-auto">
+    <div className="fixed top-4 inset-x-0 z-50 space-y-2 max-h-screen overflow-y-auto px-4 flex flex-col items-center sm:top-auto sm:bottom-4 sm:right-4 sm:inset-x-auto sm:items-end">
       {notifications.map((notification, index) => (
         <div
           key={notification.id}
-          className="animate-slideInFromRight"
+          className="animate-slideIn"
           style={{
             animationDelay: `${index * 100}ms`,
             animationFillMode: 'both'
@@ -127,6 +127,16 @@ export default function NotificationContainer() {
         </div>
       ))}
       <style>{`
+        @keyframes slideInFromTop {
+          from {
+            opacity: 0;
+            transform: translateY(-100%);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
         @keyframes slideInFromRight {
           from {
             opacity: 0;
@@ -137,8 +147,13 @@ export default function NotificationContainer() {
             transform: translateX(0);
           }
         }
-        .animate-slideInFromRight {
-          animation: slideInFromRight 0.3s ease-out forwards;
+        .animate-slideIn {
+          animation: slideInFromTop 0.3s ease-out forwards;
+        }
+        @media (min-width: 640px) {
+          .animate-slideIn {
+            animation-name: slideInFromRight;
+          }
         }
       `}</style>
     </div>
