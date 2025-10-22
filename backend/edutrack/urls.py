@@ -13,13 +13,13 @@ def health(_request):
 
 
 def root_redirect(request):
-    # Open the Admin (School management) Dashboard on the frontend
+    # Open the frontend index (SchoolHome) on the frontend
     frontend = getattr(settings, 'FRONTEND_URL', 'http://localhost:5173')
-    return HttpResponseRedirect(f"{frontend.rstrip('/')}/admin")
+    return HttpResponseRedirect(f"{frontend.rstrip('/')}/")
 
 
 urlpatterns = [
-    # Root now opens Admin dashboard
+    # Root now opens frontend index
     path('', root_redirect, name='root'),
     # Health check endpoint
     path('health/', health, name='health'),
