@@ -11,6 +11,7 @@ from django.db import IntegrityError
 from django.db.models import Q
 from django.utils.text import slugify
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
 from .models import School, EmailVerificationToken
 from django.core.cache import cache
 from django.core.mail import send_mail
@@ -18,6 +19,9 @@ from django.conf import settings
 from datetime import timedelta
 import secrets
 from django.utils import timezone
+from academics.models import Class as Klass
+from academics.models import Student
+from django.db.models import Q
 
 User = get_user_model()
 
@@ -275,6 +279,7 @@ def school_me(request):
         if not school:
             return Response({"detail": "No school linked to this admin"}, status=404)
         return Response(SchoolSerializer(school, context={"request": request}).data)
+
     # update
     if not school:
         return Response({"detail": "No school linked. Create a School and link the user via Django Admin first."}, status=400)
@@ -297,6 +302,24 @@ def school_me(request):
         except Exception:
             parsed_social = {}
 
+    # Parse homepage JSON (optional)
+    homepage_raw = data.get('homepage')
+    parsed_homepage = {}
+    if isinstance(homepage_raw, (dict, list)):
+        parsed_homepage = homepage_raw
+    elif homepage_raw in (None, '', b''):
+        parsed_homepage = {}
+    elif isinstance(homepage_raw, (bytes, bytearray)):
+        try:
+            parsed_homepage = json.loads(homepage_raw.decode('utf-8'))
+        except Exception:
+            parsed_homepage = {}
+    elif isinstance(homepage_raw, str):
+        try:
+            parsed_homepage = json.loads(homepage_raw)
+        except Exception:
+            parsed_homepage = {}
+
     payload = {
         'name': data.get('name', school.name),
         'code': data.get('code', school.code),
@@ -304,6 +327,7 @@ def school_me(request):
         'motto': data.get('motto', getattr(school, 'motto', '')),
         'aim': data.get('aim', getattr(school, 'aim', '')),
         'social_links': parsed_social,
+        'homepage': parsed_homepage,
     }
     if 'logo' in request.FILES:
         payload['logo'] = request.FILES['logo']
@@ -312,6 +336,146 @@ def school_me(request):
     serializer.is_valid(raise_exception=True)
     serializer.save()
     return Response(SchoolSerializer(school, context={"request": request}).data)
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def school_teachers_public(request):
+    """Public list of teachers for a school. Optional ?code=<school_code>.
+    Returns a minimal list of teacher profiles (id, name, email, avatar_url, role).
+    """
+    code = (request.query_params.get('code') or '').strip()
+    qs = User.objects.filter(role='teacher')
+    if code:
+        qs = qs.filter(school__code=code)
+    else:
+        # Prefer school with id=1, else fallback to oldest
+        school = School.objects.filter(id=1).first() or School.objects.order_by('id').first()
+        if school:
+            qs = qs.filter(school_id=school.id)
+        else:
+            qs = qs.none()
+    qs = qs.select_related('school').order_by('first_name','last_name','id')
+    data = []
+    for u in qs:
+        try:
+            avatar_url = ''
+            if getattr(u, 'profile_picture', None):
+                avatar_url = request.build_absolute_uri(u.profile_picture.url)
+        except Exception:
+            avatar_url = ''
+        # Determine if this teacher is assigned as a class teacher to any class in the same school
+        is_class_teacher = False
+        try:
+            is_class_teacher = Klass.objects.filter(teacher_id=u.id, school_id=getattr(u, 'school_id', None)).exists()
+        except Exception:
+            is_class_teacher = False
+        data.append({
+            'id': u.id,
+            'first_name': u.first_name,
+            'last_name': u.last_name,
+            'email': u.email,
+            'role': u.role,
+            'avatar_url': avatar_url,
+            'is_class_teacher': is_class_teacher,
+        })
+    return Response({'results': data})
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def teacher_public_detail(request, id: int):
+    """Public teacher detail by ID with minimal profile and classes taught.
+    """
+    try:
+        u = User.objects.select_related('school').get(id=id, role='teacher')
+    except User.DoesNotExist:
+        return Response({"detail": "Not found"}, status=404)
+    try:
+        avatar_url = ''
+        if getattr(u, 'profile_picture', None):
+            avatar_url = request.build_absolute_uri(u.profile_picture.url)
+    except Exception:
+        avatar_url = ''
+    is_class_teacher = False
+    try:
+        is_class_teacher = Klass.objects.filter(teacher_id=u.id, school_id=getattr(u, 'school_id', None)).exists()
+    except Exception:
+        is_class_teacher = False
+    # List classes where teacher is class teacher
+    classes = list(Klass.objects.filter(teacher_id=u.id).order_by('grade_level', 'id').values('id','grade_level','stream__name'))
+    data = {
+        'id': u.id,
+        'first_name': u.first_name,
+        'last_name': u.last_name,
+        'email': u.email,
+        'avatar_url': avatar_url,
+        'is_class_teacher': is_class_teacher,
+        'classes': [
+            {
+                'id': c['id'],
+                'label': f"{c['grade_level']} {c.get('stream__name') or ''}".strip(),
+            } for c in classes
+        ],
+    }
+    return Response(data)
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def school_public(request):
+    """Public read-only school info for the landing page.
+    Optional query params:
+      - code: school.code to select a specific school
+    Returns the first available school if not provided/found.
+    """
+    code = (request.query_params.get('code') or '').strip()
+    school = None
+    if code:
+        school = School.objects.filter(code=code).first()
+    if not school:
+        # Prefer school with id=1, else fallback to oldest
+        school = School.objects.filter(id=1).first() or School.objects.order_by('id').first()
+    if not school:
+        return Response({
+            "name": "",
+            "code": "",
+            "address": "",
+            "motto": "",
+            "aim": "",
+            "logo_url": "",
+            "social_links": {},
+        })
+    # Base serialized data
+    payload = SchoolSerializer(school, context={"request": request}).data
+    # Compute live metrics
+    try:
+        student_qs = Student.objects.filter(
+            Q(school_id=school.id) | Q(klass__school_id=school.id)
+        ).filter(is_graduated=False).distinct()
+        student_count = student_qs.count()
+    except Exception:
+        student_count = 0
+    try:
+        teacher_count = User.objects.filter(role='teacher', school_id=school.id).count()
+    except Exception:
+        teacher_count = 0
+    # Merge into homepage.stats and overwrite with live values for these keys
+    hp = payload.get('homepage') or {}
+    stats = dict(hp.get('stats') or {})
+    stats['students'] = student_count
+    stats['teachers'] = teacher_count
+    stats['satisfaction'] = '98%'
+    # Compute/refresh ratio if possible
+    if teacher_count > 0:
+        try:
+            ratio_val = max(1, round(student_count / teacher_count))
+            stats['ratio'] = f"{ratio_val}:1"
+        except Exception:
+            pass
+    hp['stats'] = stats
+    payload['homepage'] = hp
+    return Response(payload)
 
 
 @api_view(["GET"])
@@ -448,3 +612,38 @@ def verify_email(request):
     user.save(update_fields=['email_verified'])
     rec.delete()
     return Response({"detail": "Email verified"})
+
+
+@api_view(["POST"]) 
+@permission_classes([IsAuthenticated])
+def logout(request):
+    """Blacklist the provided refresh token to log out the current session.
+    Body: {refresh: <refresh_token>}
+    """
+    refresh = (request.data.get('refresh') or '').strip()
+    if not refresh:
+        return Response({"detail": "refresh is required"}, status=400)
+    try:
+        token = RefreshToken(refresh)
+        token.blacklist()
+        return Response({"detail": "Logged out"})
+    except Exception as e:
+        return Response({"detail": "Invalid token"}, status=400)
+
+
+@api_view(["POST"]) 
+@permission_classes([IsAuthenticated])
+def logout_all(request):
+    """Blacklist all outstanding refresh tokens for the current user (global logout)."""
+    try:
+        tokens = OutstandingToken.objects.filter(user=request.user)
+        count = 0
+        for t in tokens:
+            try:
+                BlacklistedToken.objects.get_or_create(token=t)
+                count += 1
+            except Exception:
+                pass
+        return Response({"detail": "Logged out from all sessions", "blacklisted": count})
+    except Exception as e:
+        return Response({"detail": "Failed to logout all"}, status=500)

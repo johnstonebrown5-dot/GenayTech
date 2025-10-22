@@ -2,6 +2,7 @@ from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework.parsers import JSONParser, FormParser, MultiPartParser
 from django.utils.dateparse import parse_datetime
 from django.db.models import Q
 from django.db.models import Sum, F, Value, DecimalField
@@ -18,6 +19,9 @@ from django.conf import settings
 import logging
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
+from django.core.files.storage import default_storage
+from django.core.files.base import ContentFile
+import os, time
 
 class NotificationViewSet(viewsets.ModelViewSet):
     queryset = Notification.objects.all()
@@ -255,3 +259,72 @@ class ATSMSCallbackView(APIView):
             logger.exception("Failed to process AT SMS callback")
         # Always return 204 quickly to prevent AT retries
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class ContactInquiryView(APIView):
+    """Public endpoint to send inquiries to the EduTrack team email.
+    Accepts JSON or form data with fields: name, sender, message, channel, origin.
+    """
+    permission_classes = [permissions.AllowAny]
+    parser_classes = [JSONParser, FormParser]
+
+    def post(self, request):
+        try:
+            name = str(request.data.get('name', '')).strip()
+            sender = str(request.data.get('sender', '')).strip()
+            message = str(request.data.get('message', '')).strip()
+            channel = str(request.data.get('channel', '')).strip() or 'email'
+            origin = str(request.data.get('origin', '')).strip() or request.META.get('HTTP_REFERER', '')
+
+            subject = f"EduTrack Inquiry via Landing Page"
+            lines = [
+                f"Name: {name}",
+                f"From: {sender}",
+                f"Channel: {channel}",
+                f"Origin: {origin}",
+                "",
+                message or "(No message provided)",
+            ]
+            body = "\n".join(lines)
+
+            # Send to support mailbox
+            send_email_safe(
+                to_list=["edutrack46@gmail.com"],
+                subject=subject,
+                body=body,
+            )
+            return Response({"detail": "sent"}, status=status.HTTP_200_OK)
+        except Exception:
+            logger.exception("Failed to send contact inquiry email")
+            return Response({"detail": "failed"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class UploadAdmissionLetterView(APIView):
+    """Public endpoint to upload an admission letter PDF (multipart/form-data, field name 'file').
+    Returns: {url: <absolute_url>}"""
+    permission_classes = [permissions.AllowAny]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def post(self, request):
+        f = request.FILES.get('file')
+        if not f:
+            return Response({"detail": "file is required"}, status=400)
+        # simple validation
+        if not str(f.name).lower().endswith(('.pdf', '.png', '.jpg', '.jpeg')):
+            return Response({"detail": "Only PDF or image files are allowed"}, status=400)
+        ts = int(time.time())
+        name = f"admissions/{ts}_{os.path.basename(f.name)}"
+        try:
+            path = default_storage.save(name, ContentFile(f.read()))
+            try:
+                url = default_storage.url(path)
+            except Exception:
+                url = f"/{path.lstrip('/')}"
+            if not (url.startswith('http://') or url.startswith('https://')):
+                url = request.build_absolute_uri(url)
+            return Response({"url": url})
+        except Exception:
+            logger.exception("Failed to upload admission letter")
+            return Response({"detail": "upload_failed"}, status=500)

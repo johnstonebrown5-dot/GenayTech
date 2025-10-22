@@ -10,6 +10,7 @@ class School(models.Model):
     aim = models.TextField(blank=True)
     logo = models.ImageField(upload_to='logos/', null=True, blank=True)
     social_links = models.JSONField(default=dict, blank=True)  # {"facebook":"","twitter":"","instagram":"","youtube":"","website":""}
+    homepage = models.JSONField(default=dict, blank=True)  # Arbitrary config used by public landing page
     # Trial flags
     is_trial = models.BooleanField(default=True)
     trial_expires_at = models.DateTimeField(null=True, blank=True)

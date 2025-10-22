@@ -13,8 +13,8 @@ import json
 import os
 import logging
 from .mpesa import MpesaClient
-from .models import Invoice, Payment, FeeCategory, ClassFee, MpesaConfig, ExpenseCategory, Expense, PocketMoneyWallet, PocketMoneyTransaction
-from .serializers import InvoiceSerializer, PaymentSerializer, FeeCategorySerializer, ClassFeeSerializer, MpesaConfigSerializer, ExpenseCategorySerializer, ExpenseSerializer, PocketMoneyWalletSerializer, PocketMoneyTransactionSerializer
+from .models import Invoice, Payment, FeeCategory, ClassFee, MpesaConfig, ExpenseCategory, Expense, PocketMoneyWallet, PocketMoneyTransaction, PaymentMethod
+from .serializers import InvoiceSerializer, PaymentSerializer, FeeCategorySerializer, ClassFeeSerializer, MpesaConfigSerializer, ExpenseCategorySerializer, ExpenseSerializer, PocketMoneyWalletSerializer, PocketMoneyTransactionSerializer, PaymentMethodSerializer
 from academics.models import Student
 
 class IsFinanceOrAdmin(permissions.BasePermission):
@@ -28,6 +28,16 @@ class InvoiceViewSet(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ['student', 'category', 'year', 'term', 'status']
     parser_classes = [MultiPartParser, FormParser, JSONParser]
+
+    # Helper: enabled payment methods for a school (defaults to all if none configured)
+    def _enabled_methods_for_school(self, school):
+        try:
+            qs = PaymentMethod.objects.filter(school=school)
+            if not qs.exists():
+                return {'mpesa','bank','cash','cheque'}
+            return set(qs.filter(enabled=True).values_list('key', flat=True))
+        except Exception:
+            return {'mpesa','bank','cash','cheque'}
 
     def get_queryset(self):
         qs = super().get_queryset().select_related('student')
@@ -319,6 +329,11 @@ class InvoiceViewSet(viewsets.ModelViewSet):
             return Response({'detail': 'Amount must be greater than 0'}, status=400)
 
         method = request.data.get('method') or 'mpesa'
+        # Enforce enabled methods per school
+        school = getattr(invoice.student.klass, 'school', None)
+        enabled = self._enabled_methods_for_school(school)
+        if str(method).lower() not in enabled:
+            return Response({'detail': f'Payment method "{method}" is disabled by admin'}, status=400)
         reference = request.data.get('reference') or ''
         attachment = request.FILES.get('attachment')
 
@@ -347,7 +362,7 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         try:
             from communications.utils import notify_payment_received
             notify_payment_received(invoice, pay)
-        except Exception:
+        except Exception as e:
             pass
 
         return Response({
@@ -380,6 +395,10 @@ class InvoiceViewSet(viewsets.ModelViewSet):
             return Response({'detail': 'Amount must be greater than 0'}, status=400)
 
         method = request.data.get('method') or 'cash'
+        # Enforce enabled methods per school
+        enabled = self._enabled_methods_for_school(school)
+        if str(method).lower() not in enabled:
+            return Response({'detail': f'Payment method "{method}" is disabled by admin'}, status=400)
         reference = request.data.get('reference') or ''
 
         inv_qs = Invoice.objects.filter(student_id=student_id).order_by('created_at', 'id')
@@ -463,6 +482,12 @@ class InvoiceViewSet(viewsets.ModelViewSet):
             have_creds = all(os.getenv(k) for k in required)
         default_sim = 'false' if have_creds else 'true'
         simulate = str(request.data.get('simulate', default_sim)).lower() in ('1','true','yes')
+
+        # Validate Mpesa method is enabled
+        sch = getattr(invoice.student.klass, 'school', None)
+        enabled = self._enabled_methods_for_school(sch)
+        if 'mpesa' not in enabled:
+            return Response({'detail': 'Mpesa payments are disabled by admin'}, status=400)
 
         # In production, integrate with Mpesa API here and return CheckoutRequestID.
         # For now, simulate immediate success if simulate=True.
@@ -712,6 +737,34 @@ class FeeCategoryViewSet(viewsets.ModelViewSet):
         if school:
             qs = qs.filter(school=school)
         return qs
+
+    def perform_create(self, serializer):
+        school = getattr(getattr(self.request, 'user', None), 'school', None)
+        serializer.save(school=school)
+
+
+class PaymentMethodViewSet(viewsets.ModelViewSet):
+    queryset = PaymentMethod.objects.all()
+    serializer_class = PaymentMethodSerializer
+    permission_classes = [IsFinanceOrAdmin]
+    filter_backends = [DjangoFilterBackend]
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        school = getattr(getattr(self.request, 'user', None), 'school', None)
+        if school:
+            qs = qs.filter(school=school)
+        else:
+            qs = qs.none()
+        return qs
+
+    def list(self, request, *args, **kwargs):
+        # Auto-seed default methods for the school when none exist
+        school = getattr(getattr(request, 'user', None), 'school', None)
+        if school and not PaymentMethod.objects.filter(school=school).exists():
+            for key in ['cash','mpesa','bank','cheque']:
+                PaymentMethod.objects.get_or_create(school=school, key=key, defaults={'enabled': True})
+        return super().list(request, *args, **kwargs)
 
     def perform_create(self, serializer):
         school = getattr(getattr(self.request, 'user', None), 'school', None)

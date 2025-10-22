@@ -103,6 +103,32 @@ class Payment(models.Model):
         return f"Payment {self.amount} for Invoice {self.invoice_id}"
 
 
+class PaymentMethod(models.Model):
+    """Configurable payment method enabled per school.
+
+    When at least one record exists for a school, only methods with enabled=True are allowed.
+    If no records exist for a school, all built-in methods are implicitly allowed for backward compatibility.
+    """
+    METHOD_CHOICES = (
+        ('mpesa', 'M-Pesa'),
+        ('bank', 'Bank'),
+        ('cash', 'Cash'),
+        ('cheque', 'Cheque'),
+    )
+    school = models.ForeignKey('accounts.School', on_delete=models.CASCADE, related_name='payment_methods')
+    key = models.CharField(max_length=20, choices=METHOD_CHOICES)
+    enabled = models.BooleanField(default=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ("school", "key")
+        verbose_name = 'Payment Method'
+        verbose_name_plural = 'Payment Methods'
+
+    def __str__(self):
+        return f"{self.school} – {self.get_key_display()} ({'Enabled' if self.enabled else 'Disabled'})"
+
+
 class ExpenseCategory(models.Model):
     """A category for expenses, e.g., Salaries, Utilities, Supplies."""
     name = models.CharField(max_length=100)
