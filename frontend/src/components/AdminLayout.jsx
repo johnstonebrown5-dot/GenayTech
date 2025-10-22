@@ -16,6 +16,7 @@ const navItems = [
   { to: '/admin/events', label: 'Events', icon: '📅' },
   { to: '/admin/timetable', label: 'Timetable', icon: '📆' },
   { to: '/admin/messages', label: 'Messages', icon: '✉️' },
+  { to: '/admin/website', label: 'Website', icon: '🌐' },
 ]
 
 export default function AdminLayout({ children }){

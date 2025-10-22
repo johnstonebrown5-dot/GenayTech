@@ -19,6 +19,7 @@ export default function AdminStudentPayments(){
   const [payForm, setPayForm] = useState({ invoice: '', amount: '', method: 'mpesa', reference: '', phone: '', attachment: null })
   const [useRealStk, setUseRealStk] = useState(false) // when true, simulate=false
   const [payError, setPayError] = useState('')
+  const [enabledMethods, setEnabledMethods] = useState(['cash','mpesa','bank','cheque'])
 
   useEffect(()=>{
     let alive = true
@@ -26,13 +27,17 @@ export default function AdminStudentPayments(){
       try{
         setLoading(true)
         setError('')
-        const [payRes, invRes] = await Promise.all([
+        const [payRes, invRes, methodsRes] = await Promise.all([
           api.get(`/finance/payments/?invoice__student=${id}`),
-          api.get(`/finance/invoices/?student=${id}`)
+          api.get(`/finance/invoices/?student=${id}`),
+          api.get('/finance/payment-methods/')
         ])
         if (!alive) return
         setPayments(payRes.data)
         setInvoices(invRes.data)
+        const mlist = Array.isArray(methodsRes.data)? methodsRes.data : (methodsRes.data?.results||[])
+        const enabled = mlist.filter(m=>m.enabled).map(m=>String(m.key).toLowerCase())
+        if (enabled.length>0) setEnabledMethods(enabled)
       }catch(e){
         if (!alive) return
         setError(e?.response?.data?.detail || e?.message || 'Failed to load payments')
@@ -238,14 +243,24 @@ export default function AdminStudentPayments(){
             <div>
               <label className="block text-sm text-gray-600 mb-1">Payment Mode</label>
               <div className="flex items-center gap-4">
-                <label className="inline-flex items-center gap-1 text-sm">
-                  <input type="radio" name="method" value="bank" checked={payForm.method==='bank'} onChange={e=>setPayForm({...payForm, method: e.target.value})} />
-                  <span>Bank</span>
-                </label>
-                <label className="inline-flex items-center gap-1 text-sm">
-                  <input type="radio" name="method" value="mpesa" checked={payForm.method==='mpesa'} onChange={e=>setPayForm({...payForm, method: e.target.value})} />
-                  <span>Mpesa</span>
-                </label>
+                {enabledMethods.includes('bank') && (
+                  <label className="inline-flex items-center gap-1 text-sm">
+                    <input type="radio" name="method" value="bank" checked={payForm.method==='bank'} onChange={e=>setPayForm({...payForm, method: e.target.value})} />
+                    <span>Bank</span>
+                  </label>
+                )}
+                {enabledMethods.includes('mpesa') && (
+                  <label className="inline-flex items-center gap-1 text-sm">
+                    <input type="radio" name="method" value="mpesa" checked={payForm.method==='mpesa'} onChange={e=>setPayForm({...payForm, method: e.target.value})} />
+                    <span>Mpesa</span>
+                  </label>
+                )}
+                {enabledMethods.includes('cash') && (
+                  <label className="inline-flex items-center gap-1 text-sm">
+                    <input type="radio" name="method" value="cash" checked={payForm.method==='cash'} onChange={e=>setPayForm({...payForm, method: e.target.value})} />
+                    <span>Cash</span>
+                  </label>
+                )}
               </div>
             </div>
             <div className="grid md:grid-cols-2 gap-3">

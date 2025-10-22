@@ -7,14 +7,13 @@ import { useNotification } from '../components/NotificationContext'
 export default function AdminFees({ embed=false, initialTab='categories' }){
   const [tab, setTab] = useState(initialTab) // categories | classFees | arrears | payments
   const { showSuccess, showError } = useNotification()
-  const [counts, setCounts] = useState({ categories: null, classFees: null, arrears: null, payments: null })
-  const [loadingCounts, setLoadingCounts] = useState({ categories: true, classFees: true, arrears: true, payments: true })
+  const [counts, setCounts] = useState({ categories: null, classFees: null, arrears: null, payments: null, methods: null })
+  const [loadingCounts, setLoadingCounts] = useState({ categories: true, classFees: true, arrears: true, payments: true, methods: true })
   const onCount = (key, value) => setCounts(prev=>({ ...prev, [key]: value }))
   const onLoading = (key, value) => setLoadingCounts(prev=>({ ...prev, [key]: value }))
   const content = (
       <div className="min-h-screen bg-gray-50">
         {/* Header Section */}
-
         <div className="bg-white shadow-sm border-b">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="py-6">
@@ -42,6 +41,7 @@ export default function AdminFees({ embed=false, initialTab='categories' }){
                 { id: 'classFees', name: 'Assign Class Fees', icon: '💰' },
                 { id: 'arrears', name: 'Balances & Arrears', icon: '📊' },
                 { id: 'payments', name: 'Payment History', icon: '💳' },
+                { id: 'methods', name: 'Payment Methods', icon: '⚙️' },
               ].map((tabItem) => (
                 <button
                   key={tabItem.id}
@@ -86,6 +86,7 @@ export default function AdminFees({ embed=false, initialTab='categories' }){
             {tab==='classFees' && <ClassFees showSuccess={showSuccess} showError={showError} onCount={(n)=>onCount('classFees', n)} onLoading={(v)=>onLoading('classFees', v)} />}
             {tab==='arrears' && <Arrears showSuccess={showSuccess} showError={showError} onCount={(n)=>onCount('arrears', n)} onLoading={(v)=>onLoading('arrears', v)} />}
             {tab==='payments' && <PaymentHistory showSuccess={showSuccess} showError={showError} onCount={(n)=>onCount('payments', n)} onLoading={(v)=>onLoading('payments', v)} />}
+            {tab==='methods' && <PaymentMethods showSuccess={showSuccess} showError={showError} onCount={(n)=>onCount('methods', n)} onLoading={(v)=>onLoading('methods', v)} />}
           </div>
         </div>
       </div>
@@ -94,6 +95,86 @@ export default function AdminFees({ embed=false, initialTab='categories' }){
     <AdminLayout>
       {content}
     </AdminLayout>
+  )
+}
+
+function PaymentMethods({ showSuccess, showError, onCount, onLoading }){
+  const [items, setItems] = useState([])
+  const [loading, setLoading] = useState(false)
+  const [savingId, setSavingId] = useState(null)
+
+  const load = async () => {
+    setLoading(true)
+    onLoading?.(true)
+    try {
+      const { data } = await api.get('/finance/payment-methods/')
+      const arr = Array.isArray(data) ? data : (Array.isArray(data?.results) ? data.results : [])
+      setItems(arr)
+      onCount?.(arr.length)
+    } catch (err) {
+      showError?.('Failed to Load Payment Methods', err?.message || 'Failed')
+    } finally {
+      setLoading(false)
+      onLoading?.(false)
+    }
+  }
+  useEffect(()=>{ load() },[])
+
+  const toggle = async (item) => {
+    const id = item.id
+    const next = !item.enabled
+    setSavingId(id)
+    try {
+      await api.patch(`/finance/payment-methods/${id}/`, { enabled: next })
+      setItems(prev => prev.map(it => it.id===id ? { ...it, enabled: next } : it))
+      showSuccess?.('Payment Method Updated', `${String(item.key).toUpperCase()} ${next? 'enabled' : 'disabled'}.`)
+    } catch (err) {
+      showError?.('Failed to Update Method', err?.message || 'Failed')
+    } finally {
+      setSavingId(null)
+    }
+  }
+
+  const label = (k) => {
+    const map = { cash: 'Cash', mpesa: 'Mpesa', bank: 'Bank', cheque: 'Cheque' }
+    return map[String(k).toLowerCase()] || k
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-white rounded-lg shadow-sm border p-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-gray-100 rounded-lg">
+              <svg className="w-5 h-5 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>
+            </div>
+            <h3 className="text-lg font-semibold text-gray-800">Payment Methods</h3>
+          </div>
+          <div className="text-sm text-gray-500">{loading? 'Loading…' : `${items.length} methods`}</div>
+        </div>
+        <div className="mt-4 divide-y">
+          {loading ? (
+            <div className="p-3 text-sm text-gray-500">Loading…</div>
+          ) : items.length === 0 ? (
+            <div className="p-3 text-sm text-gray-500">No methods found.</div>
+          ) : (
+            items.map(m => (
+              <div key={m.id} className="flex items-center justify-between py-3">
+                <div>
+                  <div className="font-medium">{label(m.key)}</div>
+                  <div className="text-xs text-gray-500">Key: {m.key}</div>
+                </div>
+                <label className="inline-flex items-center gap-2 text-sm">
+                  <input type="checkbox" checked={!!m.enabled} onChange={()=>toggle(m)} disabled={savingId===m.id} />
+                  <span className="text-gray-700">Enabled</span>
+                </label>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+      <div className="text-xs text-gray-500">Disabled methods cannot be used when recording payments or initiating STK.</div>
+    </div>
   )
 }
 

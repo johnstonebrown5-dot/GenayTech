@@ -5,7 +5,7 @@ import { NotificationProvider } from './components/NotificationContext'
 import NotificationContainer from './components/NotificationContainer'
 import MessageNotifier from './components/MessageNotifier'
 import LoginPage from './pages/LoginPage'
-import LandingPage from './pages/LandingPage'
+import SchoolHome from './pages/SchoolHome'
 import TrialOnboarding from './pages/TrialOnboarding'
 import AdminDashboard from './pages/AdminDashboard'
 import TeacherDashboard from './pages/TeacherDashboard'
@@ -52,6 +52,11 @@ import AdminEvents from './pages/AdminEvents'
 import AdminAcademicCalendar from './pages/AdminAcademicCalendar'
 import AdminSubjects from './pages/AdminSubjects'
 import AdminSubjectProfile from './pages/AdminSubjectProfile'
+import AdminWebsite from './pages/AdminWebsite'
+import PublicTeachers from './pages/PublicTeachers'
+import PublicTeacherProfile from './pages/PublicTeacherProfile'
+import PublicAdmissions from './pages/PublicAdmissions'
+import PublicNewsDetail from './pages/PublicNewsDetail'
 import Messages from './pages/Messages'
 import AdminLayout from './components/AdminLayout'
 import AdminTimetable from './pages/AdminTimetable'
@@ -93,7 +98,11 @@ export default function App() {
           <MessageNotifier />
           <Routes>
             {/* Public landing page */}
-            <Route path="/" element={<LandingPage />} />
+            <Route path="/" element={<SchoolHome />} />
+            <Route path="/teachers" element={<PublicTeachers />} />
+            <Route path="/teachers/:id" element={<PublicTeacherProfile />} />
+            <Route path="/admissions" element={<PublicAdmissions />} />
+            <Route path="/news/:id" element={<PublicNewsDetail />} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/trial" element={<TrialOnboarding />} />
             <Route path="/app" element={<RoleRedirect />} />
@@ -120,6 +129,7 @@ export default function App() {
             <Route path="/admin/events" element={<ProtectedRoute roles={["admin"]}><AdminEvents/></ProtectedRoute>} />
             <Route path="/admin/calendar" element={<ProtectedRoute roles={["admin"]}><AdminAcademicCalendar/></ProtectedRoute>} />
             <Route path="/admin/messages" element={<ProtectedRoute roles={["admin"]}><AdminLayout><Messages/></AdminLayout></ProtectedRoute>} />
+            <Route path="/admin/website" element={<ProtectedRoute roles={["admin"]}><AdminLayout><AdminWebsite/></AdminLayout></ProtectedRoute>} />
             <Route path="/admin/timetable" element={<ProtectedRoute roles={["admin"]}><AdminTimetable/></ProtectedRoute>} />
             <Route path="/admin/timetable/class" element={<ProtectedRoute roles={["admin","teacher"]}><ClassTimetable/></ProtectedRoute>} />
             <Route path="/admin/timetable/teacher" element={<ProtectedRoute roles={["admin"]}><TeacherTimetableView/></ProtectedRoute>} />

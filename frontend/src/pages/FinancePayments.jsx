@@ -27,6 +27,7 @@ export default function FinancePayments(){
   const [studentSearch, setStudentSearch] = useState('')
   const [studentResults, setStudentResults] = useState([])
   const [searchingStudents, setSearchingStudents] = useState(false)
+  const [enabledMethods, setEnabledMethods] = useState(['cash','mpesa','bank','cheque'])
 
   useEffect(()=>{ load() }, [tab])
 
@@ -35,9 +36,15 @@ export default function FinancePayments(){
     try {
       const params = {}
       if (tab !== 'all') params.method = tab
-      const { data } = await api.get('/finance/payments/', { params })
-      const list = Array.isArray(data) ? data : (data?.results || [])
+      const [payRes, methodsRes] = await Promise.all([
+        api.get('/finance/payments/', { params }),
+        api.get('/finance/payment-methods/')
+      ])
+      const list = Array.isArray(payRes.data) ? payRes.data : (payRes.data?.results || [])
       setPayments(list)
+      const mlist = Array.isArray(methodsRes.data) ? methodsRes.data : (methodsRes.data?.results || [])
+      const enabled = mlist.filter(m=>m.enabled).map(m=>String(m.key).toLowerCase())
+      if (enabled.length>0) setEnabledMethods(enabled)
     } catch {
       setPayments([])
     } finally { setLoading(false) }
@@ -84,7 +91,13 @@ export default function FinancePayments(){
       const amt = Number(amount||0)
       if (!sid) throw new Error('Student ID is required')
       if (!(amt>0)) throw new Error('Enter a valid amount')
-      await api.post('/finance/invoices/pay_student/', { student: sid, amount: amt, method: method||'cash', reference })
+      // Ensure method is enabled; fallback to first enabled
+      let chosen = method || 'cash'
+      if (!enabledMethods.includes(String(chosen).toLowerCase())) {
+        chosen = enabledMethods[0] || 'cash'
+        setMethod(chosen)
+      }
+      await api.post('/finance/invoices/pay_student/', { student: sid, amount: amt, method: chosen, reference })
       // Reset minimal fields and refresh list
       setAmount('')
       setReference('')
@@ -203,10 +216,10 @@ export default function FinancePayments(){
             <div>
               <label className="block text-xs text-gray-600 mb-1">Method</label>
               <select value={method} onChange={e=>setMethod(e.target.value)} className="w-full px-3 py-2 border rounded text-sm">
-                <option value="cash">Cash</option>
-                <option value="mpesa">Mpesa</option>
-                <option value="bank">Bank</option>
-                <option value="cheque">Cheque</option>
+                {enabledMethods.includes('cash') && (<option value="cash">Cash</option>)}
+                {enabledMethods.includes('mpesa') && (<option value="mpesa">Mpesa</option>)}
+                {enabledMethods.includes('bank') && (<option value="bank">Bank</option>)}
+                {enabledMethods.includes('cheque') && (<option value="cheque">Cheque</option>)}
               </select>
             </div>
             <div>

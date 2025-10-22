@@ -23,6 +23,12 @@ export function AuthProvider({ children }) {
   }
 
   const logout = () => {
+    try {
+      const refresh = localStorage.getItem('refresh')
+      if (refresh) {
+        api.post('/auth/logout/', { refresh }).catch(()=>{})
+      }
+    } catch {}
     localStorage.removeItem('access'); localStorage.removeItem('refresh'); setUser(null)
   }
 

@@ -29,6 +29,31 @@ export default function TeacherGrades(){
   const [invalid, setInvalid] = useState({}) // { student_id: true }
   const saveTimersRef = useRef({}) // { student_id: timeoutId }
 
+  // Helper: compute percentage for a raw value given an Out Of
+  const toPercent = (raw, out) => {
+    const v = Number(raw)
+    const o = Number(out || examMeta.total_marks || 100)
+    if (Number.isNaN(v) || Number.isNaN(o) || o <= 0) return ''
+    return `${Math.round((v / o) * 1000) / 10}%`
+  }
+
+  // Helper: combined percentage across all selected components for a student
+  const toCombinedPercent = (studentId) => {
+    if (!Array.isArray(components) || components.length === 0) return ''
+    let sumMarks = 0
+    let sumOut = 0
+    for (const c of components){
+      const v = Number((marksAll?.[c.id]?.[studentId]) ?? '')
+      const out = Number(outOfPerComp?.[c.id] ?? examMeta.total_marks ?? 100)
+      if (!Number.isNaN(v) && !Number.isNaN(out) && out > 0){
+        sumMarks += v
+        sumOut += out
+      }
+    }
+    if (sumOut <= 0) return ''
+    return `${Math.round((sumMarks / sumOut) * 1000) / 10}%`
+  }
+
   // Upload UI state
   const [uploadFile, setUploadFile] = useState(null)
   const [uploading, setUploading] = useState(false)
@@ -810,16 +835,19 @@ export default function TeacherGrades(){
                   <div className="text-sm font-medium truncate">{st.name}</div>
                   <div className="text-xs text-gray-500">{st.admission_no}</div>
                 </div>
-                <input
-                  type="number"
-                  inputMode="decimal"
-                  min={0}
-                  max={Number(outOf)||Number(examMeta.total_marks)||100}
-                  step="0.01"
-                  className={`border p-2 rounded w-24 text-right ${invalid[st.id] ? 'border-red-500 bg-red-50' : ''}`}
-                  value={marks[st.id] || ''}
-                  onChange={e=>handleMarkChange(st.id, e.target.value)}
-                />
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    min={0}
+                    max={Number(outOf)||Number(examMeta.total_marks)||100}
+                    step="0.01"
+                    className={`border p-2 rounded w-24 text-right ${invalid[st.id] ? 'border-red-500 bg-red-50' : ''}`}
+                    value={marks[st.id] || ''}
+                    onChange={e=>handleMarkChange(st.id, e.target.value)}
+                  />
+                  <span className="text-xs text-gray-500 w-12 text-right">{toPercent(marks[st.id], outOf)}</span>
+                </div>
               </div>
             ))}
         </div>
@@ -838,6 +866,9 @@ export default function TeacherGrades(){
                     <th key={c.id} className="py-2 text-right">{c.code}</th>
                   ))
                 )}
+                {entryMode !== 'single' && components.length > 0 && (
+                  <th className="py-2 text-right">Percent</th>
+                )}
               </tr>
             </thead>
             <tbody>
@@ -847,32 +878,43 @@ export default function TeacherGrades(){
                   <td className="py-2">{st.admission_no}</td>
                   {entryMode === 'single' ? (
                     <td className="py-2 text-right">
-                      <input
-                        type="number"
-                        inputMode="decimal"
-                        min={0}
-                        max={Number(outOf)||Number(examMeta.total_marks)||100}
-                        step="0.01"
-                        className={`border p-2 rounded w-28 text-right focus:ring-2 focus:ring-indigo-200 ${invalid[st.id] ? 'border-red-500 bg-red-50' : ''}`}
-                        value={marks[st.id] || ''}
-                        onChange={e=>handleMarkChange(st.id, e.target.value)}
-                      />
-                    </td>
-                  ) : (
-                    components.map(c => (
-                      <td key={c.id} className="py-2 text-right">
+                      <div className="flex items-center justify-end gap-2">
                         <input
                           type="number"
                           inputMode="decimal"
                           min={0}
-                          max={Number(outOfPerComp[c.id])||Number(examMeta.total_marks)||100}
+                          max={Number(outOf)||Number(examMeta.total_marks)||100}
                           step="0.01"
-                          className={`border p-2 rounded w-24 text-right focus:ring-2 focus:ring-indigo-200 ${(invalidAll[c.id]?.[st.id]) ? 'border-red-500 bg-red-50' : ''}`}
-                          value={(marksAll[c.id]?.[st.id]) || ''}
-                          onChange={e=>handleMarkChangeAll(c.id, st.id, e.target.value)}
+                          className={`border p-2 rounded w-28 text-right focus:ring-2 focus:ring-indigo-200 ${invalid[st.id] ? 'border-red-500 bg-red-50' : ''}`}
+                          value={marks[st.id] || ''}
+                          onChange={e=>handleMarkChange(st.id, e.target.value)}
                         />
+                        <span className="text-xs text-gray-500 w-12 text-right">{toPercent(marks[st.id], outOf)}</span>
+                      </div>
+                    </td>
+                  ) : (
+                    components.map(c => (
+                      <td key={c.id} className="py-2 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <input
+                            type="number"
+                            inputMode="decimal"
+                            min={0}
+                            max={Number(outOfPerComp[c.id])||Number(examMeta.total_marks)||100}
+                            step="0.01"
+                            className={`border p-2 rounded w-24 text-right focus:ring-2 focus:ring-indigo-200 ${(invalidAll[c.id]?.[st.id]) ? 'border-red-500 bg-red-50' : ''}`}
+                            value={(marksAll[c.id]?.[st.id]) || ''}
+                            onChange={e=>handleMarkChangeAll(c.id, st.id, e.target.value)}
+                          />
+                          <span className="text-xs text-gray-500 w-12 text-right">{toPercent((marksAll[c.id]?.[st.id]) || '', outOfPerComp[c.id])}</span>
+                        </div>
                       </td>
                     ))
+                  )}
+                  {entryMode !== 'single' && components.length > 0 && (
+                    <td className="py-2 text-right">
+                      <span className="text-xs text-gray-700 font-medium">{toCombinedPercent(st.id)}</span>
+                    </td>
                   )}
                 </tr>
               ))}
