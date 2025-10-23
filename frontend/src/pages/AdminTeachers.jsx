@@ -8,6 +8,7 @@ import { Link } from 'react-router-dom'
 export default function AdminTeachers(){
   const [teachers, setTeachers] = useState([])
   const [classes, setClasses] = useState([])
+  const [subjects, setSubjects] = useState([])
   const [users, setUsers] = useState([])
   const [form, setForm] = useState({ user_id:'', subjects:'', klass:'' })
   const [newTeacher, setNewTeacher] = useState({ username:'', password:'', first_name:'', last_name:'', email:'' })
@@ -23,17 +24,20 @@ export default function AdminTeachers(){
   const load = async () => {
     try {
       setLoading(true)
-      const [t, cl, u] = await Promise.all([
+      const [t, cl, u, s] = await Promise.all([
         api.get('/academics/teachers/'),
         api.get('/academics/classes/'),
-        api.get('/auth/users/?role=teacher')
+        api.get('/auth/users/?role=teacher'),
+        api.get('/academics/subjects/')
       ])
       const tArr = Array.isArray(t.data) ? t.data : (Array.isArray(t.data?.results) ? t.data.results : [])
       const clArr = Array.isArray(cl.data) ? cl.data : (Array.isArray(cl.data?.results) ? cl.data.results : [])
       const uArr = Array.isArray(u.data) ? u.data : (Array.isArray(u.data?.results) ? u.data.results : [])
+      const sArr = Array.isArray(s.data) ? s.data : (Array.isArray(s.data?.results) ? s.data.results : [])
       setTeachers(tArr)
       setClasses(clArr)
       setUsers(uArr)
+      setSubjects(sArr)
     } catch (e) {
       showError('Failed to Load Teachers', 'There was a problem loading teachers data. Please refresh.')
     } finally {
@@ -76,17 +80,72 @@ export default function AdminTeachers(){
     }
   }
 
+  const directory = useMemo(() => {
+    const list = Array.isArray(teachers) ? teachers : []
+    const byUserId = new Set(list.map(t => t?.user?.id))
+    const missing = (Array.isArray(users) ? users : []).filter(u => !byUserId.has(u.id)).map(u => ({ id: null, user: u, subjects: '', klass_detail: null }))
+    return [...list, ...missing]
+  }, [teachers, users])
+
   const filteredTeachers = useMemo(() => {
     const q = search.trim().toLowerCase()
-    if (!q) return teachers
-    return teachers.filter(t => {
+    const base = directory
+    if (!q) return base
+    return base.filter(t => {
       const u = t.user || {}
       const name = `${u.username || ''} ${u.first_name || ''} ${u.last_name || ''}`.toLowerCase()
       const subjects = (t.subjects || '').toLowerCase()
       const klass = `${t.klass_detail?.name || ''}`.toLowerCase()
       return name.includes(q) || subjects.includes(q) || klass.includes(q)
     })
-  }, [teachers, search])
+  }, [directory, search])
+
+  // Quick assign subjects modal
+  const [showQuickAssign, setShowQuickAssign] = useState(false)
+  const [qaTeacher, setQaTeacher] = useState({ teacherId:'', userId:'', name:'' })
+  const [qaSelected, setQaSelected] = useState([])
+  const [qaSaving, setQaSaving] = useState(false)
+  const [qaSearch, setQaSearch] = useState('')
+
+  const openQuickAssign = (t) => {
+    const teacherId = t.id ? String(t.id) : ''
+    const userId = t.user?.id ? String(t.user.id) : ''
+    const name = `${t.user?.first_name||''} ${t.user?.last_name||''}`.trim() || (t.user?.username||'')
+    // Preselect based on existing subjects string
+    const subjStr = (t.subjects || '').toLowerCase()
+    const pre = (subjects||[])
+      .filter(s => subjStr.includes((s.name||'').toLowerCase()) || subjStr.includes((s.code||'').toLowerCase()))
+      .map(s => s.id)
+    setQaTeacher({ teacherId, userId, name })
+    setQaSelected(pre)
+    setShowQuickAssign(true)
+  }
+
+  const toggleQa = (id) => {
+    setQaSelected(a => a.includes(id) ? a.filter(x=>x!==id) : [...a, id])
+  }
+
+  const saveQuickAssign = async (e) => {
+    e?.preventDefault?.()
+    if (!qaTeacher.userId && !qaTeacher.teacherId) return
+    try{
+      setQaSaving(true)
+      const names = (subjects||[]).filter(s=> qaSelected.includes(s.id)).map(s=> s.name)
+      if (qaTeacher.teacherId) {
+        await api.patch(`/academics/teachers/${qaTeacher.teacherId}/`, { subjects: names.join(', ') })
+      } else if (qaTeacher.userId) {
+        // create teacher profile then set subjects
+        const { data } = await api.post('/academics/teachers/', { user_id: Number(qaTeacher.userId), subjects: names.join(', ') })
+        setQaTeacher(t => ({ ...t, teacherId: String(data?.id||'') }))
+      }
+      await load()
+      setShowQuickAssign(false)
+    } catch (err) {
+      showError('Failed to Save', 'Could not assign subjects to this teacher')
+    } finally {
+      setQaSaving(false)
+    }
+  }
 
   return (
     <AdminLayout>
@@ -98,7 +157,7 @@ export default function AdminTeachers(){
             <p className="text-sm text-gray-600">Create teacher accounts, assign subjects and class, and manage the directory.</p>
           </div>
           <div className="flex items-center gap-2 overflow-x-auto md:overflow-visible py-1 -mx-1 px-1">
-            <span className="shrink-0 px-2.5 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700">{teachers.length} Teachers</span>
+            <span className="shrink-0 px-2.5 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700">{users.length} Teachers</span>
             <span className="shrink-0 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">{classes.length} Classes</span>
             <Link to="/admin/subjects" className="shrink-0 px-3 py-1.5 rounded border hover:bg-gray-50">Subjects</Link>
             <button onClick={()=>setShowCreateUser(true)} className="shrink-0 px-3 py-1.5 rounded bg-green-600 hover:bg-green-700 text-white">Create Teacher User</button>
@@ -162,8 +221,10 @@ export default function AdminTeachers(){
                   .split(',')
                   .map(s => s.trim())
                   .filter(Boolean)
+                const Container = t.id ? Link : 'div'
+                const containerProps = t.id ? { to: `/admin/teachers/${t.id}` } : {}
                 return (
-                  <Link key={t.id} to={`/admin/teachers/${t.id}`} className="flex items-center justify-between gap-3 p-3 rounded-xl border border-gray-200 hover:border-brand-200 hover:bg-brand-50/40 transition">
+                  <Container key={t.id || `u-${t.user?.id}`} {...containerProps} className="flex items-center justify-between gap-3 p-3 rounded-xl border border-gray-200 hover:border-brand-200 hover:bg-brand-50/40 transition">
                     <div className="flex items-center gap-3 min-w-0">
                       <div className="h-10 w-10 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center font-semibold">
                         {(t.user?.first_name?.[0] || t.user?.username?.[0] || '?').toUpperCase()}
@@ -176,15 +237,17 @@ export default function AdminTeachers(){
                             <span key={idx} className="px-2 py-0.5 rounded-full text-[11px] bg-purple-100 text-purple-700">{s}</span>
                           ))}
                           {subj.length>3 && <span className="text-[11px] text-gray-500">+{subj.length-3} more</span>}
+                          {!subj.length && <span className="text-[11px] text-gray-500">No subjects</span>}
                         </div>
                       </div>
                     </div>
-                    <div className="shrink-0">
+                    <div className="shrink-0 flex items-center gap-2">
                       {t.klass_detail?.name ? (
                         <span className="px-2 py-0.5 rounded-full text-xs bg-emerald-100 text-emerald-700">{t.klass_detail.name}</span>
                       ) : <span className="text-xs text-gray-500">-</span>}
+                      <button type="button" onClick={(e)=>{ e.preventDefault(); openQuickAssign(t) }} className="px-2 py-1 rounded border text-xs hover:bg-gray-50">Assign Subjects</button>
                     </div>
-                  </Link>
+                  </Container>
                 )
               })
             )}
@@ -197,6 +260,7 @@ export default function AdminTeachers(){
                   <th className="py-2 px-3">User</th>
                   <th className="py-2 px-3">Subjects</th>
                   <th className="py-2 px-3">Class</th>
+                  <th className="py-2 px-3 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -211,17 +275,30 @@ export default function AdminTeachers(){
                       .map(s => s.trim())
                       .filter(Boolean)
                     return (
-                      <tr key={t.id} className="border-t hover:bg-gray-50/60">
+                      <tr key={t.id || `u-${t.user?.id}`} className="border-t hover:bg-gray-50/60">
                         <td className="py-2 px-3">
-                          <Link to={`/admin/teachers/${t.id}`} className="flex items-center gap-2 group">
-                            <div className="h-8 w-8 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center font-semibold">
-                              {(t.user?.first_name?.[0] || t.user?.username?.[0] || '?').toUpperCase()}
+                          {t.id ? (
+                            <Link to={`/admin/teachers/${t.id}`} className="flex items-center gap-2 group">
+                              <div className="h-8 w-8 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center font-semibold">
+                                {(t.user?.first_name?.[0] || t.user?.username?.[0] || '?').toUpperCase()}
+                              </div>
+                              <div>
+                                <div className="font-medium group-hover:underline">{t.user?.first_name} {t.user?.last_name}</div>
+                                <div className="text-xs text-gray-500">@{t.user?.username}</div>
+                              </div>
+                            </Link>
+                          ) : (
+                            <div className="flex items-center gap-2">
+                              <div className="h-8 w-8 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center font-semibold">
+                                {(t.user?.first_name?.[0] || t.user?.username?.[0] || '?').toUpperCase()}
+                              </div>
+                              <div>
+                                <div className="font-medium">{t.user?.first_name} {t.user?.last_name}</div>
+                                <div className="text-xs text-gray-500">@{t.user?.username}</div>
+                                <div className="text-[11px] text-gray-500">Not yet assigned</div>
+                              </div>
                             </div>
-                            <div>
-                              <div className="font-medium group-hover:underline">{t.user?.first_name} {t.user?.last_name}</div>
-                              <div className="text-xs text-gray-500">@{t.user?.username}</div>
-                            </div>
-                          </Link>
+                          )}
                         </td>
                         <td className="py-2 px-3">
                           <div className="flex flex-wrap gap-1.5">
@@ -235,6 +312,9 @@ export default function AdminTeachers(){
                             <span className="px-2 py-0.5 rounded-full text-xs bg-emerald-100 text-emerald-700">{t.klass_detail.name}</span>
                           ) : <span className="text-gray-500">-</span>}
                         </td>
+                        <td className="py-2 px-3 text-right">
+                          <button type="button" onClick={()=>openQuickAssign(t)} className="px-2 py-1 rounded border text-xs hover:bg-gray-50">Assign Subjects</button>
+                        </td>
                       </tr>
                     )
                   })
@@ -242,6 +322,31 @@ export default function AdminTeachers(){
               </tbody>
             </table>
           </div>
+          {/* Quick Assign Modal */}
+          <Modal open={showQuickAssign} onClose={()=>setShowQuickAssign(false)} title={`Assign Subjects — ${qaTeacher.name}`} size="lg">
+            <form onSubmit={saveQuickAssign} className="grid gap-3">
+              <input className="border p-2 rounded" placeholder="Search subjects..." value={qaSearch} onChange={e=>setQaSearch(e.target.value)} />
+              <div className="max-h-64 overflow-auto border rounded p-2 bg-white">
+                <div className="grid sm:grid-cols-2 gap-2">
+                  {(subjects||[])
+                    .filter(s=>{ const q = qaSearch.trim().toLowerCase(); if(!q) return true; return (s.name||'').toLowerCase().includes(q) || (s.code||'').toLowerCase().includes(q) })
+                    .map(s=>{
+                      const checked = qaSelected.includes(s.id)
+                      return (
+                        <label key={s.id} className="flex items-center gap-2 text-sm">
+                          <input type="checkbox" className="h-4 w-4" checked={checked} onChange={()=>toggleQa(s.id)} />
+                          <span><span className="px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 text-xs mr-1">{s.code}</span>{s.name}</span>
+                        </label>
+                      )
+                    })}
+                </div>
+              </div>
+              <div className="flex justify-end gap-2 mt-2">
+                <button type="button" onClick={()=>setShowQuickAssign(false)} className="px-3 py-2 rounded border">Cancel</button>
+                <button type="submit" className="px-3 py-2 rounded bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-60" disabled={qaSaving}>{qaSaving? 'Saving...' : 'Save'}</button>
+              </div>
+            </form>
+          </Modal>
         </div>
       </div>
     </AdminLayout>

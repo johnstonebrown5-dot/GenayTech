@@ -12,6 +12,9 @@ export default function AdminTeacherProfile(){
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
   const [classes, setClasses] = useState([])
+  const [subjectsCatalog, setSubjectsCatalog] = useState([])
+  const [subjectSearch, setSubjectSearch] = useState('')
+  const [selectedSubjectIds, setSelectedSubjectIds] = useState(new Set())
   const { showSuccess, showError } = useNotification()
 
   // editable form fields
@@ -31,15 +34,18 @@ export default function AdminTeacherProfile(){
     async function load(){
       try {
         setLoading(true)
-        const [tRes, cRes] = await Promise.all([
+        const [tRes, cRes, sRes] = await Promise.all([
           api.get(`/academics/teachers/${id}/`),
-          api.get('/academics/classes/')
+          api.get('/academics/classes/'),
+          api.get('/academics/subjects/')
         ])
         if (!cancelled) {
           setTeacher(tRes.data)
           // Coerce to array in case API is paginated {results: [...]} or returns non-array
           const cls = Array.isArray(cRes.data) ? cRes.data : (Array.isArray(cRes.data?.results) ? cRes.data.results : [])
           setClasses(cls)
+          const subs = Array.isArray(sRes.data) ? sRes.data : (Array.isArray(sRes.data?.results) ? sRes.data.results : [])
+          setSubjectsCatalog(subs)
           setForm({
             first_name: tRes.data?.user?.first_name || '',
             last_name: tRes.data?.user?.last_name || '',
@@ -50,6 +56,14 @@ export default function AdminTeacherProfile(){
             klass: tRes.data?.klass || '',
             tsc_number: tRes.data?.tsc_number || '',
           })
+          // Initialize selection from existing subjects string (match by code or name)
+          const subjStr = (tRes.data?.subjects || '').toLowerCase()
+          const preSel = new Set(
+            (subs||[])
+              .filter(s=> subjStr.includes((s.code||'').toLowerCase()) || subjStr.includes((s.name||'').toLowerCase()))
+              .map(s=> String(s.id))
+          )
+          setSelectedSubjectIds(preSel)
         }
       } catch (e) {
         if (!cancelled) setError('Failed to load teacher profile')
@@ -159,12 +173,58 @@ export default function AdminTeacherProfile(){
                 <input className="w-full border border-gray-200 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-200 focus:border-blue-300 transition-colors" value={form.phone} onChange={e=>setForm({...form, phone:e.target.value})} />
               </div>
               <div className="md:col-span-2">
-                <label className="text-gray-600 text-sm font-medium">Subjects (comma separated)</label>
-                <input className="w-full border border-gray-200 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-200 focus:border-blue-300 transition-colors" value={form.subjects} onChange={e=>setForm({...form, subjects:e.target.value})} />
-                <div className="flex flex-wrap gap-1.5 mt-2">
-                  {(form.subjects || '').split(',').map(s=>s.trim()).filter(Boolean).map((s,i)=> (
-                    <span key={i} className="px-2 py-0.5 rounded-full text-xs bg-purple-100 text-purple-700 border border-purple-200">{s}</span>
-                  ))}
+                <label className="text-gray-600 text-sm font-medium">Subjects</label>
+                <div className="mt-1 grid gap-2">
+                  <input
+                    className="w-full border border-gray-200 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-200 focus:border-blue-300 transition-colors"
+                    placeholder="Search subjects..."
+                    value={subjectSearch}
+                    onChange={e=>setSubjectSearch(e.target.value)}
+                  />
+                  <div className="max-h-48 overflow-auto rounded-lg border border-gray-200 p-2 bg-white">
+                    <div className="grid sm:grid-cols-2 gap-2">
+                      {(subjectsCatalog||[])
+                        .filter(s=>{
+                          const q = subjectSearch.trim().toLowerCase()
+                          if(!q) return true
+                          return (s.code||'').toLowerCase().includes(q) || (s.name||'').toLowerCase().includes(q)
+                        })
+                        .map(s=>{
+                          const sid = String(s.id)
+                          const checked = selectedSubjectIds.has(sid)
+                          return (
+                            <label key={sid} className="flex items-center gap-2 text-sm">
+                              <input
+                                type="checkbox"
+                                className="h-4 w-4"
+                                checked={checked}
+                                onChange={e=>{
+                                  setSelectedSubjectIds(prev=>{
+                                    const next = new Set(Array.from(prev))
+                                    if(e.target.checked) next.add(sid); else next.delete(sid)
+                                    // sync to form.subjects as comma separated names
+                                    const names = (subjectsCatalog||[])
+                                      .filter(x=> next.has(String(x.id)))
+                                      .map(x=> x.name || x.code || '')
+                                      .filter(Boolean)
+                                    setForm(f=>({ ...f, subjects: names.join(', ') }))
+                                    return next
+                                  })
+                                }}
+                              />
+                              <span><span className="px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 text-xs align-middle mr-1">{s.code}</span>{s.name}</span>
+                            </label>
+                          )
+                        })}
+                    </div>
+                  </div>
+                  {form.subjects && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {form.subjects.split(',').map(s=>s.trim()).filter(Boolean).map((s,i)=>(
+                        <span key={i} className="px-2 py-0.5 rounded-full text-xs bg-purple-100 text-purple-700 border border-purple-200">{s}</span>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
               <div>

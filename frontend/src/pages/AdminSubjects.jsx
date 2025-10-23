@@ -8,6 +8,7 @@ export default function AdminSubjects(){
   const [subjects, setSubjects] = useState([])
   const [classes, setClasses] = useState([])
   const [teachers, setTeachers] = useState([])
+  const [teacherUsers, setTeacherUsers] = useState([])
 
   const [creating, setCreating] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -22,15 +23,17 @@ export default function AdminSubjects(){
   const load = async () => {
     try {
       setLoading(true)
-      const [s, c, t] = await Promise.all([
+      const [s, c, t, u] = await Promise.all([
         api.get('/academics/subjects/'),
         api.get('/academics/classes/'),
-        api.get('/academics/teachers/')
+        api.get('/academics/teachers/'),
+        api.get('/auth/users/?role=teacher')
       ])
       const sArr = Array.isArray(s.data) ? s.data : (Array.isArray(s.data?.results) ? s.data.results : [])
       const cArr = Array.isArray(c.data) ? c.data : (Array.isArray(c.data?.results) ? c.data.results : [])
       const tArr = Array.isArray(t.data) ? t.data : (Array.isArray(t.data?.results) ? t.data.results : [])
-      setSubjects(sArr); setClasses(cArr); setTeachers(tArr)
+      const uArr = Array.isArray(u.data) ? u.data : (Array.isArray(u.data?.results) ? u.data.results : [])
+      setSubjects(sArr); setClasses(cArr); setTeachers(tArr); setTeacherUsers(uArr)
     } catch (e) {
       showError('Failed to Load Data', 'Could not load subjects/classes/teachers')
     } finally {
@@ -39,6 +42,14 @@ export default function AdminSubjects(){
   }
 
   useEffect(()=>{ load() },[])
+
+  const allTeacherDirectory = useMemo(()=>{
+    // Start with teacher profiles
+    const byUserId = new Set((teachers||[]).map(t=>t?.user?.id))
+    // Users without teacher profile
+    const missing = (teacherUsers||[]).filter(u=> !byUserId.has(u.id))
+    return { profiles: teachers||[], missingUsers: missing }
+  }, [teachers, teacherUsers])
 
   const createSubject = async (e) => {
     e.preventDefault()
@@ -73,7 +84,23 @@ export default function AdminSubjects(){
     if (!teacherAssign.teacher_id) return
     try {
       const subNames = subjects.filter(s => teacherAssign.subject_ids.includes(s.id)).map(s => s.name)
-      await api.patch(`/academics/teachers/${teacherAssign.teacher_id}/`, { subjects: subNames.join(', ') })
+      const val = String(teacherAssign.teacher_id)
+      if (val.startsWith('t:')) {
+        const tid = val.slice(2)
+        await api.patch(`/academics/teachers/${tid}/`, { subjects: subNames.join(', ') })
+      } else if (val.startsWith('u:')) {
+        const uid = val.slice(2)
+        // Create teacher profile if it doesn't exist, then set subjects
+        const createRes = await api.post('/academics/teachers/', { user_id: Number(uid), subjects: subNames.join(', ') })
+        // Optional: refresh selected to new profile id
+        const newId = createRes?.data?.id
+        if (newId) {
+          setTeacherAssign(a=>({ ...a, teacher_id: `t:${newId}` }))
+        }
+      } else {
+        // Backward compatibility: assume it is a teacher id
+        await api.patch(`/academics/teachers/${val}/`, { subjects: subNames.join(', ') })
+      }
       showSuccess('Teacher Updated', 'Subjects allocated to teacher')
       await load()
     } catch (err) {
@@ -140,7 +167,18 @@ export default function AdminSubjects(){
             <div className="font-semibold">Allocate Subjects to Teacher</div>
             <select className="border p-2 rounded w-full" value={teacherAssign.teacher_id} onChange={e=>setTeacherAssign({...teacherAssign, teacher_id: e.target.value})}>
               <option value="">Select Teacher</option>
-              {teachers.map(t => <option key={t.id} value={t.id}>{t.user?.first_name} {t.user?.last_name} (@{t.user?.username})</option>)}
+              {allTeacherDirectory.profiles.map(t => (
+                <option key={t.id} value={`t:${t.id}`}>{t.user?.first_name} {t.user?.last_name} (@{t.user?.username})</option>
+              ))}
+              {allTeacherDirectory.missingUsers.length > 0 && (
+                <optgroup label="Users without teacher profile (will be created)">
+                  {allTeacherDirectory.missingUsers.map(u => (
+                    <option key={`u-${u.id}`} value={`u:${u.id}`}>
+                      {(u.first_name||'') + ' ' + (u.last_name||'')} (@{u.username})
+                    </option>
+                  ))}
+                </optgroup>
+              )}
             </select>
             <div className="flex flex-wrap gap-2">
               {subjects.map(s => {

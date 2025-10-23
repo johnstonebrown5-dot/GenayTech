@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import api from '../api'
+import Modal from '../components/Modal'
 import { useNotification } from '../components/NotificationContext'
 
 export default function TeacherGrades(){
@@ -29,12 +30,67 @@ export default function TeacherGrades(){
   const [invalid, setInvalid] = useState({}) // { student_id: true }
   const saveTimersRef = useRef({}) // { student_id: timeoutId }
 
+  // NEW: Allow teachers to input as raw marks or percentages
+  const [inputAs, setInputAs] = useState('marks') // 'marks' | 'percent'
+  const [unitModal, setUnitModal] = useState(false)
+
   // Helper: compute percentage for a raw value given an Out Of
   const toPercent = (raw, out) => {
     const v = Number(raw)
     const o = Number(out || examMeta.total_marks || 100)
     if (Number.isNaN(v) || Number.isNaN(o) || o <= 0) return ''
     return `${Math.round((v / o) * 1000) / 10}%`
+  }
+
+  // (Removed) Local saved snapshot fallback to honor strict matching requirement
+
+  // ---------- Robust save helper ----------
+  const saveResults = async (rows) => {
+    if (!Array.isArray(rows) || rows.length === 0) return { ok: true, failed: 0 }
+    // Try bulk first
+    try {
+      const res = await api.post('/academics/exam_results/bulk/', { results: rows })
+      const failed = Number(res?.data?.failed || 0)
+      if (failed === 0) return { ok: true, failed: 0 }
+      // If everything failed, fall through to fallback
+      if (failed < rows.length) return { ok: true, failed }
+    } catch (e) {
+      // ignore and try fallback
+    }
+    // Fallback: send individually to a non-bulk endpoint with alternate field names
+    let failed = 0
+    for (const r of rows){
+      const primary = {
+        exam: r.exam,
+        subject: r.subject,
+        student: r.student,
+        marks: r.marks,
+        ...(r.component ? { component: r.component } : {}),
+        ...(r.out_of ? { out_of: r.out_of } : {}),
+      }
+      const alternate = {
+        exam_id: r.exam,
+        subject_id: r.subject,
+        student_id: r.student,
+        score: r.marks,
+        ...(r.component ? { component_id: r.component } : {}),
+        ...(r.out_of ? { out_of: r.out_of } : {}),
+      }
+      let ok = false
+      try { await api.post('/academics/exam_results/', primary); ok = true } catch {}
+      if (!ok){
+        try { await api.post('/academics/exam_results/', alternate); ok = true } catch {}
+      }
+      if (!ok) failed++
+    }
+    return { ok: failed === 0, failed }
+  }
+
+  const percentToMarks = (pct, out) => {
+    const p = Number(String(pct).toString().replace(/%/g,'').trim())
+    const o = Number(out || examMeta.total_marks || 100)
+    if (Number.isNaN(p) || Number.isNaN(o) || o <= 0) return ''
+    return String(Math.round((p/100) * o))
   }
 
   // Helper: combined percentage across all selected components for a student
@@ -224,18 +280,22 @@ export default function TeacherGrades(){
   // All-mode change handler
   const handleMarkChangeAll = (compId, studentId, raw) => {
     const total = Number(outOfPerComp[compId]) || Number(examMeta.total_marks) || 100
+    // Convert if entering percentage
+    const toStore = (inputAs === 'percent') ? percentToMarks(raw, total) : String(raw)
     setMarksAll(prev => ({
       ...prev,
-      [compId]: { ...(prev[compId]||{}), [studentId]: raw }
+      [compId]: { ...(prev[compId]||{}), [studentId]: toStore }
     }))
-    const num = Number(raw)
-    const bad = raw !== '' && (Number.isNaN(num) || num < 0 || num > total)
+    const numCheck = (inputAs === 'percent') ? Number(String(raw).toString().replace(/%/g,'')) : Number(raw)
+    const limit = (inputAs === 'percent') ? 100 : total
+    const bad = raw !== '' && (Number.isNaN(numCheck) || numCheck < 0 || numCheck > limit)
     setInvalidAll(prev => ({
       ...prev,
       [compId]: { ...(prev[compId]||{}), [studentId]: bad }
     }))
     if (bad) {
-      showError('Invalid marks', `Value must be between 0 and ${total}.`, 3000)
+      const unit = inputAs==='percent' ? '%' : total
+      showError('Invalid input', `Value must be between 0 and ${unit}.`, 3000)
     }
   }
 
@@ -350,7 +410,7 @@ export default function TeacherGrades(){
     return ()=>{ mounted = false }
   }, [selectedClass])
 
-  // Load existing results for selected exam and subject; prefill marks
+  // Load existing results for selected exam and subject; prefill marks (overlay, non-destructive)
   useEffect(()=>{
     const examId = Number(selectedExamId)
     const subjectId = Number(selectedSubject)
@@ -374,27 +434,139 @@ export default function TeacherGrades(){
           return out
         }
         if (entryMode === 'single'){
-          const base = `/academics/exam_results/?exam=${examId}&subject=${subjectId}`
-          const url = compId ? `${base}&component=${compId}` : base
-          const list = await fetchAll(url)
-          const map = {}
-          students.forEach(s=>{ map[s.id] = '' })
-          list.forEach(r=>{ if (r && r.student != null) map[r.student] = Math.round(Number(r.marks||0)) })
-          if (alive) setMarks(map)
+          const urls = []
+          const base1 = `/academics/exam_results/?exam=${examId}&subject=${subjectId}`
+          urls.push(base1)
+          if (compId) urls.push(`${base1}&component=${compId}`)
+          // include class filters
+          urls.push(`/academics/exam_results/?exam=${examId}&subject=${subjectId}&klass=${selectedClass}`)
+          urls.push(`/academics/exam_results/?exam=${examId}&subject=${subjectId}&class=${selectedClass}`)
+          urls.push(`/academics/exam_results/?exam=${examId}&subject=${subjectId}&klass_id=${selectedClass}`)
+          urls.push(`/academics/exam_results/?exam=${examId}&subject=${subjectId}&class_id=${selectedClass}`)
+          if (compId){
+            urls.push(`/academics/exam_results/?exam=${examId}&subject=${subjectId}&component=${compId}&klass=${selectedClass}`)
+            urls.push(`/academics/exam_results/?exam=${examId}&subject=${subjectId}&component=${compId}&class=${selectedClass}`)
+          }
+          // alternative param names
+          const base2 = `/academics/exam_results/?exam_id=${examId}&subject_id=${subjectId}`
+          urls.push(base2)
+          if (compId) urls.push(`${base2}&component_id=${compId}`)
+          // also exam only as a last resort
+          urls.push(`/academics/exam_results/?exam=${examId}`)
+          let list = []
+          for (const u of urls){
+            try{
+              const part = await fetchAll(u)
+              if (Array.isArray(part) && part.length) { list = part; break }
+            }catch{}
+          }
+          // final fallback: exam-only then filter to current class students
+          if (!list.length){
+            try{
+              const part = await fetchAll(`/academics/exam_results/?exam=${examId}`)
+              const allowed = new Set(students.map(s=>s.id))
+              list = part.filter(r=> allowed.has((r?.student ?? r?.student_id ?? r?.student_detail?.id)))
+            }catch{}
+          }
+          // If we got rows, filter locally by selected subject/component if fields differ
+          if (list.length){
+            const subjObj = subjects.find(s=> String(s.id)===String(subjectId)) || {}
+            const subjCode = (subjObj.code||'').toLowerCase()
+            const subjName = (subjObj.name||'').toLowerCase()
+            const compIdStr = compId ? String(compId) : ''
+            list = list.filter(r => {
+              const sid = r?.subject ?? r?.subject_id ?? r?.subject_detail?.id
+              const scode = (r?.subject_code || r?.subject_detail?.code || '').toLowerCase()
+              const sname = (r?.subject_name || r?.subject_detail?.name || '').toLowerCase()
+              const comp = r?.component ?? r?.component_id ?? r?.component_detail?.id
+              const subjectOk = sid ? String(sid)===String(subjectId) : (scode? scode===subjCode : (sname? sname===subjName : true))
+              const compOk = compId ? (comp ? String(comp)===compIdStr : true) : true
+              return subjectOk && compOk
+            })
+          }
+          // If no matches, clear to blanks. Else overlay values.
+          if (alive){
+            if (!list.length){
+              const empty = {}
+              students.forEach(s=>{ empty[s.id] = '' })
+              setMarks(empty)
+            } else {
+              setMarks(prev => {
+                const next = { ...prev }
+                // Start from blanks to avoid stale values
+                students.forEach(s=>{ next[s.id] = '' })
+                list.forEach(r=>{
+                  if (!r) return
+                  const sid = r.student ?? r.student_id ?? (r.student_detail?.id)
+                  if (sid != null){
+                    const val = r.marks ?? r.score ?? r.value
+                    if (val != null) next[sid] = Math.round(Number(val))
+                  }
+                })
+                return next
+              })
+            }
+          }
         } else {
           // all mode: fetch per component
           const comps = components
-          const nextMarksAll = {}
+          const nextMarksAll = { ...(marksAll||{}) }
           for (const c of comps){
-            const url = `/academics/exam_results/?exam=${examId}&subject=${subjectId}&component=${c.id}`
-            const list = await fetchAll(url)
-            const map = {}
-            students.forEach(s=>{ map[s.id] = '' })
-            list.forEach(r=>{ if (r && r.student != null) map[r.student] = Math.round(Number(r.marks||0)) })
-            nextMarksAll[c.id] = map
+            const urls = [
+              `/academics/exam_results/?exam=${examId}&subject=${subjectId}&component=${c.id}`,
+              `/academics/exam_results/?exam=${examId}&subject=${subjectId}&component=${c.id}&klass=${selectedClass}`,
+              `/academics/exam_results/?exam=${examId}&subject=${subjectId}&component=${c.id}&class=${selectedClass}`,
+              `/academics/exam_results/?exam_id=${examId}&subject_id=${subjectId}&component_id=${c.id}`,
+              `/academics/exam_results/?exam=${examId}&component=${c.id}`,
+            ]
+            let list = []
+            for (const u of urls){
+              try{ const part = await fetchAll(u); if (Array.isArray(part) && part.length) { list = part; break } }catch{}
+            }
+            if (!list.length){
+              try{
+                const part = await fetchAll(`/academics/exam_results/?exam=${examId}&component=${c.id}`)
+                const allowed = new Set(students.map(s=>s.id))
+                list = part.filter(r=> allowed.has((r?.student ?? r?.student_id ?? r?.student_detail?.id)))
+              }catch{}
+            }
+            // Filter locally by subject/component
+            if (list.length){
+              const subjObj = subjects.find(s=> String(s.id)===String(subjectId)) || {}
+              const subjCode = (subjObj.code||'').toLowerCase()
+              const subjName = (subjObj.name||'').toLowerCase()
+              list = list.filter(r => {
+                const sid = r?.subject ?? r?.subject_id ?? r?.subject_detail?.id
+                const scode = (r?.subject_code || r?.subject_detail?.code || '').toLowerCase()
+                const sname = (r?.subject_name || r?.subject_detail?.name || '').toLowerCase()
+                const subjectOk = sid ? String(sid)===String(subjectId) : (scode? scode===subjCode : (sname? sname===subjName : true))
+                const comp = r?.component ?? r?.component_id ?? r?.component_detail?.id
+                const compOk = comp ? String(comp)===String(c.id) : true
+                return subjectOk && compOk
+              })
+            }
+            // Build map: if no matches for this component, set all blanks for that component
+            if (!list.length){
+              const blankCol = {}
+              students.forEach(s=>{ blankCol[s.id] = '' })
+              nextMarksAll[c.id] = blankCol
+            } else {
+              const map = {}
+              students.forEach(s=>{ map[s.id] = '' })
+              list.forEach(r=>{
+                if (!r) return
+                const sid = r.student ?? r.student_id ?? (r.student_detail?.id)
+                if (sid != null){
+                  const val = r.marks ?? r.score ?? r.value
+                  if (val != null) map[sid] = Math.round(Number(val))
+                }
+              })
+              nextMarksAll[c.id] = map
+            }
           }
           if (alive) setMarksAll(nextMarksAll)
         }
+        try { console.debug('TeacherGrades prefill', { examId, subjectId, compId, countSingle: entryMode==='single' ? undefined : null }) } catch {}
       }catch(e){ /* silent prefill failure */ }
     })()
     return ()=>{ alive = false }
@@ -505,11 +677,13 @@ export default function TeacherGrades(){
   // Handle change with immediate validation and feedback
   const handleMarkChange = (studentId, raw) => {
     const total = Number(outOf) || Number(examMeta.total_marks) || 100
-    setMarks(m => ({ ...m, [studentId]: raw }))
+    const toStore = (inputAs === 'percent') ? percentToMarks(raw, total) : String(raw)
+    setMarks(m => ({ ...m, [studentId]: toStore }))
     let isInvalid = false
     if (raw !== '' && raw !== null && typeof raw !== 'undefined'){
-      const num = Number(raw)
-      if (Number.isNaN(num) || num < 0 || num > total){
+      const numCheck = (inputAs === 'percent') ? Number(String(raw).toString().replace(/%/g,'')) : Number(raw)
+      const limit = (inputAs === 'percent') ? 100 : total
+      if (Number.isNaN(numCheck) || numCheck < 0 || numCheck > limit){
         isInvalid = true
       }
     }
@@ -519,7 +693,8 @@ export default function TeacherGrades(){
     })
     // Notify immediately when value first becomes invalid
     if (isInvalid && !invalid[studentId]){
-      showError('Invalid marks', `Value must be between 0 and ${total}.`, 3000)
+      const unit = inputAs==='percent' ? '%' : total
+      showError('Invalid input', `Value must be between 0 and ${unit}.`, 3000)
     }
 
     // Debounced auto-save for valid inputs
@@ -532,12 +707,13 @@ export default function TeacherGrades(){
           const subjectId = Number(selectedSubject)
           const componentId = selectedComponentId ? Number(selectedComponentId) : undefined
           const out = outOf ? Number(outOf) : undefined
-          const num = Math.round(Number(raw))
+          const base = (inputAs === 'percent') ? percentToMarks(raw, out || examMeta.total_marks || 100) : String(raw)
+          const num = Math.round(Number(base))
           if (!examId || !subjectId || Number.isNaN(num)) return
           const item = { exam: examId, subject: subjectId, student: studentId, marks: num }
           if (componentId) item.component = componentId
           if (out) item.out_of = out
-          await api.post('/academics/exam_results/bulk/', { results: [item] })
+          await saveResults([item])
         }catch(e){
           let msg = e?.response?.data?.detail
           if (!msg && e?.response?.data){
@@ -554,6 +730,64 @@ export default function TeacherGrades(){
     const ready = selectedClass && selectedSubject && selectedExamId
     if (ready) setControlsOpen(false)
   }, [selectedClass, selectedSubject, selectedExamId])
+
+  // ---------- Draft persistence (localStorage) ----------
+  const draftKey = () => {
+    const parts = [
+      'teachergrades',
+      `c:${selectedClass||''}`,
+      `s:${selectedSubject||''}`,
+      `e:${selectedExamId||''}`,
+      `m:${entryMode}`,
+      entryMode==='single' ? `p:${selectedComponentId||''}` : 'all'
+    ]
+    return parts.join('|')
+  }
+
+  // Save drafts whenever marks change
+  useEffect(()=>{
+    try{
+      if (!selectedClass || !selectedSubject || !selectedExamId) return
+      const key = draftKey()
+      const payload = {
+        when: Date.now(),
+        entryMode,
+        inputAs,
+        outOf,
+        outOfPerComp,
+        marks,
+        marksAll,
+      }
+      localStorage.setItem(key, JSON.stringify(payload))
+    }catch{}
+  }, [marks, marksAll, outOf, outOfPerComp, inputAs, entryMode, selectedClass, selectedSubject, selectedExamId])
+
+  // Restore drafts after server prefill
+  useEffect(()=>{
+    try{
+      if (!students.length || !selectedClass || !selectedSubject || !selectedExamId) return
+      const raw = localStorage.getItem(draftKey())
+      if (!raw) return
+      const data = JSON.parse(raw)
+      if (!data || typeof data !== 'object') return
+      // Only overlay same entry mode
+      if (data.entryMode === 'single'){
+        if (data.marks && typeof data.marks === 'object'){
+          setMarks(prev => ({ ...prev, ...data.marks }))
+        }
+        if (data.outOf) setOutOf(String(data.outOf))
+        if (data.inputAs) setInputAs(data.inputAs)
+      } else {
+        if (data.marksAll && typeof data.marksAll === 'object'){
+          setMarksAll(prev => ({ ...prev, ...data.marksAll }))
+        }
+        if (data.outOfPerComp && typeof data.outOfPerComp === 'object'){
+          setOutOfPerComp(prev => ({ ...prev, ...data.outOfPerComp }))
+        }
+        if (data.inputAs) setInputAs(data.inputAs)
+      }
+    }catch{}
+  }, [students, selectedClass, selectedSubject, selectedExamId])
 
   const submit = async () => {
     setSaving(true)
@@ -593,33 +827,46 @@ export default function TeacherGrades(){
         }
       }
       if (payload.length === 0) throw new Error('Enter at least one mark to save')
-      const res = await api.post('/academics/exam_results/bulk/', { results: payload })
-      const failed = Number(res?.data?.failed || 0)
+      const { failed } = await saveResults(payload)
       if (failed === 0){
         setMessage('Grades saved.')
         showSuccess('Grades saved', 'All valid marks were saved.', 4000)
       } else {
         // Show first few errors
-        const errs = Array.isArray(res?.data?.errors) ? res.data.errors : []
-        const detail = errs.slice(0,3).map(e=>{
-          if (e?.error?.detail) return e.error.detail
-          if (typeof e?.error === 'string') return e.error
-          try { return JSON.stringify(e.error) } catch { return 'Failed' }
-        }).join(' | ')
+        const detail = 'Some rows failed to save.'
         setMessage('Some grades could not be saved.')
-        showError('Partial save', `${failed} failed. ${detail}${errs.length>3?' ...':''}`, 6000)
+        showError('Partial save', `${failed} failed. ${detail}${''}`, 6000)
       }
       // Refresh marks from server to reflect canonical values
       try{
         if (entryMode === 'single'){
           const componentId = selectedComponentId ? Number(selectedComponentId) : undefined
           const base = `/academics/exam_results/?exam=${examId}&subject=${subjectId}`
-          const listRes = await api.get(componentId ? `${base}&component=${componentId}` : base)
-          const arr = Array.isArray(listRes.data) ? listRes.data : (Array.isArray(listRes?.data?.results) ? listRes.data.results : [])
-          const map = {}
-          students.forEach(s=>{ map[s.id] = '' })
-          arr.forEach(r=>{ if (r && r.student != null) map[r.student] = r.marks })
-          setMarks(map)
+          const fetchAll = async (url) => {
+            let out = []
+            let next = url
+            let guard = 0
+            while (next && guard < 50){
+              const res = await api.get(next)
+              const data = res?.data
+              if (Array.isArray(data)) { out = data; break }
+              if (data && Array.isArray(data.results)) { out = out.concat(data.results); next = data.next; guard++; continue }
+              break
+            }
+            return out
+          }
+          const list = await fetchAll(componentId ? `${base}&component=${componentId}` : base)
+          // Start from existing values; only overlay those returned by server
+          const next = { ...marks }
+          list.forEach(r=>{
+            if (!r) return
+            const sid = r.student ?? r.student_id ?? (r.student_detail?.id)
+            if (sid != null){
+              const val = r.marks ?? r.score ?? r.value
+              if (val != null) next[sid] = Math.round(Number(val))
+            }
+          })
+          setMarks(next)
         } else {
           // refresh per component
           const fetchAll = async (url) => {
@@ -647,6 +894,8 @@ export default function TeacherGrades(){
           setMarksAll(nextMarksAll)
         }
       }catch{}
+      // Clear draft after successful save
+      try { localStorage.removeItem(draftKey()) } catch {}
     }catch(e){
       // Prefer detailed backend validation errors
       let msg = e?.response?.data?.detail
@@ -684,7 +933,10 @@ export default function TeacherGrades(){
             <div className="text-lg md:text-xl font-semibold tracking-tight text-gray-900">Input Grades</div>
             <div className="text-xs text-gray-600">Enter and submit exam results for your class</div>
           </div>
-          <button onClick={()=>setControlsOpen(v=>!v)} className="text-sm px-3 py-1.5 rounded-lg hidden md:inline-flex bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-sm">{controlsOpen ? 'Hide Options' : 'Change Selection'}</button>
+          <div className="hidden md:flex items-center gap-2">
+            <button onClick={()=>setUnitModal(true)} type="button" className="text-xs px-2 py-1 rounded border bg-white hover:bg-gray-50">Input: {inputAs==='percent' ? 'Percentage (%)' : 'Marks'}</button>
+            <button onClick={()=>setControlsOpen(v=>!v)} className="text-sm px-3 py-1.5 rounded-lg bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-sm">{controlsOpen ? 'Hide Options' : 'Change Selection'}</button>
+          </div>
         </div>
       </div>
 
@@ -736,6 +988,13 @@ export default function TeacherGrades(){
               <option value="single">Single Paper</option>
               <option value="all">All Papers</option>
             </select>
+          </div>
+          <div className="grid gap-1">
+            <label className="text-xs text-gray-600">Input Unit</label>
+            <div className="flex items-center gap-2">
+              <button type="button" onClick={()=>setUnitModal(true)} className="border rounded px-2 py-1 text-xs bg-white hover:bg-gray-50">{inputAs==='percent' ? 'Percentage (%)' : 'Marks'}</button>
+              <span className="text-[11px] text-gray-500">Change how you type values</span>
+            </div>
           </div>
           {/* Out Of input(s) */}
           {entryMode === 'single' ? (
@@ -840,13 +1099,13 @@ export default function TeacherGrades(){
                     type="number"
                     inputMode="decimal"
                     min={0}
-                    max={Number(outOf)||Number(examMeta.total_marks)||100}
+                    max={inputAs==='percent' ? 100 : (Number(outOf)||Number(examMeta.total_marks)||100)}
                     step="0.01"
                     className={`border p-2 rounded w-24 text-right ${invalid[st.id] ? 'border-red-500 bg-red-50' : ''}`}
                     value={marks[st.id] || ''}
                     onChange={e=>handleMarkChange(st.id, e.target.value)}
                   />
-                  <span className="text-xs text-gray-500 w-12 text-right">{toPercent(marks[st.id], outOf)}</span>
+                  <span className="text-xs text-gray-500 w-16 text-right">{inputAs==='percent' ? '%' : toPercent(marks[st.id], outOf)}</span>
                 </div>
               </div>
             ))}
@@ -883,13 +1142,13 @@ export default function TeacherGrades(){
                           type="number"
                           inputMode="decimal"
                           min={0}
-                          max={Number(outOf)||Number(examMeta.total_marks)||100}
+                          max={inputAs==='percent' ? 100 : (Number(outOf)||Number(examMeta.total_marks)||100)}
                           step="0.01"
                           className={`border p-2 rounded w-28 text-right focus:ring-2 focus:ring-indigo-200 ${invalid[st.id] ? 'border-red-500 bg-red-50' : ''}`}
                           value={marks[st.id] || ''}
                           onChange={e=>handleMarkChange(st.id, e.target.value)}
                         />
-                        <span className="text-xs text-gray-500 w-12 text-right">{toPercent(marks[st.id], outOf)}</span>
+                        <span className="text-xs text-gray-500 w-16 text-right">{inputAs==='percent' ? '%' : toPercent(marks[st.id], outOf)}</span>
                       </div>
                     </td>
                   ) : (
@@ -900,13 +1159,13 @@ export default function TeacherGrades(){
                             type="number"
                             inputMode="decimal"
                             min={0}
-                            max={Number(outOfPerComp[c.id])||Number(examMeta.total_marks)||100}
+                            max={inputAs==='percent' ? 100 : (Number(outOfPerComp[c.id])||Number(examMeta.total_marks)||100)}
                             step="0.01"
                             className={`border p-2 rounded w-24 text-right focus:ring-2 focus:ring-indigo-200 ${(invalidAll[c.id]?.[st.id]) ? 'border-red-500 bg-red-50' : ''}`}
                             value={(marksAll[c.id]?.[st.id]) || ''}
                             onChange={e=>handleMarkChangeAll(c.id, st.id, e.target.value)}
                           />
-                          <span className="text-xs text-gray-500 w-12 text-right">{toPercent((marksAll[c.id]?.[st.id]) || '', outOfPerComp[c.id])}</span>
+                          <span className="text-xs text-gray-500 w-16 text-right">{inputAs==='percent' ? '%' : toPercent((marksAll[c.id]?.[st.id]) || '', outOfPerComp[c.id])}</span>
                         </div>
                       </td>
                     ))
@@ -939,6 +1198,24 @@ export default function TeacherGrades(){
       </div>
       {/* Spacer so the fixed bar doesn't cover content */}
       <div className="h-24 md:hidden" aria-hidden="true" />
+
+      {/* Input Unit Modal */}
+      <Modal open={unitModal} onClose={()=>setUnitModal(false)} title="Choose Input Unit" size="sm">
+        <div className="grid gap-3">
+          <div className="text-sm text-gray-600">You can type values as raw marks or as percentages. We always save marks on the server.</div>
+          <label className="flex items-center gap-2 text-sm">
+            <input type="radio" name="unit" checked={inputAs==='marks'} onChange={()=>setInputAs('marks')} />
+            <span>Marks (0 to Out Of)</span>
+          </label>
+          <label className="flex items-center gap-2 text-sm">
+            <input type="radio" name="unit" checked={inputAs==='percent'} onChange={()=>setInputAs('percent')} />
+            <span>Percentage (0% to 100%)</span>
+          </label>
+          <div className="flex justify-end gap-2 mt-1">
+            <button type="button" className="px-3 py-1.5 rounded border" onClick={()=>setUnitModal(false)}>Close</button>
+          </div>
+        </div>
+      </Modal>
     </div>
   )
 }

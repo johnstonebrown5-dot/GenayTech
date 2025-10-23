@@ -17,9 +17,6 @@ export default function SchoolHome() {
     logo_url: '',
     homepage: {}
   })
-  const [heroTilt, setHeroTilt] = useState({ rx: 0, ry: 0 })
-  const [heroIndex, setHeroIndex] = useState(0)
-  const [scrollProgress, setScrollProgress] = useState(0)
 
   // Simple scroll-reveal helper
   function Reveal({ className = '', children }){
@@ -83,30 +80,6 @@ export default function SchoolHome() {
     return <span ref={ref} className={className}>{display}</span>
   }
 
-  function onHeroMouseMove(e){
-    const rect = e.currentTarget.getBoundingClientRect()
-    const x = (e.clientX - rect.left) / rect.width - 0.5
-    const y = (e.clientY - rect.top) / rect.height - 0.5
-    const ry = x * 10
-    const rx = -y * 8
-    setHeroTilt({ rx, ry })
-  }
-  function onHeroMouseLeave(){ setHeroTilt({ rx: 0, ry: 0 }) }
-
-  function handleCardTilt(e){
-    const rect = e.currentTarget.getBoundingClientRect()
-    const x = (e.clientX - rect.left) / rect.width - 0.5
-    const y = (e.clientY - rect.top) / rect.height - 0.5
-    const ry = x * 8
-    const rx = -y * 6
-    e.currentTarget.style.transform = `perspective(900px) rotateX(${rx}deg) rotateY(${ry}deg)`
-    e.currentTarget.style.transition = 'transform 80ms ease-out'
-  }
-  function resetCardTilt(e){
-    e.currentTarget.style.transform = 'perspective(900px) rotateX(0deg) rotateY(0deg)'
-    e.currentTarget.style.transition = 'transform 180ms ease-out'
-  }
-
   useEffect(() => {
     let mounted = true
     ;(async () => {
@@ -129,26 +102,6 @@ export default function SchoolHome() {
       }
     })()
     return () => { mounted = false }
-  }, [])
-
-  useEffect(() => {
-    const raw = Array.isArray(school?.homepage?.hero?.images) ? school.homepage.hero.images : []
-    const len = raw.length || 4
-    if (len <= 1) return
-    const id = setInterval(() => setHeroIndex(i => (i + 1) % len), 5000)
-    return () => clearInterval(id)
-  }, [school?.homepage?.hero?.images])
-
-  useEffect(() => {
-    function onScroll(){
-      const st = window.scrollY
-      const h = document.documentElement.scrollHeight - window.innerHeight
-      const p = h > 0 ? st / h : 0
-      setScrollProgress(p)
-    }
-    onScroll()
-    window.addEventListener('scroll', onScroll, { passive: true })
-    return () => window.removeEventListener('scroll', onScroll)
   }, [])
 
   // Show a loading screen while fetching school data
@@ -194,20 +147,13 @@ export default function SchoolHome() {
           0% { background-position: -200% 0; }
           100% { background-position: 200% 0; }
         }
-        @keyframes fadeIn {
-          0% { opacity: 0; transform: scale(1.01); }
-          100% { opacity: 1; transform: scale(1); }
-        }
         @media (prefers-reduced-motion: reduce) {
           * { animation: none !important; transition: none !important; }
         }
       `}</style>
-      <div className="fixed top-0 left-0 right-0 z-40 h-0.5 md:h-1 pointer-events-none">
-        <div className="h-full w-full bg-gradient-to-r from-indigo-600 via-purple-500 to-pink-500 transform-gpu origin-left" style={{ transform: `scaleX(${scrollProgress})` }} />
-      </div>
       {/* Header */}
       <header className="sticky top-0 z-30 bg-white/70 backdrop-blur supports-[backdrop-filter]:backdrop-blur border-b border-transparent shadow-sm">
-        <div className="mx-auto max-w-7xl px-6 py-4 flex items-center justify-between">
+        <div className="mx-auto max-w-7xl px-4 md:px-6 py-3 md:py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             {school.logo_url ? (
               <img src={toAbsoluteUrl(school.logo_url)} alt="School logo" className="h-9 w-9 rounded-xl object-cover border border-gray-200" />
@@ -264,28 +210,28 @@ export default function SchoolHome() {
       {/* Hero */}
       <section className="relative overflow-hidden">
         <div className="absolute inset-0 bg-[radial-gradient(1200px_600px_at_-10%_-10%,rgba(79,70,229,0.12),transparent_60%),radial-gradient(1200px_600px_at_110%_30%,rgba(147,51,234,0.12),transparent_60%),linear-gradient(to_bottom,white,rgba(248,250,252,0.6))]" />
-        <div aria-hidden className="pointer-events-none absolute -top-24 -right-24 h-72 w-72 rounded-full bg-indigo-300/30 blur-3xl" style={{ animation: 'float 10s ease-in-out infinite' }} />
-        <div aria-hidden className="pointer-events-none absolute bottom-0 -left-24 h-80 w-80 rounded-full bg-purple-300/30 blur-3xl" style={{ animation: 'float2 12s ease-in-out infinite' }} />
-        <div aria-hidden className="pointer-events-none absolute top-10 left-10 h-6 w-6 rounded-full bg-indigo-400/40" style={{ animation: 'float 8s ease-in-out infinite' }} />
-        <div aria-hidden className="pointer-events-none absolute bottom-12 right-16 h-10 w-10 rounded-full border border-purple-300/60" style={{ animation: 'spinSlow 18s linear infinite' }} />
-        <div className="relative mx-auto max-w-7xl px-6 pt-16 pb-24">
+        <div aria-hidden className="hidden sm:block pointer-events-none absolute -top-24 -right-24 h-72 w-72 rounded-full bg-indigo-300/30 blur-3xl" style={{ animation: 'float 10s ease-in-out infinite' }} />
+        <div aria-hidden className="hidden sm:block pointer-events-none absolute bottom-0 -left-24 h-80 w-80 rounded-full bg-purple-300/30 blur-3xl" style={{ animation: 'float2 12s ease-in-out infinite' }} />
+        <div aria-hidden className="hidden sm:block pointer-events-none absolute top-10 left-10 h-6 w-6 rounded-full bg-indigo-400/40" style={{ animation: 'float 8s ease-in-out infinite' }} />
+        <div aria-hidden className="hidden sm:block pointer-events-none absolute bottom-12 right-16 h-10 w-10 rounded-full border border-purple-300/60" style={{ animation: 'spinSlow 18s linear infinite' }} />
+        <div className="relative mx-auto max-w-7xl px-4 md:px-6 pt-12 md:pt-16 pb-16 md:pb-24">
           <div className="grid lg:grid-cols-2 gap-12 items-center">
             <div>
               <div className="inline-flex items-center gap-2 rounded-full bg-indigo-100 text-indigo-700 px-3 py-1 text-xs font-semibold mb-4 shadow-sm" style={{ animation: 'pulseBadge 2.8s ease-out infinite' }}>
                 <span>{school.homepage?.hero?.badge || school.motto}</span>
               </div>
-              <h1 className="text-5xl md:text-6xl font-extrabold tracking-tight bg-gradient-to-r from-gray-900 via-gray-900 to-indigo-800 bg-clip-text text-transparent">
+              <h1 className="text-4xl sm:text-5xl md:text-6xl font-extrabold leading-tight tracking-tight bg-gradient-to-r from-gray-900 via-gray-900 to-indigo-800 bg-clip-text text-transparent">
                 {school.homepage?.hero?.title || `Welcome to ${school.name}`}
               </h1>
               <div className="mt-3 h-1.5 w-24 rounded-full bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 animate-pulse" />
               <p className="mt-4 text-xl text-gray-600">
                 {school.homepage?.hero?.subtitle || 'A nurturing, diverse and high-achieving community empowering students to thrive in academics, character, and service.'}
               </p>
-              <div className="mt-8 flex flex-wrap gap-3">
-                <a href={school.homepage?.hero?.ctaPrimaryLink || '#admissions'} className="px-6 py-3 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-semibold shadow-lg hover:shadow-xl hover:opacity-95 transition" style={{ backgroundSize: '200% 100%', animation: 'shimmer 6s linear infinite' }}>
+              <div className="mt-8 grid grid-cols-1 sm:flex gap-3">
+                <a href={school.homepage?.hero?.ctaPrimaryLink || '#admissions'} className="w-full sm:w-auto px-6 py-3 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-semibold shadow-lg hover:shadow-xl hover:opacity-95 transition">
                   {school.homepage?.hero?.ctaPrimaryText || 'Start Your Application'}
                 </a>
-                <a href={school.homepage?.hero?.ctaSecondaryLink || '#about'} className="px-6 py-3 rounded-xl border border-gray-300 text-gray-700 font-medium hover:bg-gray-50 transition">
+                <a href={school.homepage?.hero?.ctaSecondaryLink || '#about'} className="w-full sm:w-auto px-6 py-3 rounded-xl border border-gray-300 text-gray-700 font-medium hover:bg-gray-50 transition">
                   {school.homepage?.hero?.ctaSecondaryText || 'Learn More'}
                 </a>
               </div>
@@ -296,34 +242,32 @@ export default function SchoolHome() {
               </div>
             </div>
             <div className="relative">
-              <div onMouseMove={onHeroMouseMove} onMouseLeave={onHeroMouseLeave} style={{ transform: `perspective(1000px) rotateX(${heroTilt.rx}deg) rotateY(${heroTilt.ry}deg)`, transformStyle: 'preserve-3d', transition: 'transform 180ms ease-out' }}>
-                <div className="rounded-3xl border border-gray-200 shadow-2xl overflow-hidden bg-white ring-1 ring-gray-100 transform transition hover:-translate-y-0.5 hover:shadow-[0_20px_50px_rgba(79,70,229,0.15)]" style={{ animation: 'panZoom 16s ease-in-out infinite' }}>
-                  {(() => {
-                    const imgs = school?.homepage?.hero?.images || []
-                    const main = imgs[0] ? toAbsoluteUrl(imgs[0]) : new URL('../../images/pexels-kwakugriffn-14554003.jpg', import.meta.url).href
-                    const t1 = imgs[1] ? toAbsoluteUrl(imgs[1]) : new URL('../../images/pexels-gabby-k-6289065.jpg', import.meta.url).href
-                    const t2 = imgs[2] ? toAbsoluteUrl(imgs[2]) : new URL('../../images/pexels-akelaphotography-448877.jpg', import.meta.url).href
-                    const t3 = imgs[3] ? toAbsoluteUrl(imgs[3]) : new URL('../../images/pexels-kwakugriffn-14554003.jpg', import.meta.url).href
-                    return (
-                      <>
-                        <img
-                          src={main}
-                          alt="Hero"
-                          width="1280"
-                          height="640"
-                          loading="eager"
-                          decoding="async"
-                          className="w-full h-80 object-cover"
-                        />
-                        <div className="grid grid-cols-3 divide-x divide-gray-100">
-                          <img loading="lazy" decoding="async" width="400" height="160" src={t1} alt="Students" className="h-28 w-full object-cover"/>
-                          <img loading="lazy" decoding="async" width="400" height="160" src={t2} alt="Learning" className="h-28 w-full object-cover"/>
-                          <img loading="lazy" decoding="async" width="400" height="160" src={t3} alt="Community" className="h-28 w-full object-cover"/>
-                        </div>
-                      </>
-                    )
-                  })()}
-                </div>
+              <div className="rounded-3xl border border-gray-200 shadow-2xl overflow-hidden bg-white ring-1 ring-gray-100 transform transition hover:-translate-y-0.5 hover:shadow-[0_20px_50px_rgba(79,70,229,0.15)]" style={{ animation: 'panZoom 16s ease-in-out infinite' }}>
+                {(() => {
+                  const imgs = school?.homepage?.hero?.images || []
+                  const main = imgs[0] ? toAbsoluteUrl(imgs[0]) : new URL('../../images/pexels-kwakugriffn-14554003.jpg', import.meta.url).href
+                  const t1 = imgs[1] ? toAbsoluteUrl(imgs[1]) : new URL('../../images/pexels-gabby-k-6289065.jpg', import.meta.url).href
+                  const t2 = imgs[2] ? toAbsoluteUrl(imgs[2]) : new URL('../../images/pexels-akelaphotography-448877.jpg', import.meta.url).href
+                  const t3 = imgs[3] ? toAbsoluteUrl(imgs[3]) : new URL('../../images/pexels-kwakugriffn-14554003.jpg', import.meta.url).href
+                  return (
+                    <>
+                      <img
+                        src={main}
+                        alt="Hero"
+                        width="1280"
+                        height="640"
+                        loading="eager"
+                        decoding="async"
+                        className="w-full h-56 sm:h-72 md:h-80 object-cover"
+                      />
+                      <div className="grid grid-cols-3 divide-x divide-gray-100">
+                        <img loading="lazy" decoding="async" width="400" height="160" src={t1} alt="Students" className="h-20 sm:h-24 md:h-28 w-full object-cover"/>
+                        <img loading="lazy" decoding="async" width="400" height="160" src={t2} alt="Learning" className="h-20 sm:h-24 md:h-28 w-full object-cover"/>
+                        <img loading="lazy" decoding="async" width="400" height="160" src={t3} alt="Community" className="h-20 sm:h-24 md:h-28 w-full object-cover"/>
+                      </div>
+                    </>
+                  )
+                })()}
               </div>
               {(() => {
                 const st = school?.homepage?.stats || {}
@@ -331,7 +275,7 @@ export default function SchoolHome() {
                 const teachers = st?.teachers ?? '—'
                 const satisfaction = st?.satisfaction || '98%'
                 return (
-                  <div className="pointer-events-none absolute -bottom-5 left-4 right-4 md:left-6 md:right-auto z-10">
+                  <div className="hidden md:block pointer-events-none absolute -bottom-5 left-4 right-4 md:left-6 md:right-auto z-10">
                     <div className="rounded-xl border border-gray-200 bg-white/80 backdrop-blur px-3 py-2 shadow-md flex gap-4 text-sm">
                       <div className="flex items-baseline gap-1"><CountUp value={students} className="text-indigo-700 font-semibold" /><span className="text-gray-600">Students</span></div>
                       <div className="flex items-baseline gap-1"><CountUp value={teachers} className="text-indigo-700 font-semibold" /><span className="text-gray-600">Teachers</span></div>
@@ -355,7 +299,7 @@ export default function SchoolHome() {
       {/* About */}
       <section id="about" className="relative overflow-hidden bg-gradient-to-b from-indigo-50 via-sky-50 to-emerald-50/30">
         <div aria-hidden className="absolute inset-0 pointer-events-none opacity-25 [background:radial-gradient(rgba(99,102,241,0.18)_1px,transparent_1px)] [background-size:22px_22px]" />
-        <div className="mx-auto max-w-7xl px-6 py-20">
+        <div className="mx-auto max-w-7xl px-4 md:px-6 py-14 md:py-20">
           <div className="grid lg:grid-cols-2 gap-12 items-start">
           <Reveal>
             <h2 className="text-3xl font-bold text-gray-900">{school.homepage?.about?.title || `About ${school.name}`}</h2>
@@ -411,7 +355,7 @@ export default function SchoolHome() {
       <section id="academics" className="relative overflow-hidden bg-gradient-to-b from-emerald-50 via-indigo-50 to-purple-50/40">
         <div aria-hidden className="absolute inset-0 pointer-events-none opacity-20 [background:radial-gradient(rgba(16,185,129,0.18)_1px,transparent_1px)] [background-size:22px_22px]" />
         <Wave className="absolute -top-px left-0 right-0 h-16 w-full text-emerald-50" flip />
-        <div className="mx-auto max-w-7xl px-6 py-16">
+        <div className="mx-auto max-w-7xl px-4 md:px-6 py-14 md:py-16">
           <div className="text-center max-w-3xl mx-auto">
             <h2 className="text-4xl font-bold text-gray-900">Academic Programs</h2>
             <p className="mt-3 text-lg text-gray-600">Engaging, rigorous and future‑ready curriculum from junior secondary through senior school.</p>
@@ -425,12 +369,10 @@ export default function SchoolHome() {
               { title: 'Sports & Arts', desc: 'Football, athletics, music, drama and visual arts.' },
               { title: 'Clubs & Societies', desc: 'Debate, wildlife, Red Cross, Scouts and more.' },
             ]).map((f, idx) => (
-              <Reveal key={f.title}>
-                <div className={`rounded-xl border border-gray-200 p-6 hover:shadow-lg transition bg-gradient-to-br ${['from-indigo-50 to-indigo-100','from-emerald-50 to-emerald-100','from-violet-50 to-violet-100','from-rose-50 to-rose-100','from-amber-50 to-amber-100','from-sky-50 to-sky-100'][idx % 6]}`} onMouseMove={handleCardTilt} onMouseLeave={resetCardTilt} style={{ transformStyle: 'preserve-3d', transition: 'transform 120ms ease-out' }}>
-                  <div className="h-10 w-10 rounded-lg grid place-items-center mb-4 bg-indigo-600/10 text-indigo-700">★</div>
-                  <h3 className="font-semibold text-gray-900">{f.title}</h3>
-                  <p className="mt-2 text-sm text-gray-600">{f.desc}</p>
-                </div>
+              <Reveal key={f.title} className={`rounded-xl border border-gray-200 p-6 hover:shadow-lg transition bg-gradient-to-br ${['from-indigo-50 to-indigo-100','from-emerald-50 to-emerald-100','from-violet-50 to-violet-100','from-rose-50 to-rose-100','from-amber-50 to-amber-100','from-sky-50 to-sky-100'][idx % 6]}`}>
+                <div className="h-10 w-10 rounded-lg grid place-items-center mb-4 bg-indigo-600/10 text-indigo-700">★</div>
+                <h3 className="font-semibold text-gray-900">{f.title}</h3>
+                <p className="mt-2 text-sm text-gray-600">{f.desc}</p>
               </Reveal>
             ))}
           </div>
@@ -442,7 +384,7 @@ export default function SchoolHome() {
       <section id="admissions" className="relative overflow-hidden bg-gradient-to-b from-purple-50 via-pink-50 to-rose-50/30">
         <div aria-hidden className="absolute inset-0 pointer-events-none opacity-20 [background:radial-gradient(rgba(244,114,182,0.16)_1px,transparent_1px)] [background-size:22px_22px]" />
         <Wave className="absolute -top-px left-0 right-0 h-16 w-full text-purple-50" flip />
-        <div className="mx-auto max-w-7xl px-6 py-20">
+        <div className="mx-auto max-w-7xl px-4 md:px-6 py-16 md:py-20">
           <div className="grid lg:grid-cols-2 gap-12 items-center">
           <Reveal>
             <h2 className="text-3xl font-bold text-gray-900">Admissions</h2>
@@ -491,7 +433,7 @@ export default function SchoolHome() {
       <section id="news" className="relative overflow-hidden bg-gradient-to-b from-rose-50 via-violet-50 to-indigo-50/40">
         <div aria-hidden className="absolute inset-0 pointer-events-none opacity-15 [background:radial-gradient(rgba(147,51,234,0.18)_1px,transparent_1px)] [background-size:22px_22px]" />
         <Wave className="absolute -top-px left-0 right-0 h-16 w-full text-rose-50" flip />
-        <div className="mx-auto max-w-7xl px-6 py-16">
+        <div className="mx-auto max-w-7xl px-4 md:px-6 py-14 md:py-16">
           <div className="flex items-end justify-between">
             <div>
               <h2 className="text-3xl font-bold text-gray-900">News & Highlights</h2>
@@ -505,21 +447,19 @@ export default function SchoolHome() {
               { title: 'Inter-County Football Champions', date: 'Aug 30, 2025', url: '' },
               { title: 'New ICT Lab Commissioned', date: 'Aug 05, 2025', url: '' },
             ]).map((n, idx) => (
-              <Reveal key={n.title || idx}>
-                <div className="rounded-xl border border-gray-200 bg-white overflow-hidden hover:shadow-lg" onMouseMove={handleCardTilt} onMouseLeave={resetCardTilt} style={{ transformStyle: 'preserve-3d', transition: 'transform 120ms ease-out' }}>
-                  {n.image ? (
-                    <img src={toAbsoluteUrl(n.image)} alt={n.title || 'News image'} className="w-full aspect-[16/9] object-cover" loading="lazy" />
-                  ) : (
-                    <div className="aspect-[16/9] bg-gray-100" />
+              <Reveal key={n.title || idx} className="rounded-xl border border-gray-200 bg-white overflow-hidden hover:shadow-lg">
+                {n.image ? (
+                  <img src={toAbsoluteUrl(n.image)} alt={n.title || 'News image'} className="w-full aspect-[16/9] object-cover" loading="lazy" />
+                ) : (
+                  <div className="aspect-[16/9] bg-gray-100" />
+                )}
+                <div className="p-4">
+                  <div className="text-xs text-gray-500">{n.date}</div>
+                  <h3 className="mt-1 font-semibold text-gray-900">{n.title}</h3>
+                  {(/^https?:\/\//i.test(n.url || '')
+                    ? <a href={n.url} target="_blank" rel="noreferrer" className="mt-2 inline-flex items-center gap-1 text-sm text-indigo-700 hover:underline">Read more →</a>
+                    : <Link to={`/news/${idx}`} className="mt-2 inline-flex items-center gap-1 text-sm text-indigo-700 hover:underline">Read more →</Link>
                   )}
-                  <div className="p-4">
-                    <div className="text-xs text-gray-500">{n.date}</div>
-                    <h3 className="mt-1 font-semibold text-gray-900">{n.title}</h3>
-                    {(/^https?:\/\//i.test(n.url || '')
-                      ? <a href={n.url} target="_blank" rel="noreferrer" className="mt-2 inline-flex items-center gap-1 text-sm text-indigo-700 hover:underline">Read more →</a>
-                      : <Link to={`/news/${idx}`} className="mt-2 inline-flex items-center gap-1 text-sm text-indigo-700 hover:underline">Read more →</Link>
-                    )}
-                  </div>
                 </div>
               </Reveal>
             ))}
@@ -531,7 +471,7 @@ export default function SchoolHome() {
       <section id="contact" className="relative overflow-hidden bg-gradient-to-b from-indigo-50 via-blue-50 to-white">
         <div aria-hidden className="absolute inset-0 pointer-events-none opacity-15 [background:radial-gradient(rgba(59,130,246,0.16)_1px,transparent_1px)] [background-size:22px_22px]" />
         <Wave className="absolute -top-px left-0 right-0 h-16 w-full text-indigo-50" flip />
-        <div className="mx-auto max-w-7xl px-6 py-16">
+        <div className="mx-auto max-w-7xl px-4 md:px-6 py-14 md:py-16">
           <div className="grid md:grid-cols-2 gap-10 items-start">
           <div>
             <h2 className="text-3xl font-bold text-gray-900">Contact Us</h2>

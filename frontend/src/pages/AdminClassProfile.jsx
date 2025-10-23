@@ -20,6 +20,9 @@ export default function AdminClassProfile(){
   const [gradePerf, setGradePerf] = useState([]) // [{klass, klass_name, mean}]
   const [loadingGradePerf, setLoadingGradePerf] = useState(false)
   const [teachers, setTeachers] = useState([])
+  const [allTeachers, setAllTeachers] = useState([])
+  const [subjectTeachers, setSubjectTeachers] = useState([])
+  const [teacherUsers, setTeacherUsers] = useState([])
   const [showAssignModal, setShowAssignModal] = useState(false)
   const [assignForm, setAssignForm] = useState({ subject: '', teacher: '' })
   const [showReassignCT, setShowReassignCT] = useState(false)
@@ -81,18 +84,31 @@ export default function AdminClassProfile(){
   }, [])
 
   const subjects = Array.isArray(klass?.subjects) ? klass.subjects : []
-  // Filter teachers by selected subject (match by subject code or name in profile.subjects comma list)
+  // Teachers for dropdown: prefer server-filtered list; otherwise filter locally from the full list
   const filteredTeachers = useMemo(() => {
-    if (!assignForm.subject) return teachers
+    const dedupByUserId = (arr) => {
+      const seen = new Set()
+      const out = []
+      for (const t of arr) {
+        const uid = t?.user?.id
+        if (!uid || !seen.has(uid)) { out.push(t); if (uid) seen.add(uid) }
+      }
+      return out
+    }
+    if (subjectTeachers.length) return dedupByUserId(subjectTeachers)
+    const base = dedupByUserId([...(allTeachers.length ? allTeachers : teachers), ...teacherUsers])
+    if (!assignForm.subject) return base
     const subj = subjects.find(s => String(s.id) === String(assignForm.subject))
-    if (!subj) return teachers
+    if (!subj) return base
     const code = (subj.code || '').toLowerCase()
     const name = (subj.name || '').toLowerCase()
-    return teachers.filter(t => {
+    const matched = base.filter(t => {
       const subjStr = (t.subjects || t.user?.subjects || '').toLowerCase()
-      return subjStr.includes(code) || subjStr.includes(name)
+      return (code && subjStr.includes(code)) || (name && subjStr.includes(name))
     })
-  }, [assignForm.subject, subjects, teachers])
+    // If nothing matched (e.g., subjects not filled on profiles), show all school teachers
+    return matched.length ? matched : base
+  }, [assignForm.subject, subjects, teachers, allTeachers, subjectTeachers, teacherUsers])
   const classStudents = useMemo(() => {
     const cid = String(id)
     return students.filter(s => String(s.klass) === cid || String(s.klass_detail?.id || '') === cid)
@@ -158,10 +174,24 @@ export default function AdminClassProfile(){
     async function loadTeachers(){
       try {
         const { data } = await api.get('/academics/teachers/')
-        if (!cancelled) setTeachers(Array.isArray(data) ? data : [])
+        if (!cancelled) {
+          const list = Array.isArray(data) ? data : (Array.isArray(data?.results) ? data.results : [])
+          setTeachers(list)
+          setAllTeachers(list)
+        }
       } catch (e) {
-        if (!cancelled) setTeachers([])
+        if (!cancelled) { setTeachers([]); setAllTeachers([]) }
       }
+      // Best effort: also load plain users with role=teacher for fallback
+      try {
+        const res = await api.get('/auth/users/?role=teacher')
+        if (!cancelled) {
+          const uArr = Array.isArray(res.data) ? res.data : (Array.isArray(res.data?.results) ? res.data.results : [])
+          // Normalize into teacher-like objects
+          const mapped = uArr.map(u=>({ id: null, user: u, subjects: '', klass: null, klass_detail: null }))
+          setTeacherUsers(mapped)
+        }
+      } catch {}
     }
     loadTeachers()
     return ()=>{ cancelled = true }
@@ -182,8 +212,37 @@ export default function AdminClassProfile(){
     // Load teachers filtered by subject for smaller dropdown and accuracy
     if (subjId) {
       try {
-        const { data } = await api.get(`/academics/teachers/?subject=${subjId}`)
-        setTeachers(Array.isArray(data) ? data : [])
+        // Try by subject id
+        let out = []
+        try {
+          const r1 = await api.get(`/academics/teachers/?subject=${subjId}`)
+          out = Array.isArray(r1.data) ? r1.data : (Array.isArray(r1.data?.results) ? r1.data.results : [])
+        } catch {}
+        // If empty, try by code or name
+        if (!out.length) {
+          const subj = (Array.isArray(subjects) ? subjects : []).find(s => String(s.id) === String(subjId)) || {}
+          const code = encodeURIComponent(subj.code || '')
+          const name = encodeURIComponent(subj.name || '')
+          if (code) {
+            try {
+              const r2 = await api.get(`/academics/teachers/?code=${code}`)
+              out = Array.isArray(r2.data) ? r2.data : (Array.isArray(r2.data?.results) ? r2.data.results : out)
+            } catch {}
+          }
+          if (!out.length && name) {
+            try {
+              const r3 = await api.get(`/academics/teachers/?name=${name}&school=`)
+              out = Array.isArray(r3.data) ? r3.data : (Array.isArray(r3.data?.results) ? r3.data.results : out)
+            } catch {}
+          }
+        }
+        if (!out.length) {
+          try {
+            const r4 = await api.get('/academics/teachers/?school=')
+            out = Array.isArray(r4.data) ? r4.data : (Array.isArray(r4.data?.results) ? r4.data.results : [])
+          } catch {}
+        }
+        setSubjectTeachers(out)
       } catch (e) {
         /* ignore; fallback to previously loaded all teachers */
       }
@@ -212,6 +271,18 @@ export default function AdminClassProfile(){
       setShowAssignModal(false)
     }
   }
+
+  const [assignSearch, setAssignSearch] = useState('')
+  const displayTeachers = useMemo(()=>{
+    const q = assignSearch.trim().toLowerCase()
+    if (!q) return filteredTeachers
+    return filteredTeachers.filter(t => {
+      const u = t.user || {}
+      const name = `${u.first_name||''} ${u.last_name||''} ${u.username||''}`.toLowerCase()
+      const subs = (t.subjects||'').toLowerCase()
+      return name.includes(q) || subs.includes(q)
+    })
+  }, [filteredTeachers, assignSearch])
 
   return (
     <AdminLayout>
@@ -466,26 +537,42 @@ export default function AdminClassProfile(){
       {/* Assign Subject Teacher Modal */}
       <Modal open={showAssignModal} onClose={()=>setShowAssignModal(false)} title="Assign Subject Teacher" size="sm">
         <form onSubmit={saveAssignment} className="grid gap-3">
-          <label className="grid gap-1">
+          <div className="grid gap-1">
             <span className="text-sm text-gray-700">Subject</span>
-            <select className="border p-2 rounded" value={assignForm.subject} onChange={e=>setAssignForm({...assignForm, subject:e.target.value})} required>
-              <option value="">Select Subject</option>
-              {subjects.map(s => (
-                <option key={s.id} value={s.id}>{s.code} — {s.name}</option>
-              ))}
-            </select>
-          </label>
-          <label className="grid gap-1">
+            <div className="flex items-center gap-2">
+              <select className="border p-2 rounded w-full" value={assignForm.subject} onChange={e=>{ setAssignForm({...assignForm, subject:e.target.value}); setSubjectTeachers([]) }} required>
+                <option value="">Select Subject</option>
+                {subjects.map(s => (
+                  <option key={s.id} value={s.id}>{s.code} — {s.name}</option>
+                ))}
+              </select>
+            </div>
+            {!!assignForm.subject && (()=>{
+              const s = subjects.find(x=> String(x.id)===String(assignForm.subject))
+              return s ? <div className="text-xs text-gray-500">Selected: <span className="px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 mr-1">{s.code}</span>{s.name}</div> : null
+            })()}
+          </div>
+
+          <div className="grid gap-1">
             <span className="text-sm text-gray-700">Teacher</span>
-            <select className="border p-2 rounded" value={assignForm.teacher} onChange={e=>setAssignForm({...assignForm, teacher:e.target.value})} required>
+            <input className="border p-2 rounded" placeholder="Search teacher by name, username, or subject" value={assignSearch} onChange={e=>setAssignSearch(e.target.value)} />
+            <select className="border p-2 rounded w-full" value={assignForm.teacher} onChange={e=>setAssignForm({...assignForm, teacher:e.target.value})} required>
               <option value="">Select Teacher</option>
-              {filteredTeachers.map(t => (
-                <option key={t.user?.id || t.id} value={t.user?.id || t.id}>
-                  {t.user?.first_name || ''} {t.user?.last_name || ''} (@{t.user?.username})
-                </option>
-              ))}
+              {displayTeachers.length === 0 ? (
+                <option disabled value="">No matching teachers</option>
+              ) : (
+                displayTeachers.map(t => (
+                  <option key={t.user?.id || t.id} value={t.user?.id || t.id}>
+                    {(t.user?.first_name || '') + ' ' + (t.user?.last_name || '')}
+                    {t.user?.username ? ` (@${t.user.username})` : ''}
+                    {t.subjects ? ` — ${t.subjects}` : ''}
+                  </option>
+                ))
+              )}
             </select>
-          </label>
+            <div className="text-xs text-gray-500">Tip: Use search to narrow down teachers. List shows school‑wide teachers.</div>
+          </div>
+
           <div className="flex justify-end gap-2 mt-2">
             <button type="button" onClick={()=>setShowAssignModal(false)} className="px-4 py-2 rounded border">Cancel</button>
             <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded">Save</button>
