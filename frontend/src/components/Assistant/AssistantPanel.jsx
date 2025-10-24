@@ -582,6 +582,8 @@ export default function AssistantPanel(){
   // Sizing + resizing handlers
   const [boxSize, setBoxSize] = React.useState({ width: 380, height: 520 })
   const resizingRef = React.useRef(false)
+  // Small screen detection for responsive mobile layout
+  const isSmall = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(max-width: 480px)').matches
   const startResize = (e) => {
     e.preventDefault()
     resizingRef.current = { startX: e.clientX, startY: e.clientY, startW: boxSize.width, startH: boxSize.height }
@@ -611,12 +613,16 @@ export default function AssistantPanel(){
           aria-modal="false"
           style={{
             position: 'fixed',
-            right: 20,
-            bottom: 86,
-            width: boxSize.width,
-            height: boxSize.height,
+            right: isSmall ? 0 : 20,
+            left: isSmall ? 0 : 'auto',
+            bottom: isSmall ? 0 : 86,
+            width: isSmall ? '100vw' : boxSize.width,
+            height: isSmall ? '50vh' : boxSize.height,
             background: 'white',
-            borderRadius: 12,
+            borderTopLeftRadius: 12,
+            borderTopRightRadius: 12,
+            borderBottomLeftRadius: isSmall ? 0 : 12,
+            borderBottomRightRadius: isSmall ? 0 : 12,
             boxShadow: '0 20px 40px rgba(0,0,0,0.25)',
             display: 'flex',
             flexDirection: 'column',
@@ -627,9 +633,11 @@ export default function AssistantPanel(){
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', borderBottom: '1px solid #e5e7eb', background: '#f8fafc' }}>
             <div style={{ fontWeight: 600 }}>Assistant</div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <div title="Resize" onMouseDown={startResize} style={{ width: 16, height: 16, cursor: 'nwse-resize', opacity: 0.7 }}>
-                <svg viewBox="0 0 24 24" width="16" height="16"><path d="M3 21h18M7 17h14M11 13h10M15 9h6M19 5h2" stroke="#64748b" fill="none" strokeWidth="2"/></svg>
-              </div>
+              {!isSmall && (
+                <div title="Resize" onMouseDown={startResize} style={{ width: 16, height: 16, cursor: 'nwse-resize', opacity: 0.7 }}>
+                  <svg viewBox="0 0 24 24" width="16" height="16"><path d="M3 21h18M7 17h14M11 13h10M15 9h6M19 5h2" stroke="#64748b" fill="none" strokeWidth="2"/></svg>
+                </div>
+              )}
               <button onClick={closePanel} style={{ border: 'none', background: 'transparent', fontSize: '18px', cursor: 'pointer' }}>&times;</button>
             </div>
           </div>
