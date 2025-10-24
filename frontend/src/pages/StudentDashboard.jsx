@@ -17,9 +17,10 @@ export default function StudentDashboard(){
   const [summary, setSummary] = useState({ total_billed: 0, total_paid: 0, balance: 0 })
   const [showPay, setShowPay] = useState(false)
   const [selectedInvoice, setSelectedInvoice] = useState(null)
-  const [payForm, setPayForm] = useState({ amount: '', method: 'mpesa', reference: '' })
+  const [payForm, setPayForm] = useState({ amount: '', method: 'mpesa', reference: '', phone: '' })
   const [payError, setPayError] = useState('')
   const [paySubmitting, setPaySubmitting] = useState(false)
+  const [stkStatus, setStkStatus] = useState('idle') // idle | initiating | sent | polling | fetching | success | failed
   // Report Card modal
   const [showReport, setShowReport] = useState(false)
   // Derive current tab from URL: /student, /student/academics, /student/finance
@@ -172,7 +173,38 @@ export default function StudentDashboard(){
         setPaySubmitting(false)
         return
       }
-      await api.post(`/finance/invoices/${selectedInvoice.id}/pay/`, payload)
+      // If M-Pesa, run STK via Co-op instead of manual recording
+      if (String(payForm.method).toLowerCase()==='mpesa'){
+        if (!payForm.phone) { setPayError('Phone number required for STK'); setPaySubmitting(false); return }
+        setStkStatus('initiating')
+        // Baseline: current invoice status from my_invoices (students have access)
+        const beforeInv = await api.get('/finance/invoices/my/')
+        const beforeList = Array.isArray(beforeInv.data) ? beforeInv.data : (beforeInv.data?.results || [])
+        const beforeItem = beforeList.find(x => Number(x.id) === Number(selectedInvoice.id))
+        const beforeStatus = beforeItem?.status || 'unpaid'
+        await api.post(`/finance/invoices/${selectedInvoice.id}/coop_stk/`, {
+          phone: String(payForm.phone).trim(),
+          amount: payload.amount,
+          simulate: false,
+        })
+        setStkStatus('sent')
+        // Poll up to 60s for invoice status change (unpaid -> partial/paid)
+        setStkStatus('polling')
+        const started = Date.now()
+        let updated = false
+        while (Date.now() - started < 60000) {
+          await new Promise(r=>setTimeout(r, 3000))
+          const pollInv = await api.get('/finance/invoices/my/')
+          const list = Array.isArray(pollInv.data) ? pollInv.data : (pollInv.data?.results || [])
+          const item = list.find(x => Number(x.id) === Number(selectedInvoice.id))
+          const nowStatus = item?.status || beforeStatus
+          if (nowStatus !== beforeStatus && (nowStatus === 'partial' || nowStatus === 'paid')) { updated = true; break }
+        }
+        if (!updated){ setPayError('STK sent, but no confirmation yet. It may complete later.'); setStkStatus('failed') }
+        else { setStkStatus('success') }
+      } else {
+        await api.post(`/finance/invoices/${selectedInvoice.id}/pay/`, payload)
+      }
       // Refresh
       const [invRes, sumRes] = await Promise.all([
         api.get('/finance/invoices/my/'),
@@ -526,15 +558,14 @@ export default function StudentDashboard(){
             <div className="text-sm text-gray-700">Amount Due: <strong>{Number(selectedInvoice.amount).toLocaleString()}</strong></div>
             {payError && <div className="bg-red-50 text-red-700 text-sm p-2 rounded">{payError}</div>}
             <input className="border p-2 rounded" type="number" step="0.01" placeholder="Amount" value={payForm.amount} onChange={e=>setPayForm({...payForm, amount:e.target.value})} required />
-            <select className="border p-2 rounded" value={payForm.method} onChange={e=>setPayForm({...payForm, method:e.target.value})}>
-              <option value="mpesa">M-Pesa</option>
-              <option value="bank">Bank</option>
-              <option value="cash">Cash</option>
-            </select>
+            {/* Mode selection removed: always use M-Pesa STK via Co-op */}
+            <input className="border p-2 rounded" placeholder="Phone 07XXXXXXXX" value={payForm.phone} onChange={e=>setPayForm({...payForm, phone:e.target.value})} />
+            {/* Always real STK; toggle removed */}
+            {stkStatus==='failed' && (<div className="text-xs text-red-600">STK failed or timed out.</div>)}
             <input className="border p-2 rounded" placeholder="Reference (optional)" value={payForm.reference} onChange={e=>setPayForm({...payForm, reference:e.target.value})} />
             <div className="flex justify-end gap-2">
               <button type="button" className="px-4 py-2 rounded border" onClick={()=>setShowPay(false)}>Cancel</button>
-              <button className="px-4 py-2 rounded text-white bg-green-600 disabled:opacity-60" disabled={paySubmitting}>{paySubmitting ? 'Paying...' : 'Pay'}</button>
+              <button className="px-4 py-2 rounded text-white bg-green-600 disabled:opacity-60" disabled={paySubmitting}>{paySubmitting ? (stkStatus==='polling'?'Waiting...':'Initiating...') : 'Initiate STK'}</button>
             </div>
           </form>
         )}

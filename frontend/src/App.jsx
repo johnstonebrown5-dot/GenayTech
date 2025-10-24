@@ -6,6 +6,7 @@ import NotificationContainer from './components/NotificationContainer'
 import MessageNotifier from './components/MessageNotifier'
 import LoginPage from './pages/LoginPage'
 import SchoolHome from './pages/SchoolHome'
+import FeaturedPost from './pages/FeaturedPost'
 import TrialOnboarding from './pages/TrialOnboarding'
 import AdminDashboard from './pages/AdminDashboard'
 import TeacherDashboard from './pages/TeacherDashboard'
@@ -133,6 +134,7 @@ export default function App() {
             <Route path="/admin/timetable" element={<ProtectedRoute roles={["admin"]}><AdminTimetable/></ProtectedRoute>} />
             <Route path="/admin/timetable/class" element={<ProtectedRoute roles={["admin","teacher"]}><ClassTimetable/></ProtectedRoute>} />
             <Route path="/admin/timetable/teacher" element={<ProtectedRoute roles={["admin"]}><TeacherTimetableView/></ProtectedRoute>} />
+            <Route path="/featured/:slug" element={<FeaturedPost/>} />
             <Route path="/teacher" element={<ProtectedRoute roles={["teacher","admin"]}><TeacherLayout><TeacherDashboard/></TeacherLayout></ProtectedRoute>} />
             <Route path="/teacher/messages" element={<ProtectedRoute roles={["teacher","admin"]}><TeacherLayout><Messages/></TeacherLayout></ProtectedRoute>} />
             <Route path="/teacher/classes" element={<ProtectedRoute roles={["teacher","admin"]}><TeacherLayout><TeacherClasses/></TeacherLayout></ProtectedRoute>} />

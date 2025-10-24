@@ -13,6 +13,7 @@ import json
 import os
 import logging
 from .mpesa import MpesaClient
+from .coop_stk import CoopStkClient
 from .models import Invoice, Payment, FeeCategory, ClassFee, MpesaConfig, ExpenseCategory, Expense, PocketMoneyWallet, PocketMoneyTransaction, PaymentMethod
 from .serializers import InvoiceSerializer, PaymentSerializer, FeeCategorySerializer, ClassFeeSerializer, MpesaConfigSerializer, ExpenseCategorySerializer, ExpenseSerializer, PocketMoneyWalletSerializer, PocketMoneyTransactionSerializer, PaymentMethodSerializer
 from academics.models import Student
@@ -28,6 +29,17 @@ class InvoiceViewSet(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ['student', 'category', 'year', 'term', 'status']
     parser_classes = [MultiPartParser, FormParser, JSONParser]
+
+    # Allow non-admin access to specific actions (e.g., students initiating STK)
+    def get_permissions(self):
+        # Actions that only require authentication (student-facing)
+        relaxed = {
+            'my', 'my_summary', 'stk_push', 'coop_stk',
+            'student_summary', 'summary', 'arrears', 'arrears_export'
+        }
+        if getattr(self, 'action', None) in relaxed:
+            return [permissions.IsAuthenticated()]
+        return super().get_permissions()
 
     # Helper: enabled payment methods for a school (defaults to all if none configured)
     def _enabled_methods_for_school(self, school):
@@ -202,6 +214,42 @@ class InvoiceViewSet(viewsets.ModelViewSet):
             w.writerow(r)
         return resp
 
+    @action(detail=False, methods=['get'], url_path='verify_reference', permission_classes=[permissions.IsAuthenticated])
+    def verify_reference(self, request):
+        """Verify a payment by reference code.
+        Params: reference (required), invoice (optional), amount (optional)
+        Checks basic format and whether the reference already exists.
+        Returns { valid_format, duplicate, matches_invoice, conflicts: [...]}.
+        """
+        import re
+        ref = (request.query_params.get('reference') or '').strip()
+        if not ref:
+            return Response({'detail': 'reference is required'}, status=400)
+        # Basic Mpesa code format A-Z/0-9 length 8-20 (flexible)
+        valid_format = bool(re.fullmatch(r'[A-Z0-9]{8,20}', ref, flags=0))
+        qs = self.get_queryset().filter(reference__iexact=ref)
+        duplicate = qs.exists()
+        conflicts = [
+            {
+                'id': p.id,
+                'invoice': getattr(p.invoice, 'id', None),
+                'amount': float(getattr(p, 'amount', 0) or 0),
+                'created_at': getattr(p, 'created_at', None),
+                'method': getattr(p, 'method', ''),
+            }
+            for p in qs[:5]
+        ]
+        invoice_id = request.query_params.get('invoice')
+        matches_invoice = False
+        if invoice_id and duplicate:
+            matches_invoice = qs.filter(invoice_id=invoice_id).exists()
+        return Response({
+            'valid_format': valid_format,
+            'duplicate': duplicate,
+            'matches_invoice': matches_invoice,
+            'conflicts': conflicts,
+        })
+
     @action(detail=False, methods=['get'], url_path='summary')
     def summary(self, request):
         """
@@ -334,6 +382,9 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         enabled = self._enabled_methods_for_school(school)
         if str(method).lower() not in enabled:
             return Response({'detail': f'Payment method "{method}" is disabled by admin'}, status=400)
+        # Students can only record M-Pesa payments; Bank/Cash restricted to Admin/Finance
+        if user.role not in ('admin','finance') and str(method).lower() != 'mpesa':
+            return Response({'detail': 'Only M-Pesa payments are allowed for students'}, status=403)
         reference = request.data.get('reference') or ''
         attachment = request.FILES.get('attachment')
 
@@ -458,6 +509,13 @@ class InvoiceViewSet(viewsets.ModelViewSet):
             return Response({'detail': 'Invoice not found'}, status=404)
 
         logger = logging.getLogger(__name__)
+        # Students can only initiate STK for their own invoice
+        user = request.user
+        if getattr(user, 'role', None) not in ('admin','finance'):
+            from academics.models import Student as _Student
+            stu_id = _Student.objects.filter(user=user).values_list('id', flat=True).first()
+            if not stu_id or invoice.student_id != stu_id:
+                return Response({'detail': 'Forbidden'}, status=403)
         phone = (request.data.get('phone') or '').strip()
         # Normalize phone to 2547XXXXXXXX format required by Daraja
         if phone.startswith('+'):
@@ -536,6 +594,66 @@ class InvoiceViewSet(viewsets.ModelViewSet):
                 return Response({'detail': f'STK error: {e}'}, status=500)
         # Fallback mocked when credentials missing
         return Response({'status':'pending','message':'STK credentials not configured; set MPESA_* env vars or use simulate=true.'}, status=202)
+
+    @action(detail=True, methods=['post'], url_path='coop_stk', permission_classes=[permissions.IsAuthenticated])
+    def coop_stk(self, request, pk=None):
+        """Initiate a Co-op Bank gateway STK push for this invoice.
+        Body: { phone: string, amount?: number, simulate?: bool }
+        Uses env vars COOP_* set in backend or server env.
+        """
+        try:
+            invoice = self.get_queryset().get(pk=pk)
+        except Invoice.DoesNotExist:
+            return Response({'detail': 'Invoice not found'}, status=404)
+
+        logger = logging.getLogger(__name__)
+        phone = (request.data.get('phone') or '').strip()
+        if phone.startswith('+'):
+            phone = phone[1:]
+        if phone.startswith('0') and len(phone) == 10:
+            phone = '254' + phone[1:]
+        if not phone:
+            return Response({'detail': 'phone is required'}, status=400)
+        try:
+            amount = float(request.data.get('amount') or invoice.amount)
+        except (TypeError, ValueError):
+            return Response({'detail': 'Invalid amount'}, status=400)
+
+        # Validate Mpesa method is enabled for the school
+        sch = getattr(invoice.student.klass, 'school', None)
+        enabled = self._enabled_methods_for_school(sch)
+        if 'mpesa' not in enabled:
+            return Response({'detail': 'Mpesa payments are disabled by admin'}, status=400)
+
+        # Determine if credentials exist for Co-op client
+        have_creds = all(os.getenv(k) for k in ('COOP_CLIENT_ID','COOP_CLIENT_SECRET','COOP_BASE_URL','COOP_TOKEN_URL','COOP_SHORT_CODE','COOP_PASSKEY'))
+        default_sim = 'false' if have_creds else 'true'
+        simulate = str(request.data.get('simulate', default_sim)).lower() in ('1','true','yes')
+
+        logger.info("Co-op STK request init", extra={
+            'invoice_id': invoice.id,
+            'phone': phone[-4:],
+            'amount': amount,
+            'simulate': simulate,
+        })
+        if simulate:
+            return Response({'status': 'pending', 'message': 'Co-op STK simulated. Configure COOP_* env vars or set simulate=false.'}, status=202)
+
+        if have_creds:
+            try:
+                client = CoopStkClient()
+                resp = client.stk_push(phone=str(phone), amount=amount, account_ref=f"INV{invoice.id}")
+                checkout_id = resp.get('CheckoutRequestID') or resp.get('checkoutRequestID') or ''
+                if checkout_id:
+                    invoice.mpesa_transaction_id = checkout_id
+                    invoice.save(update_fields=['mpesa_transaction_id'])
+                logger.info("Co-op STK initiated", extra={'invoice_id': invoice.id, 'checkout_request_id': checkout_id})
+                return Response({'status': 'pending', 'message': 'STK initiated', 'coop': resp}, status=202)
+            except Exception as e:
+                logger.exception("Co-op STK initiation failed", extra={'invoice_id': invoice.id})
+                return Response({'detail': f'Co-op STK error: {e}'}, status=500)
+
+        return Response({'status': 'pending', 'message': 'Co-op credentials not configured; set COOP_* env vars or use simulate=true.'}, status=202)
 
 class PaymentViewSet(viewsets.ModelViewSet):
     queryset = Payment.objects.all()
@@ -959,6 +1077,52 @@ def mpesa_callback(request):
         invoice.save(update_fields=['status'])
 
     # Respond to Daraja per spec
+    return JsonResponse({'ResultCode': 0, 'ResultDesc': 'Accepted'})
+
+
+# Public endpoint for Co-op gateway STK callback (expected same Safaricom structure)
+@csrf_exempt
+def coop_mpesa_callback(request):
+    logger = logging.getLogger(__name__)
+    if request.method != 'POST':
+        return JsonResponse({'detail': 'Method not allowed'}, status=405)
+    try:
+        data = json.loads(request.body.decode('utf-8') or '{}')
+    except Exception:
+        data = {}
+
+    stk_cb = (
+        data.get('Body', {})
+            .get('stkCallback', {})
+    )
+    checkout_id = stk_cb.get('CheckoutRequestID')
+    result_code = stk_cb.get('ResultCode')
+    meta_items = stk_cb.get('CallbackMetadata', {}).get('Item', []) if isinstance(stk_cb.get('CallbackMetadata', {}), dict) else []
+    meta = {item.get('Name'): item.get('Value') for item in meta_items if isinstance(item, dict)}
+    receipt = meta.get('MpesaReceiptNumber') or meta.get('M-PESAReceiptNumber')
+    amount = meta.get('Amount')
+
+    invoice = Invoice.objects.filter(mpesa_transaction_id=checkout_id).first() if checkout_id else None
+    logger.info("Co-op STK callback received", extra={'checkout_request_id': checkout_id, 'result_code': result_code})
+
+    if result_code == 0 and invoice and amount:
+        pay = Payment.objects.create(
+            invoice=invoice,
+            amount=float(amount),
+            method='mpesa',
+            reference=receipt or (checkout_id or ''),
+            recorded_by=None,
+        )
+        totals = invoice.payments.aggregate(s=Sum('amount'))
+        total_paid = float(totals['s'] or 0)
+        if total_paid >= float(invoice.amount):
+            invoice.status = 'paid'
+        elif 0 < total_paid < float(invoice.amount):
+            invoice.status = 'partial'
+        else:
+            invoice.status = 'unpaid'
+        invoice.save(update_fields=['status'])
+
     return JsonResponse({'ResultCode': 0, 'ResultDesc': 'Accepted'})
 
 

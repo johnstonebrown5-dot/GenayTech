@@ -17,7 +17,7 @@ export default function AdminStudentPayments(){
   const [paying, setPaying] = useState(false)
   const [stkStatus, setStkStatus] = useState('idle') // idle | initiating | sent | polling | fetching | success | failed
   const [payForm, setPayForm] = useState({ invoice: '', amount: '', method: 'mpesa', reference: '', phone: '', attachment: null })
-  const [useRealStk, setUseRealStk] = useState(false) // when true, simulate=false
+  // Always use real STK (Co-op)
   const [payError, setPayError] = useState('')
   const [enabledMethods, setEnabledMethods] = useState(['cash','mpesa','bank','cheque'])
 
@@ -125,10 +125,10 @@ export default function AdminStudentPayments(){
       const before = await api.get(`/finance/payments/?invoice=${payForm.invoice}`)
       const baselineCount = Array.isArray(before.data) ? before.data.length : 0
 
-      const { data } = await api.post(`/finance/invoices/${payForm.invoice}/stk_push/`, {
+      const { data } = await api.post(`/finance/invoices/${payForm.invoice}/coop_stk/`, {
         phone: payForm.phone,
         amount: amountNum,
-        simulate: !useRealStk
+        simulate: false
       })
       // Mark as sent
       setStkStatus('sent')
@@ -240,29 +240,7 @@ export default function AdminStudentPayments(){
                   ))}
               </select>
             </div>
-            <div>
-              <label className="block text-sm text-gray-600 mb-1">Payment Mode</label>
-              <div className="flex items-center gap-4">
-                {enabledMethods.includes('bank') && (
-                  <label className="inline-flex items-center gap-1 text-sm">
-                    <input type="radio" name="method" value="bank" checked={payForm.method==='bank'} onChange={e=>setPayForm({...payForm, method: e.target.value})} />
-                    <span>Bank</span>
-                  </label>
-                )}
-                {enabledMethods.includes('mpesa') && (
-                  <label className="inline-flex items-center gap-1 text-sm">
-                    <input type="radio" name="method" value="mpesa" checked={payForm.method==='mpesa'} onChange={e=>setPayForm({...payForm, method: e.target.value})} />
-                    <span>Mpesa</span>
-                  </label>
-                )}
-                {enabledMethods.includes('cash') && (
-                  <label className="inline-flex items-center gap-1 text-sm">
-                    <input type="radio" name="method" value="cash" checked={payForm.method==='cash'} onChange={e=>setPayForm({...payForm, method: e.target.value})} />
-                    <span>Cash</span>
-                  </label>
-                )}
-              </div>
-            </div>
+            {/* Payment mode selection removed: default to M-Pesa STK via Co-op */}
             <div className="grid md:grid-cols-2 gap-3">
               <div>
                 <label className="block text-sm text-gray-600 mb-1">Amount</label>
@@ -273,27 +251,17 @@ export default function AdminStudentPayments(){
                 <input className="border p-2 rounded w-full" placeholder={payForm.method==='mpesa' ? 'M-Pesa Code' : 'Bank Slip/Ref'} value={payForm.reference} onChange={e=>setPayForm({ ...payForm, reference: e.target.value })} />
               </div>
             </div>
-            {payForm.method==='bank' && (
-              <div>
-                <label className="block text-sm text-gray-600 mb-1">Bank Slip (optional)</label>
-                <input type="file" accept="image/*,application/pdf" onChange={(e)=> setPayForm({ ...payForm, attachment: e.target.files?.[0] || null })} />
-              </div>
-            )}
-            {payForm.method==='mpesa' && (
+            {/* Always require phone for STK */}
+            {
               <div>
                 <label className="block text-sm text-gray-600 mb-1">Phone Number (Mpesa)</label>
                 <input className="border p-2 rounded w-full" placeholder="07XXXXXXXX" value={payForm.phone} onChange={e=>setPayForm({ ...payForm, phone: e.target.value })} />
               </div>
-            )}
-            {payForm.method==='mpesa' && (
-              <label className="inline-flex items-center gap-2 text-sm text-gray-700 mt-1">
-                <input type="checkbox" checked={useRealStk} onChange={e=>setUseRealStk(e.target.checked)} />
-                <span>Use real STK (Daraja)</span>
-              </label>
-            )}
+            }
+            
             <div className="flex justify-end gap-2 mt-2">
               <button type="button" onClick={()=>setShowPay(false)} className="px-4 py-2 rounded border">Cancel</button>
-              {payForm.method==='mpesa' ? (
+              {
                 <>
                   <button type="button" onClick={submitStkPush} className={`px-4 py-2 rounded text-white disabled:opacity-60 ${stkStatus==='failed' ? 'bg-red-600' : 'bg-sky-600'}`} disabled={paying}>
                     {stkStatus==='initiating' && 'Sending STK...'}
@@ -305,11 +273,8 @@ export default function AdminStudentPayments(){
                     {stkStatus==='idle' && !paying && 'Initiate STK'}
                     {paying && (stkStatus==='idle' || stkStatus==='failed') && 'Processing...'}
                   </button>
-                  <button className="bg-green-600 text-white px-4 py-2 rounded disabled:opacity-60" disabled={paying}>{paying ? 'Processing...' : 'Record Manually'}</button>
                 </>
-              ) : (
-                <button className="bg-green-600 text-white px-4 py-2 rounded disabled:opacity-60" disabled={paying}>{paying ? 'Processing...' : 'Submit Payment'}</button>
-              )}
+              }
             </div>
             {stkStatus==='failed' && (
               <div className="text-xs text-red-600 mt-1">STK failed or timed out. Please verify the phone number and try again.</div>

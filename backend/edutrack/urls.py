@@ -1,5 +1,5 @@
 from django.contrib import admin
-from django.urls import path, include
+from django.urls import path, include, re_path
 from django.http import JsonResponse
 from django.shortcuts import render
 from django.http import HttpResponseRedirect
@@ -12,10 +12,19 @@ def health(_request):
     return JsonResponse({"status": "ok"})
 
 
+def spa_redirect(request, path: str = ""):
+    # Redirect any non-API route to the frontend, preserving path and query
+    frontend = getattr(settings, 'FRONTEND_URL', 'http://localhost:5173').rstrip('/')
+    target = f"{frontend}/{path}" if path else f"{frontend}/"
+    query = request.META.get('QUERY_STRING')
+    if query:
+        target = f"{target}?{query}"
+    return HttpResponseRedirect(target)
+
+
 def root_redirect(request):
-    # Open the frontend index (SchoolHome) on the frontend
-    frontend = getattr(settings, 'FRONTEND_URL', 'http://localhost:5173')
-    return HttpResponseRedirect(f"{frontend.rstrip('/')}/")
+    # Root now opens frontend index
+    return spa_redirect(request)
 
 
 urlpatterns = [
@@ -32,6 +41,8 @@ urlpatterns = [
     path('api/finance/', include('finance.urls')),
     path('api/communications/', include('communications.urls')),
     path('api/reports/', include('reports.urls')),
+    # Catch-all for any non-API route: send to frontend SPA
+    re_path(r'^(?!api/).*$', spa_redirect),
 ]
 
 # Serve media files (e.g., uploaded logos) in development

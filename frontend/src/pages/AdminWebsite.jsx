@@ -8,7 +8,8 @@ export default function AdminWebsite(){
   const [saving, setSaving] = useState(false)
   const [ok, setOk] = useState('')
   const [error, setError] = useState('')
-  const [form, setForm] = useState({ name:'', code:'', address:'', motto:'', aim:'', logoUrl:'', homepage:{ hero:{}, about:{}, stats:{}, admissions:{}, programs:[] } })
+  const [form, setForm] = useState({ name:'', code:'', address:'', motto:'', aim:'', logoUrl:'', homepage:{ hero:{}, about:{}, stats:{}, admissions:{}, programs:[], featured:[], gallery:{ items:[] } } })
+  const [headteacherFile, setHeadteacherFile] = useState(null)
   const [liveStats, setLiveStats] = useState({ students:null, teachers:null, satisfaction:null, ratio:null })
   const [pickerOpen, setPickerOpen] = useState(false)
   const mapRef = useRef(null)
@@ -69,6 +70,12 @@ export default function AdminWebsite(){
       fd.append('address', form.address)
       fd.append('motto', form.motto)
       fd.append('aim', form.aim)
+      // Flatten headteacher simple fields for convenience on backend
+      const ht = (form.homepage && form.homepage.headteacher) || {}
+      if (ht.name != null) fd.append('headteacher_name', ht.name)
+      if (ht.title != null) fd.append('headteacher_title', ht.title)
+      if (ht.message != null) fd.append('headteacher_message', ht.message)
+      if (headteacherFile) fd.append('headteacher_photo', headteacherFile)
       fd.append('homepage', JSON.stringify(form.homepage || {}))
       await api.put('/auth/school/me/', fd, { headers:{ 'Content-Type':'multipart/form-data' } })
       setOk('Saved successfully')
@@ -84,7 +91,12 @@ export default function AdminWebsite(){
   const about = form.homepage?.about || {}
   const stats = form.homepage?.stats || {}
   const admissions = form.homepage?.admissions || {}
+  const headteacher = form.homepage?.headteacher || {}
   const programs = Array.isArray(form.homepage?.programs) ? form.homepage.programs : []
+  const featured = Array.isArray(form.homepage?.featured) ? form.homepage.featured : []
+  const galleryItems = Array.isArray(form.homepage?.gallery?.items) ? form.homepage.gallery.items : []
+  const partners = Array.isArray(form.homepage?.partners) ? form.homepage.partners : []
+  const sponsors = Array.isArray(form.homepage?.sponsors) ? form.homepage.sponsors : []
 
   useEffect(() => {
     if (!pickerOpen) return
@@ -200,6 +212,217 @@ export default function AdminWebsite(){
               </div>
             </section>
 
+            {/* Partners */}
+            <section className="mt-16">
+              <h3 className="text-lg font-semibold text-gray-900">Our Partners</h3>
+              <p className="text-sm text-gray-600 mt-1">Logos with links to partner websites.</p>
+              <div className="mt-4 grid gap-3">
+                {(partners || []).map((p, idx) => (
+                  <div key={idx} className="rounded border border-gray-200 p-3 grid md:grid-cols-4 gap-3 items-start">
+                    <label className="text-sm">
+                      <div>Name</div>
+                      <input className="border p-2 rounded w-full mt-1" value={p.name || ''} onChange={e=>setForm(f=>{ const arr=[...(f.homepage?.partners||[])]; arr[idx] = { ...(arr[idx]||{}), name:e.target.value }; return { ...f, homepage:{ ...f.homepage, partners:arr } } })} />
+                    </label>
+                    <label className="text-sm">
+                      <div>Website URL</div>
+                      <input className="border p-2 rounded w-full mt-1" value={p.url || ''} onChange={e=>setForm(f=>{ const arr=[...(f.homepage?.partners||[])]; arr[idx] = { ...(arr[idx]||{}), url:e.target.value }; return { ...f, homepage:{ ...f.homepage, partners:arr } } })} />
+                    </label>
+                    <div className="text-sm md:col-span-2">
+                      <div>Logo</div>
+                      <div className="mt-1 flex items-center gap-2">
+                        <input className="border p-2 rounded w-full" placeholder="Logo URL" value={p.logo || ''} onChange={e=>setForm(f=>{ const arr=[...(f.homepage?.partners||[])]; arr[idx] = { ...(arr[idx]||{}), logo:e.target.value }; return { ...f, homepage:{ ...f.homepage, partners:arr } } })} />
+                        <label className="px-2 py-1 rounded bg-gray-100 hover:bg-gray-200 cursor-pointer text-xs">Upload
+                          <input type="file" accept="image/*" className="hidden" onChange={async ev=>{
+                            const file = ev.target.files?.[0]
+                            if(!file) return
+                            const fd = new FormData(); fd.append('file', file)
+                            try{
+                              const { data } = await api.post('/communications/upload-admission-letter/', fd, { headers:{'Content-Type':'multipart/form-data'} })
+                              const url = data?.url || ''
+                              setForm(f=>{ const arr=[...(f.homepage?.partners||[])]; arr[idx] = { ...(arr[idx]||{}), logo:url }; return { ...f, homepage:{ ...f.homepage, partners:arr } } })
+                              ev.target.value = ''
+                            }catch{}
+                          }} />
+                        </label>
+                      </div>
+                      <div className="mt-2 h-16 bg-gray-50 rounded grid place-items-center">
+                        {p.logo ? <img src={toAbsoluteUrl(p.logo)} alt="logo" className="max-h-14 object-contain"/> : <span className="text-xs text-gray-500">No logo</span>}
+                      </div>
+                    </div>
+                    <div className="md:col-span-4 text-right">
+                      <button type="button" className="text-sm text-red-600" onClick={()=>setForm(f=>{ const arr=[...(f.homepage?.partners||[])]; arr.splice(idx,1); return { ...f, homepage:{ ...f.homepage, partners:arr } } })}>Remove</button>
+                    </div>
+                  </div>
+                ))}
+                <button type="button" className="px-3 py-2 rounded bg-gray-100 text-sm hover:bg-gray-200 w-fit" onClick={()=>setForm(f=>{ const arr=[...(f.homepage?.partners||[])]; if(arr.length<24) arr.push({ name:'', url:'', logo:'' }); return { ...f, homepage:{ ...f.homepage, partners:arr } } })}>Add Partner</button>
+              </div>
+            </section>
+
+            {/* Sponsors */}
+            <section className="mt-16">
+              <h3 className="text-lg font-semibold text-gray-900">Our Sponsors</h3>
+              <p className="text-sm text-gray-600 mt-1">Logos with links to sponsor websites.</p>
+              <div className="mt-4 grid gap-3">
+                {(sponsors || []).map((p, idx) => (
+                  <div key={idx} className="rounded border border-gray-200 p-3 grid md:grid-cols-4 gap-3 items-start">
+                    <label className="text-sm">
+                      <div>Name</div>
+                      <input className="border p-2 rounded w-full mt-1" value={p.name || ''} onChange={e=>setForm(f=>{ const arr=[...(f.homepage?.sponsors||[])]; arr[idx] = { ...(arr[idx]||{}), name:e.target.value }; return { ...f, homepage:{ ...f.homepage, sponsors:arr } } })} />
+                    </label>
+                    <label className="text-sm">
+                      <div>Website URL</div>
+                      <input className="border p-2 rounded w-full mt-1" value={p.url || ''} onChange={e=>setForm(f=>{ const arr=[...(f.homepage?.sponsors||[])]; arr[idx] = { ...(arr[idx]||{}), url:e.target.value }; return { ...f, homepage:{ ...f.homepage, sponsors:arr } } })} />
+                    </label>
+                    <div className="text-sm md:col-span-2">
+                      <div>Logo</div>
+                      <div className="mt-1 flex items-center gap-2">
+                        <input className="border p-2 rounded w-full" placeholder="Logo URL" value={p.logo || ''} onChange={e=>setForm(f=>{ const arr=[...(f.homepage?.sponsors||[])]; arr[idx] = { ...(arr[idx]||{}), logo:e.target.value }; return { ...f, homepage:{ ...f.homepage, sponsors:arr } } })} />
+                        <label className="px-2 py-1 rounded bg-gray-100 hover:bg-gray-200 cursor-pointer text-xs">Upload
+                          <input type="file" accept="image/*" className="hidden" onChange={async ev=>{
+                            const file = ev.target.files?.[0]
+                            if(!file) return
+                            const fd = new FormData(); fd.append('file', file)
+                            try{
+                              const { data } = await api.post('/communications/upload-admission-letter/', fd, { headers:{'Content-Type':'multipart/form-data'} })
+                              const url = data?.url || ''
+                              setForm(f=>{ const arr=[...(f.homepage?.sponsors||[])]; arr[idx] = { ...(arr[idx]||{}), logo:url }; return { ...f, homepage:{ ...f.homepage, sponsors:arr } } })
+                              ev.target.value = ''
+                            }catch{}
+                          }} />
+                        </label>
+                      </div>
+                      <div className="mt-2 h-16 bg-gray-50 rounded grid place-items-center">
+                        {p.logo ? <img src={toAbsoluteUrl(p.logo)} alt="logo" className="max-h-14 object-contain"/> : <span className="text-xs text-gray-500">No logo</span>}
+                      </div>
+                    </div>
+                    <div className="md:col-span-4 text-right">
+                      <button type="button" className="text-sm text-red-600" onClick={()=>setForm(f=>{ const arr=[...(f.homepage?.sponsors||[])]; arr.splice(idx,1); return { ...f, homepage:{ ...f.homepage, sponsors:arr } } })}>Remove</button>
+                    </div>
+                  </div>
+                ))}
+                <button type="button" className="px-3 py-2 rounded bg-gray-100 text-sm hover:bg-gray-200 w-fit" onClick={()=>setForm(f=>{ const arr=[...(f.homepage?.sponsors||[])]; if(arr.length<24) arr.push({ name:'', url:'', logo:'' }); return { ...f, homepage:{ ...f.homepage, sponsors:arr } } })}>Add Sponsor</button>
+              </div>
+            </section>
+
+            {/* Featured */}
+            <section className="mt-16">
+              <h3 className="text-lg font-semibold text-gray-900">Featured</h3>
+              <p className="text-sm text-gray-600 mt-1">Cards that appear in the Featured section. You can add multiple images per card.</p>
+              <div className="mt-4 grid gap-3">
+                {(featured || []).map((it, idx) => (
+                  <div key={idx} className="rounded border border-gray-200 p-3 grid md:grid-cols-5 gap-3 items-start">
+                    <label className="text-sm md:col-span-2">
+                      <div>Title</div>
+                      <input className="border p-2 rounded w-full mt-1" value={it.title || ''} onChange={e=>setForm(f=>{ const arr=[...(f.homepage?.featured||[])]; arr[idx]={...arr[idx], title:e.target.value}; return { ...f, homepage:{ ...f.homepage, featured:arr } } })} />
+                    </label>
+                    <label className="text-sm">
+                      <div>Slug (optional)</div>
+                      <input className="border p-2 rounded w-full mt-1" placeholder="e.g. modern-science-labs" value={it.slug || ''} onChange={e=>setForm(f=>{ const arr=[...(f.homepage?.featured||[])]; arr[idx]={...arr[idx], slug:e.target.value}; return { ...f, homepage:{ ...f.homepage, featured:arr } } })} />
+                    </label>
+                    <label className="text-sm md:col-span-3">
+                      <div>Description</div>
+                      <textarea rows={3} className="border p-2 rounded w-full mt-1" value={it.desc || ''} onChange={e=>setForm(f=>{ const arr=[...(f.homepage?.featured||[])]; arr[idx]={...arr[idx], desc:e.target.value}; return { ...f, homepage:{ ...f.homepage, featured:arr } } })} />
+                    </label>
+                    <label className="text-sm md:col-span-5">
+                      <div>Content</div>
+                      <textarea rows={6} className="border p-2 rounded w-full mt-1" placeholder="Write the full post content here..." value={it.content || ''} onChange={e=>setForm(f=>{ const arr=[...(f.homepage?.featured||[])]; arr[idx]={...arr[idx], content:e.target.value}; return { ...f, homepage:{ ...f.homepage, featured:arr } } })} />
+                    </label>
+                    <label className="text-sm">
+                      <div>Tag</div>
+                      <input className="border p-2 rounded w-full mt-1" value={it.tag || ''} onChange={e=>setForm(f=>{ const arr=[...(f.homepage?.featured||[])]; arr[idx]={...arr[idx], tag:e.target.value}; return { ...f, homepage:{ ...f.homepage, featured:arr } } })} />
+                    </label>
+                    <label className="text-sm md:col-span-2">
+                      <div>Link</div>
+                      <input className="border p-2 rounded w-full mt-1" value={it.link || ''} onChange={e=>setForm(f=>{ const arr=[...(f.homepage?.featured||[])]; arr[idx]={...arr[idx], link:e.target.value}; return { ...f, homepage:{ ...f.homepage, featured:arr } } })} />
+                    </label>
+                    <div className="text-sm md:col-span-5">
+                      <div className="flex items-center justify-between">
+                        <div className="font-medium">Images</div>
+                        <button type="button" className="text-xs px-2 py-1 rounded bg-gray-100 hover:bg-gray-200" onClick={()=>setForm(f=>{ const arr=[...(f.homepage?.featured||[])]; const imgs = Array.isArray(arr[idx]?.images)? arr[idx].images : (arr[idx]?.image?[arr[idx].image]:[]); imgs.push(''); arr[idx] = { ...(arr[idx]||{}), images:imgs }; return { ...f, homepage:{ ...f.homepage, featured:arr } } })}>Add image</button>
+                      </div>
+                      <div className="mt-2 grid md:grid-cols-3 gap-2">
+                        {(Array.isArray(it.images) ? it.images : (it.image ? [it.image] : [])).map((u, i2) => (
+                          <div key={i2} className="rounded border p-2">
+                            <div className="text-xs">Image {i2+1}</div>
+                            <div className="mt-1 flex items-center gap-2">
+                              <input className="border p-2 rounded w-full" placeholder="Image URL" value={u || ''} onChange={e=>setForm(f=>{ const arr=[...(f.homepage?.featured||[])]; const imgs = Array.isArray(arr[idx]?.images)? [...arr[idx].images] : (arr[idx]?.image?[arr[idx].image]:[]); imgs[i2] = e.target.value; arr[idx] = { ...(arr[idx]||{}), images:imgs }; return { ...f, homepage:{ ...f.homepage, featured:arr } } })} />
+                              <label className="px-2 py-1 rounded bg-gray-100 hover:bg-gray-200 cursor-pointer text-xs">Upload
+                                <input type="file" accept="image/*" className="hidden" onChange={async ev=>{
+                                  const file = ev.target.files?.[0]
+                                  if(!file) return
+                                  const fd = new FormData(); fd.append('file', file)
+                                  try{
+                                    const { data } = await api.post('/communications/upload-admission-letter/', fd, { headers:{'Content-Type':'multipart/form-data'} })
+                                    const url = data?.url || ''
+                                    setForm(f=>{ const arr=[...(f.homepage?.featured||[])]; const imgs = Array.isArray(arr[idx]?.images)? [...arr[idx].images] : (arr[idx]?.image?[arr[idx].image]:[]); imgs[i2] = url; arr[idx] = { ...(arr[idx]||{}), images:imgs }; return { ...f, homepage:{ ...f.homepage, featured:arr } } })
+                                    ev.target.value = ''
+                                  }catch{}
+                                }} />
+                              </label>
+                              <button type="button" className="text-xs text-red-600" onClick={()=>setForm(f=>{ const arr=[...(f.homepage?.featured||[])]; const imgs = Array.isArray(arr[idx]?.images)? [...arr[idx].images] : []; imgs.splice(i2,1); arr[idx] = { ...(arr[idx]||{}), images:imgs }; return { ...f, homepage:{ ...f.homepage, featured:arr } } })}>Remove</button>
+                            </div>
+                            <div className="mt-2 h-24 bg-gray-50 rounded grid place-items-center">
+                              {u ? <img src={toAbsoluteUrl(u)} alt="preview" className="h-24 w-full object-cover rounded"/> : <span className="text-xs text-gray-500">No image</span>}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="md:col-span-5 text-right">
+                      <button type="button" className="text-sm text-red-600" onClick={()=>setForm(f=>{ const arr=[...(f.homepage?.featured||[])]; arr.splice(idx,1); return { ...f, homepage:{ ...f.homepage, featured:arr } } })}>Remove</button>
+                    </div>
+                  </div>
+                ))}
+                <button type="button" className="px-3 py-2 rounded bg-gray-100 text-sm hover:bg-gray-200 w-fit" onClick={()=>setForm(f=>{ const arr=[...(f.homepage?.featured||[])]; if(arr.length<9) arr.push({ title:'', desc:'', images:[] }); return { ...f, homepage:{ ...f.homepage, featured:arr } } })}>Add Featured Item</button>
+              </div>
+            </section>
+
+            {/* Gallery */}
+            <section className="mt-16">
+              <h3 className="text-lg font-semibold text-gray-900">Gallery</h3>
+              <p className="text-sm text-gray-600 mt-1">Add images to the homepage gallery. You can set a title and category for filtering.</p>
+              <div className="mt-4 grid gap-3">
+                {(galleryItems || []).map((g, idx) => (
+                  <div key={idx} className="rounded border border-gray-200 p-3 grid md:grid-cols-4 gap-3 items-start">
+                    <label className="text-sm">
+                      <div>Title</div>
+                      <input className="border p-2 rounded w-full mt-1" value={g.title || ''} onChange={e=>setForm(f=>{ const arr=[...(f.homepage?.gallery?.items||[])]; arr[idx] = { ...(arr[idx]||{}), title:e.target.value }; return { ...f, homepage:{ ...f.homepage, gallery:{ items:arr } } } })} />
+                    </label>
+                    <label className="text-sm">
+                      <div>Category</div>
+                      <input className="border p-2 rounded w-full mt-1" value={g.category || ''} onChange={e=>setForm(f=>{ const arr=[...(f.homepage?.gallery?.items||[])]; arr[idx] = { ...(arr[idx]||{}), category:e.target.value }; return { ...f, homepage:{ ...f.homepage, gallery:{ items:arr } } } })} />
+                    </label>
+                    <div className="text-sm md:col-span-2">
+                      <div>Image</div>
+                      <div className="mt-1 flex items-center gap-2">
+                        <input className="border p-2 rounded w-full" placeholder="Image URL" value={g.url || ''} onChange={e=>setForm(f=>{ const arr=[...(f.homepage?.gallery?.items||[])]; arr[idx] = { ...(arr[idx]||{}), url:e.target.value }; return { ...f, homepage:{ ...f.homepage, gallery:{ items:arr } } } })} />
+                        <label className="px-2 py-1 rounded bg-gray-100 hover:bg-gray-200 cursor-pointer text-xs">Upload
+                          <input type="file" accept="image/*" className="hidden" onChange={async ev=>{
+                            const file = ev.target.files?.[0]
+                            if(!file) return
+                            const fd = new FormData(); fd.append('file', file)
+                            try{
+                              const { data } = await api.post('/communications/upload-admission-letter/', fd, { headers:{'Content-Type':'multipart/form-data'} })
+                              const url = data?.url || ''
+                              setForm(f=>{ const arr=[...(f.homepage?.gallery?.items||[])]; arr[idx] = { ...(arr[idx]||{}), url }; return { ...f, homepage:{ ...f.homepage, gallery:{ items:arr } } } })
+                              ev.target.value = ''
+                            }catch{}
+                          }} />
+                        </label>
+                      </div>
+                      <div className="mt-2 h-24 bg-gray-50 rounded grid place-items-center">
+                        {g.url ? <img src={toAbsoluteUrl(g.url)} alt="preview" className="h-24 w-full object-cover rounded"/> : <span className="text-xs text-gray-500">No image</span>}
+                      </div>
+                    </div>
+                    <div className="md:col-span-4 text-right">
+                      <button type="button" className="text-sm text-red-600" onClick={()=>setForm(f=>{ const arr=[...(f.homepage?.gallery?.items||[])]; arr.splice(idx,1); return { ...f, homepage:{ ...f.homepage, gallery:{ items:arr } } } })}>Remove</button>
+                    </div>
+                  </div>
+                ))}
+                <button type="button" className="px-3 py-2 rounded bg-gray-100 text-sm hover:bg-gray-200 w-fit" onClick={()=>setForm(f=>{ const arr=[...(f.homepage?.gallery?.items||[])]; if(arr.length<24) arr.push({ url:'', title:'', category:'' }); return { ...f, homepage:{ ...f.homepage, gallery:{ items:arr } } } })}>Add Gallery Image</button>
+              </div>
+            </section>
+
             {/* About */}
             <section className="mt-16 grid lg:grid-cols-2 gap-10 items-start">
               <div>
@@ -243,6 +466,52 @@ export default function AdminWebsite(){
                     <input className="mt-1 font-semibold text-indigo-700 bg-transparent outline-none" value={stats.years || '25+'} onChange={e=>setForm(f=>({ ...f, homepage:{ ...f.homepage, stats:{ ...stats, years:e.target.value } } }))} />
                   </label>
                 </div>
+              </div>
+            </section>
+
+            {/* Headteacher */}
+            <section className="mt-16 grid lg:grid-cols-3 gap-10 items-start">
+              <div className="lg:col-span-1">
+                <h3 className="text-lg font-semibold text-gray-900">Headteacher</h3>
+                <p className="text-sm text-gray-600 mt-1">Name, title, portrait photo and welcome message.</p>
+                <div className="mt-4 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm text-center">
+                  <div className="mx-auto h-36 w-36 rounded-2xl overflow-hidden bg-gray-50 border border-gray-200 grid place-items-center">
+                    {headteacher.photo ? (
+                      <img src={toAbsoluteUrl(headteacher.photo)} alt="Headteacher" className="h-full w-full object-cover" />
+                    ) : (
+                      <span className="text-3xl text-gray-400">👩‍🏫</span>
+                    )}
+                  </div>
+                  <div className="mt-3 flex items-center justify-center gap-2">
+                    <label className="px-3 py-1.5 rounded bg-gray-100 hover:bg-gray-200 cursor-pointer text-xs">Upload Photo
+                      <input type="file" accept="image/*" className="hidden" onChange={ev=>{
+                        const file = ev.target.files?.[0]
+                        if(!file) return
+                        setHeadteacherFile(file)
+                        // Optimistic preview via object URL
+                        const url = URL.createObjectURL(file)
+                        setForm(f=>({ ...f, homepage:{ ...f.homepage, headteacher:{ ...headteacher, photo:url } } }))
+                      }} />
+                    </label>
+                    {headteacher.photo ? (
+                      <button type="button" className="text-xs text-red-600" onClick={()=>{ setHeadteacherFile(null); setForm(f=>({ ...f, homepage:{ ...f.homepage, headteacher:{ ...headteacher, photo:'' } } })) }}>Remove</button>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+              <div className="lg:col-span-2 grid gap-4">
+                <label className="text-sm">
+                  <div>Name</div>
+                  <input className="border p-2 rounded w-full mt-1" value={headteacher.name || ''} onChange={e=>setForm(f=>({ ...f, homepage:{ ...f.homepage, headteacher:{ ...headteacher, name:e.target.value } } }))} />
+                </label>
+                <label className="text-sm">
+                  <div>Title</div>
+                  <input className="border p-2 rounded w-full mt-1" placeholder="Headteacher" value={headteacher.title || ''} onChange={e=>setForm(f=>({ ...f, homepage:{ ...f.homepage, headteacher:{ ...headteacher, title:e.target.value } } }))} />
+                </label>
+                <label className="text-sm">
+                  <div>Message</div>
+                  <textarea rows={6} className="border p-2 rounded w-full mt-1" value={headteacher.message || ''} onChange={e=>setForm(f=>({ ...f, homepage:{ ...f.homepage, headteacher:{ ...headteacher, message:e.target.value } } }))} />
+                </label>
               </div>
             </section>
 

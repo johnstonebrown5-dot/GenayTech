@@ -38,13 +38,7 @@ export default function SchoolHome() {
     )
   }
 
-  function Wave({ className = '', flip = false }) {
-    return (
-      <svg className={className} viewBox="0 0 1440 120" preserveAspectRatio="none" aria-hidden="true" style={flip ? { transform: 'scaleY(-1)' } : undefined}>
-        <path fill="currentColor" d="M0,64L60,80C120,96,240,128,360,138.7C480,149,600,139,720,133.3C840,128,960,128,1080,122.7C1200,117,1320,107,1380,101.3L1440,96L1440,0L1380,0C1320,0,1200,0,1080,0C960,0,840,0,720,0C600,0,480,0,360,0C240,0,120,0,60,0L0,0Z" />
-      </svg>
-    )
-  }
+  
 
   function CountUp({ value, className = '' }) {
     const str = (value ?? '').toString()
@@ -80,6 +74,72 @@ export default function SchoolHome() {
     return <span ref={ref} className={className}>{display}</span>
   }
 
+  function FeaturedCard({ item }) {
+    function slugify(s){
+      return (s||'').toString().toLowerCase().replace(/[^a-z0-9\s-]/g,'').replace(/\s+/g,'-').replace(/-+/g,'-').replace(/^-|-$|_/g,'').trim()
+    }
+    const imgs = Array.isArray(item?.images) && item.images.length
+      ? item.images
+      : (item?.image ? [item.image] : [])
+    const sources = imgs.map((u)=> (/^https?:/i.test(u) ? u : toAbsoluteUrl(u)))
+    const [ix, setIx] = useState(0)
+    const hasMulti = sources.length > 1
+    const current = sources[ix] || ''
+    const defaultSlug = slugify(item?.slug || item?.title)
+    const defaultHref = `/featured/${defaultSlug}`
+    const href = item?.link || defaultHref
+    const isExternal = /^https?:\/\//i.test(href)
+    function prev(){ setIx(i => (i - 1 + sources.length) % sources.length) }
+    function next(){ setIx(i => (i + 1) % sources.length) }
+    return (
+      <Reveal className="rounded-xl border border-gray-200 bg-white overflow-hidden hover:shadow-lg">
+        {(() => {
+          const ImgBlock = (
+            current ? (
+              <div className="relative">
+                <img src={current} alt={item?.title || 'Featured'} className="w-full aspect-[16/9] object-cover" loading="lazy"/>
+                {hasMulti && (
+                  <>
+                    <div className="absolute inset-x-0 bottom-2 flex items-center justify-center gap-1">
+                      {sources.map((_, di)=> (
+                        <span key={di} className={`h-1.5 w-1.5 rounded-full ${di===ix? 'bg-white' : 'bg-white/60'}`} />
+                      ))}
+                    </div>
+                    <button type="button" aria-label="Previous" onClick={prev} className="absolute left-2 top-1/2 -translate-y-1/2 p-2 rounded-full bg-black/35 text-white hover:bg-black/50">‹</button>
+                    <button type="button" aria-label="Next" onClick={next} className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-full bg-black/35 text-white hover:bg-black/50">›</button>
+                  </>
+                )}
+              </div>
+            ) : (
+              <div className="aspect-[16/9] bg-gray-100" />
+            )
+          )
+          return isExternal ? (
+            <a href={href} target="_blank" rel="noreferrer">{ImgBlock}</a>
+          ) : (
+            <Link to={href}>{ImgBlock}</Link>
+          )
+        })()}
+        <div className="p-4">
+          {item?.tag ? <div className="text-xs inline-flex px-2 py-0.5 rounded bg-indigo-100 text-indigo-700">{item.tag}</div> : null}
+          {isExternal ? (
+            <a href={href} target="_blank" rel="noreferrer" className="mt-1 font-semibold text-gray-900 hover:underline block">{item?.title}</a>
+          ) : (
+            <Link to={href} className="mt-1 font-semibold text-gray-900 hover:underline block">{item?.title}</Link>
+          )}
+          {item?.desc ? <p className="mt-1 text-sm text-gray-600">{item.desc}</p> : null}
+          <div className="mt-2">
+            {isExternal ? (
+              <a href={href} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-sm text-indigo-700 hover:underline">Read more →</a>
+            ) : (
+              <Link to={href} className="inline-flex items-center gap-1 text-sm text-indigo-700 hover:underline">Read more →</Link>
+            )}
+          </div>
+        </div>
+      </Reveal>
+    )
+  }
+
   useEffect(() => {
     let mounted = true
     ;(async () => {
@@ -103,6 +163,76 @@ export default function SchoolHome() {
     })()
     return () => { mounted = false }
   }, [])
+
+  const heroImages = (() => {
+    const imgs = school?.homepage?.hero?.images || []
+    const fallbacks = [
+      new URL('../../images/pexels-kwakugriffn-14554003.jpg', import.meta.url).href,
+      new URL('../../images/pexels-gabby-k-6289065.jpg', import.meta.url).href,
+      new URL('../../images/pexels-akelaphotography-448877.jpg', import.meta.url).href,
+    ]
+    return (imgs.length ? imgs.map(toAbsoluteUrl) : fallbacks).slice(0, 5)
+  })()
+
+  const animationVariant = 'fade'
+  const [heroIndex, setHeroIndex] = useState(0)
+  const [heroColor, setHeroColor] = useState('rgba(79,70,229,0.12)')
+  const [galleryCat, setGalleryCat] = useState('All')
+
+  function extractDominantColor(src) {
+    return new Promise((resolve) => {
+      const img = new Image()
+      img.crossOrigin = 'anonymous'
+      img.decoding = 'async'
+      img.onload = () => {
+        try {
+          const canvas = document.createElement('canvas')
+          const ctx = canvas.getContext('2d', { willReadFrequently: true })
+          const w = (canvas.width = 32)
+          const h = (canvas.height = 32)
+          ctx.drawImage(img, 0, 0, w, h)
+          const { data } = ctx.getImageData(0, 0, w, h)
+          let r = 0, g = 0, b = 0, n = 0
+          for (let i = 0; i < data.length; i += 4) {
+            const a = data[i + 3]
+            if (a < 128) continue
+            r += data[i]
+            g += data[i + 1]
+            b += data[i + 2]
+            n++
+          }
+          if (!n) throw new Error('no-opaque-pixels')
+          r = Math.round(r / n); g = Math.round(g / n); b = Math.round(b / n)
+          resolve(`rgba(${r},${g},${b},0.18)`) 
+        } catch {
+          resolve('rgba(79,70,229,0.12)')
+        }
+      }
+      img.onerror = () => resolve('rgba(79,70,229,0.12)')
+      img.src = src
+    })
+  }
+
+  useEffect(() => {
+    let t
+    const autoplay = Boolean(school?.homepage?.hero?.autoplay)
+    if (!autoplay) return
+    const intervalMs = Math.max(3500, Number(school?.homepage?.hero?.interval) || 5500)
+    function tick(){ setHeroIndex((i) => (i + 1) % heroImages.length) }
+    t = setInterval(tick, intervalMs)
+    return () => clearInterval(t)
+  }, [school?.homepage?.hero?.interval, school?.homepage?.hero?.autoplay, heroImages.length])
+
+  useEffect(() => {
+    let mounted = true
+    const src = heroImages[heroIndex]
+    if (!src) return
+    ;(async () => {
+      const col = await extractDominantColor(src)
+      if (mounted) setHeroColor(col)
+    })()
+    return () => { mounted = false }
+  }, [heroIndex, heroImages])
 
   // Show a loading screen while fetching school data
   if (loading) {
@@ -164,6 +294,7 @@ export default function SchoolHome() {
           </div>
           <nav className="hidden md:flex items-center gap-8 text-sm text-gray-600">
             <a href="#about" className="hover:text-gray-900">About</a>
+            <a href="#headteacher" className="hover:text-gray-900">Headteacher</a>
             <a href="#academics" className="hover:text-gray-900">Academics</a>
             <Link to="/teachers" className="hover:text-gray-900">Teachers</Link>
             <a href="#admissions" className="hover:text-gray-900">Admissions</a>
@@ -193,6 +324,7 @@ export default function SchoolHome() {
           <div className="md:hidden border-t border-gray-100 bg-white">
             <div className="px-6 py-4 flex flex-col gap-3 text-gray-700">
               <a href="#about" onClick={() => setMobileOpen(false)} className="py-2">About</a>
+              <a href="#headteacher" onClick={() => setMobileOpen(false)} className="py-2">Headteacher</a>
               <a href="#academics" onClick={() => setMobileOpen(false)} className="py-2">Academics</a>
               <Link to="/teachers" onClick={() => setMobileOpen(false)} className="py-2">Teachers</Link>
               <a href="#admissions" onClick={() => setMobileOpen(false)} className="py-2">Admissions</a>
@@ -209,15 +341,12 @@ export default function SchoolHome() {
 
       {/* Hero */}
       <section className="relative overflow-hidden">
-        <div className="absolute inset-0 bg-[radial-gradient(1200px_600px_at_-10%_-10%,rgba(79,70,229,0.12),transparent_60%),radial-gradient(1200px_600px_at_110%_30%,rgba(147,51,234,0.12),transparent_60%),linear-gradient(to_bottom,white,rgba(248,250,252,0.6))]" />
-        <div aria-hidden className="hidden sm:block pointer-events-none absolute -top-24 -right-24 h-72 w-72 rounded-full bg-indigo-300/30 blur-3xl" style={{ animation: 'float 10s ease-in-out infinite' }} />
-        <div aria-hidden className="hidden sm:block pointer-events-none absolute bottom-0 -left-24 h-80 w-80 rounded-full bg-purple-300/30 blur-3xl" style={{ animation: 'float2 12s ease-in-out infinite' }} />
-        <div aria-hidden className="hidden sm:block pointer-events-none absolute top-10 left-10 h-6 w-6 rounded-full bg-indigo-400/40" style={{ animation: 'float 8s ease-in-out infinite' }} />
-        <div aria-hidden className="hidden sm:block pointer-events-none absolute bottom-12 right-16 h-10 w-10 rounded-full border border-purple-300/60" style={{ animation: 'spinSlow 18s linear infinite' }} />
+        <div className="absolute inset-0" style={{ backgroundImage: `radial-gradient(1200px 600px at -10% -10%, ${heroColor}, transparent 60%), radial-gradient(1200px 600px at 110% 30%, rgba(147,51,234,0.12), transparent 60%), linear-gradient(to bottom, white, rgba(248,250,252,0.6))` }} />
+        {/* decorative blobs removed to reduce motion */}
         <div className="relative mx-auto max-w-7xl px-4 md:px-6 pt-12 md:pt-16 pb-16 md:pb-24">
           <div className="grid lg:grid-cols-2 gap-12 items-center">
             <div>
-              <div className="inline-flex items-center gap-2 rounded-full bg-indigo-100 text-indigo-700 px-3 py-1 text-xs font-semibold mb-4 shadow-sm" style={{ animation: 'pulseBadge 2.8s ease-out infinite' }}>
+              <div className="inline-flex items-center gap-2 rounded-full bg-indigo-100 text-indigo-700 px-3 py-1 text-xs font-semibold mb-4 shadow-sm">
                 <span>{school.homepage?.hero?.badge || school.motto}</span>
               </div>
               <h1 className="text-4xl sm:text-5xl md:text-6xl font-extrabold leading-tight tracking-tight bg-gradient-to-r from-gray-900 via-gray-900 to-indigo-800 bg-clip-text text-transparent">
@@ -242,32 +371,44 @@ export default function SchoolHome() {
               </div>
             </div>
             <div className="relative">
-              <div className="rounded-3xl border border-gray-200 shadow-2xl overflow-hidden bg-white ring-1 ring-gray-100 transform transition hover:-translate-y-0.5 hover:shadow-[0_20px_50px_rgba(79,70,229,0.15)]" style={{ animation: 'panZoom 16s ease-in-out infinite' }}>
-                {(() => {
-                  const imgs = school?.homepage?.hero?.images || []
-                  const main = imgs[0] ? toAbsoluteUrl(imgs[0]) : new URL('../../images/pexels-kwakugriffn-14554003.jpg', import.meta.url).href
-                  const t1 = imgs[1] ? toAbsoluteUrl(imgs[1]) : new URL('../../images/pexels-gabby-k-6289065.jpg', import.meta.url).href
-                  const t2 = imgs[2] ? toAbsoluteUrl(imgs[2]) : new URL('../../images/pexels-akelaphotography-448877.jpg', import.meta.url).href
-                  const t3 = imgs[3] ? toAbsoluteUrl(imgs[3]) : new URL('../../images/pexels-kwakugriffn-14554003.jpg', import.meta.url).href
-                  return (
-                    <>
+              <div className="rounded-3xl border border-gray-200 shadow-2xl overflow-hidden bg-white ring-1 ring-gray-100 transform transition hover:-translate-y-0.5 hover:shadow-[0_20px_50px_rgba(79,70,229,0.15)]">
+                <div className="relative w-full h-56 sm:h-72 md:h-80">
+                  {heroImages.map((src, i) => {
+                    const isActive = i === heroIndex
+                    const common = {
+                      transitionProperty: 'opacity, filter',
+                      zIndex: isActive ? 2 : 1,
+                    }
+                    const fadeStyle = common
+                    const dissolveStyle = common
+                    const boxStyle = {
+                      transitionProperty: 'clip-path, opacity',
+                      clipPath: isActive ? 'inset(0% 0% 0% 0%)' : 'inset(50% 50% 50% 50%)',
+                      zIndex: isActive ? 2 : 1,
+                    }
+                    return (
                       <img
-                        src={main}
+                        key={src + i}
+                        src={src}
                         alt="Hero"
                         width="1280"
                         height="640"
-                        loading="eager"
+                        loading={i === 0 ? 'eager' : 'lazy'}
                         decoding="async"
-                        className="w-full h-56 sm:h-72 md:h-80 object-cover"
+                        className={`absolute inset-0 w-full h-full object-cover transition-all duration-700 ${animationVariant === 'fade' ? (isActive ? 'opacity-100' : 'opacity-0') : ''} ${animationVariant === 'dissolve' ? (isActive ? 'opacity-100 blur-0' : 'opacity-0 blur-sm') : ''}`}
+                        style={animationVariant === 'box' ? boxStyle : (animationVariant === 'dissolve' ? dissolveStyle : fadeStyle)}
                       />
-                      <div className="grid grid-cols-3 divide-x divide-gray-100">
-                        <img loading="lazy" decoding="async" width="400" height="160" src={t1} alt="Students" className="h-20 sm:h-24 md:h-28 w-full object-cover"/>
-                        <img loading="lazy" decoding="async" width="400" height="160" src={t2} alt="Learning" className="h-20 sm:h-24 md:h-28 w-full object-cover"/>
-                        <img loading="lazy" decoding="async" width="400" height="160" src={t3} alt="Community" className="h-20 sm:h-24 md:h-28 w-full object-cover"/>
-                      </div>
-                    </>
-                  )
-                })()}
+                    )
+                  })}
+                </div>
+                <div className="grid grid-cols-3 divide-x divide-gray-100">
+                  {heroImages.slice(0, 3).map((src, i) => (
+                    <button key={src + 't' + i} type="button" onClick={() => setHeroIndex(i)} className="relative group">
+                      <img loading="lazy" decoding="async" width="400" height="160" src={src} alt="Thumb" className="h-20 sm:h-24 md:h-28 w-full object-cover"/>
+                      <span className={`absolute inset-0 ring-2 ${heroIndex === i ? 'ring-indigo-500' : 'ring-transparent'} pointer-events-none`} />
+                    </button>
+                  ))}
+                </div>
               </div>
               {(() => {
                 const st = school?.homepage?.stats || {}
@@ -289,16 +430,16 @@ export default function SchoolHome() {
         </div>
         <div className="hidden md:flex items-center gap-2 absolute left-1/2 -translate-x-1/2 bottom-6 text-gray-500/80">
           <span className="text-xs tracking-wider uppercase">Scroll</span>
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4" style={{ animation: 'bounceY 1.2s infinite' }}>
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4">
             <path d="M12 16.5a1 1 0 0 1-.7-.29l-5-5a1 1 0 1 1 1.4-1.42l4.3 4.3 4.3-4.3a1 1 0 0 1 1.4 1.42l-5 5a1 1 0 0 1-.7.29Z" />
           </svg>
         </div>
-        <Wave className="absolute -bottom-px left-0 right-0 h-16 w-full text-purple-50" />
+        
       </section>
 
       {/* About */}
-      <section id="about" className="relative overflow-hidden bg-gradient-to-b from-indigo-50 via-sky-50 to-emerald-50/30">
-        <div aria-hidden className="absolute inset-0 pointer-events-none opacity-25 [background:radial-gradient(rgba(99,102,241,0.18)_1px,transparent_1px)] [background-size:22px_22px]" />
+      <section id="about" className="relative overflow-hidden bg-gradient-to-b from-slate-50 via-indigo-50/20 to-white">
+        <div aria-hidden className="absolute inset-0 pointer-events-none opacity-10 [background:radial-gradient(rgba(99,102,241,0.14)_1px,transparent_1px)] [background-size:22px_22px]" />
         <div className="mx-auto max-w-7xl px-4 md:px-6 py-14 md:py-20">
           <div className="grid lg:grid-cols-2 gap-12 items-start">
           <Reveal>
@@ -348,13 +489,47 @@ export default function SchoolHome() {
           </Reveal>
           </div>
         </div>
-        <Wave className="absolute -bottom-px left-0 right-0 h-16 w-full text-emerald-50" />
+        
+      </section>
+
+      <section id="headteacher" className="relative overflow-hidden bg-gradient-to-b from-white via-amber-50/20 to-white">
+        <div aria-hidden className="absolute inset-0 pointer-events-none opacity-10 [background:radial-gradient(rgba(245,158,11,0.14)_1px,transparent_1px)] [background-size:22px_22px]" />
+        <div className="mx-auto max-w-7xl px-4 md:px-6 py-14 md:py-16">
+          {(() => {
+            const ht = school?.homepage?.headteacher || {}
+            const name = ht.name || 'Headteacher'
+            const title = ht.title || 'Headteacher'
+            const photo = ht.photo ? toAbsoluteUrl(ht.photo) : ''
+            const message = ht.message || 'Welcome to our school. We are committed to academic excellence, character formation, and holistic growth of every learner entrusted to us.'
+            return (
+              <div className="grid lg:grid-cols-3 gap-8 items-start">
+                <Reveal className="lg:col-span-1">
+                  <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-lg text-center">
+                    {photo ? (
+                      <img src={photo} alt={name} className="mx-auto h-36 w-36 rounded-2xl object-cover border border-gray-200" loading="lazy" />
+                    ) : (
+                      <div className="mx-auto h-36 w-36 rounded-2xl bg-gray-100 grid place-items-center text-3xl text-gray-400">👩‍🏫</div>
+                    )}
+                    <div className="mt-4 font-semibold text-gray-900">{name}</div>
+                    <div className="text-sm text-gray-600">{title}</div>
+                  </div>
+                </Reveal>
+                <Reveal className="lg:col-span-2">
+                  <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-lg">
+                    <h2 className="text-3xl font-bold text-gray-900">Message from the Headteacher</h2>
+                    <p className="mt-4 text-lg leading-relaxed text-gray-700 whitespace-pre-line">{message}</p>
+                  </div>
+                </Reveal>
+              </div>
+            )
+          })()}
+        </div>
       </section>
 
       {/* Academics */}
-      <section id="academics" className="relative overflow-hidden bg-gradient-to-b from-emerald-50 via-indigo-50 to-purple-50/40">
-        <div aria-hidden className="absolute inset-0 pointer-events-none opacity-20 [background:radial-gradient(rgba(16,185,129,0.18)_1px,transparent_1px)] [background-size:22px_22px]" />
-        <Wave className="absolute -top-px left-0 right-0 h-16 w-full text-emerald-50" flip />
+      <section id="academics" className="relative overflow-hidden bg-gradient-to-b from-white via-sky-50 to-indigo-50/20">
+        <div aria-hidden className="absolute inset-0 pointer-events-none opacity-10 [background:radial-gradient(rgba(16,185,129,0.14)_1px,transparent_1px)] [background-size:22px_22px]" />
+        
         <div className="mx-auto max-w-7xl px-4 md:px-6 py-14 md:py-16">
           <div className="text-center max-w-3xl mx-auto">
             <h2 className="text-4xl font-bold text-gray-900">Academic Programs</h2>
@@ -377,13 +552,13 @@ export default function SchoolHome() {
             ))}
           </div>
         </div>
-        <Wave className="absolute -bottom-px left-0 right-0 h-16 w-full text-indigo-50" />
+        
       </section>
 
       {/* Admissions CTA */}
-      <section id="admissions" className="relative overflow-hidden bg-gradient-to-b from-purple-50 via-pink-50 to-rose-50/30">
-        <div aria-hidden className="absolute inset-0 pointer-events-none opacity-20 [background:radial-gradient(rgba(244,114,182,0.16)_1px,transparent_1px)] [background-size:22px_22px]" />
-        <Wave className="absolute -top-px left-0 right-0 h-16 w-full text-purple-50" flip />
+      <section id="admissions" className="relative overflow-hidden bg-gradient-to-b from-white via-rose-50/20 to-white">
+        <div aria-hidden className="absolute inset-0 pointer-events-none opacity-10 [background:radial-gradient(rgba(244,114,182,0.14)_1px,transparent_1px)] [background-size:22px_22px]" />
+        
         <div className="mx-auto max-w-7xl px-4 md:px-6 py-16 md:py-20">
           <div className="grid lg:grid-cols-2 gap-12 items-center">
           <Reveal>
@@ -426,13 +601,13 @@ export default function SchoolHome() {
           </Reveal>
           </div>
         </div>
-        <Wave className="absolute -bottom-px left-0 right-0 h-16 w-full text-rose-50" />
+        
       </section>
 
       {/* News / Highlights */}
-      <section id="news" className="relative overflow-hidden bg-gradient-to-b from-rose-50 via-violet-50 to-indigo-50/40">
-        <div aria-hidden className="absolute inset-0 pointer-events-none opacity-15 [background:radial-gradient(rgba(147,51,234,0.18)_1px,transparent_1px)] [background-size:22px_22px]" />
-        <Wave className="absolute -top-px left-0 right-0 h-16 w-full text-rose-50" flip />
+      <section id="news" className="relative overflow-hidden bg-gradient-to-b from-white via-violet-50/20 to-white">
+        <div aria-hidden className="absolute inset-0 pointer-events-none opacity-10 [background:radial-gradient(rgba(147,51,234,0.14)_1px,transparent_1px)] [background-size:22px_22px]" />
+        
         <div className="mx-auto max-w-7xl px-4 md:px-6 py-14 md:py-16">
           <div className="flex items-end justify-between">
             <div>
@@ -467,10 +642,142 @@ export default function SchoolHome() {
         </div>
       </section>
 
+      {/* Featured */}
+      <section id="featured" className="relative overflow-hidden bg-gradient-to-b from-white via-indigo-50/20 to-white">
+        <div aria-hidden className="absolute inset-0 pointer-events-none opacity-10 [background:radial-gradient(rgba(99,102,241,0.14)_1px,transparent_1px)] [background-size:22px_22px]" />
+        
+        <div className="mx-auto max-w-7xl px-4 md:px-6 py-14 md:py-16">
+          <div className="text-center max-w-3xl mx-auto">
+            <h2 className="text-3xl font-bold text-gray-900">Featured</h2>
+            <p className="mt-3 text-lg text-gray-600">Highlights, programs and achievements.</p>
+          </div>
+          <div className="mt-8 grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {(school.homepage?.featured && school.homepage.featured.length ? school.homepage.featured : [
+              { title: 'Modern Science Labs', desc: 'Hands-on experiments in fully equipped labs.', images: [new URL('../../images/pexels-akelaphotography-448877.jpg', import.meta.url).href] },
+              { title: 'Championship Team', desc: 'Regional football champions for two consecutive years.', images: [new URL('../../images/pexels-gabby-k-6289065.jpg', import.meta.url).href] },
+              { title: 'Arts & Culture', desc: 'Vibrant music and drama productions.', images: [new URL('../../images/pexels-kwakugriffn-14554003.jpg', import.meta.url).href] },
+            ]).map((f, idx) => (
+              <FeaturedCard key={f.title || idx} item={f} />
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Gallery */}
+      <section id="gallery" className="relative overflow-hidden bg-gradient-to-b from-white via-amber-50/20 to-white">
+        <div aria-hidden className="absolute inset-0 pointer-events-none opacity-10 [background:radial-gradient(rgba(251,191,36,0.14)_1px,transparent_1px)] [background-size:22px_22px]" />
+        <div className="mx-auto max-w-7xl px-4 md:px-6 py-14 md:py-16">
+          {(() => {
+            const items = (school.homepage?.gallery?.items && school.homepage.gallery.items.length ? school.homepage.gallery.items : [
+              { url: new URL('../../images/pexels-kwakugriffn-14554003.jpg', import.meta.url).href, title: 'Campus Life', category: 'Campus' },
+              { url: new URL('../../images/pexels-gabby-k-6289065.jpg', import.meta.url).href, title: 'Sports', category: 'Sports' },
+              { url: new URL('../../images/pexels-akelaphotography-448877.jpg', import.meta.url).href, title: 'Science', category: 'Academics' },
+              { url: new URL('../../images/pexels-gabby-k-6289065.jpg', import.meta.url).href, title: 'Arts', category: 'Arts' },
+            ])
+            const cats = ['All', ...Array.from(new Set(items.map(i => (i.category || 'Other'))))]
+            const filtered = galleryCat === 'All' ? items : items.filter(i => (i.category || 'Other') === galleryCat)
+            return (
+              <>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h2 className="text-3xl font-bold text-gray-900">Gallery</h2>
+                    <p className="mt-1 text-gray-600">Explore moments from around the school.</p>
+                  </div>
+                  <div className="inline-flex items-center gap-1 rounded-lg border border-gray-200 p-1 bg-white">
+                    {cats.map(c => (
+                      <button key={c} type="button" onClick={() => setGalleryCat(c)} className={`px-3 py-1.5 rounded-md text-sm ${galleryCat===c ? 'bg-indigo-600 text-white' : 'text-gray-700 hover:bg-gray-50'}`}>{c}</button>
+                    ))}
+                  </div>
+                </div>
+                <div className="mt-6 grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {filtered.map((g, idx) => (
+                    <Reveal key={g.url || idx} className="group rounded-xl overflow-hidden border border-gray-200 bg-white">
+                      <div className="relative">
+                        <img src={/^https?:/.test(g.url)? g.url : toAbsoluteUrl(g.url)} alt={g.title || 'Gallery'} className="w-full aspect-square object-cover" loading="lazy"/>
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent opacity-0 group-hover:opacity-100 transition" />
+                        {g.title ? <div className="absolute bottom-2 left-2 text-white text-sm font-medium drop-shadow">{g.title}</div> : null}
+                      </div>
+                    </Reveal>
+                  ))}
+                </div>
+              </>
+            )
+          })()}
+        </div>
+        
+      </section>
+
+      {/* Partners */}
+      {Array.isArray(school.homepage?.partners) && school.homepage.partners.length ? (
+        <section id="partners" className="relative overflow-hidden bg-gradient-to-b from-white via-slate-50/20 to-white">
+          <div aria-hidden className="absolute inset-0 pointer-events-none opacity-10 [background:radial-gradient(rgba(99,102,241,0.12)_1px,transparent_1px)] [background-size:22px_22px]" />
+          <div className="mx-auto max-w-7xl px-4 md:px-6 py-14 md:py-16">
+            <div className="text-center max-w-3xl mx-auto">
+              <h2 className="text-3xl font-bold text-gray-900">Our Partners</h2>
+              <p className="mt-2 text-gray-600">Organizations we collaborate with.</p>
+            </div>
+            <div className="mt-8 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-6 items-center">
+              {school.homepage.partners.map((p, idx) => {
+                const href = (p?.url || '').trim()
+                const logo = p?.logo ? (/^https?:\/\//i.test(p.logo) ? p.logo : toAbsoluteUrl(p.logo)) : ''
+                const content = logo ? (
+                  <div className="rounded-xl border border-gray-200 bg-white p-4 hover:shadow transition">
+                    <div className="grid place-items-center">
+                      <img src={logo} alt={p?.name || 'Partner'} className="h-12 w-full object-contain" loading="lazy" />
+                    </div>
+                    {p?.name ? <div className="mt-2 text-sm font-medium text-gray-700 text-center truncate">{p.name}</div> : null}
+                  </div>
+                ) : (
+                  <div className="rounded-xl border border-gray-200 bg-white p-6 text-sm text-gray-700 grid place-items-center font-medium">{p?.name || 'Partner'}</div>
+                )
+                return href && /^https?:\/\//i.test(href) ? (
+                  <a key={idx} href={href} target="_blank" rel="noreferrer">{content}</a>
+                ) : (
+                  <div key={idx}>{content}</div>
+                )
+              })}
+            </div>
+          </div>
+        </section>
+      ) : null}
+
+      {/* Sponsors */}
+      {Array.isArray(school.homepage?.sponsors) && school.homepage.sponsors.length ? (
+        <section id="sponsors" className="relative overflow-hidden bg-gradient-to-b from-white via-slate-50/20 to-white">
+          <div aria-hidden className="absolute inset-0 pointer-events-none opacity-10 [background:radial-gradient(rgba(99,102,241,0.12)_1px,transparent_1px)] [background-size:22px_22px]" />
+          <div className="mx-auto max-w-7xl px-4 md:px-6 py-14 md:py-16">
+            <div className="text-center max-w-3xl mx-auto">
+              <h2 className="text-3xl font-bold text-gray-900">Our Sponsors</h2>
+              <p className="mt-2 text-gray-600">We are grateful for the support of these sponsors.</p>
+            </div>
+            <div className="mt-8 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-6 items-center">
+              {school.homepage.sponsors.map((p, idx) => {
+                const href = (p?.url || '').trim()
+                const logo = p?.logo ? (/^https?:\/\//i.test(p.logo) ? p.logo : toAbsoluteUrl(p.logo)) : ''
+                const content = logo ? (
+                  <div className="rounded-xl border border-gray-200 bg-white p-3 hover:shadow transition">
+                    <div className="grid place-items-center">
+                      <img src={logo} alt={p?.name || 'Sponsor'} className="h-10 w-full object-contain" loading="lazy" />
+                    </div>
+                    {p?.name ? <div className="mt-2 text-sm font-medium text-gray-700 text-center truncate">{p.name}</div> : null}
+                  </div>
+                ) : (
+                  <div className="rounded-xl border border-gray-200 bg-white p-5 text-sm text-gray-700 grid place-items-center font-medium">{p?.name || 'Sponsor'}</div>
+                )
+                return href && /^https?:\/\//i.test(href) ? (
+                  <a key={idx} href={href} target="_blank" rel="noreferrer">{content}</a>
+                ) : (
+                  <div key={idx}>{content}</div>
+                )
+              })}
+            </div>
+          </div>
+        </section>
+      ) : null}
+
       {/* Contact */}
-      <section id="contact" className="relative overflow-hidden bg-gradient-to-b from-indigo-50 via-blue-50 to-white">
-        <div aria-hidden className="absolute inset-0 pointer-events-none opacity-15 [background:radial-gradient(rgba(59,130,246,0.16)_1px,transparent_1px)] [background-size:22px_22px]" />
-        <Wave className="absolute -top-px left-0 right-0 h-16 w-full text-indigo-50" flip />
+      <section id="contact" className="relative overflow-hidden bg-gradient-to-b from-white via-blue-50/20 to-white">
+        <div aria-hidden className="absolute inset-0 pointer-events-none opacity-10 [background:radial-gradient(rgba(59,130,246,0.14)_1px,transparent_1px)] [background-size:22px_22px]" />
         <div className="mx-auto max-w-7xl px-4 md:px-6 py-14 md:py-16">
           <div className="grid md:grid-cols-2 gap-10 items-start">
           <div>
@@ -495,7 +802,6 @@ export default function SchoolHome() {
           </div>
           </div>
         </div>
-        <Wave className="absolute -bottom-px left-0 right-0 h-16 w-full text-white" />
       </section>
 
       {/* Footer */}

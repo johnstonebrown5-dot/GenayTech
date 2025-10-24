@@ -22,6 +22,8 @@ from django.utils import timezone
 from academics.models import Class as Klass
 from academics.models import Student
 from django.db.models import Q
+from django.core.files.storage import default_storage
+from django.core.files.base import ContentFile
 
 User = get_user_model()
 
@@ -320,6 +322,37 @@ def school_me(request):
         except Exception:
             parsed_homepage = {}
 
+    # Start from existing homepage and merge to avoid wiping other sections
+    existing_homepage = getattr(school, 'homepage', {}) or {}
+    if isinstance(parsed_homepage, dict):
+        merged_homepage = {**existing_homepage, **parsed_homepage}
+    else:
+        merged_homepage = existing_homepage
+
+    # Handle optional headteacher fields and photo; place under homepage.headteacher
+    try:
+        if 'headteacher_photo' in request.FILES:
+            infile = request.FILES['headteacher_photo']
+            # Save under a predictable folder
+            path = default_storage.save(f"headteacher/{getattr(school, 'id', 'school')}_{infile.name}", infile)
+            photo_url = request.build_absolute_uri(default_storage.url(path))
+            headteacher = dict(merged_homepage.get('headteacher') or {})
+            headteacher['photo'] = photo_url
+            merged_homepage['headteacher'] = headteacher
+        # Simple text fields can arrive either inside homepage JSON or as flat form fields
+        ht = dict(merged_homepage.get('headteacher') or {})
+        if data.get('headteacher_name') is not None:
+            ht['name'] = data.get('headteacher_name')
+        if data.get('headteacher_title') is not None:
+            ht['title'] = data.get('headteacher_title')
+        if data.get('headteacher_message') is not None:
+            ht['message'] = data.get('headteacher_message')
+        if ht:
+            merged_homepage['headteacher'] = ht
+    except Exception:
+        # Ignore upload failure silently (no crash); client can retry
+        pass
+
     payload = {
         'name': data.get('name', school.name),
         'code': data.get('code', school.code),
@@ -327,7 +360,7 @@ def school_me(request):
         'motto': data.get('motto', getattr(school, 'motto', '')),
         'aim': data.get('aim', getattr(school, 'aim', '')),
         'social_links': parsed_social,
-        'homepage': parsed_homepage,
+        'homepage': merged_homepage,
     }
     if 'logo' in request.FILES:
         payload['logo'] = request.FILES['logo']
