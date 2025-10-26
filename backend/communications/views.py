@@ -7,8 +7,8 @@ from django.utils.dateparse import parse_datetime
 from django.db.models import Q
 from django.db.models import Sum, F, Value, DecimalField
 from django.db.models.functions import Coalesce
-from .models import Notification, Event
-from .serializers import NotificationSerializer, EventSerializer, ArrearsMessageCampaignSerializer
+from .models import Notification, Event, DeliveryLog
+from .serializers import NotificationSerializer, EventSerializer, ArrearsMessageCampaignSerializer, DeliveryLogSerializer
 from .models import ArrearsMessageCampaign, Message, MessageRecipient
 from .serializers import MessageSerializer
 from academics.models import Student
@@ -108,9 +108,46 @@ class EventViewSet(viewsets.ModelViewSet):
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 
+class IsAdminOrFinance(permissions.BasePermission):
+    def has_permission(self, request, view):
+        role = getattr(request.user, 'role', None)
+        return bool(request.user and request.user.is_authenticated and role in ('admin','finance'))
+
+
+class DeliveryLogViewSet(viewsets.ReadOnlyModelViewSet):
+    serializer_class = DeliveryLogSerializer
+    permission_classes = [permissions.IsAuthenticated, IsAdminOrFinance]
+
+    def get_queryset(self):
+        user = self.request.user
+        qs = DeliveryLog.objects.all()
+        # Scope to user's school
+        if getattr(user, 'school_id', None):
+            qs = qs.filter(school_id=user.school_id)
+        else:
+            qs = qs.none()
+        # Optional channel filter
+        ch = self.request.query_params.get('channel')
+        if ch in ('sms','email'):
+            qs = qs.filter(channel=ch)
+        return qs.order_by('-created_at','id')
+
+    @action(detail=False, methods=['get'])
+    def recent(self, request):
+        try:
+            limit_param = request.query_params.get('limit')
+            limit = int(limit_param) if (limit_param and str(limit_param).isdigit()) else 50
+            limit = max(1, min(limit, 200))
+        except Exception:
+            limit = 50
+        qs = self.get_queryset()[:limit]
+        ser = self.get_serializer(qs, many=True)
+        return Response(ser.data)
+
+
 class ArrearsMessageCampaignViewSet(viewsets.ModelViewSet):
     serializer_class = ArrearsMessageCampaignSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, IsAdminOrFinance]
 
     def get_queryset(self):
         user = self.request.user
@@ -148,6 +185,112 @@ class ArrearsMessageCampaignViewSet(viewsets.ModelViewSet):
         campaign = self.get_object()
         data = ArrearsMessageCampaignSerializer(campaign).data
         return Response(data)
+
+    @action(detail=True, methods=['post'])
+    def cancel(self, request, pk=None):
+        camp = self.get_object()
+        # Only same-school admin/finance allowed (enforced by IsAdminOrFinance and queryset scoping)
+        if camp.status not in [ArrearsMessageCampaign.Status.QUEUED, ArrearsMessageCampaign.Status.RUNNING]:
+            return Response({'detail': 'Campaign not active'}, status=status.HTTP_409_CONFLICT)
+        camp.cancel_requested = True
+        camp.status = ArrearsMessageCampaign.Status.CANCELED
+        camp.finished_at = timezone.now()
+        camp.save(update_fields=['cancel_requested', 'status', 'finished_at'])
+        return Response({'status': 'canceled'})
+
+    @action(detail=True, methods=['post'])
+    def resume(self, request, pk=None):
+        camp = self.get_object()
+        if camp.status != ArrearsMessageCampaign.Status.CANCELED:
+            return Response({'detail': 'Campaign not canceled'}, status=status.HTTP_409_CONFLICT)
+        camp.cancel_requested = False
+        camp.status = ArrearsMessageCampaign.Status.QUEUED
+        camp.started_at = timezone.now()
+        camp.sent_count = 0
+        camp.error_message = ''
+        camp.save(update_fields=['cancel_requested','status','started_at','sent_count','error_message'])
+        t = threading.Thread(target=process_arrears_campaign, args=(camp.id,), daemon=True)
+        t.start()
+        return Response({'status': 'queued'})
+
+    @action(detail=False, methods=['get'], url_path='latest-progress')
+    def latest_progress(self, request):
+        """Return progress for the latest queued/running campaign for current user's school.
+        Uses DeliveryLog entries to count processed per channel and computes expected_total
+        from the students queryset and selected channels.
+        """
+        user = request.user
+        school_id = getattr(user, 'school_id', None)
+        if not school_id:
+            return Response({'detail': 'No school'}, status=status.HTTP_400_BAD_REQUEST)
+        camp = (
+            ArrearsMessageCampaign.objects
+            .filter(school_id=school_id, status__in=[ArrearsMessageCampaign.Status.QUEUED, ArrearsMessageCampaign.Status.RUNNING])
+            .order_by('-created_at')
+            .first()
+        )
+        if not camp:
+            return Response({'detail': 'no_active_campaign'}, status=status.HTTP_404_NOT_FOUND)
+
+        # Compute expected_total = number_of_students * number_of_channels_selected (sms/email)
+        try:
+            from academics.models import Student
+            from django.db.models import Sum, F, Value, DecimalField, OuterRef, Subquery
+            from django.db.models.functions import Coalesce
+            from finance.models import Invoice, Payment
+            students = Student.objects.filter(klass__school_id=camp.school_id, is_active=True)
+            if getattr(camp, 'klass_id', None):
+                students = students.filter(klass_id=camp.klass_id)
+            billed_sq = (
+                Invoice.objects
+                .filter(student_id=OuterRef('pk'))
+                .values('student_id')
+                .annotate(s=Sum('amount'))
+                .values('s')[:1]
+            )
+            paid_sq = (
+                Payment.objects
+                .filter(invoice__student_id=OuterRef('pk'))
+                .values('invoice__student_id')
+                .annotate(s=Sum('amount'))
+                .values('s')[:1]
+            )
+            students = students.annotate(
+                billed=Coalesce(Subquery(billed_sq), Value(0, output_field=DecimalField(max_digits=12, decimal_places=2))),
+                paid=Coalesce(Subquery(paid_sq), Value(0, output_field=DecimalField(max_digits=12, decimal_places=2))),
+            ).annotate(balance=F('billed') - F('paid'))
+            try:
+                threshold = float(getattr(camp, 'min_balance', 0) or 0)
+            except Exception:
+                threshold = 0.0
+            if threshold < 0:
+                threshold = 0.0
+            students = students.filter(balance__gt=threshold)
+            n_students = students.count()
+        except Exception:
+            n_students = 0
+
+        channels = (1 if camp.send_sms else 0) + (1 if camp.send_email else 0)
+        expected_total = n_students * channels
+
+        # Processed counts via DeliveryLog context
+        dl = DeliveryLog.objects.filter(school_id=school_id, context__contains=f"campaign:{camp.id}")
+        sms_sent = dl.filter(channel='sms', ok=True).count()
+        sms_failed = dl.filter(channel='sms', ok=False).count()
+        email_sent = dl.filter(channel='email', ok=True).count()
+        email_failed = dl.filter(channel='email', ok=False).count()
+        processed_total = sms_sent + sms_failed + email_sent + email_failed
+        percent = int((processed_total / expected_total) * 100) if expected_total > 0 else 0
+
+        return Response({
+            'campaign': camp.id,
+            'status': camp.status,
+            'expected_total': expected_total,
+            'processed_total': processed_total,
+            'percent': percent,
+            'sms': {'sent': sms_sent, 'failed': sms_failed},
+            'email': {'sent': email_sent, 'failed': email_failed},
+        })
 
 
 class MessageViewSet(viewsets.ModelViewSet):
@@ -289,11 +432,7 @@ class ContactInquiryView(APIView):
             body = "\n".join(lines)
 
             # Send to support mailbox
-            send_email_safe(
-                to_list=["edutrack46@gmail.com"],
-                subject=subject,
-                body=body,
-            )
+            send_email_safe(subject, body, "edutrack46@gmail.com")
             return Response({"detail": "sent"}, status=status.HTTP_200_OK)
         except Exception:
             logger.exception("Failed to send contact inquiry email")

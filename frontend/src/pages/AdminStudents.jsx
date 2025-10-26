@@ -20,17 +20,33 @@ export default function AdminStudents(){
   const [filterClass, setFilterClass] = useState('')
   const [filterGender, setFilterGender] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const [confirmStudent, setConfirmStudent] = useState(null)
+  const [confirmTargetActive, setConfirmTargetActive] = useState(true)
+  const [confirmSubmitting, setConfirmSubmitting] = useState(false)
+  const [confirmAgree, setConfirmAgree] = useState(false)
 
-  // Tab: active vs graduated
-  const [tab, setTab] = useState('active') // 'active' | 'graduated'
+  // Tab: active vs graduated vs inactive
+  const [tab, setTab] = useState('active') // 'active' | 'graduated' | 'inactive'
 
   const { showSuccess, showError } = useNotification()
 
   const load = async () => {
     try {
       setIsLoading(true)
+      // Build students query
+      let studentsUrl = `/academics/students/?page_size=2000`
+      if (tab === 'graduated') {
+        studentsUrl += `&is_graduated=true`
+      } else if (tab === 'inactive') {
+        // Count graduated among inactive: fetch all students with is_active=false (any graduation state)
+        studentsUrl += `&is_active=false`
+      } else {
+        // active
+        studentsUrl += `&is_graduated=false&is_active=true`
+      }
       const [st, cl] = await Promise.all([
-        api.get(`/academics/students/?is_graduated=${tab === 'graduated' ? 'true' : 'false'}&page_size=2000`),
+        api.get(studentsUrl),
         api.get('/academics/classes/?page_size=2000')
       ])
       const stData = Array.isArray(st.data) ? st.data : (Array.isArray(st.data?.results) ? st.data.results : [])
@@ -348,6 +364,10 @@ export default function AdminStudents(){
             className={`px-3 py-1.5 rounded border text-sm ${tab==='graduated'?'bg-blue-600 text-white border-blue-600':'bg-white text-gray-700'}`}
             onClick={()=>{ setTab('graduated'); setSearchTerm(''); setSearchDraft(''); }}
           >Graduated Students</button>
+          <button
+            className={`px-3 py-1.5 rounded border text-sm ${tab==='inactive'?'bg-blue-600 text-white border-blue-600':'bg-white text-gray-700'}`}
+            onClick={()=>{ setTab('inactive'); setSearchTerm(''); setSearchDraft(''); }}
+          >Inactive Students</button>
         </div>
 
         {/* Filters & Search Toolbar (moved below cards) */}
@@ -419,7 +439,7 @@ export default function AdminStudents(){
           <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50">
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-xl font-bold text-gray-900">{tab==='active' ? 'Active Students' : 'Graduated Students'}</h2>
+                <h2 className="text-xl font-bold text-gray-900">{tab==='active' ? 'Active Students' : (tab==='inactive' ? 'Inactive Students' : 'Graduated Students')}</h2>
                 <p className="text-sm text-gray-600 mt-1">
                   {filteredStudents.length} of {students.length} students
                   {searchTerm && ` matching "${searchTerm}"`}
@@ -427,8 +447,8 @@ export default function AdminStudents(){
               </div>
               <div className="flex items-center gap-2">
                 <div className="flex items-center gap-1 text-sm text-gray-500">
-                  <div className={`w-2 h-2 rounded-full ${tab==='active'?'bg-green-400':'bg-gray-400'}`}></div>
-                  {tab==='active'?'Active':'Graduated'}
+                  <div className={`w-2 h-2 rounded-full ${tab==='active'?'bg-green-400': (tab==='inactive'?'bg-red-400':'bg-gray-400')}`}></div>
+                  {tab==='active'?'Active': (tab==='inactive'?'Inactive':'Graduated')}
                 </div>
               </div>
             </div>
@@ -504,6 +524,11 @@ export default function AdminStudents(){
                             <div className="w-2 h-2 rounded-full bg-emerald-500 mr-2"></div>
                             {s.klass_detail?.name || s.klass || 'Not Assigned'}
                           </span>
+                        ) : tab==='inactive' ? (
+                          <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-red-100 text-red-800 border border-red-200">
+                            <div className="w-2 h-2 rounded-full bg-red-500 mr-2"></div>
+                            Inactive
+                          </span>
                         ) : (
                           <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-gray-100 text-gray-800 border border-gray-200">
                             <div className="w-2 h-2 rounded-full bg-gray-500 mr-2"></div>
@@ -527,6 +552,15 @@ export default function AdminStudents(){
                             </svg>
                             View Details
                           </Link>
+                          <button
+                            onClick={()=>{ setConfirmStudent(s); setConfirmTargetActive(!s.is_active); setConfirmAgree(false); setConfirmOpen(true); }}
+                            className={`inline-flex items-center px-3 py-1.5 border text-xs font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 transition-all duration-200 ${s.is_active ? 'text-red-700 bg-red-100 hover:bg-red-200 border-transparent focus:ring-red-500' : 'text-emerald-700 bg-emerald-100 hover:bg-emerald-200 border-transparent focus:ring-emerald-500'}`}
+                          >
+                            <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v8m-4-4h8" />
+                            </svg>
+                            {s.is_active ? 'Deactivate' : 'Activate'}
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -698,6 +732,72 @@ export default function AdminStudents(){
               disabled={addStatus === 'adding'}
             >
               {addStatus === 'adding' ? 'Enrolling Student...' : addStatus === 'completed' ? '✓ Student Enrolled' : 'Enroll Student'}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        open={confirmOpen}
+        onClose={()=>{ if(!confirmSubmitting){ setConfirmOpen(false); setConfirmStudent(null); } }}
+        title={confirmTargetActive ? 'Activate Student' : 'Deactivate Student'}
+        size="md"
+      >
+        <div className="space-y-4">
+          {!confirmTargetActive && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-800">
+              <p className="font-semibold mb-2">Before you deactivate, please acknowledge:</p>
+              <ul className="list-disc list-inside space-y-1">
+                <li>The student will not be counted among exam participants.</li>
+                <li>The student will not be assigned fees or new invoices.</li>
+                <li>The student will not receive emails or messages.</li>
+                <li>Their login will be disabled immediately.</li>
+                <li>Admins can still view the student record from the admin side.</li>
+              </ul>
+              <label className="flex items-center gap-2 mt-3 text-red-900">
+                <input type="checkbox" checked={confirmAgree} onChange={(e)=>setConfirmAgree(e.target.checked)} />
+                <span>I understand and agree to deactivate this student.</span>
+              </label>
+            </div>
+          )}
+          {confirmTargetActive && (
+            <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 text-sm text-emerald-800">
+              <p className="font-semibold mb-2">Activate this student?</p>
+              <ul className="list-disc list-inside space-y-1">
+                <li>The student will be eligible for exams.</li>
+                <li>Fees and invoices may be assigned again.</li>
+                <li>They may receive emails and messages.</li>
+                <li>Their login will be enabled.</li>
+              </ul>
+            </div>
+          )}
+          <div className="flex justify-end gap-2">
+            <button
+              onClick={()=>{ if(!confirmSubmitting){ setConfirmOpen(false); setConfirmStudent(null); } }}
+              className="px-4 py-2 border rounded-lg text-gray-700 hover:bg-gray-50"
+              disabled={confirmSubmitting}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={async ()=>{
+                if(!confirmStudent) return;
+                if(!confirmTargetActive && !confirmAgree) return;
+                try{
+                  setConfirmSubmitting(true)
+                  await api.post(`/academics/students/${confirmStudent.id}/set-active/`, { is_active: confirmTargetActive })
+                  await load()
+                  setConfirmOpen(false)
+                  setConfirmStudent(null)
+                }catch(e){
+                }finally{
+                  setConfirmSubmitting(false)
+                }
+              }}
+              className={`${confirmTargetActive ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-red-600 hover:bg-red-700'} px-4 py-2 rounded-lg text-white disabled:opacity-50`}
+              disabled={confirmSubmitting || (!confirmTargetActive ? !confirmAgree : false)}
+            >
+              {confirmSubmitting ? 'Please wait...' : (confirmTargetActive ? 'Activate' : 'Deactivate')}
             </button>
           </div>
         </div>

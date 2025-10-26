@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth';
+import { useLock } from './LockProvider';
 import api from '../api';
+import FloatingDeliveryLog from './FloatingDeliveryLog';
 
 const navItems = [
     { to: '/finance', label: 'Dashboard', icon: '📊' },
@@ -18,6 +20,7 @@ export default function FinanceLayout({ children }) {
     const { pathname } = useLocation();
     const navigate = useNavigate();
     const { user, logout } = useAuth();
+    const { lock } = useLock();
     const [isOpen, setIsOpen] = useState(true);
     const [isMobileOpen, setIsMobileOpen] = useState(false);
     const [schoolName, setSchoolName] = useState('');
@@ -114,14 +117,38 @@ export default function FinanceLayout({ children }) {
                             {user?.first_name || user?.username || 'User'}
                         </span>
                     </button>
-                    <button onClick={logout} className="px-4 py-2 rounded-lg text-sm font-medium bg-gray-900 text-white hover:bg-gray-800 transition-all duration-200 shadow-soft">Logout</button>
+                    <div className="flex items-center gap-3">
+                        <button onClick={lock} className="px-3 py-2 rounded-lg text-sm font-medium bg-gray-800 text-white hover:bg-gray-900 transition-all duration-200 shadow-soft">Lock</button>
+                        <button onClick={logout} className="px-4 py-2 rounded-lg text-sm font-medium bg-gray-900 text-white hover:bg-gray-800 transition-all duration-200 shadow-soft">Logout</button>
+                    </div>
                 </div>
             </header>
 
             <div className="relative">
                 {isMobileOpen && <div className="fixed inset-0 bg-black/30 z-30 md:hidden" onClick={() => setIsMobileOpen(false)} />}
+                {/* Mobile sidebar drawer */}
+                <aside className={`fixed z-40 top-16 left-0 bottom-0 md:hidden bg-gradient-to-b from-gray-800 to-gray-900 border-r border-gray-700/30 w-72 transform transition-transform duration-200 ${isMobileOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+                    <nav className="p-3 space-y-1 overflow-y-auto h-full">
+                        {navItems.map(i => {
+                            const active = pathname === i.to;
+                            return (
+                                <Link key={i.to} to={i.to} className={`${active ? 'bg-white/20 text-white' : 'hover:bg-white/10 text-gray-300 hover:text-white'} flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-300`} title={i.label}>
+                                    <span className="text-lg w-5 text-center">{i.icon}</span>
+                                    <span className="inline-flex items-center gap-2 text-sm font-medium truncate">
+                                        {i.label}
+                                        {i.label === 'Messages' && unreadCount > 0 && (
+                                            <span className="ml-1 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] bg-red-600 text-white">
+                                                {unreadCount > 99 ? '99+' : unreadCount}
+                                            </span>
+                                        )}
+                                    </span>
+                                </Link>
+                            );
+                        })}
+                    </nav>
+                </aside>
 
-                <aside className={`fixed z-40 top-14 left-0 bottom-0 bg-gradient-to-b from-gray-800 to-gray-900 border-r border-gray-700/30 transition-all duration-200 ${sidebarBase} hidden md:flex flex-col shadow-2xl`}>
+                <aside className={`fixed z-40 top-16 left-0 bottom-0 bg-gradient-to-b from-gray-800 to-gray-900 border-r border-gray-700/30 transition-all duration-200 ${sidebarBase} hidden md:flex flex-col shadow-2xl`}>
                     <nav className="p-2 space-y-1 overflow-y-auto">
                         {navItems.map(i => {
                             const active = pathname === i.to;
@@ -148,6 +175,9 @@ export default function FinanceLayout({ children }) {
                     {children}
                 </main>
             </div>
+
+            {/* Floating Delivery Log button/panel (finance only; component checks role) */}
+            <FloatingDeliveryLog />
         </div>
     );
 }

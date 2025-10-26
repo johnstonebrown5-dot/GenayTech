@@ -246,6 +246,27 @@ class Student(models.Model):
         default='day',
         help_text='Whether the student is a day scholar or a boarder.'
     )
+    is_active = models.BooleanField(default=True, help_text='When false, the student is inactive: excluded from exams, fees, messaging, and login disabled.')
+
+class StudentClassHistory(models.Model):
+    ACTION_CHOICES = (
+        ('assigned', 'Assigned'),
+        ('promoted', 'Promoted'),
+        ('moved', 'Moved'),
+        ('graduated', 'Graduated'),
+        ('unassigned', 'Unassigned'),
+    )
+    student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='class_history')
+    from_class = models.ForeignKey('academics.Class', null=True, blank=True, on_delete=models.SET_NULL, related_name='history_from')
+    to_class = models.ForeignKey('academics.Class', null=True, blank=True, on_delete=models.SET_NULL, related_name='history_to')
+    action = models.CharField(max_length=20, choices=ACTION_CHOICES, default='moved')
+    year = models.IntegerField(null=True, blank=True)
+    term = models.IntegerField(null=True, blank=True)
+    note = models.CharField(max_length=255, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['created_at', 'id']
 
 class Competency(models.Model):
     code = models.CharField(max_length=50, unique=True)
@@ -524,13 +545,26 @@ class AcademicYear(models.Model):
                                 # Do NOT graduate; keep in class to allow clearance
                                 not_cleared.append({'student_id': stu.id, 'name': stu.name, 'balance': balance})
                                 continue
-                            # Move to the special 'Graduated' class for the school
-                            grad_class = Class.get_or_create_graduated_class(class_obj.school)
-                            stu.klass = grad_class
+                            # Mark graduated students as inactive and clear class assignment
+                            try:
+                                # Record history: graduated
+                                StudentClassHistory.objects.create(
+                                    student=stu,
+                                    from_class=class_obj,
+                                    to_class=None,
+                                    action='graduated',
+                                    year=grad_year,
+                                    term=None,
+                                    note='Auto graduation'
+                                )
+                            except Exception:
+                                pass
+                            stu.klass = None
                             stu.is_graduated = True
+                            stu.is_active = False
                             stu.graduation_year = grad_year
                             stu.school = class_obj.school
-                            stu.save(update_fields=['klass','is_graduated','graduation_year','school'])
+                            stu.save(update_fields=['klass','is_graduated','is_active','graduation_year','school'])
                             moved_count += 1
                         summary['graduated_classes'].append({
                             'class_id': class_obj.id,
@@ -557,6 +591,18 @@ class AcademicYear(models.Model):
                             # Move students one-by-one to the existing destination class
                             moved_count = 0
                             for stu in class_obj.student_set.select_for_update().all():
+                                try:
+                                    StudentClassHistory.objects.create(
+                                        student=stu,
+                                        from_class=class_obj,
+                                        to_class=target,
+                                        action='promoted',
+                                        year=getattr(self.end_date, 'year', None) if getattr(self, 'end_date', None) else None,
+                                        term=None,
+                                        note='Auto promotion to next grade'
+                                    )
+                                except Exception:
+                                    pass
                                 stu.klass = target
                                 stu.is_graduated = False
                                 stu.school = class_obj.school
@@ -599,6 +645,18 @@ class AcademicYear(models.Model):
                                 # Move students one-by-one
                                 moved_count = 0
                                 for stu in class_obj.student_set.select_for_update().all():
+                                    try:
+                                        StudentClassHistory.objects.create(
+                                            student=stu,
+                                            from_class=class_obj,
+                                            to_class=target,
+                                            action='promoted',
+                                            year=getattr(self.end_date, 'year', None) if getattr(self, 'end_date', None) else None,
+                                            term=None,
+                                            note='Auto promotion (fallback move)'
+                                        )
+                                    except Exception:
+                                        pass
                                     stu.klass = target
                                     stu.is_graduated = False
                                     stu.school = class_obj.school

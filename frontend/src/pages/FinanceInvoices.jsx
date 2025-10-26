@@ -2,6 +2,13 @@ import React, { useEffect, useState } from 'react';
 import api from '../api';
 
 export default function FinanceInvoices() {
+    const todayStr = () => {
+        const d = new Date();
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const da = String(d.getDate()).padStart(2, '0');
+        return `${y}-${m}-${da}`;
+    };
     const [invoices, setInvoices] = useState([]);
     const [students, setStudents] = useState([]);
     const [categories, setCategories] = useState([]);
@@ -11,7 +18,7 @@ export default function FinanceInvoices() {
         student: '',
         category: '',
         amount: '',
-        due_date: new Date().toISOString().slice(0, 10),
+        due_date: todayStr(),
     });
 
     useEffect(() => {
@@ -48,7 +55,7 @@ export default function FinanceInvoices() {
                 student: '',
                 category: '',
                 amount: '',
-                due_date: new Date().toISOString().slice(0, 10),
+                due_date: todayStr(),
             });
         } catch (error) {
             console.error("Failed to create invoice:", error);
@@ -114,7 +121,7 @@ export default function FinanceInvoices() {
                                 <tr key={i.id} className="bg-white border-b">
                                     <td className="px-6 py-4 font-medium text-gray-900 whitespace-nowrap">{students.find(s => s.id === i.student)?.name}</td>
                                     <td className="px-6 py-4">{categories.find(c => c.id === i.category)?.name}</td>
-                                    <td className="px-6 py-4">KES {i.amount.toLocaleString()}</td>
+                                    <td className="px-6 py-4">KES {Number(i.amount || 0).toLocaleString()}</td>
                                     <td className="px-6 py-4">{new Date(i.due_date).toLocaleDateString()}</td>
                                     <td className="px-6 py-4">
                                         <span className={`px-2 py-1 text-xs font-medium rounded-full ${i.status === 'paid' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}`}>

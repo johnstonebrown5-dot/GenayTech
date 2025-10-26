@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth'
+import { useLock } from './LockProvider'
 import api from '../api'
 
 const baseNavItems = [
@@ -14,6 +15,7 @@ export default function StudentLayout({ children }){
   const { pathname } = useLocation()
   const { user, logout } = useAuth()
   const navigate = useNavigate()
+  const { lock } = useLock()
   const [schoolName, setSchoolName] = useState('')
   const [schoolLogo, setSchoolLogo] = useState('')
   const [unreadCount, setUnreadCount] = useState(0)
@@ -104,6 +106,7 @@ export default function StudentLayout({ children }){
                 {user.first_name || user.username}
               </div>
             )}
+            <button onClick={lock} className="px-3 py-1.5 rounded bg-slate-700 text-white text-sm hover:bg-slate-800">Lock</button>
             <button onClick={logout} className="px-3 py-1.5 rounded bg-slate-800 text-white text-sm hover:bg-slate-700">Logout</button>
           </div>
         </div>

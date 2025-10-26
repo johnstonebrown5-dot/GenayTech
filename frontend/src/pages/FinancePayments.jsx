@@ -165,13 +165,13 @@ export default function FinancePayments(){
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold text-gray-900">Payments</h1>
           <p className="text-sm text-gray-500">View, search and print payments. Tabs filter by method.</p>
         </div>
-        <div className="flex gap-2">
-          <input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search name, admno, ref, invoice" className="px-3 py-2 border rounded-lg w-72 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-gray-900/20"/>
+        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+          <input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search name, admno, ref, invoice" className="px-3 py-2 border rounded-lg w-full sm:w-72 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-gray-900/20"/>
           <button onClick={printList} className="px-3 py-2 bg-gray-900 text-white rounded-lg text-sm shadow-sm hover:bg-gray-800">Print</button>
           <button onClick={()=>setShowForm(s=>!s)} className="px-3 py-2 bg-emerald-600 text-white rounded-lg text-sm shadow-sm hover:bg-emerald-700">{showForm? 'Close' : 'Record Payment'}</button>
         </div>
@@ -235,13 +235,13 @@ export default function FinancePayments(){
         </div>
       )}
 
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         {TABS.map(t=> (
           <button key={t.key} onClick={()=>setTab(t.key)} className={`px-3 py-1.5 rounded-full text-sm border transition ${tab===t.key? 'bg-gray-900 text-white border-gray-900 shadow-sm' : 'bg-white text-gray-700 border-gray-300 hover:border-gray-400'}`}>{t.label}</button>
         ))}
       </div>
 
-      <div className="flex gap-3 text-sm">
+      <div className="flex flex-wrap gap-3 text-sm">
         <div className="px-3 py-2 rounded-lg border bg-white shadow-sm">Rows: <span className="font-semibold">{filtered.length}</span></div>
         <div className="px-3 py-2 rounded-lg border bg-white shadow-sm">Total: <span className="font-semibold tabular-nums">{totalAmt.toLocaleString()}</span></div>
       </div>
@@ -285,9 +285,9 @@ export default function FinancePayments(){
         </div>
         <div className="bg-white rounded-xl border shadow-md p-4">
           <div className="text-sm font-medium text-gray-700 mb-2">Method contribution</div>
-          <div className="flex items-center gap-4">
-            <div className="w-40 h-40"><Doughnut data={doughnutData} options={{ plugins:{ legend:{ display:false }}}} /></div>
-            <div className="text-sm space-y-2">
+          <div className="flex flex-col sm:flex-row items-center gap-4">
+            <div className="w-32 h-32 sm:w-40 sm:h-40"><Doughnut data={doughnutData} options={{ plugins:{ legend:{ display:false }}}} /></div>
+            <div className="text-sm space-y-2 text-center sm:text-left">
               <div className="flex items-center gap-2"><span className="inline-block w-3 h-3 rounded bg-yellow-400" /> Cash <span className="ml-2 font-semibold tabular-nums">{totalsByMethod.CASH.toLocaleString()}</span></div>
               <div className="flex items-center gap-2"><span className="inline-block w-3 h-3 rounded bg-green-400" /> Mpesa <span className="ml-2 font-semibold tabular-nums">{totalsByMethod.MPESA.toLocaleString()}</span></div>
               <div className="flex items-center gap-2"><span className="inline-block w-3 h-3 rounded bg-blue-400" /> Bank <span className="ml-2 font-semibold tabular-nums">{totalsByMethod.BANK.toLocaleString()}</span></div>

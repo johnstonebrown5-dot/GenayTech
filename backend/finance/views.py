@@ -137,7 +137,7 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         klass_id = request.query_params.get('klass')
         min_balance = float(request.query_params.get('min_balance', 0))
 
-        stu_qs = Student.objects.all()
+        stu_qs = Student.objects.filter(is_active=True)
         if school:
             stu_qs = stu_qs.filter(klass__school=school)
         if klass_id:
@@ -179,7 +179,7 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         except Exception:
             min_balance = 0
 
-        stu_qs = Student.objects.all()
+        stu_qs = Student.objects.filter(is_active=True)
         if school:
             stu_qs = stu_qs.filter(klass__school=school)
         if klass_id:

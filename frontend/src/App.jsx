@@ -70,6 +70,8 @@ import { AssistantProvider } from './components/Assistant/AssistantContext'
 import FloatingButton from './components/Assistant/FloatingButton'
 import AssistantPanel from './components/Assistant/AssistantPanel'
 import FloatingActions from './components/FloatingActions'
+import LockProvider from './components/LockProvider'
+import PublicReceipt from './pages/PublicReceipt'
 
 function ProtectedRoute({ children, roles }) {
   const { user, loading } = useAuth()
@@ -96,10 +98,12 @@ export default function App() {
     <NotificationProvider>
       <AssistantProvider>
         <AuthProvider>
-          <MessageNotifier />
-          <Routes>
+          <LockProvider>
+            <MessageNotifier />
+            <Routes>
             {/* Public landing page */}
             <Route path="/" element={<SchoolHome />} />
+            <Route path="/receipt/:id" element={<PublicReceipt />} />
             <Route path="/teachers" element={<PublicTeachers />} />
             <Route path="/teachers/:id" element={<PublicTeacherProfile />} />
             <Route path="/admissions" element={<PublicAdmissions />} />
@@ -165,11 +169,12 @@ export default function App() {
             <Route path="/finance/fee-categories" element={<ProtectedRoute roles={["finance","admin"]}><FinanceLayout><FinanceFeeCategories/></FinanceLayout></ProtectedRoute>} />
             <Route path="/finance/class-fees" element={<ProtectedRoute roles={["finance","admin"]}><FinanceLayout><FinanceClassFees/></FinanceLayout></ProtectedRoute>} />
             <Route path="/finance/fees" element={<ProtectedRoute roles={["finance","admin"]}><FinanceFees/></ProtectedRoute>} />
-          </Routes>
-          <NotificationContainer />
-          <FloatingActions />
-          <FloatingButton />
-          <AssistantPanel />
+            </Routes>
+            <NotificationContainer />
+            <FloatingActions />
+            <FloatingButton />
+            <AssistantPanel />
+          </LockProvider>
         </AuthProvider>
       </AssistantProvider>
     </NotificationProvider>

@@ -23,6 +23,9 @@ export default function AdminClassProfile(){
   const [allTeachers, setAllTeachers] = useState([])
   const [subjectTeachers, setSubjectTeachers] = useState([])
   const [teacherUsers, setTeacherUsers] = useState([])
+  const [classHistory, setClassHistory] = useState(null)
+  const [loadingHistory, setLoadingHistory] = useState(false)
+  const [historyError, setHistoryError] = useState('')
   const [showAssignModal, setShowAssignModal] = useState(false)
   const [assignForm, setAssignForm] = useState({ subject: '', teacher: '' })
   const [showReassignCT, setShowReassignCT] = useState(false)
@@ -55,6 +58,24 @@ export default function AdminClassProfile(){
     load()
     return () => { cancelled = true }
   }, [id])
+
+  useEffect(() => {
+    let cancelled = false
+    async function loadHistory(){
+      try {
+        setLoadingHistory(true)
+        setHistoryError('')
+        const { data } = await api.get(`/academics/classes/${id}/history/`)
+        if (!cancelled) setClassHistory(data)
+      } catch (e) {
+        if (!cancelled) { setHistoryError('Failed to load class history'); setClassHistory(null) }
+      } finally {
+        if (!cancelled) setLoadingHistory(false)
+      }
+    }
+    if (activeTab === 'class') loadHistory()
+    return ()=>{ cancelled = true }
+  }, [id, activeTab])
 
   useEffect(() => {
     try{
@@ -339,6 +360,101 @@ export default function AdminClassProfile(){
                           <button onClick={()=>{ setReassignTeacher(String(klass?.teacher_detail?.id||'')); setShowReassignCT(true) }} className="text-xs px-2 py-1 rounded border hover:bg-white">Reassign</button>
                         </div>
                       </div>
+                    </div>
+
+                    <div className="p-4 rounded border bg-white">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="text-sm font-medium">Class History</div>
+                        {loadingHistory && <div className="text-xs text-gray-500">Loading…</div>}
+                      </div>
+                      {historyError && <div className="text-xs text-red-600 mb-2">{historyError}</div>}
+                      {!classHistory ? (
+                        <div className="text-sm text-gray-500">No history yet.</div>
+                      ) : (
+                        <div className="grid md:grid-cols-3 gap-4">
+                          <div className="md:col-span-2 grid md:grid-cols-2 gap-4">
+                            <div className="border rounded">
+                              <div className="px-3 py-2 text-sm font-medium bg-gray-50 border-b">Students In</div>
+                              <div className="overflow-x-auto">
+                                <table className="w-full text-left text-sm">
+                                  <thead>
+                                    <tr className="bg-gray-50">
+                                      <th className="px-3 py-2">Student</th>
+                                      <th className="px-3 py-2">From</th>
+                                      <th className="px-3 py-2">When</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {(classHistory.students_in||[]).length === 0 ? (
+                                      <tr><td className="px-3 py-3 text-gray-500" colSpan={3}>No entries.</td></tr>
+                                    ) : (
+                                      classHistory.students_in.map((h, i) => (
+                                        <tr key={i} className="border-t">
+                                          <td className="px-3 py-2">{h.student_name}</td>
+                                          <td className="px-3 py-2">{h.from || '-'}</td>
+                                          <td className="px-3 py-2">{h.year ? `${h.year}-T${h.term||'-'}` : (h.created_at || '').slice(0,10)}</td>
+                                        </tr>
+                                      ))
+                                    )}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </div>
+                            <div className="border rounded">
+                              <div className="px-3 py-2 text-sm font-medium bg-gray-50 border-b">Students Out</div>
+                              <div className="overflow-x-auto">
+                                <table className="w-full text-left text-sm">
+                                  <thead>
+                                    <tr className="bg-gray-50">
+                                      <th className="px-3 py-2">Student</th>
+                                      <th className="px-3 py-2">To</th>
+                                      <th className="px-3 py-2">When</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {(classHistory.students_out||[]).length === 0 ? (
+                                      <tr><td className="px-3 py-3 text-gray-500" colSpan={3}>No entries.</td></tr>
+                                    ) : (
+                                      classHistory.students_out.map((h, i) => (
+                                        <tr key={i} className="border-t">
+                                          <td className="px-3 py-2">{h.student_name}</td>
+                                          <td className="px-3 py-2">{h.to || '-'}</td>
+                                          <td className="px-3 py-2">{h.year ? `${h.year}-T${h.term||'-'}` : (h.created_at || '').slice(0,10)}</td>
+                                        </tr>
+                                      ))
+                                    )}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="border rounded">
+                            <div className="px-3 py-2 text-sm font-medium bg-gray-50 border-b">Exams by Term</div>
+                            <div className="overflow-x-auto">
+                              <table className="w-full text-left text-sm">
+                                <thead>
+                                  <tr className="bg-gray-50">
+                                    <th className="px-3 py-2">Term</th>
+                                    <th className="px-3 py-2">Exams</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {(classHistory.exams_by_term||[]).length === 0 ? (
+                                    <tr><td className="px-3 py-3 text-gray-500" colSpan={2}>No exams.</td></tr>
+                                  ) : (
+                                    classHistory.exams_by_term.map((r, i) => (
+                                      <tr key={i} className="border-t">
+                                        <td className="px-3 py-2">{r.year ? `${r.year}-T${r.term}` : '-'}</td>
+                                        <td className="px-3 py-2">{r.exams}</td>
+                                      </tr>
+                                    ))
+                                  )}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     {/* Gender Distribution */}

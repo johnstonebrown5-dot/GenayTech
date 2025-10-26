@@ -376,12 +376,12 @@ export default function FinanceDashboard() {
 
     return (
         <div className="space-y-6">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                     <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Finance Dashboard</h1>
                     <p className="text-gray-600 text-sm mt-1">Monitor cashflow, fees and expenses in real time.</p>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
                     <div className="hidden sm:flex items-center gap-1 bg-white border border-gray-200 rounded-full p-1">
                         {[
                           {k:'', label:'All'},
@@ -392,8 +392,8 @@ export default function FinanceDashboard() {
                           <button key={b.k} onClick={()=>applyPreset(b.k)} className={`px-3 py-1.5 text-xs rounded-full ${preset===b.k? 'bg-gray-900 text-white':'text-gray-700 hover:bg-gray-100'}`}>{b.label}</button>
                         ))}
                     </div>
-                    <input type="date" name="start" value={dateRange.start} onChange={e => setDateRange(prev => ({...prev, start: e.target.value}))} className="border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" />
-                    <input type="date" name="end" value={dateRange.end} onChange={e => setDateRange(prev => ({...prev, end: e.target.value}))} className="border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" />
+                    <input type="date" name="start" value={dateRange.start} onChange={e => setDateRange(prev => ({...prev, start: e.target.value}))} className="w-full sm:w-auto flex-1 sm:flex-none min-w-0 border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" />
+                    <input type="date" name="end" value={dateRange.end} onChange={e => setDateRange(prev => ({...prev, end: e.target.value}))} className="w-full sm:w-auto flex-1 sm:flex-none min-w-0 border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" />
                 </div>
             </div>
 
@@ -430,19 +430,23 @@ export default function FinanceDashboard() {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="bg-white rounded-2xl shadow-card border border-gray-200 p-6">
                     <h2 className="text-lg font-semibold text-gray-900 mb-4">Revenue Over Time</h2>
-                    <Line data={revenueData} options={{ responsive: true }} />
+                    <div className="h-56 sm:h-64">
+                        <Line data={revenueData} options={{ responsive: true, maintainAspectRatio: false }} />
+                    </div>
                 </div>
                 <div className="bg-white rounded-2xl shadow-card border border-gray-200 p-6">
                     <h2 className="text-lg font-semibold text-gray-900 mb-4">Expense Breakdown</h2>
-                    <Bar data={expensesData} options={{ responsive: true, indexAxis: 'y' }} />
+                    <div className="h-56 sm:h-64">
+                        <Bar data={expensesData} options={{ responsive: true, indexAxis: 'y', maintainAspectRatio: false }} />
+                    </div>
                 </div>
                 <div className="bg-white rounded-2xl shadow-card border border-gray-200 p-6">
                     <h2 className="text-lg font-semibold text-gray-900 mb-4">Collection Progress</h2>
-                    <div className="h-56 flex items-center justify-center">
-                        <div className="w-40">
+                    <div className="h-56 flex flex-col sm:flex-row items-center justify-center">
+                        <div className="w-32 sm:w-40">
                             <Doughnut data={collectionData} options={{ cutout: '70%', plugins:{legend:{display:false}} }} />
                         </div>
-                        <div className="ml-6">
+                        <div className="sm:ml-6 mt-3 sm:mt-0 text-center sm:text-left">
                             <div className="text-3xl font-bold text-gray-900">{collectionRate}%</div>
                             <div className="text-sm text-gray-600">Fees collected</div>
                         </div>

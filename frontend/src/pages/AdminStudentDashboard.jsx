@@ -96,6 +96,8 @@ export default function AdminStudentDashboard() {
     passport_no: '',
     boarding_status: 'day'
   })
+  const [historyData, setHistoryData] = useState(null)
+  const [historyError, setHistoryError] = useState('')
 
   useEffect(() => {
     let isMounted = true
@@ -103,13 +105,14 @@ export default function AdminStudentDashboard() {
       try {
         setLoading(true)
         setError('')
-        const [st, asRes, atRes, exRes, fin, cl] = await Promise.all([
+        const [st, asRes, atRes, exRes, fin, cl, hist] = await Promise.all([
           api.get(`/academics/students/${id}/`),
           api.get(`/academics/assessments/?student=${id}`),
           api.get(`/academics/attendance/?student=${id}`),
           api.get(`/academics/exam_results/?student=${id}`),
           api.get(`/finance/invoices/student-summary?student=${id}`),
-          api.get('/academics/classes/')
+          api.get('/academics/classes/'),
+          api.get(`/academics/students/${id}/history/`)
         ])
         if (!isMounted) return
         setStudent(st.data)
@@ -122,9 +125,12 @@ export default function AdminStudentDashboard() {
         setFinance(fin.data)
         const classesData = Array.isArray(cl.data) ? cl.data : (Array.isArray(cl.data?.results) ? cl.data.results : [])
         setClasses(classesData)
+        setHistoryData(hist.data)
+        setHistoryError('')
       } catch (e) {
         if (!isMounted) return
         setError(e?.response?.data?.detail || e?.message || 'Failed to load student dashboard')
+        setHistoryError(e?.response?.data?.detail || e?.message || 'Failed to load history')
       } finally {
         if (isMounted) setLoading(false)
       }
@@ -414,6 +420,128 @@ export default function AdminStudentDashboard() {
                 <StudentReportCardViewer embedded hideHistory showTermSelector={false} showExamSelector={false} showBackPrint={false} selectedTermYear={uiSelectedTerm} onSelectedTermYearChange={setUiSelectedTerm} selectedExamId={uiSelectedExamId} onSelectedExamIdChange={setUiSelectedExamId} />
               </div>
             </>
+          )}
+        </div>
+
+        <div className="bg-white rounded shadow p-4">
+          <h2 className="font-medium mb-2">Student History</h2>
+          {!!historyError && <div className="text-sm text-red-600 mb-2">{historyError}</div>}
+          {!historyData && !historyError && <div className="text-sm text-gray-500">Loading history...</div>}
+          {historyData && (
+            <div className="grid md:grid-cols-3 gap-6">
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="font-medium">Class Progression</div>
+                </div>
+                {(!historyData.classes || historyData.classes.length === 0) ? (
+                  <div className="text-sm text-gray-500">No class history found.</div>
+                ) : (
+                  <div className="text-sm relative pl-4 border-l-2 border-slate-200">
+                    {historyData.classes
+                      .filter(x => x.year || x.grade || x.class_name)
+                      .map((c, idx) => (
+                        <div key={idx} className="mb-3">
+                          <div className="flex items-center gap-2">
+                            <span className="inline-block w-2 h-2 bg-emerald-500 rounded-full -ml-[9px]"></span>
+                            <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 text-xs">
+                              {(c.year ? `${c.year}` : '')}{(c.term ? ` · T${c.term}` : '')}
+                            </span>
+                            {c.action && (
+                              <span className="px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 text-xs capitalize">
+                                {c.action}
+                              </span>
+                            )}
+                          </div>
+                          <div className="ml-3 mt-1 text-slate-800 font-medium">{c.class_name || c.grade || '-'}</div>
+                        </div>
+                      ))}
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="font-medium">Exams Overview</div>
+                </div>
+                {(!historyData.exams || historyData.exams.length === 0) ? (
+                  <div className="text-sm text-gray-500">No exams yet.</div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-sm border rounded">
+                      <thead className="bg-slate-50 text-slate-600">
+                        <tr>
+                          <th className="px-3 py-2">Exam</th>
+                          <th className="px-3 py-2">Term</th>
+                          <th className="px-3 py-2">Subjects</th>
+                          <th className="px-3 py-2">Total</th>
+                          <th className="px-3 py-2">%</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {historyData.exams.map((e)=> {
+                          const pct = e.approx_percentage
+                          const pctClass = pct == null ? 'bg-slate-100 text-slate-600' : (pct >= 75 ? 'bg-emerald-100 text-emerald-700' : pct >= 50 ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700')
+                          return (
+                            <tr key={e.exam.id} className="border-t">
+                              <td className="px-3 py-2">{e.exam.name}</td>
+                              <td className="px-3 py-2">{e.exam.year}-T{e.exam.term}</td>
+                              <td className="px-3 py-2">{e.subjects_count}</td>
+                              <td className="px-3 py-2">{e.total_marks_obtained}</td>
+                              <td className="px-3 py-2"><span className={`px-2 py-0.5 rounded-full text-xs ${pctClass}`}>{pct ?? '-'}</span></td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="font-medium">Fees by Term</div>
+                </div>
+                {(!historyData.fees || !historyData.fees.by_term || historyData.fees.by_term.length === 0) ? (
+                  <div className="text-sm text-gray-500">No fee records.</div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-sm border rounded">
+                      <thead className="bg-slate-50 text-slate-600">
+                        <tr>
+                          <th className="px-3 py-2">Term</th>
+                          <th className="px-3 py-2">Billed</th>
+                          <th className="px-3 py-2">Paid</th>
+                          <th className="px-3 py-2">Bal</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {historyData.fees.by_term.map((t, i) => {
+                          const billed = Number(t.billed || 0)
+                          const paid = Number(t.paid || 0)
+                          const bal = billed - paid
+                          const balClass = bal <= 0 ? 'text-emerald-700' : 'text-rose-700'
+                          return (
+                            <tr key={i} className="border-t">
+                              <td className="px-3 py-2">{t.year ? `${t.year}-T${t.term || '-'}` : '-'}</td>
+                              <td className="px-3 py-2">{money(billed)}</td>
+                              <td className="px-3 py-2">{money(paid)}</td>
+                              <td className={`px-3 py-2 ${balClass}`}>{money(bal)}</td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+                {historyData.fees?.summary && (
+                  <div className="text-sm bg-slate-50 rounded border p-3 mt-3 space-y-1">
+                    <div className="flex items-center justify-between"><span className="text-slate-600">Total Billed</span><span className="font-medium">{money(historyData.fees.summary.total_billed)}</span></div>
+                    <div className="flex items-center justify-between"><span className="text-slate-600">Total Paid</span><span className="font-medium">{money(historyData.fees.summary.total_paid)}</span></div>
+                    <div className="flex items-center justify-between"><span className="text-slate-600">Balance</span><span className={`font-semibold ${Number(historyData.fees.summary.balance||0) <= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>{money(historyData.fees.summary.balance)}</span></div>
+                  </div>
+                )}
+              </div>
+            </div>
           )}
         </div>
       </div>

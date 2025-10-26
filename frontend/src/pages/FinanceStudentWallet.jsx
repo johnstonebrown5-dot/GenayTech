@@ -182,7 +182,7 @@ export default function FinanceStudentWallet() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold text-gray-900">{student.name} ({student.admission_no})</h1>
           <p className="text-sm text-gray-600">Pocket Money Wallet</p>
@@ -193,10 +193,10 @@ export default function FinanceStudentWallet() {
         </div>
       </div>
 
-      <div className="flex gap-3">
-        <button onClick={() => openForm('deposit')} className="px-4 py-2 rounded-lg text-sm font-medium bg-emerald-600 text-white hover:bg-emerald-700">Deposit</button>
-        <button onClick={() => openForm('withdrawal')} className="px-4 py-2 rounded-lg text-sm font-medium bg-rose-600 text-white hover:bg-rose-700">Withdraw</button>
-        <div className="flex-1" />
+      <div className="flex flex-wrap gap-3">
+        <button onClick={() => openForm('deposit')} className="px-4 py-2 rounded-lg text-sm font-medium bg-emerald-600 text-white hover:bg-emerald-700 w-full sm:w-auto">Deposit</button>
+        <button onClick={() => openForm('withdrawal')} className="px-4 py-2 rounded-lg text-sm font-medium bg-rose-600 text-white hover:bg-rose-700 w-full sm:w-auto">Withdraw</button>
+        <div className="sm:flex-1" />
         <button onClick={async () => {
             setSearchOpen(true);
             if (searchStudents.length === 0) {
@@ -209,10 +209,10 @@ export default function FinanceStudentWallet() {
               finally { setSearchLoading(false); }
             }
           }}
-          className="px-4 py-2 rounded-lg text-sm font-medium bg-indigo-600 text-white hover:bg-indigo-700">
+          className="px-4 py-2 rounded-lg text-sm font-medium bg-indigo-600 text-white hover:bg-indigo-700 w-full sm:w-auto">
           Search Student
         </button>
-        <button onClick={() => navigate(-1)} className="px-4 py-2 rounded-lg text-sm font-medium bg-gray-200 text-gray-800 hover:bg-gray-300">Back</button>
+        <button onClick={() => navigate(-1)} className="px-4 py-2 rounded-lg text-sm font-medium bg-gray-200 text-gray-800 hover:bg-gray-300 w-full sm:w-auto">Back</button>
       </div>
 
       {showForm && (
@@ -238,30 +238,30 @@ export default function FinanceStudentWallet() {
       <div className="bg-white rounded-2xl shadow-card border border-gray-200 p-6">
         <div className="flex flex-wrap items-end justify-between gap-3 mb-3">
           <h2 className="text-lg font-semibold text-gray-900">Transaction History</h2>
-          <div className="flex items-center gap-3 text-sm">
-            <div>
+          <div className="flex flex-wrap items-end gap-3 text-sm w-full sm:w-auto">
+            <div className="min-w-[140px]">
               <label className="block text-xs text-gray-500">Type</label>
-              <select value={filterType} onChange={(e)=>{ setFilterType(e.target.value); fetchTransactions(1, pageSize); }} className="mt-1 border border-gray-300 rounded-md py-1 px-2">
+              <select value={filterType} onChange={(e)=>{ setFilterType(e.target.value); fetchTransactions(1, pageSize); }} className="mt-1 border border-gray-300 rounded-md py-1 px-2 w-full">
                 <option value="">All</option>
                 <option value="deposit">Deposit</option>
                 <option value="withdrawal">Withdrawal</option>
               </select>
             </div>
-            <div>
+            <div className="min-w-[140px]">
               <label className="block text-xs text-gray-500">From</label>
-              <input type="date" value={dateFrom} onChange={(e)=>{ setDateFrom(e.target.value); fetchTransactions(1, pageSize); }} className="mt-1 border border-gray-300 rounded-md py-1 px-2" />
+              <input type="date" value={dateFrom} onChange={(e)=>{ setDateFrom(e.target.value); fetchTransactions(1, pageSize); }} className="mt-1 border border-gray-300 rounded-md py-1 px-2 w-full" />
             </div>
-            <div>
+            <div className="min-w-[140px]">
               <label className="block text-xs text-gray-500">To</label>
-              <input type="date" value={dateTo} onChange={(e)=>{ setDateTo(e.target.value); fetchTransactions(1, pageSize); }} className="mt-1 border border-gray-300 rounded-md py-1 px-2" />
+              <input type="date" value={dateTo} onChange={(e)=>{ setDateTo(e.target.value); fetchTransactions(1, pageSize); }} className="mt-1 border border-gray-300 rounded-md py-1 px-2 w-full" />
             </div>
-            <div>
+            <div className="min-w-[140px]">
               <label className="block text-xs text-gray-500">Page size</label>
-              <select value={pageSize} onChange={(e)=>{ setPageSize(Number(e.target.value)); fetchTransactions(1, Number(e.target.value)); }} className="mt-1 border border-gray-300 rounded-md py-1 px-2">
+              <select value={pageSize} onChange={(e)=>{ setPageSize(Number(e.target.value)); fetchTransactions(1, Number(e.target.value)); }} className="mt-1 border border-gray-300 rounded-md py-1 px-2 w-full">
                 {[10,20,50,100].map(n => <option key={n} value={n}>{n}</option>)}
               </select>
             </div>
-            <button type="button" onClick={handleExportCsv} className="ml-2 px-3 py-2 rounded-lg text-sm font-medium bg-gray-900 text-white hover:bg-gray-800">Export CSV</button>
+            <button type="button" onClick={handleExportCsv} className="sm:ml-2 w-full sm:w-auto px-3 py-2 rounded-lg text-sm font-medium bg-gray-900 text-white hover:bg-gray-800">Export CSV</button>
           </div>
         </div>
         <div className="overflow-x-auto">
@@ -301,7 +301,7 @@ export default function FinanceStudentWallet() {
             </tbody>
           </table>
         </div>
-        <div className="flex items-center justify-between mt-4 text-sm text-gray-700">
+        <div className="flex flex-col sm:flex-row items-center sm:justify-between gap-3 mt-4 text-sm text-gray-700">
           <div>
             Showing page {page} of {Math.max(1, Math.ceil(totalCount / pageSize))} ({totalCount} total)
           </div>

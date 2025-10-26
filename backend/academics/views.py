@@ -28,7 +28,8 @@ from .models import (
     Exam, ExamResult, AcademicYear, Term, Stream, LessonPlan, ClassSubjectTeacher, SubjectGradingBand,
     Room, TimetableEntry,
     TimetableTemplate, PeriodSlotTemplate, TimetablePlan, TimetableClassConfig, ClassSubjectQuota,
-    TeacherAvailability, TimetableVersion
+    TeacherAvailability, TimetableVersion,
+    StudentClassHistory
 )
 from .serializers import (
     ClassSerializer, StudentSerializer, CompetencySerializer,
@@ -445,16 +446,34 @@ class ExamViewSet(viewsets.ModelViewSet):
         try:
             klass_id = request.data.get('klass')
             student_ids = request.data.get('student_ids') or []
-            if not klass_id or not isinstance(student_ids, list) or len(student_ids) == 0:
-                return Response({'detail': 'Provide klass (id) and non-empty student_ids list'}, status=400)
+            if not klass_id or not isinstance(student_ids, (list, tuple)):
+                return Response({'detail': 'klass and student_ids are required'}, status=400)
             klass = Class.objects.filter(id=klass_id).first()
             if not klass:
                 return Response({'detail': 'Class not found'}, status=404)
-            # Scope check: admin must belong to same school
-            school = getattr(getattr(request, 'user', None), 'school', None)
-            if school and klass.school_id != getattr(school, 'id', None) and not (request.user.is_staff or request.user.is_superuser):
-                return Response({'detail': 'Class must belong to your school'}, status=403)
-            updated = Student.objects.filter(id__in=student_ids).update(klass=klass, is_graduated=False, school=klass.school)
+            updated = 0
+            for sid in student_ids:
+                stu = Student.objects.filter(id=sid).select_related('klass').first()
+                if not stu:
+                    continue
+                prev = getattr(stu, 'klass', None)
+                # Record history if model exists
+                try:
+                    from .models import StudentClassHistory
+                    StudentClassHistory.objects.create(
+                        student=stu,
+                        from_class=prev,
+                        to_class=klass,
+                        action='assigned',
+                        note='Bulk assign',
+                    )
+                except Exception:
+                    pass
+                stu.klass = klass
+                stu.is_graduated = False
+                stu.school = klass.school
+                stu.save(update_fields=['klass','is_graduated','school'])
+                updated += 1
             return Response({'detail': 'Students assigned', 'updated': updated})
         except Exception as e:
             return Response({'detail': 'Bulk assign failed', 'error': str(e)}, status=500)
@@ -506,7 +525,7 @@ class ExamViewSet(viewsets.ModelViewSet):
         # Exclude non-examinable subjects from results aggregation
         res = (
             ExamResult.objects
-            .filter(exam=exam)
+            .filter(exam=exam, student__is_active=True)
             .filter(subject__is_examinable=True)
             .select_related('student', 'subject', 'component')
         )
@@ -627,7 +646,7 @@ class ExamViewSet(viewsets.ModelViewSet):
         # Collect students for grade rank across all matching exams
         res = (
             ExamResult.objects
-            .filter(exam__in=same_grade_exams, subject__is_examinable=True)
+            .filter(exam__in=same_grade_exams, subject__is_examinable=True, student__is_active=True)
             .values('exam_id', 'student_id')
             .annotate(total=Sum('marks'))
         )
@@ -2331,14 +2350,14 @@ class ExamResultViewSet(viewsets.ModelViewSet):
                 comp_cols.append((c.id, str(label)))
             header = ['student_id','admission_no','name'] + [lbl for _, lbl in comp_cols]
             writer.writerow(header)
-            for s in Student.objects.filter(klass=exam.klass).order_by('name'):
+            for s in Student.objects.filter(klass=exam.klass, is_active=True).order_by('name'):
                 row = [s.id, getattr(s,'admission_no',''), getattr(s,'name','')]
                 row += ['' for _ in comp_cols]
                 writer.writerow(row)
         else:
             # Single-paper (whole subject or a specific component) template
             writer.writerow(['student_id','admission_no','name','marks'])
-            for s in Student.objects.filter(klass=exam.klass).order_by('name'):
+            for s in Student.objects.filter(klass=exam.klass, is_active=True).order_by('name'):
                 writer.writerow([s.id, getattr(s,'admission_no',''), getattr(s,'name',''), ''])
         csv_text = sio.getvalue()
         resp = HttpResponse(csv_text, content_type='text/csv; charset=utf-8')
@@ -2351,8 +2370,8 @@ class StudentViewSet(viewsets.ModelViewSet):
     queryset = Student.objects.all()
     serializer_class = StudentSerializer
     filter_backends = [DjangoFilterBackend]
-    # Allow server-side filtering by class, gender, graduation status, and year
-    filterset_fields = ['klass', 'gender', 'is_graduated', 'graduation_year']
+    # Allow server-side filtering by class, gender, active/graduation status, and year
+    filterset_fields = ['klass', 'gender', 'is_graduated', 'graduation_year', 'is_active']
     # Support JSON (default axios), form, and multipart (for photo uploads)
     parser_classes = [JSONParser, FormParser, MultiPartParser]
 
@@ -2379,6 +2398,7 @@ class StudentViewSet(viewsets.ModelViewSet):
         grade = self.request.query_params.get('grade')
         if grade:
             qs = qs.filter(klass__grade_level=grade)
+        # Optional: by default, include both active and inactive. Frontend can pass is_active to filter.
         # Text search by name or admission number (case-insensitive)
         q = self.request.query_params.get('q')
         if q:
@@ -2399,6 +2419,196 @@ class StudentViewSet(viewsets.ModelViewSet):
             # For detailed views/updates, include related klass
             qs = qs.select_related('klass')
         return qs
+
+    @action(detail=True, methods=['get'], permission_classes=[permissions.IsAuthenticated], url_path='history')
+    def history(self, request, pk=None):
+        """Return student's academic and finance history in one payload.
+        Sections:
+        - classes: progression inferred from exams and current class/graduation
+        - exams: per-exam totals and approximate percentage
+        - fees: invoices/payments grouped by year/term with totals and overall summary
+
+        Access rules:
+        - Students can only view their own history and only published exams.
+        - Teachers/Admins can view students within their school.
+        """
+        # Resolve student object within scoped queryset
+        student = self.get_object()
+
+        user = getattr(request, 'user', None)
+        is_admin = bool(user and (getattr(user, 'role', None) == 'admin' or user.is_staff or user.is_superuser))
+        role = getattr(user, 'role', None)
+
+        # Students can only view their own
+        if role == 'student' and not is_admin:
+            if getattr(student, 'user_id', None) != getattr(user, 'id', None):
+                return Response({'detail': 'Forbidden'}, status=403)
+
+        # School scoping for non-admin staff
+        school = getattr(user, 'school', None)
+        if school and not is_admin and role != 'student':
+            # Ensure student belongs to same school (via current class or stored school)
+            s_school_id = getattr(getattr(student, 'klass', None), 'school_id', None) or getattr(student, 'school_id', None)
+            if s_school_id is not None and s_school_id != getattr(school, 'id', None):
+                return Response({'detail': 'Student is not in your school scope'}, status=403)
+
+        # ---------- Classes progression (inferred + recorded) ----------
+        try:
+            exams_q = (
+                Exam.objects
+                .filter(results__student=student)
+                .select_related('klass', 'klass__stream')
+                .values('year', 'term', 'grade_level_tag', 'klass__name')
+                .distinct()
+                .order_by('year', 'term', 'grade_level_tag')
+            )
+            classes_progression = []
+            for row in exams_q:
+                classes_progression.append({
+                    'year': row.get('year'),
+                    'term': row.get('term'),
+                    'grade': row.get('grade_level_tag'),
+                    'class_name': row.get('klass__name'),
+                    'source': 'exam',
+                })
+        except Exception:
+            classes_progression = []
+
+        # Merge explicit history records
+        try:
+            hist_rows = (
+                StudentClassHistory.objects
+                .filter(student=student)
+                .select_related('from_class','to_class','from_class__stream','to_class__stream')
+                .order_by('created_at','id')
+            )
+            for h in hist_rows:
+                classes_progression.append({
+                    'year': getattr(h, 'year', None),
+                    'term': getattr(h, 'term', None),
+                    'grade': getattr(getattr(h.to_class, 'grade_level', None), 'strip', lambda: None)() if getattr(h, 'to_class', None) else None,
+                    'class_name': getattr(getattr(h, 'to_class', None), 'name', None) or 'Graduated' if getattr(h, 'action', '') == 'graduated' else None,
+                    'action': getattr(h, 'action', None),
+                    'from': getattr(getattr(h, 'from_class', None), 'name', None),
+                    'to': getattr(getattr(h, 'to_class', None), 'name', None) or ('Graduated' if getattr(h, 'action', '') == 'graduated' else None),
+                    'source': 'record',
+                    'created_at': getattr(h, 'created_at', None),
+                })
+        except Exception:
+            pass
+
+        # Append current class/graduation snapshot
+        try:
+            classes_progression.append({
+                'year': getattr(getattr(student, 'graduation_year', None), 'year', None) if getattr(student, 'is_graduated', False) else None,
+                'term': None,
+                'grade': getattr(getattr(student, 'klass', None), 'grade_level', None) if getattr(student, 'klass', None) else ('Graduated' if getattr(student, 'is_graduated', False) else None),
+                'class_name': getattr(getattr(student, 'klass', None), 'name', ('Graduated' if getattr(student, 'is_graduated', False) else None)),
+            })
+        except Exception:
+            pass
+
+        # ---------- Exam performance ----------
+        try:
+            res_q = (
+                ExamResult.objects
+                .filter(student=student)
+                .select_related('exam', 'exam__klass')
+            )
+            if role == 'student' and not is_admin:
+                res_q = res_q.filter(exam__published=True)
+            exam_rows = (
+                res_q
+                .values('exam_id', 'exam__name', 'exam__year', 'exam__term', 'exam__total_marks', 'exam__klass__name')
+                .annotate(total=Sum('marks'), subjects=Sum(1))
+                .order_by('exam__year', 'exam__term', 'exam_id')
+            )
+            exams = []
+            for r in exam_rows:
+                total = float(r.get('total') or 0)
+                subj_count = int(r.get('subjects') or 0)
+                out_of_each = float(r.get('exam__total_marks') or 100)
+                approx_pct = None
+                try:
+                    denom = out_of_each * subj_count if subj_count else None
+                    approx_pct = round((total / denom) * 100.0, 2) if denom else None
+                except Exception:
+                    approx_pct = None
+                exams.append({
+                    'exam': {
+                        'id': r.get('exam_id'),
+                        'name': r.get('exam__name'),
+                        'year': r.get('exam__year'),
+                        'term': r.get('exam__term'),
+                        'klass_name': r.get('exam__klass__name'),
+                        'total_marks': out_of_each,
+                    },
+                    'total_marks_obtained': round(total, 2),
+                    'subjects_count': subj_count,
+                    'approx_percentage': approx_pct,
+                })
+        except Exception:
+            exams = []
+
+        # ---------- Fees: allocations and payments ----------
+        try:
+            from finance.models import Invoice, Payment
+            # Invoices grouped by year/term
+            inv_q = Invoice.objects.filter(student=student)
+            if school:
+                inv_q = inv_q.select_related('student__klass').filter(student__klass__school=school)
+            inv_grouped = inv_q.values('year', 'term').annotate(billed=Sum('amount')).order_by('year', 'term')
+
+            pay_q = Payment.objects.filter(invoice__student=student)
+            if school:
+                pay_q = pay_q.select_related('invoice__student__klass').filter(invoice__student__klass__school=school)
+            pay_grouped = pay_q.values('invoice__year', 'invoice__term').annotate(paid=Sum('amount')).order_by('invoice__year', 'invoice__term')
+
+            # Merge grouped by (year, term)
+            by_term = {}
+            for r in inv_grouped:
+                key = (r.get('year'), r.get('term'))
+                by_term[key] = {'year': r.get('year'), 'term': r.get('term'), 'billed': float(r.get('billed') or 0), 'paid': 0.0}
+            for r in pay_grouped:
+                key = (r.get('invoice__year'), r.get('invoice__term'))
+                entry = by_term.setdefault(key, {'year': r.get('invoice__year'), 'term': r.get('invoice__term'), 'billed': 0.0, 'paid': 0.0})
+                entry['paid'] = float(r.get('paid') or 0)
+            by_term_list = sorted(by_term.values(), key=lambda x: (x['year'] or 0, x['term'] or 0))
+
+            # Detailed lists (limited fields)
+            invoices = list(inv_q.order_by('-created_at').values('id', 'amount', 'status', 'category_id', 'year', 'term', 'due_date', 'created_at'))
+            payments = list(pay_q.order_by('-created_at').values('id', 'invoice_id', 'amount', 'method', 'reference', 'created_at'))
+
+            # Summary totals
+            total_billed = float(inv_q.aggregate(s=Sum('amount'))['s'] or 0)
+            total_paid = float(pay_q.aggregate(s=Sum('amount'))['s'] or 0)
+            balance = round(total_billed - total_paid, 2)
+            fees = {
+                'by_term': by_term_list,
+                'invoices': invoices,
+                'payments': payments,
+                'summary': {
+                    'total_billed': round(total_billed, 2),
+                    'total_paid': round(total_paid, 2),
+                    'balance': balance,
+                }
+            }
+        except Exception:
+            fees = {'by_term': [], 'invoices': [], 'payments': [], 'summary': {'total_billed': 0.0, 'total_paid': 0.0, 'balance': 0.0}}
+
+        return Response({
+            'student': {
+                'id': student.id,
+                'name': getattr(student, 'name', None),
+                'admission_no': getattr(student, 'admission_no', None),
+                'klass': getattr(getattr(student, 'klass', None), 'name', None),
+                'is_graduated': getattr(student, 'is_graduated', False),
+                'graduation_year': getattr(student, 'graduation_year', None),
+            },
+            'classes': classes_progression,
+            'exams': exams,
+            'fees': fees,
+        })
 
     def get_serializer_class(self):
         # Use lightweight serializer for list to reduce payload size
@@ -2436,6 +2646,29 @@ class StudentViewSet(viewsets.ModelViewSet):
             # klass cleared (e.g., graduation or temporary unassignment)
             current_school = getattr(serializer.instance, 'school', None)
             serializer.save(school=current_school or school)
+
+    @action(detail=True, methods=['post'], permission_classes=[IsAdmin], url_path='set-active')
+    def set_active(self, request, pk=None):
+        """Admin: toggle a student's active status. Body: { "is_active": true|false }"""
+        stu = self.get_object()
+        try:
+            val = request.data.get('is_active')
+            if isinstance(val, str):
+                val = str(val).lower() in ('1','true','yes','on')
+            else:
+                val = bool(val)
+        except Exception:
+            return Response({'detail': 'is_active is required as boolean'}, status=400)
+        stu.is_active = bool(val)
+        # When deactivating, student should not belong to any class henceforth
+        if stu.is_active is False:
+            stu.klass = None
+            # Keep school as-is for scoping
+            stu.save(update_fields=['is_active', 'klass'])
+        else:
+            stu.save(update_fields=['is_active'])
+        # Linked user.is_active will be synced by signal
+        return Response({'detail': 'updated', 'id': stu.id, 'is_active': stu.is_active})
 
     @action(detail=False, methods=['get'], permission_classes=[permissions.IsAuthenticated], url_path='my')
     def my(self, request):

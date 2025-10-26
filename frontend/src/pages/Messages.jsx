@@ -74,7 +74,9 @@ export default function Messages(){
     try {
       // Admin: show everyone in school; others: fetch and filter by allowedRoles
       const { data } = await api.get(`/auth/users/?q=${encodeURIComponent(q)}`)
-      const list = Array.isArray(data) ? data : []
+      // Support multiple response shapes: array, {results: [...]}, {users: [...]}
+      const raw = (Array.isArray(data) ? data : (Array.isArray(data?.results) ? data.results : (Array.isArray(data?.users) ? data.users : [])))
+      const list = Array.isArray(raw) ? raw : []
       const filtered = (user?.role === 'admin') ? list : list.filter(u => allowedRoles.includes(u.role))
       setAllUsers(filtered.filter(u => u.id !== user?.id))
     } catch {
@@ -284,7 +286,15 @@ export default function Messages(){
         .map(id => filteredUsers.find(u => u.id === id) || allUsers.find(u => u.id === id))
         .filter(Boolean)
       recentUsers.sort((a,b)=> metaTs(b.id) - metaTs(a.id))
-      return recentUsers
+      if (recentUsers.length > 0) return recentUsers
+      // Fallback: show directory if no recent chats
+      const dir = [...filteredUsers]
+      dir.sort((a,b)=>{
+        const na = (a.first_name || a.username || '').toLowerCase()
+        const nb = (b.first_name || b.username || '').toLowerCase()
+        return na.localeCompare(nb)
+      })
+      return dir
     }
     // With search: show directory matches, but sort by latest desc, then unread, then name
     const arr = [...filteredUsers]

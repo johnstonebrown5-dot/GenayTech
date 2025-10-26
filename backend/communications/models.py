@@ -9,6 +9,30 @@ class Notification(models.Model):
     date = models.DateTimeField(auto_now_add=True)
     read = models.BooleanField(default=False)
 
+class DeliveryLog(models.Model):
+    """Lightweight log of outbound communications attempts for admin/finance visibility."""
+    class Channel(models.TextChoices):
+        SMS = 'sms', 'SMS'
+        EMAIL = 'email', 'Email'
+
+    school = models.ForeignKey('accounts.School', null=True, blank=True, on_delete=models.SET_NULL, related_name='delivery_logs')
+    channel = models.CharField(max_length=10, choices=Channel.choices)
+    recipient = models.CharField(max_length=255)
+    ok = models.BooleanField(default=False)
+    message_snippet = models.CharField(max_length=300, blank=True, default='')
+    context = models.CharField(max_length=100, blank=True, default='', help_text='e.g., message:123, campaign:45')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['created_at']),
+            models.Index(fields=['channel', 'created_at']),
+        ]
+        ordering = ['-created_at', 'id']
+
+    def __str__(self):
+        return f"{self.channel.upper()} to {self.recipient} ({'OK' if self.ok else 'FAIL'})"
+
 class Event(models.Model):
     AUDIENCE_CHOICES = (
         ("all", "All"),
@@ -74,6 +98,7 @@ class ArrearsMessageCampaign(models.Model):
         RUNNING = 'running', 'Running'
         COMPLETED = 'completed', 'Completed'
         FAILED = 'failed', 'Failed'
+        CANCELED = 'canceled', 'Canceled'
 
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.QUEUED)
     started_at = models.DateTimeField(null=True, blank=True)
@@ -81,6 +106,8 @@ class ArrearsMessageCampaign(models.Model):
     error_message = models.TextField(blank=True, default='')
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    # Cancellation request flag (checked by worker)
+    cancel_requested = models.BooleanField(default=False)
 
     class Meta:
         ordering = ['-created_at']

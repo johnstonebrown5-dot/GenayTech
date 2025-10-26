@@ -48,3 +48,23 @@ def notify_student_enrollment(sender, instance, created, **kwargs):
     except Exception:
         # Avoid breaking save flow
         pass
+
+
+@receiver(post_save, sender='academics.Student')
+def sync_user_active_status(sender, instance, created, **kwargs):
+    """Keep the linked User.is_active in sync with Student.is_active.
+    When a student is marked inactive, their user account is disabled (cannot log in).
+    When reactivated, re-enable login.
+    """
+    try:
+        user = getattr(instance, 'user', None)
+        if user is None:
+            return
+        desired = bool(getattr(instance, 'is_active', True))
+        # Only update if different to avoid extra writes
+        if bool(getattr(user, 'is_active', True)) != desired:
+            user.is_active = desired
+            user.save(update_fields=['is_active'])
+    except Exception:
+        # Never block student saves
+        pass

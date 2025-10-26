@@ -76,7 +76,7 @@ class StudentSerializer(serializers.ModelSerializer):
         fields = [
             'id','admission_no','name','dob','gender','upi_number','guardian_id','guardian_name','guardian_passport_no','birth_certificate_no','klass','klass_detail','user','user_id',
             'passport_no','phone','email','address','photo','photo_url',
-            'is_graduated','graduation_year','boarding_status'
+            'is_graduated','graduation_year','boarding_status','is_active'
         ]
 
     def get_photo_url(self, obj):
@@ -99,7 +99,7 @@ class StudentListSerializer(serializers.ModelSerializer):
         model = Student
         fields = [
             'id','admission_no','name','dob','gender','upi_number','guardian_id','guardian_name','guardian_passport_no','birth_certificate_no','klass','klass_detail','photo','photo_url',
-            'is_graduated','graduation_year','boarding_status'
+            'is_graduated','graduation_year','boarding_status','is_active'
         ]
 
     def get_photo_url(self, obj):
@@ -290,6 +290,19 @@ class ExamResultSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         # Block results for non-examinable subjects
         subject = attrs.get('subject') or getattr(self.instance, 'subject', None)
+        # Block results for inactive students
+        student = attrs.get('student') or getattr(self.instance, 'student', None)
+        try:
+            if student is not None:
+                # Ensure current is_active value
+                active = getattr(student, 'is_active', None)
+                if active is None:
+                    from .models import Student as _Student
+                    active = bool(_Student.objects.filter(pk=student.pk).values_list('is_active', flat=True).first())
+                if not active:
+                    raise serializers.ValidationError({'student': 'Inactive students cannot have exam results recorded.'})
+        except Exception:
+            pass
         if subject is not None:
             try:
                 # Ensure we have the latest value of is_examinable

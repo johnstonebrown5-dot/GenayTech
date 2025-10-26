@@ -159,19 +159,19 @@ export default function FinanceReports(){
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold text-gray-900 tracking-tight">Reports</h1>
           <p className="text-sm text-gray-500">Finance analytics with filters, charts and exports.</p>
         </div>
-        <div className="flex items-end gap-2">
-          <div>
+        <div className="flex flex-wrap items-end gap-2 w-full sm:w-auto">
+          <div className="flex-1 min-w-[140px] sm:flex-none">
             <label className="block text-xs text-gray-600">From</label>
-            <input type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)} className="px-3 py-2 border rounded text-sm"/>
+            <input type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)} className="px-3 py-2 border rounded text-sm w-full"/>
           </div>
-          <div>
+          <div className="flex-1 min-w-[140px] sm:flex-none">
             <label className="block text-xs text-gray-600">To</label>
-            <input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)} className="px-3 py-2 border rounded text-sm"/>
+            <input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)} className="px-3 py-2 border rounded text-sm w-full"/>
           </div>
           <button onClick={printPage} className="px-3 py-2 bg-gray-900 text-white rounded-lg text-sm shadow-sm hover:bg-gray-800">Print</button>
           <button onClick={exportCsvPayments} className="px-3 py-2 bg-emerald-600 text-white rounded-lg text-sm shadow-sm hover:bg-emerald-700">Export Payments CSV</button>
@@ -179,7 +179,7 @@ export default function FinanceReports(){
         </div>
       </div>
 
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         {TABS.map(t=> (
           <button key={t.key} onClick={()=>setTab(t.key)} className={`px-3 py-1.5 rounded-full text-sm border transition shadow-sm ${tab===t.key? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-700 border-gray-300 hover:border-gray-400'}`}>{t.label}</button>
         ))}
@@ -251,9 +251,9 @@ export default function FinanceReports(){
             <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 text-xs">💳</span>
             Method mix
           </div>
-          <div className="flex items-center gap-4">
-            <div className="w-40 h-40"><Doughnut data={methodData} options={{ plugins:{ legend:{ display:false }}}} /></div>
-            <div className="text-sm space-y-2">
+          <div className="flex flex-col sm:flex-row items-center gap-4">
+            <div className="w-32 h-32 sm:w-40 sm:h-40"><Doughnut data={methodData} options={{ plugins:{ legend:{ display:false }}}} /></div>
+            <div className="text-sm space-y-2 text-center sm:text-left">
               <div>Cash: <span className="font-semibold tabular-nums">{totalsByMethod.CASH.toLocaleString()}</span></div>
               <div>Mpesa: <span className="font-semibold tabular-nums">{totalsByMethod.MPESA.toLocaleString()}</span></div>
               <div>Bank: <span className="font-semibold tabular-nums">{totalsByMethod.BANK.toLocaleString()}</span></div>
@@ -291,7 +291,9 @@ export default function FinanceReports(){
             <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-violet-100 text-violet-700 text-xs">🏫</span>
             Per-class revenue (top 12)
           </div>
-          <Bar data={revenueByClass} options={{ responsive:true, plugins:{ legend:{ display:false } } }} />
+          <div className="h-72">
+            <Bar data={revenueByClass} options={{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{ display:false } } }} />
+          </div>
         </div>
 
         {/* Drilldown transactions for selected day */}

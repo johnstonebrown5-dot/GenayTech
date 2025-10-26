@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
-from .models import Notification, Event, ArrearsMessageCampaign, Message, MessageRecipient
+from .models import Notification, Event, ArrearsMessageCampaign, Message, MessageRecipient, DeliveryLog
 from accounts.models import School
 
 User = get_user_model()
@@ -40,14 +40,20 @@ class ArrearsMessageCampaignSerializer(serializers.ModelSerializer):
             'send_in_app', 'send_sms', 'send_email', 'email_subject',
             'status', 'started_at', 'finished_at', 'error_message',
             'sent_count', 'sms_sent', 'sms_failed', 'email_sent', 'email_failed',
-            'created_by', 'created_at'
+            'created_by', 'created_at', 'cancel_requested'
         ]
-        read_only_fields = ['school', 'status', 'started_at', 'finished_at', 'error_message', 'sent_count', 'sms_sent', 'sms_failed', 'email_sent', 'email_failed', 'created_by', 'created_at']
+        read_only_fields = ['school', 'status', 'started_at', 'finished_at', 'error_message', 'sent_count', 'sms_sent', 'sms_failed', 'email_sent', 'email_failed', 'created_by', 'created_at', 'cancel_requested']
 
     def validate_message(self, value):
         if not value or not value.strip():
             raise serializers.ValidationError('Message cannot be empty')
         return value
+
+class DeliveryLogSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DeliveryLog
+        fields = ['id','school','channel','recipient','ok','message_snippet','context','created_at']
+        read_only_fields = fields
 
 
 class MessageRecipientSerializer(serializers.ModelSerializer):

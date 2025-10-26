@@ -44,10 +44,10 @@ export default function LoginPage() {
   }, [])
 
   const roles = [
-    { key: 'admin', label: 'ADMINISTRATOR' },
-    { key: 'teacher', label: 'Teacher' },
-    { key: 'student', label: 'Student' },
-    { key: 'finance', label: 'Finance' },
+    { key: 'admin', label: 'ADMINISTRATOR', icon: '👑' },
+    { key: 'teacher', label: 'Teacher', icon: '👩‍🏫' },
+    { key: 'student', label: 'Student', icon: '🎓' },
+    { key: 'finance', label: 'Finance', icon: '💼' },
   ]
 
   const submit = async (e) => {
@@ -155,10 +155,22 @@ export default function LoginPage() {
         <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-transparent to-black/30 pointer-events-none" />
       </div>
       {/* Dark vignette overlay (non-interactive) */}
-      <div className="absolute inset-0 bg-black/30 pointer-events-none" />
+      <div className="absolute inset-0 bg-black/40 pointer-events-none" />
       {/* Ambient gradient blobs */}
       <div className="pointer-events-none absolute -top-10 -left-10 h-72 w-72 bg-gradient-to-br from-indigo-500/40 to-purple-500/40 blur-3xl rounded-full" />
       <div className="pointer-events-none absolute bottom-10 -right-10 h-72 w-72 bg-gradient-to-br from-fuchsia-500/30 to-indigo-500/30 blur-3xl rounded-full" />
+
+      <div className="absolute inset-x-0 bottom-6 z-10 flex justify-center gap-2">
+        {slides.map((_, idx) => (
+          <button
+            key={idx}
+            type="button"
+            onClick={() => setCurrent(idx)}
+            aria-label={`Go to slide ${idx + 1}`}
+            className={`h-1.5 w-1.5 sm:h-2 sm:w-2 rounded-full transition ${current===idx ? 'bg-white' : 'bg-white/50 hover:bg-white/70'}`}
+          />
+        ))}
+      </div>
 
       {/* Header */}
       <header className="hidden sm:flex relative z-10 items-center justify-between px-6 md:px-10 py-5 text-white/95">
@@ -215,13 +227,19 @@ export default function LoginPage() {
 
                 {formStep === 'role' && (
                   <div className="mt-5">
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-2 gap-3" role="radiogroup" aria-label="Select role">
                       {roles.map((r) => (
                         <button
                           key={r.key}
                           onClick={() => handleRoleSelect(r.key)}
-                          className={`px-4 py-2.5 rounded-lg text-sm font-medium border transition ${role===r.key ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-gray-200 hover:bg-gray-50'}`}
-                        >{r.label}</button>
+                          role="radio"
+                          aria-checked={role===r.key}
+                          aria-label={r.label}
+                          className={`px-4 py-2.5 rounded-lg text-sm font-medium border transition flex items-center justify-center gap-2 ${role===r.key ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-gray-200 hover:bg-gray-50'}`}
+                        >
+                          <span className="text-base">{r.icon}</span>
+                          <span>{r.label}</span>
+                        </button>
                       ))}
                     </div>
                     <button
@@ -247,14 +265,20 @@ export default function LoginPage() {
                         {/* Subtle decorative glow (non-interactive) */}
                         <div className="absolute -inset-0.5 rounded-xl bg-gradient-to-r from-indigo-500/15 via-purple-500/15 to-pink-500/15 opacity-0 group-focus-within:opacity-80 blur-sm transition pointer-events-none" />
                         <input
+                          id="login-username"
                           type="text"
                           value={username}
                           onChange={(e)=>setUsername(e.target.value)}
                           placeholder=""
+                          autoComplete="username"
+                          inputMode="email"
+                          autoCapitalize="none"
+                          autoCorrect="off"
+                          aria-label="Email (username)"
                           className="peer w-full rounded-xl border border-gray-300 bg-white px-10 py-3.5 text-[15px] shadow-inner focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-500 transition"
                           required
                         />
-                        <label className={`pointer-events-none absolute left-10 top-1/2 -translate-y-1/2 text-gray-500 transition-all duration-200 ${username ? '-translate-y-4 text-xs' : ''} peer-focus:-translate-y-4 peer-focus:text-xs`}>Email (username)</label>
+                        <label htmlFor="login-username" className={`pointer-events-none absolute left-10 top-1/2 -translate-y-1/2 text-gray-500 transition-all duration-200 ${username ? '-translate-y-4 text-xs' : ''} peer-focus:-translate-y-4 peer-focus:text-xs`}>Email (username)</label>
                         <div className="mt-1 text-[11px] text-gray-500">Admins: use the email you signed up with.</div>
                       </div>
                       {/* Password floating */}
@@ -264,16 +288,19 @@ export default function LoginPage() {
                         </span>
                         <div className="absolute -inset-0.5 rounded-xl bg-gradient-to-r from-indigo-500/30 via-purple-500/30 to-pink-500/30 opacity-0 group-focus-within:opacity-100 blur transition pointer-events-none" />
                         <input
+                          id="login-password"
                           type={showPassword ? 'text' : 'password'}
                           value={password}
                           onChange={(e)=>setPassword(e.target.value)}
                           onKeyUp={(e)=> setCapsLockOn(e.getModifierState && e.getModifierState('CapsLock'))}
                           placeholder=""
+                          autoComplete="current-password"
+                          aria-label="Password"
                           className="peer w-full rounded-xl border border-gray-200 bg-white/95 px-10 py-3.5 pr-16 text-[15px] shadow-inner focus-soft focus:border-indigo-400 transition border-hairline"
                           required
                         />
-                        <label className={`pointer-events-none absolute left-10 top-1/2 -translate-y-1/2 text-gray-500 transition-all duration-200 ${password ? '-translate-y-4 text-xs' : ''} peer-focus:-translate-y-4 peer-focus:text-xs`}>Password</label>
-                        <button type="button" onClick={()=>setShowPassword(v=>!v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-600 hover:text-gray-800">{showPassword?'Hide':'Show'}</button>
+                        <label htmlFor="login-password" className={`pointer-events-none absolute left-10 top-1/2 -translate-y-1/2 text-gray-500 transition-all duration-200 ${password ? '-translate-y-4 text-xs' : ''} peer-focus:-translate-y-4 peer-focus:text-xs`}>Password</label>
+                        <button type="button" aria-pressed={showPassword} aria-label={showPassword ? 'Hide password' : 'Show password'} onClick={()=>setShowPassword(v=>!v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-600 hover:text-gray-800">{showPassword?'Hide':'Show'}</button>
                         {capsLockOn && <div className="mt-1 text-[11px] text-amber-700">Caps Lock is ON</div>}
                       </div>
                       <div className="flex items-center justify-between">
@@ -336,13 +363,19 @@ export default function LoginPage() {
             {formStep === 'role' && (
               <div>
                 <h2 className="text-lg font-bold text-indigo-700 mb-3">Select Your Role</h2>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Select role">
                   {roles.map(r => (
                     <button
                       key={r.key}
                       onClick={()=>handleRoleSelect(r.key)}
-                      className={`py-2.5 rounded-lg text-sm font-medium border transition ${role===r.key ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-neutral-200 hover:bg-neutral-100'}`}
-                    >{r.label}</button>
+                      role="radio"
+                      aria-checked={role===r.key}
+                      aria-label={r.label}
+                      className={`py-2.5 rounded-lg text-sm font-medium border transition flex items-center justify-center gap-2 px-3 ${role===r.key ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-neutral-200 hover:bg-neutral-100'}`}
+                    >
+                      <span className="text-base">{r.icon}</span>
+                      <span>{r.label}</span>
+                    </button>
                   ))}
                 </div>
                 <button
@@ -368,28 +401,37 @@ export default function LoginPage() {
                 {error && <div className="mb-3 text-xs text-red-700 bg-red-100 border border-red-200 rounded px-2 py-1.5">{error}</div>}
                 <form onSubmit={submit} className="space-y-3">
                   <div>
-                    <label className="block text-[12px] text-gray-700 mb-1">Email (username)</label>
+                    <label htmlFor="m-login-username" className="block text-[12px] text-gray-700 mb-1">Email (username)</label>
                     <input
+                      id="m-login-username"
                       type="text"
                       value={username}
                       onChange={e=>setUsername(e.target.value)}
+                      autoComplete="username"
+                      inputMode="email"
+                      autoCapitalize="none"
+                      autoCorrect="off"
+                      aria-label="Email (username)"
                       className="w-full rounded-lg border border-black/10 bg-white/80 px-3 py-2 text-sm"
                       required
                     />
                     <div className="mt-1 text-[11px] text-gray-500">Admins: use the email you signed up with.</div>
                   </div>
                   <div>
-                    <label className="block text-[12px] text-gray-700 mb-1">Password</label>
+                    <label htmlFor="m-login-password" className="block text-[12px] text-gray-700 mb-1">Password</label>
                     <div className="relative">
                       <input
+                        id="m-login-password"
                         type={showPassword ? 'text' : 'password'}
                         value={password}
                         onChange={e=>setPassword(e.target.value)}
                         onKeyUp={(e)=> setCapsLockOn(e.getModifierState && e.getModifierState('CapsLock'))}
+                        autoComplete="current-password"
+                        aria-label="Password"
                         className="w-full rounded-lg border border-black/10 bg-white/80 px-3 py-2 text-sm pr-16"
                         required
                       />
-                      <button type="button" onClick={()=>setShowPassword(v=>!v)} className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-600">{showPassword?'Hide':'Show'}</button>
+                      <button type="button" aria-pressed={showPassword} aria-label={showPassword ? 'Hide password' : 'Show password'} onClick={()=>setShowPassword(v=>!v)} className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-600">{showPassword?'Hide':'Show'}</button>
                     </div>
                     {capsLockOn && <div className="mt-1 text-[11px] text-amber-700">Caps Lock is ON</div>}
                   </div>

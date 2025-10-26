@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth'
+import { useLock } from './LockProvider'
 import api from '../api'
 
 const baseNavItems = [
@@ -21,6 +22,7 @@ export default function TeacherLayout({ children }){
   const { pathname } = useLocation()
   const { user, logout } = useAuth()
   const navigate = useNavigate()
+  const { lock } = useLock()
   const [isOpen, setIsOpen] = useState(true)
   const [isMobileOpen, setIsMobileOpen] = useState(false)
   const [schoolName, setSchoolName] = useState('')
@@ -221,6 +223,7 @@ export default function TeacherLayout({ children }){
             </span>
           )}
           {/* Hide header logout on mobile; show only on md+ */}
+          <button onClick={lock} className="hidden md:inline-flex px-3 py-1.5 rounded text-sm bg-gray-800 text-white hover:bg-gray-900 transition-colors shadow-soft">Lock</button>
           <button onClick={logout} className="hidden md:inline-flex px-3 py-1.5 rounded text-sm bg-gray-900 text-white hover:bg-gray-800 transition-colors shadow-soft">Logout</button>
         </div>
       </header>

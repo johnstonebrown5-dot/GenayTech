@@ -337,14 +337,14 @@ export default function FinancePocketMoney() {
             <h1 className="text-3xl font-bold text-gray-900">Pocket Money</h1>
 
             {/* Top-level quick actions */}
-            <div className="flex gap-3">
-                <button onClick={() => openTransactionForm(null, 'deposit')} className="px-4 py-2 rounded-lg text-sm font-medium bg-emerald-600 text-white hover:bg-emerald-700">
+            <div className="flex flex-wrap gap-3">
+                <button onClick={() => openTransactionForm(null, 'deposit')} className="px-4 py-2 rounded-lg text-sm font-medium bg-emerald-600 text-white hover:bg-emerald-700 w-full sm:w-auto">
                     Deposit
                 </button>
-                <button onClick={() => openTransactionForm(null, 'withdrawal')} className="px-4 py-2 rounded-lg text-sm font-medium bg-rose-600 text-white hover:bg-rose-700">
+                <button onClick={() => openTransactionForm(null, 'withdrawal')} className="px-4 py-2 rounded-lg text-sm font-medium bg-rose-600 text-white hover:bg-rose-700 w-full sm:w-auto">
                     Withdraw
                 </button>
-                <button onClick={() => { setSearchOpen(true); setSearchQueryGlobal(''); }} className="px-4 py-2 rounded-lg text-sm font-medium bg-gray-900 text-white hover:bg-gray-800">
+                <button onClick={() => { setSearchOpen(true); setSearchQueryGlobal(''); }} className="px-4 py-2 rounded-lg text-sm font-medium bg-gray-900 text-white hover:bg-gray-800 w-full sm:w-auto">
                     Search
                 </button>
             </div>
@@ -501,7 +501,7 @@ export default function FinancePocketMoney() {
                 <h2 className="text-lg font-semibold text-gray-900 mb-4">Recent Transactions</h2>
                 {/* Filters */}
                 <div className="flex flex-wrap items-end gap-3 mb-4">
-                    <div className="w-48">
+                    <div className="w-full sm:w-48">
                         <label className="block text-sm font-medium text-gray-700">Student</label>
                         <select value={filterStudentId} onChange={(e)=>{ setFilterStudentId(e.target.value); setPage(1); }} className="mt-1 block w-full border border-gray-300 rounded-md py-2 px-3 text-sm">
                             <option value="">All students</option>
@@ -510,7 +510,7 @@ export default function FinancePocketMoney() {
                             ))}
                         </select>
                     </div>
-                    <div className="w-40">
+                    <div className="w-full sm:w-40">
                         <label className="block text-sm font-medium text-gray-700">Type</label>
                         <select value={filterType} onChange={(e)=>{ setFilterType(e.target.value); setPage(1); }} className="mt-1 block w-full border border-gray-300 rounded-md py-2 px-3 text-sm">
                             <option value="">All</option>
@@ -598,13 +598,13 @@ export default function FinancePocketMoney() {
                     </table>
                 </div>
                 {/* Pagination controls */}
-                <div className="flex items-center justify-between mt-4 text-sm text-gray-700">
+                <div className="flex flex-col sm:flex-row items-center sm:justify-between gap-3 mt-4 text-sm text-gray-700">
                     <div>
                         Showing page {page} of {Math.max(1, Math.ceil(totalCount / pageSize))} ({totalCount} total)
                     </div>
                     <div className="flex gap-2">
-                        <button disabled={page <= 1} onClick={()=> setPage(p => Math.max(1, p-1))} className={`px-3 py-1 rounded border ${page<=1 ? 'text-gray-400 border-gray-200' : 'text-gray-800 border-gray-300 hover:bg-gray-50'}`}>Prev</button>
-                        <button disabled={page >= Math.ceil(totalCount / pageSize)} onClick={()=> setPage(p => p+1)} className={`px-3 py-1 rounded border ${page >= Math.ceil(totalCount / pageSize) ? 'text-gray-400 border-gray-200' : 'text-gray-800 border-gray-300 hover:bg-gray-50'}`}>Next</button>
+                        <button disabled={page <= 1} onClick={()=> setPage(p=> Math.max(1, p-1))} className={`px-3 py-1 rounded border ${page<=1 ? 'text-gray-400 border-gray-200' : 'text-gray-800 border-gray-300 hover:bg-gray-50'}`}>Prev</button>
+                        <button disabled={page >= Math.ceil(totalCount / pageSize)} onClick={()=> setPage(p=> Math.min(Math.ceil(totalCount / pageSize), p+1))} className={`px-3 py-1 rounded border ${page >= Math.ceil(totalCount / pageSize) ? 'text-gray-400 border-gray-200' : 'text-gray-800 border-gray-300 hover:bg-gray-50'}`}>Next</button>
                     </div>
                 </div>
             </div>

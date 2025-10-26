@@ -2,7 +2,9 @@ import React, { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth'
+import { useLock } from './LockProvider'
 import api from '../api'
+import FloatingDeliveryLog from './FloatingDeliveryLog'
 
 const navItems = [
   { to: '/admin', label: 'Dashboard', icon: '📊' },
@@ -23,6 +25,7 @@ export default function AdminLayout({ children }){
   const { pathname } = useLocation()
   const navigate = useNavigate()
   const { user, logout } = useAuth()
+  const { lock } = useLock()
   const [isOpen, setIsOpen] = useState(true)
   const [isMobileOpen, setIsMobileOpen] = useState(false)
   const [schoolName, setSchoolName] = useState('')
@@ -210,6 +213,18 @@ export default function AdminLayout({ children }){
               </div>
             )}
             <button
+              onClick={lock}
+              className="hidden sm:flex px-3 py-2 rounded-lg text-sm font-semibold bg-gray-800 text-white hover:bg-gray-900 transition-all duration-200 shadow-soft items-center gap-2"
+              aria-label="Lock now"
+              title="Lock now"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V7.5a4.5 4.5 0 10-9 0v3" />
+                <rect x="5.25" y="10.5" width="13.5" height="9" rx="2" ry="2" />
+              </svg>
+              <span>Lock</span>
+            </button>
+            <button
               onClick={logout}
               className="hidden sm:flex px-3.5 py-2 rounded-lg text-sm font-semibold bg-red-600 text-white hover:bg-red-700 active:bg-red-800 transition-all duration-200 shadow-soft items-center gap-2"
               aria-label="Logout"
@@ -264,6 +279,9 @@ export default function AdminLayout({ children }){
           <div style={{ position:'fixed', right:16, bottom:24, zIndex:2100}}>{btn}</div>
         )
       })()}
+
+      {/* Floating Delivery Log button/panel (admin only; component checks role) */}
+      <FloatingDeliveryLog />
 
       {/* Sidebar + Content */}
       <div className="relative">

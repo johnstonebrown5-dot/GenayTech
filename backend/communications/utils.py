@@ -17,6 +17,25 @@ import phonenumbers
 logger = logging.getLogger(__name__)
 
 
+def log_delivery(*, school_id: int | None, channel: str, recipient: str, ok: bool, message: str = '', context: str = '') -> None:
+    """Persist a lightweight delivery log. Never raises."""
+    try:
+        # Local import to avoid circulars
+        from .models import DeliveryLog
+        snippet = (message or '')[:300]
+        DeliveryLog.objects.create(
+            school_id=school_id,
+            channel=channel,
+            recipient=str(recipient)[:255],
+            ok=bool(ok),
+            message_snippet=snippet,
+            context=(context or '')[:100],
+        )
+    except Exception:
+        # Swallow any logging persistence issues
+        logger.debug("DeliveryLog persist failed", exc_info=True)
+
+
 class TLSv1_2HttpAdapter(HTTPAdapter):
     def init_poolmanager(self, connections, maxsize, block=False, **pool_kwargs):
         ctx = ssl_.create_urllib3_context()
@@ -346,7 +365,7 @@ def process_arrears_campaign(campaign_id: int):
             campaign.sent_count = 0
             campaign.save(update_fields=['status', 'started_at', 'error_message', 'sent_count'])
 
-        students = Student.objects.filter(klass__school_id=campaign.school_id)
+        students = Student.objects.filter(klass__school_id=campaign.school_id, is_active=True)
         if campaign.klass_id:
             students = students.filter(klass_id=campaign.klass_id)
 
@@ -433,6 +452,18 @@ def process_arrears_campaign(campaign_id: int):
                         count += 1
                     else:
                         sms_failed += 1
+                    # Log attempt
+                    try:
+                        log_delivery(
+                            school_id=getattr(campaign, 'school_id', None),
+                            channel='sms',
+                            recipient=str(phone),
+                            ok=bool(ok),
+                            message=msg,
+                            context=f"campaign:{campaign.id};student:{getattr(stu,'id',None)}",
+                        )
+                    except Exception:
+                        pass
 
             # Email
             if campaign.send_email:
@@ -449,6 +480,18 @@ def process_arrears_campaign(campaign_id: int):
                         count += 1
                     else:
                         email_failed += 1
+                    # Log attempt
+                    try:
+                        log_delivery(
+                            school_id=getattr(campaign, 'school_id', None),
+                            channel='email',
+                            recipient=str(recipient),
+                            ok=bool(ok),
+                            message=msg,
+                            context=f"campaign:{campaign.id};student:{getattr(stu,'id',None)}",
+                        )
+                    except Exception:
+                        pass
 
         if notifications:
             Notification.objects.bulk_create(notifications)
@@ -511,24 +554,52 @@ def process_message_delivery(message_id: int):
         subject = f"New message from {getattr(msg.sender, 'username', 'user')}"
         for r in recipients:
             u = r.user
-            if not u:
+            if not u or (hasattr(u, 'is_active') and not u.is_active):
                 continue
             # SMS
             phone = getattr(u, 'phone', '')
             if phone:
+                ok_sms = False
                 try:
-                    if send_sms(phone, msg.body):
+                    ok_sms = send_sms(phone, msg.body)
+                    if ok_sms:
                         sent_sms += 1
                 except Exception:
                     logger.exception("Failed to SMS user %s", getattr(u, 'id', ''))
+                finally:
+                    try:
+                        log_delivery(
+                            school_id=getattr(msg, 'school_id', None),
+                            channel='sms',
+                            recipient=str(phone),
+                            ok=bool(ok_sms),
+                            message=msg.body,
+                            context=f"message:{message_id};user:{getattr(u,'id',None)}",
+                        )
+                    except Exception:
+                        pass
             # Email
             email = getattr(u, 'email', '')
             if email:
+                ok_email = False
                 try:
-                    if send_email_safe(subject, msg.body, email):
+                    ok_email = send_email_safe(subject, msg.body, email)
+                    if ok_email:
                         sent_email += 1
                 except Exception:
                     logger.exception("Failed to email user %s", getattr(u, 'id', ''))
+                finally:
+                    try:
+                        log_delivery(
+                            school_id=getattr(msg, 'school_id', None),
+                            channel='email',
+                            recipient=str(email),
+                            ok=bool(ok_email),
+                            message=msg.body,
+                            context=f"message:{message_id};user:{getattr(u,'id',None)}",
+                        )
+                    except Exception:
+                        pass
         logger.info("Message %s delivery complete: email=%s sms=%s", message_id, sent_email, sent_sms)
     except Exception:
         logger.exception("Message delivery %s failed", message_id)
@@ -585,6 +656,17 @@ def deliver_message_collect(message_id: int) -> dict:
                     logger.exception("Failed to SMS user %s", getattr(u, 'id', ''))
                     ok_sms = False
                 results['sms'].append({'user_id': getattr(u, 'id', None), 'phone': phone, 'ok': bool(ok_sms)})
+                try:
+                    log_delivery(
+                        school_id=getattr(msg, 'school_id', None),
+                        channel='sms',
+                        recipient=str(phone),
+                        ok=bool(ok_sms),
+                        message=msg.body,
+                        context=f"message:{message_id};user:{getattr(u,'id',None)}",
+                    )
+                except Exception:
+                    pass
 
             # Email
             email = getattr(u, 'email', '')
@@ -596,6 +678,17 @@ def deliver_message_collect(message_id: int) -> dict:
                     logger.exception("Failed to email user %s", getattr(u, 'id', ''))
                     ok_email = False
                 results['email'].append({'user_id': getattr(u, 'id', None), 'email': email, 'ok': bool(ok_email)})
+                try:
+                    log_delivery(
+                        school_id=getattr(msg, 'school_id', None),
+                        channel='email',
+                        recipient=str(email),
+                        ok=bool(ok_email),
+                        message=msg.body,
+                        context=f"message:{message_id};user:{getattr(u,'id',None)}",
+                    )
+                except Exception:
+                    pass
     except Exception:
         logger.exception("deliver_message_collect failed for message %s", message_id)
     return results
@@ -673,7 +766,7 @@ def create_message_for_role(school_id: int, sender_id: int, body: str, role: str
         recipient_role=role,
     )
     # Materialize recipients (same-school, same role)
-    recipients_qs = User.objects.filter(school_id=school_id, role=role)
+    recipients_qs = User.objects.filter(school_id=school_id, role=role, is_active=True)
     recs = [MessageRecipient(message=msg, user=u) for u in recipients_qs]
     if recs:
         MessageRecipient.objects.bulk_create(recs, ignore_conflicts=True)
@@ -696,6 +789,9 @@ def notify_enrollment(student) -> bool:
         school = getattr(getattr(student, 'klass', None), 'school', None)
         school_id = getattr(school, 'id', None)
         body = f"Welcome {student_name}! You have been enrolled{(' to ' + klass_name) if klass_name else ''}."
+        # Do not notify inactive students
+        if not getattr(student, 'is_active', True):
+            return True
 
         # In-app notification
         if getattr(student, 'user_id', None):
@@ -722,7 +818,18 @@ def notify_enrollment(student) -> bool:
         phone = getattr(student, 'guardian_id', None)
         if phone:
             try:
-                send_sms(phone, body)
+                ok = send_sms(phone, body)
+            except Exception:
+                ok = False
+            try:
+                log_delivery(
+                    school_id=getattr(getattr(student, 'klass', None), 'school_id', None),
+                    channel='sms',
+                    recipient=str(phone),
+                    ok=bool(ok),
+                    message=body,
+                    context=f"enrollment;student:{getattr(student,'id',None)}",
+                )
             except Exception:
                 pass
 
@@ -731,7 +838,18 @@ def notify_enrollment(student) -> bool:
         if recipient:
             try:
                 subj = f"Enrollment Confirmation{(' - ' + getattr(school,'name','')) if school else ''}"
-                send_email_safe(subj, body, recipient)
+                ok = send_email_safe(subj, body, recipient)
+            except Exception:
+                ok = False
+            try:
+                log_delivery(
+                    school_id=getattr(school, 'id', None),
+                    channel='email',
+                    recipient=str(recipient),
+                    ok=bool(ok),
+                    message=body,
+                    context=f"enrollment;student:{getattr(student,'id',None)}",
+                )
             except Exception:
                 pass
         return True
@@ -750,6 +868,8 @@ def notify_payment_received(invoice, payment) -> bool:
         student = getattr(invoice, 'student', None)
         if not student:
             return False
+        if not getattr(student, 'is_active', True):
+            return True
         school = getattr(getattr(student, 'klass', None), 'school', None)
         school_id = getattr(school, 'id', None)
         # Compute updated totals

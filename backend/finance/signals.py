@@ -65,6 +65,9 @@ def ensure_invoices_for_assigned_class(sender, instance: Student, created, **kwa
     - Best-effort; never break student saves.
     """
     try:
+        # Do not generate invoices for inactive students
+        if not getattr(instance, 'is_active', True):
+            return
         # Require a class assignment
         if not instance.klass_id:
             return
