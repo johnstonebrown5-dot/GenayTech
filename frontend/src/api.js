@@ -18,6 +18,27 @@ let isRefreshing = false
 let refreshPromise = null
 const subscribers = []
 function subscribeTokenRefresh(cb){ subscribers.push(cb) }
+
+// Build low/medium/high image candidates by appending resize/quality query params.
+// If the backend/CDN doesn't support them, it will still return the original;
+// URLs remain distinct for caching and progressive upgrade.
+export function imageCandidates(url){
+  const abs = toAbsoluteUrl(url)
+  if (!abs) return { high: '', medium: '', low: '' }
+  const u = new URL(abs, window.location.origin)
+  function withParams(w, q){
+    const x = new URL(u.toString())
+    // Preserve existing params and add hints (commonly used by CDNs)
+    x.searchParams.set('w', String(w))
+    x.searchParams.set('q', String(q))
+    return x.toString()
+  }
+  return {
+    high: withParams(1600, 85),
+    medium: withParams(960, 70),
+    low: withParams(480, 50),
+  }
+}
 function onRefreshed(newToken){ while(subscribers.length) { const cb = subscribers.shift(); try{ cb(newToken) }catch{} } }
 
 api.interceptors.response.use(

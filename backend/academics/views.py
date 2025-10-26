@@ -179,6 +179,62 @@ class ClassViewSet(viewsets.ModelViewSet):
         ser = self.get_serializer(qs, many=True)
         return Response(ser.data)
 
+    @action(detail=True, methods=['get'], permission_classes=[IsTeacherOrAdmin], url_path='students')
+    def students(self, request, pk=None):
+        """Return the list of students enrolled in this class.
+        Used by the Class details > Students tab.
+        """
+        klass = self.get_object()
+        # Scope by the class directly; order by name for consistent display
+        qs = Student.objects.filter(klass=klass).order_by('name')
+        # Use lightweight serializer for list performance
+        from .serializers import StudentListSerializer
+        ser = StudentListSerializer(qs, many=True, context={'request': request})
+        return Response(ser.data)
+
+    @action(detail=True, methods=['get'], permission_classes=[IsTeacherOrAdmin], url_path='history')
+    def history(self, request, pk=None):
+        """Return class history events derived from StudentClassHistory.
+        Includes promotions, assignments, moves, and graduations involving this class.
+        """
+        klass = self.get_object()
+        try:
+            rows = (
+                StudentClassHistory.objects
+                .filter(Q(from_class=klass) | Q(to_class=klass))
+                .select_related('student','from_class','to_class')
+                .order_by('created_at','id')
+            )
+            events = []
+            for h in rows:
+                events.append({
+                    'id': getattr(h, 'id', None),
+                    'student': {
+                        'id': getattr(getattr(h, 'student', None), 'id', None),
+                        'name': getattr(getattr(h, 'student', None), 'name', None),
+                        'admission_no': getattr(getattr(h, 'student', None), 'admission_no', None),
+                    },
+                    'action': getattr(h, 'action', None),
+                    'from': getattr(getattr(h, 'from_class', None), 'name', None),
+                    'to': getattr(getattr(h, 'to_class', None), 'name', None) or ('Graduated' if getattr(h, 'action', '') == 'graduated' else None),
+                    'year': getattr(h, 'year', None),
+                    'term': getattr(h, 'term', None),
+                    'note': getattr(h, 'note', ''),
+                    'created_at': getattr(h, 'created_at', None),
+                })
+        except Exception:
+            events = []
+        # Lightweight summary
+        summary = {
+            'total_events': len(events),
+            'promoted': len([e for e in events if e.get('action') == 'promoted']),
+            'assigned': len([e for e in events if e.get('action') == 'assigned']),
+            'moved': len([e for e in events if e.get('action') == 'moved']),
+            'graduated': len([e for e in events if e.get('action') == 'graduated']),
+            'unassigned': len([e for e in events if e.get('action') == 'unassigned']),
+        }
+        return Response({'class': {'id': klass.id, 'name': klass.name, 'grade_level': klass.grade_level}, 'events': events, 'summary': summary})
+
 
 class ExamViewSet(viewsets.ModelViewSet):
     queryset = Exam.objects.all()
@@ -2394,6 +2450,19 @@ class StudentViewSet(viewsets.ModelViewSet):
         if school:
             # Include students in classes of this school OR graduated students scoped by student.school
             qs = qs.filter(Q(klass__school=school) | Q(school=school))
+        # Support multiple alias query params for filtering by class id
+        try:
+            qp = self.request.query_params
+            class_param = None
+            for k in ('class', 'klass', 'class_id', 'classId'):
+                v = qp.get(k)
+                if v not in (None, ''):
+                    class_param = v
+                    break
+            if class_param not in (None, ''):
+                qs = qs.filter(klass_id=int(class_param))
+        except Exception:
+            pass
         # Optional grade filter via related class grade_level
         grade = self.request.query_params.get('grade')
         if grade:

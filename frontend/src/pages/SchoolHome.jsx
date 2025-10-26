@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import api, { toAbsoluteUrl } from '../api'
+import api, { toAbsoluteUrl, imageCandidates } from '../api'
+import ProgressiveImage from '../components/ProgressiveImage'
 
 export default function SchoolHome() {
   const [mobileOpen, setMobileOpen] = useState(false)
@@ -286,7 +287,13 @@ export default function SchoolHome() {
         <div className="mx-auto max-w-7xl px-4 md:px-6 py-3 md:py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             {school.logo_url ? (
-              <img src={toAbsoluteUrl(school.logo_url)} alt="School logo" className="h-9 w-9 rounded-xl object-cover border border-gray-200" />
+              <ProgressiveImage
+                src={toAbsoluteUrl(school.logo_url)}
+                candidates={imageCandidates(school.logo_url)}
+                alt="School logo"
+                className="h-9 w-9 rounded-xl border border-gray-200 overflow-hidden"
+                style={{ width: 36, height: 36 }}
+              />
             ) : (
               <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-indigo-600 to-purple-600 text-white grid place-items-center font-bold shadow-sm">S</div>
             )}
@@ -387,15 +394,12 @@ export default function SchoolHome() {
                       zIndex: isActive ? 2 : 1,
                     }
                     return (
-                      <img
+                      <ProgressiveImage
                         key={src + i}
                         src={src}
+                        candidates={imageCandidates(src)}
                         alt="Hero"
-                        width="1280"
-                        height="640"
-                        loading={i === 0 ? 'eager' : 'lazy'}
-                        decoding="async"
-                        className={`absolute inset-0 w-full h-full object-cover transition-all duration-700 ${animationVariant === 'fade' ? (isActive ? 'opacity-100' : 'opacity-0') : ''} ${animationVariant === 'dissolve' ? (isActive ? 'opacity-100 blur-0' : 'opacity-0 blur-sm') : ''}`}
+                        className={`absolute inset-0 w-full h-full transition-all duration-700 ${animationVariant === 'fade' ? (isActive ? 'opacity-100' : 'opacity-0') : ''} ${animationVariant === 'dissolve' ? (isActive ? 'opacity-100 blur-0' : 'opacity-0 blur-sm') : ''}`}
                         style={animationVariant === 'box' ? boxStyle : (animationVariant === 'dissolve' ? dissolveStyle : fadeStyle)}
                       />
                     )
@@ -404,7 +408,12 @@ export default function SchoolHome() {
                 <div className="grid grid-cols-3 divide-x divide-gray-100">
                   {heroImages.slice(0, 3).map((src, i) => (
                     <button key={src + 't' + i} type="button" onClick={() => setHeroIndex(i)} className="relative group">
-                      <img loading="lazy" decoding="async" width="400" height="160" src={src} alt="Thumb" className="h-20 sm:h-24 md:h-28 w-full object-cover"/>
+                      <ProgressiveImage
+                        src={src}
+                        candidates={imageCandidates(src)}
+                        alt="Thumb"
+                        className="h-20 sm:h-24 md:h-28 w-full overflow-hidden rounded-none"
+                      />
                       <span className={`absolute inset-0 ring-2 ${heroIndex === i ? 'ring-indigo-500' : 'ring-transparent'} pointer-events-none`} />
                     </button>
                   ))}
@@ -506,7 +515,7 @@ export default function SchoolHome() {
                 <Reveal className="lg:col-span-1">
                   <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-lg text-center">
                     {photo ? (
-                      <img src={photo} alt={name} className="mx-auto h-36 w-36 rounded-2xl object-cover border border-gray-200" loading="lazy" />
+                      <ProgressiveImage src={photo} candidates={imageCandidates(photo)} alt={name} className="mx-auto h-36 w-36 rounded-2xl border border-gray-200 overflow-hidden" />
                     ) : (
                       <div className="mx-auto h-36 w-36 rounded-2xl bg-gray-100 grid place-items-center text-3xl text-gray-400">👩‍🏫</div>
                     )}

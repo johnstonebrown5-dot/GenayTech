@@ -28,6 +28,11 @@ export default function AdminClassProfile(){
   const [historyError, setHistoryError] = useState('')
   const [showAssignModal, setShowAssignModal] = useState(false)
   const [assignForm, setAssignForm] = useState({ subject: '', teacher: '' })
+  // Assign subjects modal state
+  const [showAssignSubjects, setShowAssignSubjects] = useState(false)
+  const [availableSubjects, setAvailableSubjects] = useState([])
+  const [subjectSearch, setSubjectSearch] = useState('')
+  const [selectedSubjectIds, setSelectedSubjectIds] = useState([])
   const [showReassignCT, setShowReassignCT] = useState(false)
   const [reassignTeacher, setReassignTeacher] = useState('')
   const availableCTs = useMemo(() => {
@@ -86,13 +91,22 @@ export default function AdminClassProfile(){
     }catch{}
   }, [searchParams])
 
-  // Load students once for this page (then filter by class id)
+  // Load students for this class (use dedicated endpoint to avoid pagination issues)
   useEffect(() => {
     let cancelled = false
     async function loadStudents(){
       try {
         setLoadingStudents(true)
-        const { data } = await api.get('/academics/students/')
+        // Prefer class-specific roster endpoint
+        let data = null
+        try {
+          const res = await api.get(`/academics/classes/${id}/students/`)
+          data = res.data
+        } catch (err) {
+          // Fallback to generic endpoint with class filter (handle pagination too)
+          const res2 = await api.get(`/academics/students/?classId=${encodeURIComponent(id)}`)
+          data = Array.isArray(res2.data) ? res2.data : (Array.isArray(res2.data?.results) ? res2.data.results : [])
+        }
         if (!cancelled) setStudents(Array.isArray(data) ? data : [])
       } catch (e) {
         if (!cancelled) setStudents([])
@@ -100,11 +114,65 @@ export default function AdminClassProfile(){
         if (!cancelled) setLoadingStudents(false)
       }
     }
-    loadStudents()
+    if (activeTab === 'students' || !students.length) {
+      loadStudents()
+    }
     return () => { cancelled = true }
-  }, [])
+  }, [id, activeTab])
 
   const subjects = Array.isArray(klass?.subjects) ? klass.subjects : []
+  // Keep selected list in sync with current class when opening modal
+  useEffect(() => {
+    if (!showAssignSubjects) return
+    setSelectedSubjectIds(subjects.map(s => s.id))
+  }, [showAssignSubjects, subjects])
+
+  const openAssignSubjects = async () => {
+    try {
+      setShowAssignSubjects(true)
+      // Load ALL subjects (handle paginated responses)
+      const all = []
+      let url = '/academics/subjects/'
+      for (let i = 0; i < 50; i++) { // safety upper bound
+        const res = await api.get(url)
+        const data = res.data
+        if (Array.isArray(data)) {
+          all.push(...data)
+          break
+        }
+        const pageItems = Array.isArray(data?.results) ? data.results : []
+        all.push(...pageItems)
+        const next = data?.next
+        if (!next) break
+        // If next is absolute, convert to relative path for api client
+        try {
+          const nextUrl = new URL(next, window.location.origin)
+          url = nextUrl.pathname + nextUrl.search
+        } catch {
+          url = next
+        }
+      }
+      setAvailableSubjects(all)
+    } catch {
+      setAvailableSubjects([])
+    }
+  }
+
+  const toggleSubject = (id) => {
+    setSelectedSubjectIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
+  }
+
+  const saveAssignedSubjects = async () => {
+    try {
+      await api.patch(`/academics/classes/${id}/`, { subject_ids: selectedSubjectIds })
+      // refresh class details to reflect selected subjects
+      const { data } = await api.get(`/academics/classes/${id}/`)
+      setKlass(data)
+      setShowAssignSubjects(false)
+    } catch {
+      setShowAssignSubjects(false)
+    }
+  }
   // Teachers for dropdown: prefer server-filtered list; otherwise filter locally from the full list
   const filteredTeachers = useMemo(() => {
     const dedupByUserId = (arr) => {
@@ -134,6 +202,48 @@ export default function AdminClassProfile(){
     const cid = String(id)
     return students.filter(s => String(s.klass) === cid || String(s.klass_detail?.id || '') === cid)
   }, [students, id])
+  const handleDownloadCsv = () => {
+    const rows = [
+      ['Admission No','Name','Guardian Phone']
+    ]
+    for (const s of classStudents) {
+      rows.push([
+        String(s.admission_no || ''),
+        String(s.name || ''),
+        String(s.guardian_id || '')
+      ])
+    }
+    const csv = rows.map(r => r.map(v => '"' + String(v).replaceAll('"','""') + '"').join(',')).join('\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${(klass?.name || 'class').replaceAll(' ','_')}_students.csv`
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    URL.revokeObjectURL(url)
+  }
+  const handlePrintList = () => {
+    const w = window.open('', '_blank', 'width=900,height=700')
+    if (!w) return
+    const title = `${klass?.name || 'Class'} — Students`
+    const rows = classStudents.map(s => `<tr><td style="padding:6px;border:1px solid #e5e7eb">${s.admission_no||''}</td><td style="padding:6px;border:1px solid #e5e7eb">${s.name||''}</td><td style="padding:6px;border:1px solid #e5e7eb">${s.guardian_id||''}</td></tr>`).join('')
+    w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${title}</title></head><body style="font-family:ui-sans-serif,system-ui,Segoe UI,Roboto,Helvetica,Arial">
+      <h2 style="margin:0 0 12px 0">${title}</h2>
+      <table style="width:100%;border-collapse:collapse;font-size:14px">
+        <thead><tr>
+          <th style="text-align:left;padding:6px;border:1px solid #e5e7eb;background:#f9fafb">Admission No</th>
+          <th style="text-align:left;padding:6px;border:1px solid #e5e7eb;background:#f9fafb">Name</th>
+          <th style="text-align:left;padding:6px;border:1px solid #e5e7eb;background:#f9fafb">Guardian Phone</th>
+        </tr></thead>
+        <tbody>${rows || ''}</tbody>
+      </table>
+    </body></html>`)
+    w.document.close()
+    w.focus()
+    w.print()
+  }
   const genderStats = useMemo(() => {
     const boys = classStudents.filter(s => (s.gender || '').toLowerCase().startsWith('m')).length
     const girls = classStudents.filter(s => (s.gender || '').toLowerCase().startsWith('f')).length
@@ -345,26 +455,26 @@ export default function AdminClassProfile(){
                 {activeTab === 'class' && (
                   <div className="space-y-4">
                     <div className="grid md:grid-cols-3 gap-4">
-                      <div className="p-3 rounded border bg-gray-50">
-                        <div className="text-xs text-gray-500">Grade</div>
-                        <div className="font-medium">{klass?.grade_level || '-'}</div>
+                      <div className="p-4 rounded-xl border border-gray-200 bg-white shadow-sm">
+                        <div className="text-[11px] uppercase tracking-wide text-gray-500">Grade</div>
+                        <div className="mt-1 text-lg font-semibold text-gray-800">{klass?.grade_level || '-'}</div>
                       </div>
-                      <div className="p-3 rounded border bg-gray-50">
-                        <div className="text-xs text-gray-500">Stream</div>
-                        <div className="font-medium">{klass?.stream_detail?.name || '-'}</div>
+                      <div className="p-4 rounded-xl border border-gray-200 bg-white shadow-sm">
+                        <div className="text-[11px] uppercase tracking-wide text-gray-500">Stream</div>
+                        <div className="mt-1 text-lg font-semibold text-gray-800">{klass?.stream_detail?.name || '-'}</div>
                       </div>
-                      <div className="p-3 rounded border bg-gray-50">
-                        <div className="text-xs text-gray-500">Class Teacher</div>
-                        <div className="flex items-center justify-between gap-2">
+                      <div className="p-4 rounded-xl border border-gray-200 bg-white shadow-sm">
+                        <div className="text-[11px] uppercase tracking-wide text-gray-500">Class Teacher</div>
+                        <div className="mt-1 flex items-center justify-between gap-2">
                           <div className="font-medium truncate">{klass?.teacher_detail ? `${klass.teacher_detail.first_name} ${klass.teacher_detail.last_name}` : '—'}</div>
-                          <button onClick={()=>{ setReassignTeacher(String(klass?.teacher_detail?.id||'')); setShowReassignCT(true) }} className="text-xs px-2 py-1 rounded border hover:bg-white">Reassign</button>
+                          <button onClick={()=>{ setReassignTeacher(String(klass?.teacher_detail?.id||'')); setShowReassignCT(true) }} className="px-2.5 py-1 rounded-lg border border-gray-200 text-xs hover:bg-gray-50">Reassign</button>
                         </div>
                       </div>
                     </div>
 
-                    <div className="p-4 rounded border bg-white">
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="text-sm font-medium">Class History</div>
+                    <div className="p-4 rounded-xl border border-gray-200 bg-white shadow-sm">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="text-sm font-semibold text-gray-800">Class History</div>
                         {loadingHistory && <div className="text-xs text-gray-500">Loading…</div>}
                       </div>
                       {historyError && <div className="text-xs text-red-600 mb-2">{historyError}</div>}
@@ -373,15 +483,15 @@ export default function AdminClassProfile(){
                       ) : (
                         <div className="grid md:grid-cols-3 gap-4">
                           <div className="md:col-span-2 grid md:grid-cols-2 gap-4">
-                            <div className="border rounded">
+                            <div className="rounded-lg border border-gray-200 overflow-hidden">
                               <div className="px-3 py-2 text-sm font-medium bg-gray-50 border-b">Students In</div>
                               <div className="overflow-x-auto">
-                                <table className="w-full text-left text-sm">
-                                  <thead>
-                                    <tr className="bg-gray-50">
-                                      <th className="px-3 py-2">Student</th>
-                                      <th className="px-3 py-2">From</th>
-                                      <th className="px-3 py-2">When</th>
+                                <table className="min-w-full text-sm">
+                                  <thead className="bg-gray-50">
+                                    <tr>
+                                      <th className="px-3 py-2 text-left">Student</th>
+                                      <th className="px-3 py-2 text-left">From</th>
+                                      <th className="px-3 py-2 text-left">When</th>
                                     </tr>
                                   </thead>
                                   <tbody>
@@ -389,10 +499,10 @@ export default function AdminClassProfile(){
                                       <tr><td className="px-3 py-3 text-gray-500" colSpan={3}>No entries.</td></tr>
                                     ) : (
                                       classHistory.students_in.map((h, i) => (
-                                        <tr key={i} className="border-t">
-                                          <td className="px-3 py-2">{h.student_name}</td>
-                                          <td className="px-3 py-2">{h.from || '-'}</td>
-                                          <td className="px-3 py-2">{h.year ? `${h.year}-T${h.term||'-'}` : (h.created_at || '').slice(0,10)}</td>
+                                        <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                                          <td className="px-3 py-2 border-t">{h.student_name}</td>
+                                          <td className="px-3 py-2 border-t">{h.from || '-'}</td>
+                                          <td className="px-3 py-2 border-t">{h.year ? `${h.year}-T${h.term||'-'}` : (h.created_at || '').slice(0,10)}</td>
                                         </tr>
                                       ))
                                     )}
@@ -400,15 +510,15 @@ export default function AdminClassProfile(){
                                 </table>
                               </div>
                             </div>
-                            <div className="border rounded">
+                            <div className="rounded-lg border border-gray-200 overflow-hidden">
                               <div className="px-3 py-2 text-sm font-medium bg-gray-50 border-b">Students Out</div>
                               <div className="overflow-x-auto">
-                                <table className="w-full text-left text-sm">
-                                  <thead>
-                                    <tr className="bg-gray-50">
-                                      <th className="px-3 py-2">Student</th>
-                                      <th className="px-3 py-2">To</th>
-                                      <th className="px-3 py-2">When</th>
+                                <table className="min-w-full text-sm">
+                                  <thead className="bg-gray-50">
+                                    <tr>
+                                      <th className="px-3 py-2 text-left">Student</th>
+                                      <th className="px-3 py-2 text-left">To</th>
+                                      <th className="px-3 py-2 text-left">When</th>
                                     </tr>
                                   </thead>
                                   <tbody>
@@ -416,10 +526,10 @@ export default function AdminClassProfile(){
                                       <tr><td className="px-3 py-3 text-gray-500" colSpan={3}>No entries.</td></tr>
                                     ) : (
                                       classHistory.students_out.map((h, i) => (
-                                        <tr key={i} className="border-t">
-                                          <td className="px-3 py-2">{h.student_name}</td>
-                                          <td className="px-3 py-2">{h.to || '-'}</td>
-                                          <td className="px-3 py-2">{h.year ? `${h.year}-T${h.term||'-'}` : (h.created_at || '').slice(0,10)}</td>
+                                        <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                                          <td className="px-3 py-2 border-t">{h.student_name}</td>
+                                          <td className="px-3 py-2 border-t">{h.to || '-'}</td>
+                                          <td className="px-3 py-2 border-t">{h.year ? `${h.year}-T${h.term||'-'}` : (h.created_at || '').slice(0,10)}</td>
                                         </tr>
                                       ))
                                     )}
@@ -428,14 +538,14 @@ export default function AdminClassProfile(){
                               </div>
                             </div>
                           </div>
-                          <div className="border rounded">
+                          <div className="rounded-lg border border-gray-200 overflow-hidden">
                             <div className="px-3 py-2 text-sm font-medium bg-gray-50 border-b">Exams by Term</div>
                             <div className="overflow-x-auto">
-                              <table className="w-full text-left text-sm">
-                                <thead>
-                                  <tr className="bg-gray-50">
-                                    <th className="px-3 py-2">Term</th>
-                                    <th className="px-3 py-2">Exams</th>
+                              <table className="min-w-full text-sm">
+                                <thead className="bg-gray-50">
+                                  <tr>
+                                    <th className="px-3 py-2 text-left">Term</th>
+                                    <th className="px-3 py-2 text-left">Exams</th>
                                   </tr>
                                 </thead>
                                 <tbody>
@@ -443,9 +553,9 @@ export default function AdminClassProfile(){
                                     <tr><td className="px-3 py-3 text-gray-500" colSpan={2}>No exams.</td></tr>
                                   ) : (
                                     classHistory.exams_by_term.map((r, i) => (
-                                      <tr key={i} className="border-t">
-                                        <td className="px-3 py-2">{r.year ? `${r.year}-T${r.term}` : '-'}</td>
-                                        <td className="px-3 py-2">{r.exams}</td>
+                                      <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                                        <td className="px-3 py-2 border-t">{r.year ? `${r.year}-T${r.term}` : '-'}</td>
+                                        <td className="px-3 py-2 border-t">{r.exams}</td>
                                       </tr>
                                     ))
                                   )}
@@ -457,10 +567,9 @@ export default function AdminClassProfile(){
                       )}
                     </div>
 
-                    {/* Gender Distribution */}
                     <div className="grid md:grid-cols-3 gap-4">
-                      <div className="p-4 rounded border bg-white">
-                        <div className="text-sm font-medium mb-2">Gender Distribution</div>
+                      <div className="p-4 rounded-xl border border-gray-200 bg-white shadow-sm">
+                        <div className="text-sm font-semibold mb-2 text-gray-800">Gender Distribution</div>
                         <div className="flex items-end gap-6 h-24">
                           <div className="flex flex-col items-center flex-1">
                             <div className="w-10 bg-blue-500 rounded-t" style={{height: `${genderStats.total? Math.round((genderStats.boys/genderStats.total)*100) : 0}%`}}></div>
@@ -474,10 +583,9 @@ export default function AdminClassProfile(){
                         <div className="text-xs text-gray-500 mt-2">Total: {genderStats.total}</div>
                       </div>
 
-                      {/* Performance vs Other Classes */}
-                      <div className="md:col-span-2 p-4 rounded border bg-white">
+                      <div className="md:col-span-2 p-4 rounded-xl border border-gray-200 bg-white shadow-sm">
                         <div className="flex items-center justify-between mb-2">
-                          <div className="text-sm font-medium">Performance vs same grade</div>
+                          <div className="text-sm font-semibold text-gray-800">Performance vs same grade</div>
                           {loadingGradePerf && <div className="text-xs text-gray-500">Loading…</div>}
                         </div>
                         {gradePerf.length === 0 ? (
@@ -507,9 +615,12 @@ export default function AdminClassProfile(){
                   <div>
                     <div className="flex items-center justify-between mb-2">
                       <div className="text-sm text-gray-600">Subjects</div>
-                      {subjects.length > 0 && (
-                        <button onClick={()=>openAssign(subjects[0]?.id)} className="text-sm px-3 py-1.5 rounded border border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100">Assign Teacher</button>
-                      )}
+                      <div className="flex gap-2">
+                        <button onClick={openAssignSubjects} className="text-sm px-3 py-1.5 rounded border bg-white hover:bg-gray-50">Assign Subjects</button>
+                        {subjects.length > 0 && (
+                          <button onClick={()=>openAssign(subjects[0]?.id)} className="text-sm px-3 py-1.5 rounded border border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100">Assign Teacher</button>
+                        )}
+                      </div>
                     </div>
                     {subjects.length === 0 ? (
                       <div className="text-sm text-gray-500">No subjects assigned.</div>
@@ -552,32 +663,38 @@ export default function AdminClassProfile(){
 
                 {activeTab === 'students' && (
                   <div>
-                    <div className="text-sm text-gray-600 mb-2">Students in {klass?.name}</div>
+                    <div className="flex items-center justify-between mb-2 gap-2">
+                      <div className="text-sm text-gray-600">Students in {klass?.name}</div>
+                      <div className="flex gap-2">
+                        <button onClick={handlePrintList} className="px-3 py-1.5 rounded border bg-white hover:bg-gray-50 text-gray-700">Print List</button>
+                        <button onClick={handleDownloadCsv} className="px-3 py-1.5 rounded bg-emerald-600 text-white hover:bg-emerald-700">Download CSV</button>
+                      </div>
+                    </div>
                     {loadingStudents ? (
                       <div className="text-sm text-gray-500">Loading students...</div>
                     ) : classStudents.length === 0 ? (
                       <div className="text-sm text-gray-500">No students enrolled in this class.</div>
                     ) : (
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-left text-sm">
-                          <thead>
-                            <tr className="bg-gray-50">
-                              <th className="px-3 py-2">Admission No</th>
-                              <th className="px-3 py-2">Name</th>
-                              <th className="px-3 py-2">Guardian Phone</th>
-                              <th className="px-3 py-2"></th>
+                      <div className="overflow-x-auto rounded-lg border border-gray-200">
+                        <table className="min-w-full text-sm">
+                          <thead className="bg-gray-50">
+                            <tr>
+                              <th className="px-3 py-2 text-left whitespace-nowrap">Admission No</th>
+                              <th className="px-3 py-2 text-left whitespace-nowrap">Name</th>
+                              <th className="px-3 py-2 text-left whitespace-nowrap">Guardian Phone</th>
+                              <th className="px-3 py-2 text-right"></th>
                             </tr>
                           </thead>
                           <tbody>
-                            {classStudents.map(s => (
-                              <tr key={s.id} className="border-t hover:bg-gray-50">
-                                <td className="px-3 py-2 font-mono text-xs">{s.admission_no}</td>
-                                <td className="px-3 py-2">
+                            {classStudents.map((s, idx) => (
+                              <tr key={s.id} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                                <td className="px-3 py-2 font-mono text-xs border-t">{s.admission_no}</td>
+                                <td className="px-3 py-2 border-t">
                                   <Link to={`/admin/students/${s.id}`} className="text-blue-700 hover:underline">{s.name}</Link>
                                 </td>
-                                <td className="px-3 py-2">{s.guardian_id || 'N/A'}</td>
-                                <td className="px-3 py-2 text-right">
-                                  <Link to={`/admin/students/${s.id}`} className="text-blue-600 hover:underline">View</Link>
+                                <td className="px-3 py-2 border-t">{s.guardian_id || 'N/A'}</td>
+                                <td className="px-3 py-2 text-right border-t">
+                                  <Link to={`/admin/students/${s.id}`} className="inline-flex items-center px-2 py-1 rounded border text-xs hover:bg-white">View</Link>
                                 </td>
                               </tr>
                             ))}
@@ -650,6 +767,48 @@ export default function AdminClassProfile(){
           </div>
         </div>
       </div>
+      {/* Assign Subjects Modal */}
+      <Modal open={showAssignSubjects} onClose={()=>setShowAssignSubjects(false)} title={`Assign Subjects • Selected ${selectedSubjectIds.length}`} size="lg">
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <input value={subjectSearch} onChange={e=>setSubjectSearch(e.target.value)} placeholder="Search subjects..." className="w-full border rounded px-3 py-2" />
+            <button onClick={()=>setSelectedSubjectIds(availableSubjects.map(s=>s.id))} className="px-2 py-1 text-xs rounded border">Select All</button>
+            <button onClick={()=>setSelectedSubjectIds([])} className="px-2 py-1 text-xs rounded border">Clear</button>
+          </div>
+          <div className="max-h-80 overflow-auto rounded border">
+            <table className="min-w-full text-sm">
+              <thead className="bg-gray-50 sticky top-0">
+                <tr>
+                  <th className="px-3 py-2 text-left">Include</th>
+                  <th className="px-3 py-2 text-left">Code</th>
+                  <th className="px-3 py-2 text-left">Name</th>
+                </tr>
+              </thead>
+              <tbody>
+                {availableSubjects
+                  .filter(s => {
+                    const q = subjectSearch.trim().toLowerCase()
+                    if (!q) return true
+                    return (s.code||'').toLowerCase().includes(q) || (s.name||'').toLowerCase().includes(q)
+                  })
+                  .map((s, i) => (
+                    <tr key={s.id} className={i%2===0?'bg-white':'bg-gray-50'}>
+                      <td className="px-3 py-2 border-t">
+                        <input type="checkbox" checked={selectedSubjectIds.includes(s.id)} onChange={()=>toggleSubject(s.id)} />
+                      </td>
+                      <td className="px-3 py-2 border-t font-mono text-xs">{s.code}</td>
+                      <td className="px-3 py-2 border-t">{s.name}</td>
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="flex items-center justify-end gap-2">
+            <button onClick={()=>setShowAssignSubjects(false)} className="px-3 py-1.5 rounded border">Cancel</button>
+            <button onClick={saveAssignedSubjects} className="px-3 py-1.5 rounded bg-blue-600 text-white hover:bg-blue-700">Save</button>
+          </div>
+        </div>
+      </Modal>
       {/* Assign Subject Teacher Modal */}
       <Modal open={showAssignModal} onClose={()=>setShowAssignModal(false)} title="Assign Subject Teacher" size="sm">
         <form onSubmit={saveAssignment} className="grid gap-3">
