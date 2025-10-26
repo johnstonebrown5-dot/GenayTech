@@ -6,6 +6,7 @@ from django.http import HttpResponseRedirect
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 from django.conf import settings
 from django.conf.urls.static import static
+from django.views.static import serve as static_serve
 
 
 def health(_request):
@@ -42,9 +43,14 @@ urlpatterns = [
     path('api/communications/', include('communications.urls')),
     path('api/reports/', include('reports.urls')),
     # Catch-all for any non-API route: send to frontend SPA
-    re_path(r'^(?!api/).*$', spa_redirect),
+    re_path(r'^(?!api/|media/).*$', spa_redirect),
 ]
 
 # Serve media files (e.g., uploaded logos) in development
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+else:
+    if not getattr(settings, 'USE_S3', False):
+        urlpatterns += [
+            re_path(r'^media/(?P<path>.*)$', static_serve, {'document_root': settings.MEDIA_ROOT}),
+        ]
