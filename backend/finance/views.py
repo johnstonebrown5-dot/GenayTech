@@ -915,9 +915,15 @@ class ClassFeeViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         class_fee = serializer.save()
-        # Auto-generate invoices for all students in the class for the given period
         students = Student.objects.filter(klass=class_fee.klass)
+        try:
+            cat_name = str(getattr(class_fee.fee_category, 'name', '') or '').strip().lower()
+            is_boarding_category = ('board' in cat_name)
+        except Exception:
+            is_boarding_category = False
         for stu in students:
+            if is_boarding_category and str(getattr(stu, 'boarding_status', 'day')).lower() != 'boarding':
+                continue
             # Avoid duplicate invoice for same category/year/term
             inv, created = Invoice.objects.get_or_create(
                 student=stu,
@@ -942,7 +948,14 @@ class ClassFeeViewSet(viewsets.ModelViewSet):
         """
         instance = serializer.save()
         students = Student.objects.filter(klass=instance.klass)
+        try:
+            cat_name = str(getattr(instance.fee_category, 'name', '') or '').strip().lower()
+            is_boarding_category = ('board' in cat_name)
+        except Exception:
+            is_boarding_category = False
         for stu in students:
+            if is_boarding_category and str(getattr(stu, 'boarding_status', 'day')).lower() != 'boarding':
+                continue
             inv, created = Invoice.objects.get_or_create(
                 student=stu,
                 category=instance.fee_category,
@@ -1000,7 +1013,14 @@ class ClassFeeViewSet(viewsets.ModelViewSet):
                 instance = serializer.save()
                 # generate invoices per created class fee
                 students = Student.objects.filter(klass_id=kid)
+                try:
+                    cat_name = str(getattr(instance.fee_category, 'name', '') or '').strip().lower()
+                    is_boarding_category = ('board' in cat_name)
+                except Exception:
+                    is_boarding_category = False
                 for stu in students:
+                    if is_boarding_category and str(getattr(stu, 'boarding_status', 'day')).lower() != 'boarding':
+                        continue
                     inv, inv_created = Invoice.objects.get_or_create(
                         student=stu,
                         category=instance.fee_category,

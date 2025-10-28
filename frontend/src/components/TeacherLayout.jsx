@@ -32,6 +32,9 @@ export default function TeacherLayout({ children }){
   const [hasAttendanceAccess, setHasAttendanceAccess] = useState(false)
   const [classTeacherClassId, setClassTeacherClassId] = useState('')
   const [unreadCount, setUnreadCount] = useState(0)
+  const [broadcastUnread, setBroadcastUnread] = useState(0)
+  const [broadcastBanner, setBroadcastBanner] = useState(null)
+  const [bannerExpanded, setBannerExpanded] = useState(false)
 
   useEffect(() => { setIsMobileOpen(false) }, [pathname])
 
@@ -73,9 +76,16 @@ export default function TeacherLayout({ children }){
         const inboxList = inb.status === 'fulfilled' ? (Array.isArray(inb.value.data) ? inb.value.data : (inb.value.data?.results || [])) : []
         const sysList = sys.status === 'fulfilled' ? (Array.isArray(sys.value.data) ? sys.value.data : (sys.value.data?.results || [])) : []
         const total = computeUnread(inboxList) + computeUnread(sysList)
-        if (mounted) setUnreadCount(total)
+        if (mounted) {
+          setUnreadCount(total)
+          const bOnly = Array.isArray(sysList) ? sysList.filter(m => m.is_broadcast) : []
+          const bCount = computeUnread(bOnly)
+          setBroadcastUnread(bCount)
+          const latest = Array.isArray(bOnly) && bOnly.length > 0 ? bOnly[0] : null
+          setBroadcastBanner(latest || null)
+        }
       } catch {
-        if (mounted) setUnreadCount(0)
+        if (mounted) { setUnreadCount(0); setBroadcastUnread(0); setBroadcastBanner(null) }
       }
     }
     load()
@@ -162,6 +172,22 @@ export default function TeacherLayout({ children }){
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {broadcastBanner && (
+        <div className="sticky top-0 z-40 w-full bg-red-600 text-white">
+          <div className="px-3 md:px-4 py-2 flex items-start gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5 mt-0.5">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M10.29 3.86l-8.48 14.7A1 1 0 002.62 20h18.76a1 1 0 00.86-1.5l-8.48-14.64a1 1 0 00-1.73 0z" />
+            </svg>
+            <a href="/teacher/messages?tab=system" className="flex-1 min-w-0">
+              <div className="text-sm font-semibold tracking-wide uppercase opacity-90">{broadcastBanner.system_tag || 'Alert'}</div>
+              <div className="text-sm leading-snug" style={{ maxHeight: bannerExpanded ? 'none' : 40, overflow: bannerExpanded ? 'visible' : 'hidden' }}>{String(broadcastBanner.body||'')}</div>
+            </a>
+            <button onClick={()=>setBannerExpanded(v=>!v)} className="sm:hidden text-xs underline decoration-white/70 underline-offset-2 px-2 py-1">
+              {bannerExpanded ? 'Show less' : 'Read more'}
+            </button>
+          </div>
+        </div>
+      )}
       {/* Top bar - refreshed style */}
       <header className="sticky top-0 z-30 bg-white text-gray-900 px-3 md:px-4 h-14 flex items-center gap-2 md:gap-3 shadow-sm border-b border-gray-200">
         <button
@@ -217,6 +243,21 @@ export default function TeacherLayout({ children }){
           )}
         </div>
         <div className="ml-auto flex items-center gap-2 md:gap-3">
+          <Link
+            to="/teacher/messages?tab=system"
+            className="relative inline-flex items-center justify-center w-10 h-10 rounded-lg border border-gray-200 hover:bg-gray-50"
+            aria-label="Notifications"
+            title="System messages"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5 text-gray-700">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75V9a6 6 0 10-12 0v.75a8.967 8.967 0 01-2.311 6.022c1.733.64 3.56 1.085 5.455 1.31m5.713 0a24.255 24.255 0 01-5.713 0m5.713 0a3 3 0 11-5.713 0" />
+            </svg>
+            {broadcastUnread > 0 && (
+              <span className="absolute -top-1 -right-1 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] bg-red-600 text-white">
+                {broadcastUnread > 99 ? '99+' : broadcastUnread}
+              </span>
+            )}
+          </Link>
           {user && (
             <span className="text-sm hidden sm:inline text-gray-600">
               {user.first_name || user.username}
@@ -236,16 +277,16 @@ export default function TeacherLayout({ children }){
         )}
 
         {/* Sidebar */}
-        <aside className={`fixed z-40 top-14 left-0 bottom-0 bg-slate-800 border-r border-slate-700/30 transition-all duration-200 ${sidebarBase} hidden md:flex flex-col shadow-xl`}> 
+        <aside className={`fixed z-40 top-14 left-0 bottom-0 bg-gradient-to-b from-blue-600 via-blue-700 to-blue-900 border-r border-blue-500/30 transition-all duration-200 ${sidebarBase} hidden md:flex flex-col shadow-2xl`}> 
           <nav className="p-2 space-y-1 overflow-y-auto">
             {([ ...(hasAttendanceAccess? [{ to: '/teacher/attendance', label: 'Attendance', icon: '🗓️' }] : []), ...baseNavItems ]).map(i => {
               const active = pathname === i.to
               return (
                 <Link key={i.to} to={i.to}
                   className={`${active
-                    ? 'bg-slate-700 text-white shadow border border-slate-600/50'
-                    : 'hover:bg-slate-700/60 text-slate-200 hover:text-white'
-                  } flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 group`}
+                    ? 'bg-white/20 text-white shadow-lg border border-white/30'
+                    : 'hover:bg-white/10 text-blue-100 hover:text-white'
+                  } flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-300 group`}
                   title={i.label}
                 >
                   <span className="text-lg w-5 text-center" aria-hidden>{i.icon}</span>
@@ -263,7 +304,7 @@ export default function TeacherLayout({ children }){
               )
             })}
           </nav>
-          <div className="mt-auto p-3 text-xs text-slate-300/80">
+          <div className="mt-auto p-3 text-xs text-blue-200/80">
             {isOpen && (
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></div>
@@ -274,16 +315,16 @@ export default function TeacherLayout({ children }){
         </aside>
 
         {/* Mobile Drawer Sidebar */}
-        <aside className={`fixed z-40 top-14 left-0 bottom-0 bg-slate-800 border-r border-slate-700/30 w-64 p-2 md:hidden transition-transform duration-200 shadow-2xl ${isMobileOpen? 'translate-x-0':'-translate-x-full'}`}>
+        <aside className={`fixed z-40 top-14 left-0 bottom-0 bg-gradient-to-b from-blue-600 via-blue-700 to-blue-900 border-r border-blue-500/30 w-64 p-2 md:hidden transition-transform duration-200 shadow-2xl ${isMobileOpen? 'translate-x-0':'-translate-x-full'}`}>
           <nav className="space-y-1 overflow-y-auto">
             {([ ...(hasAttendanceAccess? [{ to: '/teacher/attendance', label: 'Attendance', icon: '🗓️' }] : []), ...baseNavItems ]).map(i => {
               const active = pathname === i.to
               return (
                 <Link key={i.to} to={i.to}
                   className={`${active
-                    ? 'bg-slate-700 text-white shadow border border-slate-600/50'
-                    : 'hover:bg-slate-700/60 text-slate-200 hover:text-white'
-                  } flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200`}
+                    ? 'bg-white/20 text-white shadow-lg border border-white/30'
+                    : 'hover:bg-white/10 text-blue-100 hover:text-white'
+                  } flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-300`}
                 >
                   <span className="text-lg" aria-hidden>{i.icon}</span>
                   <span className="relative inline-flex items-center gap-2 text-sm font-medium">
@@ -298,7 +339,7 @@ export default function TeacherLayout({ children }){
               )
             })}
           </nav>
-          <div className="mt-auto p-3 text-xs text-slate-300/80">
+          <div className="mt-auto p-3 text-xs text-blue-200/80">
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></div>
               <span>© {new Date().getFullYear()} EDU-TRACK</span>

@@ -78,9 +78,9 @@ class MessageSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'school', 'sender', 'sender_username', 'body', 'created_at',
             'audience', 'recipient_role', 'reply_to', 'recipients', 'recipient_ids',
-            'system_tag'
+            'system_tag', 'is_broadcast'
         ]
-        read_only_fields = ['school', 'sender', 'sender_username', 'created_at', 'recipients', 'system_tag']
+        read_only_fields = ['school', 'sender', 'sender_username', 'created_at', 'recipients', 'system_tag', 'is_broadcast']
 
     def get_sender_username(self, obj):
         return getattr(obj.sender, 'username', None)

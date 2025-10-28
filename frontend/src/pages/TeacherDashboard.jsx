@@ -162,26 +162,27 @@ export default function TeacherDashboard(){
   }, [nextClass?.start])
 
   return (
-    <div className="p-4 md:p-6 space-y-6 max-w-7xl mx-auto">
+    <div className="p-4 md:p-6 space-y-6 max-w-7xl mx-auto bg-gradient-to-b from-slate-50 to-white">
       {/* Header - elevated gradient card */}
-      <div className="relative overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
-        <div className="pointer-events-none absolute -top-10 right-0 h-40 w-40 rounded-full bg-indigo-500/10 blur-2" />
+      <div className="relative overflow-hidden rounded-2xl border border-gray-200 bg-white/80 backdrop-blur supports-[backdrop-filter]:bg-white/60 shadow-[0_10px_30px_rgba(2,6,23,0.06)]">
+        <div className="pointer-events-none absolute -top-10 right-0 h-44 w-44 rounded-full bg-indigo-500/15 blur-2" />
+        <div className="pointer-events-none absolute -bottom-12 -left-12 h-56 w-56 rounded-full bg-fuchsia-400/10 blur-3xl" />
         <div className="p-4 md:p-6 flex items-center justify-between gap-4">
           <div className="flex items-center gap-4">
             {school?.logo_url ? (
-              <img src={school.logo_url} alt="School logo" className="h-12 w-12 rounded-lg bg-gray-50 p-1 object-contain border border-gray-200" />
+              <img src={school.logo_url} alt="School logo" className="h-12 w-12 rounded-xl bg-white p-1 object-contain border border-gray-200 shadow-sm" />
             ) : (
-              <div className="h-12 w-12 rounded-lg bg-indigo-50 flex items-center justify-center text-xl border border-indigo-100">🏫</div>
+              <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 text-white flex items-center justify-center text-xl shadow-sm">🏫</div>
             )}
             <div>
-              <div className="text-lg md:text-2xl font-bold tracking-tight">Teacher Dashboard</div>
-              <div className="text-gray-600 text-xs md:text-sm truncate flex items-center gap-2">
+              <div className="text-lg md:text-2xl font-extrabold tracking-tight text-slate-900">Teacher Dashboard</div>
+              <div className="text-slate-600 text-xs md:text-sm truncate flex items-center gap-2">
                 <span>{school?.name || '—'}</span>
-                {school?.term && <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">{school.term}</span>}
+                {school?.term && <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 shadow-xs">{school.term}</span>}
               </div>
             </div>
           </div>
-          <div className="hidden sm:block text-xs md:text-sm text-gray-600">Quick actions and classes</div>
+          <div className="hidden sm:block text-xs md:text-sm text-slate-600">Quick actions and classes</div>
         </div>
       </div>
 
@@ -274,27 +275,28 @@ export default function TeacherDashboard(){
 
 function DashCard({ title, value, to, icon, accent }){
   return (
-    <Link to={to} className="group rounded-2xl border border-gray-200 bg-white p-3 sm:p-4 flex items-center justify-between shadow-sm hover:shadow transition-all snap-center min-w-[260px]">
-      <div className="flex items-center gap-3">
+    <Link to={to} className="group relative rounded-2xl border border-gray-200 bg-white/90 backdrop-blur p-3 sm:p-4 flex items-center justify-between shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all snap-center min-w-[260px]">
+      <div className="pointer-events-none absolute -inset-0.5 rounded-2xl bg-gradient-to-r from-transparent via-indigo-500/10 to-transparent opacity-0 group-hover:opacity-100 blur-sm transition" />
+      <div className="flex items-center gap-3 relative z-10">
         <IconBox accent={accent}>{icon || '➡️'}</IconBox>
         <div>
-          <div className="text-xs text-gray-600">{title}</div>
-          <div className="text-2xl font-semibold tracking-tight text-gray-900">{value}</div>
+          <div className="text-xs text-slate-600">{title}</div>
+          <div className="text-2xl font-semibold tracking-tight text-slate-900">{value}</div>
         </div>
       </div>
-      <div className="text-gray-400 group-hover:translate-x-0.5 transition">→</div>
+      <div className="text-slate-400 group-hover:translate-x-0.5 transition relative z-10">→</div>
     </Link>
   )
 }
 
 function QuickPanel({ title, description, link, actionLabel }){
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-4 flex items-center justify-between shadow-sm">
+    <div className="rounded-2xl border border-gray-200 bg-white/90 backdrop-blur p-4 flex items-center justify-between shadow-sm hover:shadow-md transition">
       <div>
-        <div className="font-medium text-gray-900">{title}</div>
-        <div className="text-sm text-gray-600">{description}</div>
+        <div className="font-medium text-slate-900">{title}</div>
+        <div className="text-sm text-slate-600">{description}</div>
       </div>
-      <Link to={link} className="px-3 py-1.5 rounded-lg bg-gray-900 text-white hover:bg-black/90 text-sm">{actionLabel}</Link>
+      <Link to={link} className="px-3 py-1.5 rounded-lg bg-gray-900 text-white hover:bg-black/90 text-sm shadow-sm">{actionLabel}</Link>
     </div>
   )
 }
@@ -302,9 +304,9 @@ function QuickPanel({ title, description, link, actionLabel }){
 /* UI Helpers */
 function SectionCard({ title, action, children }){
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-      <div className="border-b px-4 py-2 flex items-center justify-between bg-gray-50/50">
-        <div className="font-medium text-gray-800">{title}</div>
+    <div className="bg-white/90 backdrop-blur rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+      <div className="border-b px-4 py-2 flex items-center justify-between bg-gray-50">
+        <div className="font-medium text-slate-800">{title}</div>
         {action}
       </div>
       <div className="p-4">{children}</div>
@@ -313,31 +315,31 @@ function SectionCard({ title, action, children }){
 }
 
 function Chip({ children }){
-  return <span className="text-[11px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 border border-gray-200">{children}</span>
+  return <span className="text-[11px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200 shadow-xs">{children}</span>
 }
 
 function IconBox({ children, accent = 'from-indigo-500 to-indigo-600' }){
   return (
-    <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-lg text-white flex items-center justify-center text-xl bg-gradient-to-br ${accent}`}>{children}</div>
+    <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl text-white flex items-center justify-center text-xl bg-gradient-to-br ${accent} shadow-sm ring-1 ring-black/5`}>{children}</div>
   )
 }
 
 /* Next Class + Today Tasks */
 function NextClassCard({ nextClass, countdown }){
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+    <div className="rounded-2xl border border-gray-200 bg-white/90 backdrop-blur p-4 shadow-sm">
       <div className="flex items-center justify-between mb-1">
-        <div className="font-medium text-gray-900">My Next Class</div>
-        <span className="text-xs text-gray-500">Today</span>
+        <div className="font-medium text-slate-900">My Next Class</div>
+        <span className="text-xs text-slate-500">Today</span>
       </div>
       {!nextClass ? (
-        <div className="text-sm text-gray-600">No upcoming class today.</div>
+        <div className="text-sm text-slate-600">No upcoming class today.</div>
       ) : (
         <div className="flex items-center gap-3">
           <IconBox accent="from-sky-500 to-blue-600">📘</IconBox>
           <div className="min-w-0">
             <div className="font-semibold truncate">{nextClass.label}</div>
-            <div className="text-xs text-gray-600">Starts {nextClass.start?.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</div>
+            <div className="text-xs text-slate-600">Starts {nextClass.start?.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</div>
             <div className="text-xs text-emerald-700 mt-0.5">{countdown}</div>
           </div>
         </div>
@@ -351,28 +353,28 @@ function TodayTasksCard({ classes=[], me, plansCount=0 }){
   const meId = String(me?.id || '')
   const myClass = (classes||[]).find(c => [c?.teacher, c?.teacher_detail?.id, c?.teacher_detail?.user?.id].map(v=> (v==null? '' : String(v))).includes(meId))
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
-      <div className="font-medium text-gray-900 mb-2">Today's Tasks</div>
+    <div className="rounded-2xl border border-gray-200 bg-white/90 backdrop-blur p-4 shadow-sm">
+      <div className="font-medium text-slate-900 mb-2">Today's Tasks</div>
       <ul className="grid gap-2">
-        <li className="flex items-center justify-between p-2 rounded-lg border border-gray-100">
+        <li className="flex items-center justify-between p-2 rounded-lg border border-gray-100 hover:bg-slate-50/60 transition">
           <div className="flex items-center gap-2 min-w-0">
             <IconBox accent="from-emerald-500 to-green-600">✅</IconBox>
             <div className="min-w-0">
               <div className="text-sm font-medium truncate">Lesson Plans</div>
-              <div className="text-xs text-gray-600">{plansCount} plan(s) today</div>
+              <div className="text-xs text-slate-600">{plansCount} plan(s) today</div>
             </div>
           </div>
-          <Link to="/teacher/lessons" className="text-sm px-2.5 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50">Open</Link>
+          <Link to="/teacher/lessons" className="text-sm px-2.5 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 shadow-xs">Open</Link>
         </li>
-        <li className="flex items-center justify-between p-2 rounded-lg border border-gray-100">
+        <li className="flex items-center justify-between p-2 rounded-lg border border-gray-100 hover:bg-slate-50/60 transition">
           <div className="flex items-center gap-2 min-w-0">
             <IconBox accent="from-amber-500 to-orange-600">🗓️</IconBox>
             <div className="min-w-0">
               <div className="text-sm font-medium truncate">Attendance {myClass? `— ${myClass.name}`:''}</div>
-              <div className="text-xs text-gray-600">Mark attendance for today</div>
+              <div className="text-xs text-slate-600">Mark attendance for today</div>
             </div>
           </div>
-          <Link to="/teacher/attendance" className="text-sm px-2.5 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50">Mark</Link>
+          <Link to="/teacher/attendance" className="text-sm px-2.5 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 shadow-xs">Mark</Link>
         </li>
       </ul>
     </div>
@@ -395,9 +397,9 @@ function SkeletonCard(){
 
 function EmptyState({ icon='📭', title='Nothing here', subtitle='No data to show yet.', action }){
   return (
-    <div className="text-center py-8 text-gray-600">
-      <div className="mx-auto mb-2 w-12 h-12 rounded-xl bg-gray-50 border border-gray-200 flex items-center justify-center text-2xl">{icon}</div>
-      <div className="font-medium text-gray-800">{title}</div>
+    <div className="text-center py-8 text-slate-600">
+      <div className="mx-auto mb-2 w-12 h-12 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-center text-2xl shadow-xs">{icon}</div>
+      <div className="font-medium text-slate-800">{title}</div>
       <div className="text-sm">{subtitle}</div>
       {action && <div className="mt-3">{action}</div>}
     </div>
@@ -495,15 +497,15 @@ function MiniCalendar({ events=[], month=new Date(), onPrev, onNext, onToday }){
   return (
     <div className="overflow-hidden">
       <div className="flex items-center justify-between mb-3">
-        <div className="text-xs sm:text-sm text-gray-600 font-medium">{month.toLocaleString(undefined,{ month:'long', year:'numeric' })}</div>
+        <div className="text-xs sm:text-sm text-slate-600 font-medium">{month.toLocaleString(undefined,{ month:'long', year:'numeric' })}</div>
         <div className="flex items-center gap-1.5 sm:gap-2">
-          <button onClick={onPrev} className="p-2 sm:p-2.5 rounded-full border border-gray-200 hover:bg-gray-50" aria-label="Previous month">‹</button>
-          <button onClick={onNext} className="p-2 sm:p-2.5 rounded-full border border-gray-200 hover:bg-gray-50" aria-label="Next month">›</button>
-          <button onClick={onToday} className="px-2 py-1 text-[10px] sm:text-xs rounded-full border border-gray-200 hover:bg-gray-50">Today</button>
+          <button onClick={onPrev} className="p-2 sm:p-2.5 rounded-full border border-slate-200 hover:bg-slate-50" aria-label="Previous month">‹</button>
+          <button onClick={onNext} className="p-2 sm:p-2.5 rounded-full border border-slate-200 hover:bg-slate-50" aria-label="Next month">›</button>
+          <button onClick={onToday} className="px-2 py-1 text-[10px] sm:text-xs rounded-full border border-slate-200 hover:bg-slate-50">Today</button>
         </div>
       </div>
       <div className="space-y-3">
-        <div className="grid grid-cols-7 text-[10px] sm:text-[11px] font-semibold text-gray-500 mb-2">
+        <div className="grid grid-cols-7 text-[10px] sm:text-[11px] font-semibold text-slate-500 mb-2">
           {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d=> <div key={d} className="px-0.5 sm:px-1 py-0.5 sm:py-1 text-center tracking-wide">{d}</div>)}
         </div>
         <div className="grid grid-cols-7 gap-1">
@@ -513,27 +515,27 @@ function MiniCalendar({ events=[], month=new Date(), onPrev, onNext, onToday }){
             const isToday = key === localKey(new Date())
             const dayEvents = eventsByDay[key] || []
             const color = dayEvents.length>0 ? colorForEvent(dayEvents[0]) : null
-            const baseBg = inMonth ? 'bg-white' : 'bg-gray-50'
+            const baseBg = inMonth ? 'bg-white' : 'bg-slate-50'
             const activeBg = color ? color.chip.split(' ').find(c=>c.startsWith('bg-')) : baseBg
             return (
-              <div key={i} className={`relative rounded-xl min-h-[52px] sm:min-h-[68px] p-1.5 sm:p-2 text-[10px] sm:text-xs border ${inMonth? 'border-gray-200':'border-gray-200/70'} ${dayEvents.length? activeBg : baseBg} hover:border-indigo-300 transition-all`}>
+              <div key={i} className={`relative rounded-xl min-h-[52px] sm:min-h-[68px] p-1.5 sm:p-2 text-[10px] sm:text-xs border ${inMonth? 'border-slate-200':'border-slate-200/70'} ${dayEvents.length? activeBg : baseBg} hover:border-indigo-300 hover:shadow-[0_2px_10px_rgba(2,6,23,0.06)] transition-all`}>
                 <div className="flex items-center justify-between">
-                  <div className={`${inMonth? 'text-gray-800':'text-gray-400'} text-[10px] sm:text-[11px] font-semibold`}>{d.getDate()}</div>
+                  <div className={`${inMonth? 'text-slate-800':'text-slate-400'} text-[10px] sm:text-[11px] font-semibold`}>{d.getDate()}</div>
                   {isToday && <span className="text-[9px] sm:text-[10px] px-1.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">Today</span>}
                 </div>
                 <div className="mt-1 flex flex-wrap gap-1">
                   {dayEvents.slice(0,2).map(ev => {
                     const c = colorForEvent(ev)
                     return (
-                      <span key={ev.id} className={`px-1.5 py-0.5 rounded-full text-[9px] sm:text-[10px] border truncate max-w-full ${c.chip}`} title={ev.title}>
+                      <span key={ev.id} className={`px-1.5 py-0.5 rounded-full text-[9px] sm:text-[10px] border truncate max-w-full shadow-xs ${c.chip}`} title={ev.title}>
                         {ev.title}
                       </span>
                     )
                   })}
-                  {dayEvents.length>2 && <span className="text-[9px] sm:text-[10px] text-gray-500">+{dayEvents.length-2} more</span>}
+                  {dayEvents.length>2 && <span className="text-[9px] sm:text-[10px] text-slate-500">+{dayEvents.length-2} more</span>}
                 </div>
                 {dayEvents.length>0 && (
-                  <div className="absolute bottom-1 right-2 inline-flex items-center gap-1 text-[9px] sm:text-[10px] text-gray-500">
+                  <div className="absolute bottom-1 right-2 inline-flex items-center gap-1 text-[9px] sm:text-[10px] text-slate-500">
                     <span className={`w-1.5 h-1.5 rounded-full ${color?.dot || 'bg-blue-500'}`} />
                     {dayEvents.length}
                   </div>

@@ -26,6 +26,12 @@ export default function AdminClassProfile(){
   const [classHistory, setClassHistory] = useState(null)
   const [loadingHistory, setLoadingHistory] = useState(false)
   const [historyError, setHistoryError] = useState('')
+  const [showAddStudents, setShowAddStudents] = useState(false)
+  const [unassigned, setUnassigned] = useState([])
+  const [unassignedSearch, setUnassignedSearch] = useState('')
+  const [selectedUnassigned, setSelectedUnassigned] = useState([])
+  const [addingStudents, setAddingStudents] = useState(false)
+  const [addStudentsError, setAddStudentsError] = useState('')
   const [showAssignModal, setShowAssignModal] = useState(false)
   const [assignForm, setAssignForm] = useState({ subject: '', teacher: '' })
   // Assign subjects modal state
@@ -119,6 +125,58 @@ export default function AdminClassProfile(){
     }
     return () => { cancelled = true }
   }, [id, activeTab])
+
+  const openAddStudents = async () => {
+    setShowAddStudents(true)
+    setAddStudentsError('')
+    setSelectedUnassigned([])
+    try {
+      const all = []
+      let url = '/academics/students/'
+      for (let i = 0; i < 50; i++) {
+        const res = await api.get(url)
+        const data = res.data
+        if (Array.isArray(data)) {
+          all.push(...data)
+          break
+        }
+        const pageItems = Array.isArray(data?.results) ? data.results : []
+        all.push(...pageItems)
+        const next = data?.next
+        if (!next) break
+        try {
+          const nextUrl = new URL(next, window.location.origin)
+          url = nextUrl.pathname + nextUrl.search
+        } catch {
+          url = next
+        }
+      }
+      const filtered = all.filter(s => !s.klass && !s.is_graduated && s.is_active !== false)
+      setUnassigned(filtered)
+    } catch {
+      setUnassigned([])
+    }
+  }
+
+  const toggleUnassigned = (sid) => {
+    setSelectedUnassigned(prev => prev.includes(sid) ? prev.filter(x => x !== sid) : [...prev, sid])
+  }
+
+  const saveAddStudents = async () => {
+    if (!selectedUnassigned.length) { setShowAddStudents(false); return }
+    try {
+      setAddingStudents(true)
+      setAddStudentsError('')
+      await api.post(`/academics/classes/${id}/add-students/`, { students: selectedUnassigned })
+      const res = await api.get(`/academics/classes/${id}/students/`)
+      setStudents(Array.isArray(res.data) ? res.data : [])
+      setShowAddStudents(false)
+    } catch (e) {
+      setAddStudentsError(e?.response?.data?.detail || 'Failed to add students')
+    } finally {
+      setAddingStudents(false)
+    }
+  }
 
   const subjects = Array.isArray(klass?.subjects) ? klass.subjects : []
   // Keep selected list in sync with current class when opening modal
@@ -455,15 +513,15 @@ export default function AdminClassProfile(){
                 {activeTab === 'class' && (
                   <div className="space-y-4">
                     <div className="grid md:grid-cols-3 gap-4">
-                      <div className="p-4 rounded-xl border border-gray-200 bg-white shadow-sm">
+                      <div className="p-4 rounded-xl border border-indigo-100 bg-indigo-50 shadow-sm">
                         <div className="text-[11px] uppercase tracking-wide text-gray-500">Grade</div>
                         <div className="mt-1 text-lg font-semibold text-gray-800">{klass?.grade_level || '-'}</div>
                       </div>
-                      <div className="p-4 rounded-xl border border-gray-200 bg-white shadow-sm">
+                      <div className="p-4 rounded-xl border border-emerald-100 bg-emerald-50 shadow-sm">
                         <div className="text-[11px] uppercase tracking-wide text-gray-500">Stream</div>
                         <div className="mt-1 text-lg font-semibold text-gray-800">{klass?.stream_detail?.name || '-'}</div>
                       </div>
-                      <div className="p-4 rounded-xl border border-gray-200 bg-white shadow-sm">
+                      <div className="p-4 rounded-xl border border-fuchsia-100 bg-fuchsia-50 shadow-sm">
                         <div className="text-[11px] uppercase tracking-wide text-gray-500">Class Teacher</div>
                         <div className="mt-1 flex items-center justify-between gap-2">
                           <div className="font-medium truncate">{klass?.teacher_detail ? `${klass.teacher_detail.first_name} ${klass.teacher_detail.last_name}` : '—'}</div>
@@ -472,7 +530,7 @@ export default function AdminClassProfile(){
                       </div>
                     </div>
 
-                    <div className="p-4 rounded-xl border border-gray-200 bg-white shadow-sm">
+                    <div className="p-4 rounded-xl border border-slate-200 bg-slate-50 shadow-sm">
                       <div className="flex items-center justify-between mb-3">
                         <div className="text-sm font-semibold text-gray-800">Class History</div>
                         {loadingHistory && <div className="text-xs text-gray-500">Loading…</div>}
@@ -483,11 +541,11 @@ export default function AdminClassProfile(){
                       ) : (
                         <div className="grid md:grid-cols-3 gap-4">
                           <div className="md:col-span-2 grid md:grid-cols-2 gap-4">
-                            <div className="rounded-lg border border-gray-200 overflow-hidden">
-                              <div className="px-3 py-2 text-sm font-medium bg-gray-50 border-b">Students In</div>
+                            <div className="rounded-lg border border-indigo-200 overflow-hidden bg-white">
+                              <div className="px-3 py-2 text-sm font-medium bg-indigo-50 border-b border-indigo-100">Students In</div>
                               <div className="overflow-x-auto">
                                 <table className="min-w-full text-sm">
-                                  <thead className="bg-gray-50">
+                                  <thead className="bg-indigo-50">
                                     <tr>
                                       <th className="px-3 py-2 text-left">Student</th>
                                       <th className="px-3 py-2 text-left">From</th>
@@ -499,7 +557,7 @@ export default function AdminClassProfile(){
                                       <tr><td className="px-3 py-3 text-gray-500" colSpan={3}>No entries.</td></tr>
                                     ) : (
                                       classHistory.students_in.map((h, i) => (
-                                        <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                                        <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-indigo-50/50'}>
                                           <td className="px-3 py-2 border-t">{h.student_name}</td>
                                           <td className="px-3 py-2 border-t">{h.from || '-'}</td>
                                           <td className="px-3 py-2 border-t">{h.year ? `${h.year}-T${h.term||'-'}` : (h.created_at || '').slice(0,10)}</td>
@@ -510,11 +568,11 @@ export default function AdminClassProfile(){
                                 </table>
                               </div>
                             </div>
-                            <div className="rounded-lg border border-gray-200 overflow-hidden">
-                              <div className="px-3 py-2 text-sm font-medium bg-gray-50 border-b">Students Out</div>
+                            <div className="rounded-lg border border-rose-200 overflow-hidden bg-white">
+                              <div className="px-3 py-2 text-sm font-medium bg-rose-50 border-b border-rose-100">Students Out</div>
                               <div className="overflow-x-auto">
                                 <table className="min-w-full text-sm">
-                                  <thead className="bg-gray-50">
+                                  <thead className="bg-rose-50">
                                     <tr>
                                       <th className="px-3 py-2 text-left">Student</th>
                                       <th className="px-3 py-2 text-left">To</th>
@@ -526,7 +584,7 @@ export default function AdminClassProfile(){
                                       <tr><td className="px-3 py-3 text-gray-500" colSpan={3}>No entries.</td></tr>
                                     ) : (
                                       classHistory.students_out.map((h, i) => (
-                                        <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                                        <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-rose-50/50'}>
                                           <td className="px-3 py-2 border-t">{h.student_name}</td>
                                           <td className="px-3 py-2 border-t">{h.to || '-'}</td>
                                           <td className="px-3 py-2 border-t">{h.year ? `${h.year}-T${h.term||'-'}` : (h.created_at || '').slice(0,10)}</td>
@@ -538,11 +596,11 @@ export default function AdminClassProfile(){
                               </div>
                             </div>
                           </div>
-                          <div className="rounded-lg border border-gray-200 overflow-hidden">
-                            <div className="px-3 py-2 text-sm font-medium bg-gray-50 border-b">Exams by Term</div>
+                          <div className="rounded-lg border border-amber-200 overflow-hidden bg-white">
+                            <div className="px-3 py-2 text-sm font-medium bg-amber-50 border-b border-amber-100">Exams by Term</div>
                             <div className="overflow-x-auto">
                               <table className="min-w-full text-sm">
-                                <thead className="bg-gray-50">
+                                <thead className="bg-amber-50">
                                   <tr>
                                     <th className="px-3 py-2 text-left">Term</th>
                                     <th className="px-3 py-2 text-left">Exams</th>
@@ -568,7 +626,7 @@ export default function AdminClassProfile(){
                     </div>
 
                     <div className="grid md:grid-cols-3 gap-4">
-                      <div className="p-4 rounded-xl border border-gray-200 bg-white shadow-sm">
+                      <div className="p-4 rounded-xl border border-cyan-200 bg-cyan-50 shadow-sm">
                         <div className="text-sm font-semibold mb-2 text-gray-800">Gender Distribution</div>
                         <div className="flex items-end gap-6 h-24">
                           <div className="flex flex-col items-center flex-1">
@@ -583,7 +641,7 @@ export default function AdminClassProfile(){
                         <div className="text-xs text-gray-500 mt-2">Total: {genderStats.total}</div>
                       </div>
 
-                      <div className="md:col-span-2 p-4 rounded-xl border border-gray-200 bg-white shadow-sm">
+                      <div className="md:col-span-2 p-4 rounded-xl border border-violet-200 bg-violet-50 shadow-sm">
                         <div className="flex items-center justify-between mb-2">
                           <div className="text-sm font-semibold text-gray-800">Performance vs same grade</div>
                           {loadingGradePerf && <div className="text-xs text-gray-500">Loading…</div>}
@@ -666,6 +724,7 @@ export default function AdminClassProfile(){
                     <div className="flex items-center justify-between mb-2 gap-2">
                       <div className="text-sm text-gray-600">Students in {klass?.name}</div>
                       <div className="flex gap-2">
+                        <button onClick={openAddStudents} className="px-3 py-1.5 rounded bg-indigo-600 text-white hover:bg-indigo-700">Add Students</button>
                         <button onClick={handlePrintList} className="px-3 py-1.5 rounded border bg-white hover:bg-gray-50 text-gray-700">Print List</button>
                         <button onClick={handleDownloadCsv} className="px-3 py-1.5 rounded bg-emerald-600 text-white hover:bg-emerald-700">Download CSV</button>
                       </div>
@@ -888,6 +947,47 @@ export default function AdminClassProfile(){
             <button type="submit" className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded">Save</button>
           </div>
         </form>
+      </Modal>
+
+      <Modal open={showAddStudents} onClose={()=>setShowAddStudents(false)} title={`Add Students to ${klass?.name||'Class'}`} size="lg">
+        <div className="space-y-3">
+          {addStudentsError && <div className="text-sm text-red-600">{addStudentsError}</div>}
+          <div className="flex items-center gap-2">
+            <input className="w-full border rounded px-3 py-2 text-sm" placeholder="Search by name or admission no" value={unassignedSearch} onChange={e=>setUnassignedSearch(e.target.value)} />
+            <div className="text-xs text-gray-500">{selectedUnassigned.length} selected</div>
+          </div>
+          <div className="max-h-80 overflow-auto border rounded">
+            <table className="min-w-full text-sm">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-3 py-2 text-left w-8"></th>
+                  <th className="px-3 py-2 text-left">Admission No</th>
+                  <th className="px-3 py-2 text-left">Name</th>
+                  <th className="px-3 py-2 text-left">Guardian Phone</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(() => {
+                  const q = unassignedSearch.trim().toLowerCase()
+                  const list = q ? unassigned.filter(s => String(s.admission_no||'').toLowerCase().includes(q) || String(s.name||'').toLowerCase().includes(q)) : unassigned
+                  if (!list.length) return (<tr><td className="px-3 py-3 text-gray-500" colSpan={4}>No unassigned students found.</td></tr>)
+                  return list.map(s => (
+                    <tr key={s.id} className="border-t">
+                      <td className="px-3 py-2"><input type="checkbox" checked={selectedUnassigned.includes(s.id)} onChange={()=>toggleUnassigned(s.id)} /></td>
+                      <td className="px-3 py-2">{s.admission_no}</td>
+                      <td className="px-3 py-2">{s.name}</td>
+                      <td className="px-3 py-2">{s.guardian_id || '-'}</td>
+                    </tr>
+                  ))
+                })()}
+              </tbody>
+            </table>
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <button onClick={()=>setShowAddStudents(false)} className="px-4 py-2 border rounded">Cancel</button>
+            <button onClick={saveAddStudents} disabled={addingStudents || selectedUnassigned.length===0} className="px-5 py-2 rounded text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60">{addingStudents ? 'Adding…' : 'Add Selected'}</button>
+          </div>
+        </div>
       </Modal>
     </AdminLayout>
   )

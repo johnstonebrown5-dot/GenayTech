@@ -98,6 +98,10 @@ export default function AdminStudentDashboard() {
   })
   const [historyData, setHistoryData] = useState(null)
   const [historyError, setHistoryError] = useState('')
+  const [histYear, setHistYear] = useState('')
+  const [histTerm, setHistTerm] = useState('')
+  const [histAcademicYear, setHistAcademicYear] = useState('')
+  const [histIncludeSubjects, setHistIncludeSubjects] = useState(false)
 
   useEffect(() => {
     let isMounted = true
@@ -105,6 +109,11 @@ export default function AdminStudentDashboard() {
       try {
         setLoading(true)
         setError('')
+        const params = {}
+        if (histYear) params.year = histYear
+        if (histTerm) params.term = histTerm
+        if (histAcademicYear) params.academic_year = histAcademicYear
+        if (histIncludeSubjects) params.include_subjects = 'true'
         const [st, asRes, atRes, exRes, fin, cl, hist] = await Promise.all([
           api.get(`/academics/students/${id}/`),
           api.get(`/academics/assessments/?student=${id}`),
@@ -112,7 +121,7 @@ export default function AdminStudentDashboard() {
           api.get(`/academics/exam_results/?student=${id}`),
           api.get(`/finance/invoices/student-summary?student=${id}`),
           api.get('/academics/classes/'),
-          api.get(`/academics/students/${id}/history/`)
+          api.get(`/academics/students/${id}/history/`, { params })
         ])
         if (!isMounted) return
         setStudent(st.data)
@@ -137,7 +146,7 @@ export default function AdminStudentDashboard() {
     }
     load()
     return () => { isMounted = false }
-  }, [id])
+  }, [id, histYear, histTerm, histAcademicYear, histIncludeSubjects])
 
   async function onPhotoChange(e){
     const file = e.target.files?.[0]
@@ -541,6 +550,67 @@ export default function AdminStudentDashboard() {
                   </div>
                 )}
               </div>
+            </div>
+          )}
+          {historyData && (
+            <div className="mt-6">
+              <div className="flex flex-wrap items-end gap-2 mb-3">
+                <input className="px-2 py-1.5 border rounded text-sm w-28" placeholder="Year" value={histYear} onChange={e=>setHistYear(e.target.value)} />
+                <select className="px-2 py-1.5 border rounded text-sm w-28" value={histTerm} onChange={e=>setHistTerm(e.target.value)}>
+                  <option value="">Term</option>
+                  <option value="1">T1</option>
+                  <option value="2">T2</option>
+                  <option value="3">T3</option>
+                </select>
+                <input className="px-2 py-1.5 border rounded text-sm w-40" placeholder="Academic Year" value={histAcademicYear} onChange={e=>setHistAcademicYear(e.target.value)} />
+                <label className="inline-flex items-center gap-2 text-sm">
+                  <input type="checkbox" checked={histIncludeSubjects} onChange={e=>setHistIncludeSubjects(e.target.checked)} />
+                  <span>Include Subjects</span>
+                </label>
+              </div>
+              {Array.isArray(historyData.exams_grouped_academic_year) && historyData.exams_grouped_academic_year.length > 0 ? (
+                <div className="space-y-4">
+                  {historyData.exams_grouped_academic_year.map((ay, idx) => (
+                    <div key={idx} className="border rounded">
+                      <div className="px-3 py-2 bg-slate-50 font-medium">{ay.academic_year_label}</div>
+                      <div className="divide-y">
+                        {(ay.terms || []).map((t, i) => (
+                          <div key={i} className="p-3">
+                            <div className="text-sm font-medium mb-2">Term {t.term} • Exams: {t.total_exams} • Total: {Number(t.total_marks_obtained || 0)}</div>
+                            {t.approx_percentage_mean != null && (
+                              <div className="text-xs mb-2">Avg %: {t.approx_percentage_mean}</div>
+                            )}
+                            <div className="overflow-x-auto">
+                              <table className="w-full text-left text-sm">
+                                <thead>
+                                  <tr>
+                                    <th className="px-2 py-1.5">Exam</th>
+                                    <th className="px-2 py-1.5">Subjects</th>
+                                    <th className="px-2 py-1.5">Total</th>
+                                    <th className="px-2 py-1.5">%</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {(t.items || []).map((e, j) => (
+                                    <tr key={j} className="border-t">
+                                      <td className="px-2 py-1.5">{e.exam?.name}</td>
+                                      <td className="px-2 py-1.5">{e.subjects_count}</td>
+                                      <td className="px-2 py-1.5">{e.total_marks_obtained}</td>
+                                      <td className="px-2 py-1.5">{e.approx_percentage ?? '-'}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-sm text-gray-500">No grouped exam history found.</div>
+              )}
             </div>
           )}
         </div>

@@ -3,6 +3,7 @@ from pathlib import Path
 from datetime import timedelta
 from dotenv import load_dotenv
 import dj_database_url
+from urllib.parse import urlparse
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -157,7 +158,10 @@ else:
 # Prefer DATABASE_URL if provided (Render / 12-factor style)
 DATABASE_URL = os.getenv('DATABASE_URL')
 if DATABASE_URL:
-    DATABASES['default'] = dj_database_url.parse(DATABASE_URL, conn_max_age=600, ssl_require=True)
+    if DATABASE_URL.startswith('sqlite'):
+        DATABASES['default'] = dj_database_url.parse(DATABASE_URL, conn_max_age=600, ssl_require=False)
+    else:
+        DATABASES['default'] = dj_database_url.parse(DATABASE_URL, conn_max_age=600, ssl_require=True)
 
 AUTH_USER_MODEL = 'accounts.User'
 
@@ -194,15 +198,6 @@ TIME_ZONE = os.getenv('TIME_ZONE', 'Africa/Nairobi')
 USE_I18N = True
 USE_TZ = True
 
-STATIC_URL = '/static/'
-STATIC_ROOT = BASE_DIR / 'staticfiles'
-MEDIA_URL = '/media/'
-MEDIA_ROOT = BASE_DIR / 'media'
-
-# When not using S3, serve static files with WhiteNoise's manifest storage
-if not os.getenv('USE_S3', 'False') == 'True':
-    STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
-
 # Respect HTTPS scheme when behind a proxy/load balancer (e.g., Render)
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
@@ -216,15 +211,40 @@ if USE_S3:
     AWS_S3_REGION_NAME = os.getenv('AWS_S3_REGION_NAME', 'us-east-1')
     AWS_DEFAULT_ACL = None
     AWS_QUERYSTRING_AUTH = False
+    # Derive a public custom domain for the bucket, supporting both S3 and DO Spaces
+    AWS_S3_CUSTOM_DOMAIN = os.getenv('AWS_S3_CUSTOM_DOMAIN', '').strip()
+    if not AWS_S3_CUSTOM_DOMAIN:
+        if AWS_S3_ENDPOINT_URL:
+            parsed = urlparse(AWS_S3_ENDPOINT_URL)
+            host = parsed.netloc
+            AWS_S3_CUSTOM_DOMAIN = f"{AWS_STORAGE_BUCKET_NAME}.{host}"
+        else:
+            region = AWS_S3_REGION_NAME or 'us-east-1'
+            AWS_S3_CUSTOM_DOMAIN = f"{AWS_STORAGE_BUCKET_NAME}.s3.{region}.amazonaws.com"
+
+    # Serve static and media from separate folders within the same bucket
+    STATIC_URL = f"https://{AWS_S3_CUSTOM_DOMAIN}/static/"
+    MEDIA_URL = f"https://{AWS_S3_CUSTOM_DOMAIN}/media/"
 
     STORAGES = {
         'default': {
             'BACKEND': 'storages.backends.s3boto3.S3Boto3Storage',
+            'OPTIONS': { 'location': 'media' },
         },
         'staticfiles': {
             'BACKEND': 'storages.backends.s3boto3.S3Boto3Storage',
+            'OPTIONS': { 'location': 'static' },
         },
     }
+else:
+    STATIC_URL = '/static/'
+    STATIC_ROOT = BASE_DIR / 'staticfiles'
+    MEDIA_URL = '/media/'
+    MEDIA_ROOT = BASE_DIR / 'media'
+
+    # When not using S3, serve static files with WhiteNoise's manifest storage
+    if not os.getenv('USE_S3', 'False') == 'True':
+        STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 CORS_ALLOW_ALL_ORIGINS = os.getenv('CORS_ALLOW_ALL_ORIGINS', 'True') == 'True'
 CORS_ALLOWED_ORIGINS = [o for o in os.getenv('CORS_ALLOWED_ORIGINS', '').split(',') if o]

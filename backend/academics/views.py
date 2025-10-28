@@ -235,6 +235,94 @@ class ClassViewSet(viewsets.ModelViewSet):
         }
         return Response({'class': {'id': klass.id, 'name': klass.name, 'grade_level': klass.grade_level}, 'events': events, 'summary': summary})
 
+    @action(detail=True, methods=['post'], permission_classes=[IsAdmin], url_path='add-students')
+    def add_students(self, request, pk=None):
+        """Admin: Add students without a class to this class.
+        Body: { students: [<id>, ...] }
+        Rules:
+        - Only students with klass IS NULL are considered.
+        - Scope to same school as the class.
+        - Records StudentClassHistory(action='assigned').
+        Returns { assigned: [ids], skipped: [{id, reason}], count }
+        """
+        klass = self.get_object()
+        try:
+            ids = request.data.get('students') or []
+            if isinstance(ids, str):
+                ids = [int(x.strip()) for x in ids.split(',') if x.strip()]
+            ids = [int(x) for x in ids]
+        except Exception:
+            return Response({'detail': 'students must be an array of IDs or a comma-separated string'}, status=400)
+
+        if not ids:
+            return Response({'detail': 'No student IDs provided'}, status=400)
+
+        school_id = getattr(klass, 'school_id', None)
+        qs = Student.objects.filter(id__in=ids, klass__isnull=True)
+        if school_id:
+            qs = qs.filter(school_id=school_id)
+
+        found_ids = set(qs.values_list('id', flat=True))
+        assigned = []
+        skipped = []
+
+        # Prepare current term year/number best-effort
+        year = None
+        term_num = None
+        try:
+            from .models import Term
+            t = Term.objects.filter(academic_year__school_id=school_id, is_current=True).first()
+            if t:
+                term_num = int(getattr(t, 'number', None) or 0) or None
+                try:
+                    year = int(getattr(t.academic_year.end_date, 'year', None) or getattr(t.academic_year.start_date, 'year', None))
+                except Exception:
+                    year = None
+        except Exception:
+            pass
+
+        for sid in ids:
+            if sid not in found_ids:
+                # Determine reason
+                reason = 'not_found_or_already_in_class'
+                try:
+                    stu = Student.objects.filter(id=sid).first()
+                    if stu and stu.klass_id:
+                        reason = 'already_in_class'
+                    elif stu and school_id and (stu.school_id not in (None, school_id)):
+                        reason = 'different_school'
+                    elif not stu:
+                        reason = 'not_found'
+                except Exception:
+                    pass
+                skipped.append({'id': sid, 'reason': reason})
+                continue
+            stu = qs.filter(id=sid).first()
+            if not stu:
+                skipped.append({'id': sid, 'reason': 'not_found_or_already_in_class'})
+                continue
+            prev = getattr(stu, 'klass', None)
+            stu.klass = klass
+            # Persist school on student in case they previously had none
+            if not getattr(stu, 'school_id', None):
+                stu.school_id = school_id
+            stu.save(update_fields=['klass','school'])
+            try:
+                StudentClassHistory.objects.create(
+                    student=stu,
+                    from_class=prev,
+                    to_class=klass,
+                    action='assigned',
+                    year=year,
+                    term=term_num,
+                    note='Bulk add via class action'
+                )
+            except Exception:
+                pass
+            assigned.append(sid)
+
+        return Response({'assigned': assigned, 'skipped': skipped, 'count': len(assigned)})
+
 
 class ExamViewSet(viewsets.ModelViewSet):
     queryset = Exam.objects.all()
@@ -2579,6 +2667,12 @@ class StudentViewSet(viewsets.ModelViewSet):
 
         # ---------- Exam performance ----------
         try:
+            qp = getattr(request, 'query_params', {})
+            year_filter = qp.get('year')
+            term_filter = qp.get('term')
+            ay_label_filter = qp.get('academic_year') or qp.get('academic_year_label')
+            include_subjects = str(qp.get('include_subjects', 'false')).lower() in ('1','true','yes','on')
+
             res_q = (
                 ExamResult.objects
                 .filter(student=student)
@@ -2586,9 +2680,27 @@ class StudentViewSet(viewsets.ModelViewSet):
             )
             if role == 'student' and not is_admin:
                 res_q = res_q.filter(exam__published=True)
+            if year_filter not in (None, ''):
+                try:
+                    res_q = res_q.filter(exam__year=int(year_filter))
+                except Exception:
+                    pass
+            if term_filter not in (None, ''):
+                try:
+                    res_q = res_q.filter(exam__term=int(term_filter))
+                except Exception:
+                    pass
+            if ay_label_filter not in (None, ''):
+                try:
+                    ssid = getattr(getattr(student, 'klass', None), 'school_id', None) or getattr(student, 'school_id', None)
+                    ay_obj = AcademicYear.objects.filter(school_id=ssid, label=ay_label_filter).first()
+                    if ay_obj:
+                        res_q = res_q.filter(exam__date__gte=getattr(ay_obj, 'start_date', None), exam__date__lte=getattr(ay_obj, 'end_date', None))
+                except Exception:
+                    pass
             exam_rows = (
                 res_q
-                .values('exam_id', 'exam__name', 'exam__year', 'exam__term', 'exam__total_marks', 'exam__klass__name')
+                .values('exam_id', 'exam__name', 'exam__year', 'exam__term', 'exam__total_marks', 'exam__klass__name', 'exam__date')
                 .annotate(total=Sum('marks'), subjects=Sum(1))
                 .order_by('exam__year', 'exam__term', 'exam_id')
             )
@@ -2611,13 +2723,136 @@ class StudentViewSet(viewsets.ModelViewSet):
                         'term': r.get('exam__term'),
                         'klass_name': r.get('exam__klass__name'),
                         'total_marks': out_of_each,
+                        'date': r.get('exam__date'),
                     },
                     'total_marks_obtained': round(total, 2),
                     'subjects_count': subj_count,
                     'approx_percentage': approx_pct,
                 })
+            if include_subjects and exams:
+                try:
+                    exam_ids = [e['exam']['id'] for e in exams if e.get('exam', {}).get('id') is not None]
+                    details = (
+                        ExamResult.objects
+                        .filter(student=student, exam_id__in=exam_ids)
+                        .select_related('subject', 'component')
+                    )
+                    by_exam = {}
+                    for r in details:
+                        rec = by_exam.setdefault(getattr(r, 'exam_id', None), [])
+                        rec.append({
+                            'subject': {
+                                'id': getattr(getattr(r, 'subject', None), 'id', None),
+                                'code': getattr(getattr(r, 'subject', None), 'code', None),
+                                'name': getattr(getattr(r, 'subject', None), 'name', None),
+                            },
+                            'component': ({
+                                'id': getattr(getattr(r, 'component', None), 'id', None),
+                                'code': getattr(getattr(r, 'component', None), 'code', None),
+                                'name': getattr(getattr(r, 'component', None), 'name', None),
+                                'max_marks': getattr(getattr(r, 'component', None), 'max_marks', None),
+                            } if getattr(r, 'component', None) else None),
+                            'marks': getattr(r, 'marks', None),
+                        })
+                    for e in exams:
+                        ex_id = e.get('exam', {}).get('id')
+                        if ex_id in by_exam:
+                            e['subjects'] = by_exam.get(ex_id) or []
+                except Exception:
+                    pass
+
+            exams_grouped_map = {}
+            for item in exams:
+                y = item['exam'].get('year')
+                t = item['exam'].get('term')
+                key = (y, t)
+                grp = exams_grouped_map.setdefault(key, {
+                    'year': y,
+                    'term': t,
+                    'items': [],
+                    'total_exams': 0,
+                    'total_marks_obtained': 0.0,
+                    '_total_denominator': 0.0,
+                })
+                grp['items'].append(item)
+                grp['total_exams'] += 1
+                try:
+                    grp['total_marks_obtained'] += float(item.get('total_marks_obtained') or 0)
+                    subj_ct = float(item.get('subjects_count') or 0)
+                    per_subj_max = float(item.get('exam', {}).get('total_marks') or 0)
+                    denom = (subj_ct * per_subj_max) if subj_ct and per_subj_max else 0.0
+                    grp['_total_denominator'] += denom
+                except Exception:
+                    pass
+            exams_grouped = []
+            for g in sorted(exams_grouped_map.values(), key=lambda x: ((x['year'] or 0), (x['term'] or 0))):
+                try:
+                    g['approx_percentage_mean'] = round(((g['total_marks_obtained'] / g.get('_total_denominator', 0)) * 100.0), 2) if g.get('_total_denominator', 0) else None
+                except Exception:
+                    g['approx_percentage_mean'] = None
+                g.pop('_total_denominator', None)
+                exams_grouped.append(g)
+
+            try:
+                student_school_id = getattr(getattr(student, 'klass', None), 'school_id', None) or getattr(student, 'school_id', None)
+                ay_list = []
+                if student_school_id:
+                    ay_list = list(AcademicYear.objects.filter(school_id=student_school_id).values('label', 'start_date', 'end_date'))
+                def find_ay_label(d):
+                    if not d:
+                        return None
+                    for ay in ay_list:
+                        s = ay.get('start_date')
+                        e = ay.get('end_date')
+                        if s and e and s <= d <= e:
+                            return ay.get('label')
+                    return None
+                for item in exams:
+                    d = item.get('exam', {}).get('date')
+                    item['exam']['academic_year_label'] = find_ay_label(d)
+                grouped_by_ay = {}
+                for item in exams:
+                    label = item.get('exam', {}).get('academic_year_label') or 'Unknown'
+                    term = item.get('exam', {}).get('term')
+                    node = grouped_by_ay.setdefault(label, {'academic_year_label': label, 'terms': {}})
+                    tnode = node['terms'].setdefault(term, {'term': term, 'items': [], 'total_exams': 0, 'total_marks_obtained': 0.0, '_total_denominator': 0.0})
+                    tnode['items'].append(item)
+                    tnode['total_exams'] += 1
+                    try:
+                        tnode['total_marks_obtained'] += float(item.get('total_marks_obtained') or 0)
+                        subj_ct = float(item.get('subjects_count') or 0)
+                        per_subj_max = float(item.get('exam', {}).get('total_marks') or 0)
+                        denom = (subj_ct * per_subj_max) if subj_ct and per_subj_max else 0.0
+                        tnode['_total_denominator'] += denom
+                    except Exception:
+                        pass
+                exams_grouped_academic_year = []
+                for lbl, node in grouped_by_ay.items():
+                    terms_vals = list(node['terms'].values())
+                    for tv in terms_vals:
+                        try:
+                            tv['approx_percentage_mean'] = round(((tv['total_marks_obtained'] / tv.get('_total_denominator', 0)) * 100.0), 2) if tv.get('_total_denominator', 0) else None
+                        except Exception:
+                            tv['approx_percentage_mean'] = None
+                        tv.pop('_total_denominator', None)
+                    terms_list = sorted(terms_vals, key=lambda x: (x['term'] or 0))
+                    exams_grouped_academic_year.append({'academic_year_label': lbl, 'terms': terms_list})
+                try:
+                    def label_sort_key(lbl):
+                        try:
+                            nums = [int(x) for x in str(lbl).split('/') if x.isdigit()]
+                            return (max(nums) if nums else 0)
+                        except Exception:
+                            return 0
+                    exams_grouped_academic_year.sort(key=lambda x: label_sort_key(x['academic_year_label']))
+                except Exception:
+                    pass
+            except Exception:
+                exams_grouped_academic_year = []
         except Exception:
             exams = []
+            exams_grouped = []
+            exams_grouped_academic_year = []
 
         # ---------- Fees: allocations and payments ----------
         try:
@@ -2676,6 +2911,8 @@ class StudentViewSet(viewsets.ModelViewSet):
             },
             'classes': classes_progression,
             'exams': exams,
+            'exams_grouped': exams_grouped,
+            'exams_grouped_academic_year': exams_grouped_academic_year,
             'fees': fees,
         })
 

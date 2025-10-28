@@ -34,6 +34,9 @@ export default function AdminLayout({ children }){
   const [currentYear, setCurrentYear] = useState(null)
   const [unreadCount, setUnreadCount] = useState(0)
   const [selfActive, setSelfActive] = useState(undefined)
+  const [broadcastUnread, setBroadcastUnread] = useState(0)
+  const [broadcastBanner, setBroadcastBanner] = useState(null)
+  const [bannerExpanded, setBannerExpanded] = useState(false)
 
   // Close mobile drawer on route change
   useEffect(() => { setIsMobileOpen(false) }, [pathname])
@@ -90,9 +93,16 @@ export default function AdminLayout({ children }){
         const inboxList = inb.status === 'fulfilled' ? (Array.isArray(inb.value.data) ? inb.value.data : (inb.value.data?.results || [])) : []
         const sysList = sys.status === 'fulfilled' ? (Array.isArray(sys.value.data) ? sys.value.data : (sys.value.data?.results || [])) : []
         const total = computeUnread(inboxList) + computeUnread(sysList)
-        if (mounted) setUnreadCount(total)
+        if (mounted) {
+          setUnreadCount(total)
+          const bOnly = Array.isArray(sysList) ? sysList.filter(m => m.is_broadcast) : []
+          const bCount = computeUnread(bOnly)
+          setBroadcastUnread(bCount)
+          const latest = Array.isArray(bOnly) && bOnly.length > 0 ? bOnly[0] : null
+          setBroadcastBanner(latest || null)
+        }
       } catch {
-        if (mounted) setUnreadCount(0)
+        if (mounted) { setUnreadCount(0); setBroadcastUnread(0); setBroadcastBanner(null) }
       }
     }
     // initial
@@ -127,6 +137,22 @@ export default function AdminLayout({ children }){
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {broadcastBanner && (
+        <div className="sticky top-0 z-40 w-full bg-red-600 text-white">
+          <div className="max-w-screen-2xl mx-auto px-3 sm:px-4 md:px-6 py-2 flex items-start gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5 mt-0.5">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M10.29 3.86l-8.48 14.7A1 1 0 002.62 20h18.76a1 1 0 00.86-1.5l-8.48-14.64a1 1 0 00-1.73 0z" />
+            </svg>
+            <a href="/admin/messages?tab=system" className="flex-1 min-w-0">
+              <div className="text-sm font-semibold tracking-wide uppercase opacity-90">{broadcastBanner.system_tag || 'Alert'}</div>
+              <div className="text-sm leading-snug" style={{ maxHeight: bannerExpanded ? 'none' : 40, overflow: bannerExpanded ? 'visible' : 'hidden' }}>{String(broadcastBanner.body||'')}</div>
+            </a>
+            <button onClick={()=>setBannerExpanded(v=>!v)} className="sm:hidden text-xs underline decoration-white/70 underline-offset-2 px-2 py-1">
+              {bannerExpanded ? 'Show less' : 'Read more'}
+            </button>
+          </div>
+        </div>
+      )}
       {/* Top bar */}
       <header className="sticky top-0 z-30 bg-white/90 backdrop-blur supports-[backdrop-filter]:bg-white/70 border-b border-gray-200/80 px-3 sm:px-4 md:px-6 h-16 pt-[env(safe-area-inset-top)] shadow-soft">
         <div className="max-w-screen-2xl mx-auto h-full flex items-center gap-2">
@@ -198,6 +224,21 @@ export default function AdminLayout({ children }){
                 </svg>
               </button>
             </div>
+            <Link
+              to="/admin/messages?tab=system"
+              className="relative inline-flex items-center justify-center w-10 h-10 rounded-lg border border-gray-200 hover:bg-gray-50 transition-all"
+              aria-label="Notifications"
+              title="System messages"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5 text-gray-700">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75V9a6 6 0 10-12 0v.75a8.967 8.967 0 01-2.311 6.022c1.733.64 3.56 1.085 5.455 1.31m5.713 0a24.255 24.255 0 01-5.713 0m5.713 0a3 3 0 11-5.713 0" />
+              </svg>
+              {broadcastUnread > 0 && (
+                <span className="absolute -top-1 -right-1 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] bg-red-600 text-white">
+                  {broadcastUnread > 99 ? '99+' : broadcastUnread}
+                </span>
+              )}
+            </Link>
             {user && (
               <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-full">
                 <div className="w-6 h-6 bg-brand-600 rounded-full flex items-center justify-center">

@@ -148,6 +148,7 @@ class Message(models.Model):
     reply_to = models.ForeignKey('self', null=True, blank=True, on_delete=models.SET_NULL, related_name='replies')
     # Optional tag for system-generated messages to ease frontend filtering
     system_tag = models.CharField(max_length=30, null=True, blank=True, db_index=True)
+    is_broadcast = models.BooleanField(default=False, db_index=True)
 
     class Meta:
         ordering = ['-created_at', 'id']

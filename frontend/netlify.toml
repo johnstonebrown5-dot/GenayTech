@@ -19,11 +19,11 @@
 # Proxy media files to the backend so image URLs like /media/... work on Netlify
 [[redirects]]
   from = "/media/*"
-  to = "https://edu-track-15m3.onrender.com/media/:splat"
+  to = "https://edutrack-backend.onrender.com/media/:splat"
   status = 200
 
 # Proxy static files to the backend if referenced from the frontend
 [[redirects]]
   from = "/static/*"
-  to = "https://edu-track-15m3.onrender.com/static/:splat"
+  to = "https://edutrack-backend.onrender.com/static/:splat"
   status = 200
