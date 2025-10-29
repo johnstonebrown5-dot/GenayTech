@@ -132,12 +132,12 @@ export default function AdminWebsite(){
   return (
     <AdminLayout>
       <div className="max-w-7xl mx-auto">
-        <div className="px-6 py-4 flex items-center justify-between">
-          <div>
+        <div className="px-4 sm:px-6 py-3 sm:py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+          <div className="hidden md:block">
             <h1 className="text-xl font-semibold">Website Editor</h1>
             <p className="text-gray-600 text-sm">Edit the homepage exactly as it appears.</p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <a href="/" target="_blank" rel="noreferrer" className="px-3 py-2 rounded border border-gray-300 text-gray-700 text-sm hover:bg-gray-50">Open Public Site</a>
             <button onClick={submit} className="px-4 py-2 rounded bg-indigo-600 text-white text-sm hover:bg-indigo-700 disabled:opacity-60" disabled={saving}>{saving ? 'Saving…' : 'Save Changes'}</button>
           </div>
@@ -151,18 +151,18 @@ export default function AdminWebsite(){
         ) : (
           <div className="mx-6 my-6 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
             {/* Hero */}
-            <section className="grid lg:grid-cols-2 gap-10 items-start">
+            <section className="grid lg:grid-cols-2 gap-6 lg:gap-10 items-start">
               <div>
-                <div className="inline-flex items-center gap-2 rounded-full bg-indigo-50 px-3 py-1 text-xs font-medium text-indigo-700">
-                  <input className="bg-transparent outline-none w-64" value={hero.badge || ''} onChange={e=>setForm(f=>({ ...f, homepage:{ ...f.homepage, hero:{ ...hero, badge:e.target.value } } }))} placeholder="Hero badge" />
+                <div className="inline-flex items-center gap-2 rounded-full bg-indigo-50 px-3 py-1 text-xs font-medium text-indigo-700 w-full sm:w-auto">
+                  <input className="bg-transparent outline-none w-full sm:w-64 min-w-0" value={hero.badge || ''} onChange={e=>setForm(f=>({ ...f, homepage:{ ...f.homepage, hero:{ ...hero, badge:e.target.value } } }))} placeholder="Hero badge" />
                 </div>
                 <div className="mt-4">
                   <input className="w-full text-4xl md:text-5xl font-extrabold tracking-tight text-gray-900 bg-transparent outline-none" value={hero.title || `Welcome to ${form.name}`} onChange={e=>setForm(f=>({ ...f, homepage:{ ...f.homepage, hero:{ ...hero, title:e.target.value } } }))} />
                   <textarea rows={3} className="w-full mt-3 text-gray-600 bg-transparent outline-none" value={hero.subtitle || 'A nurturing, diverse and high-achieving community empowering students to thrive in academics, character, and service.'} onChange={e=>setForm(f=>({ ...f, homepage:{ ...f.homepage, hero:{ ...hero, subtitle:e.target.value } } }))} />
                 </div>
-                <div className="mt-6 flex gap-3">
-                  <input className="px-5 py-3 rounded-lg border bg-indigo-600/10 text-indigo-800 font-medium outline-none" value={hero.ctaPrimaryText || 'Start Your Application'} onChange={e=>setForm(f=>({ ...f, homepage:{ ...f.homepage, hero:{ ...hero, ctaPrimaryText:e.target.value } } }))} />
-                  <input className="px-5 py-3 rounded-lg border text-gray-700 font-medium outline-none" value={hero.ctaSecondaryText || 'Learn More'} onChange={e=>setForm(f=>({ ...f, homepage:{ ...f.homepage, hero:{ ...hero, ctaSecondaryText:e.target.value } } }))} />
+                <div className="mt-6 flex flex-wrap gap-3">
+                  <input className="px-5 py-3 rounded-lg border bg-indigo-600/10 text-indigo-800 font-medium outline-none min-w-[160px] flex-1" value={hero.ctaPrimaryText || 'Start Your Application'} onChange={e=>setForm(f=>({ ...f, homepage:{ ...f.homepage, hero:{ ...hero, ctaPrimaryText:e.target.value } } }))} />
+                  <input className="px-5 py-3 rounded-lg border text-gray-700 font-medium outline-none min-w-[160px] flex-1" value={hero.ctaSecondaryText || 'Learn More'} onChange={e=>setForm(f=>({ ...f, homepage:{ ...f.homepage, hero:{ ...hero, ctaSecondaryText:e.target.value } } }))} />
                 </div>
               </div>
               <div className="relative">
@@ -173,10 +173,10 @@ export default function AdminWebsite(){
                     return (
                       <div>
                         <div className="relative">
-                          <div className="absolute top-3 right-3 z-10 bg-white/90 rounded shadow p-2 grid gap-2">
+                          <div className="absolute top-3 left-3 right-3 sm:left-auto sm:right-3 z-10 bg-white/90 rounded shadow p-2 grid gap-2 max-w-full">
                             {Array.from({length:4}).map((_,idx)=> (
                               <div key={idx} className="flex items-center gap-2">
-                                <input className="border p-1 rounded text-xs w-56" placeholder={idx===0?'Main image URL':'Thumbnail URL'} value={(imgs[idx]||'')} onChange={e=>setForm(f=>{ const arr=[...(f.homepage?.hero?.images||[])]; arr[idx]=e.target.value; return { ...f, homepage:{ ...f.homepage, hero:{ ...hero, images:arr } } } })} />
+                                <input className="border p-1 rounded text-xs w-full sm:w-56" placeholder={idx===0?'Main image URL':'Thumbnail URL'} value={(imgs[idx]||'')} onChange={e=>setForm(f=>{ const arr=[...(f.homepage?.hero?.images||[])]; arr[idx]=e.target.value; return { ...f, homepage:{ ...f.homepage, hero:{ ...hero, images:arr } } } })} />
                                 <label className="text-xs px-2 py-1 rounded bg-gray-100 hover:bg-gray-200 cursor-pointer">
                                   Upload
                                   <input type="file" accept="image/*" className="hidden" onChange={async ev=>{
@@ -195,14 +195,14 @@ export default function AdminWebsite(){
                               </div>
                             ))}
                           </div>
-                          <div className="w-full h-80 bg-gray-100 grid place-items-center text-gray-400 text-sm">
-                            {main ? (<img src={main} alt="Hero" className="w-full h-80 object-cover" />) : 'Main image preview'}
+                          <div className="w-full h-60 sm:h-80 bg-gray-100 grid place-items-center text-gray-400 text-sm">
+                            {main ? (<img src={main} alt="Hero" className="w-full h-60 sm:h-80 object-cover" />) : 'Main image preview'}
                           </div>
                         </div>
                         <div className="grid grid-cols-3 divide-x divide-gray-100">
                           {Array.from({length:3}).map((_,i)=>{
                             const src = imgs[i+1] ? toAbsoluteUrl(imgs[i+1]) : ''
-                            return <div key={i} className="h-28 w-full bg-gray-100">{src ? <img src={src} className="h-28 w-full object-cover"/> : null}</div>
+                            return <div key={i} className="h-20 sm:h-28 w-full bg-gray-100">{src ? <img src={src} className="h-20 sm:h-28 w-full object-cover"/> : null}</div>
                           })}
                         </div>
                       </div>
@@ -440,30 +440,30 @@ export default function AdminWebsite(){
                 </div>
               </div>
               <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-                <div className="grid grid-cols-2 gap-4 text-sm text-gray-700">
-                  <label className="rounded-lg bg-gray-50 p-4">
+                <div className="grid grid-cols-2 gap-4 text-sm text-gray-700 min-w-0">
+                  <label className="rounded-lg bg-gray-50 p-4 overflow-hidden">
                     <div className="text-xs text-gray-500">Students (live)</div>
-                    <div className="mt-1 font-semibold text-indigo-700">{liveStats.students ?? '—'}</div>
+                    <div className="mt-1 font-semibold text-indigo-700 truncate">{liveStats.students ?? '—'}</div>
                   </label>
-                  <label className="rounded-lg bg-gray-50 p-4">
+                  <label className="rounded-lg bg-gray-50 p-4 overflow-hidden">
                     <div className="text-xs text-gray-500">Teachers (live)</div>
-                    <div className="mt-1 font-semibold text-indigo-700">{liveStats.teachers ?? '—'}</div>
+                    <div className="mt-1 font-semibold text-indigo-700 truncate">{liveStats.teachers ?? '—'}</div>
                   </label>
-                  <label className="rounded-lg bg-gray-50 p-4">
+                  <label className="rounded-lg bg-gray-50 p-4 overflow-hidden">
                     <div className="text-xs text-gray-500">Parent Satisfaction (auto)</div>
-                    <div className="mt-1 font-semibold text-indigo-700">{liveStats.satisfaction || '98%'}</div>
+                    <div className="mt-1 font-semibold text-indigo-700 truncate">{liveStats.satisfaction || '98%'}</div>
                   </label>
-                  <label className="rounded-lg bg-gray-50 p-4">
+                  <label className="rounded-lg bg-gray-50 p-4 overflow-hidden">
                     <div className="text-xs text-gray-500">Student-Teacher Ratio</div>
-                    <input className="mt-1 font-semibold text-indigo-700 bg-transparent outline-none" value={stats.ratio || liveStats.ratio || '15:1'} onChange={e=>setForm(f=>({ ...f, homepage:{ ...f.homepage, stats:{ ...stats, ratio:e.target.value } } }))} />
+                    <input className="mt-1 font-semibold text-indigo-700 bg-transparent outline-none w-full min-w-0" value={stats.ratio || liveStats.ratio || '15:1'} onChange={e=>setForm(f=>({ ...f, homepage:{ ...f.homepage, stats:{ ...stats, ratio:e.target.value } } }))} />
                   </label>
-                  <label className="rounded-lg bg-gray-50 p-4">
+                  <label className="rounded-lg bg-gray-50 p-4 overflow-hidden">
                     <div className="text-xs text-gray-500">Co-curricular Clubs</div>
-                    <input className="mt-1 font-semibold text-indigo-700 bg-transparent outline-none" value={stats.clubs || '40+'} onChange={e=>setForm(f=>({ ...f, homepage:{ ...f.homepage, stats:{ ...stats, clubs:e.target.value } } }))} />
+                    <input className="mt-1 font-semibold text-indigo-700 bg-transparent outline-none w-full min-w-0" value={stats.clubs || '40+'} onChange={e=>setForm(f=>({ ...f, homepage:{ ...f.homepage, stats:{ ...stats, clubs:e.target.value } } }))} />
                   </label>
-                  <label className="rounded-lg bg-gray-50 p-4">
+                  <label className="rounded-lg bg-gray-50 p-4 overflow-hidden">
                     <div className="text-xs text-gray-500">Years of Excellence</div>
-                    <input className="mt-1 font-semibold text-indigo-700 bg-transparent outline-none" value={stats.years || '25+'} onChange={e=>setForm(f=>({ ...f, homepage:{ ...f.homepage, stats:{ ...stats, years:e.target.value } } }))} />
+                    <input className="mt-1 font-semibold text-indigo-700 bg-transparent outline-none w-full min-w-0" value={stats.years || '25+'} onChange={e=>setForm(f=>({ ...f, homepage:{ ...f.homepage, stats:{ ...stats, years:e.target.value } } }))} />
                   </label>
                 </div>
               </div>

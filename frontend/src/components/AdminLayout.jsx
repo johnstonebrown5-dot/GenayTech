@@ -37,6 +37,7 @@ export default function AdminLayout({ children }){
   const [broadcastUnread, setBroadcastUnread] = useState(0)
   const [broadcastBanner, setBroadcastBanner] = useState(null)
   const [bannerExpanded, setBannerExpanded] = useState(false)
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
 
   // Close mobile drawer on route change
   useEffect(() => { setIsMobileOpen(false) }, [pathname])
@@ -290,18 +291,18 @@ export default function AdminLayout({ children }){
         const iconSize = 18
         const btn = (
           <button
-            onClick={logout}
+            onClick={() => setShowLogoutConfirm(true)}
             aria-label="Logout"
             title="Logout"
             style={{
-              order: 1,
+              order: 4,
               width: `${size}px`,
               height: `${size}px`,
               borderRadius: '9999px',
               border: 'none',
-              background: '#dc2626',
+              background: 'linear-gradient(135deg, #ef4444, #dc2626)',
               color: 'white',
-              boxShadow: '0 6px 14px rgba(220,38,38,0.35)',
+              boxShadow: '0 8px 22px rgba(220,38,38,0.35)',
               cursor: 'pointer',
               display: 'inline-flex',
               alignItems: 'center',
@@ -310,8 +311,9 @@ export default function AdminLayout({ children }){
               pointerEvents: 'auto',
             }}
           >
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width={iconSize} height={iconSize}>
-              <path fillRule="evenodd" d="M12 2.25a.75.75 0 01.75.75v7.5a.75.75 0 01-1.5 0V3a.75.75 0 01.75-.75zm-4.657 2.843a.75.75 0 011.06 1.06 7.5 7.5 0 101.06-1.06 9 9 0 11-12.727 0z" clipRule="evenodd" />
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width={iconSize+2} height={iconSize+2} fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="12" y1="3" x2="12" y2="11" />
+              <path d="M19 12.5a7 7 0 1 1-14 0" />
             </svg>
           </button>
         )
@@ -332,7 +334,10 @@ export default function AdminLayout({ children }){
         )}
 
         {/* Sidebar */}
-        <aside className={`fixed z-40 top-[calc(4rem+env(safe-area-inset-top))] left-0 bottom-0 bg-gradient-to-b from-blue-600 via-blue-700 to-blue-900 border-r border-blue-500/30 transition-all duration-200 ${sidebarBase} hidden md:flex flex-col shadow-2xl`}>
+        <aside
+          className={`fixed z-40 left-0 bottom-0 bg-gradient-to-b from-blue-600 via-blue-700 to-blue-900 border-r border-blue-500/30 transition-all duration-200 ${sidebarBase} hidden md:flex flex-col shadow-2xl`}
+          style={{ top: broadcastBanner ? 'calc(4rem + env(safe-area-inset-top) + 40px)' : 'calc(4rem + env(safe-area-inset-top))' }}
+        >
           <nav className="p-2 space-y-1 overflow-y-auto">
             {navItems.map(i => {
               const active = pathname === i.to
@@ -370,7 +375,10 @@ export default function AdminLayout({ children }){
         </aside>
 
         {/* Mobile Drawer Sidebar */}
-        <aside className={`fixed z-40 top-[calc(4rem+env(safe-area-inset-top))] left-0 bottom-0 bg-gradient-to-b from-blue-600 via-blue-700 to-blue-900 border-r border-blue-500/30 w-64 p-2 md:hidden transition-transform duration-200 shadow-2xl ${isMobileOpen? 'translate-x-0':'-translate-x-full'}`}>
+        <aside
+          className={`fixed z-40 left-0 bottom-0 bg-gradient-to-b from-blue-600 via-blue-700 to-blue-900 border-r border-blue-500/30 w-64 p-2 md:hidden transition-transform duration-200 shadow-2xl ${isMobileOpen? 'translate-x-0':'-translate-x-full'}`}
+          style={{ top: broadcastBanner ? 'calc(4rem + env(safe-area-inset-top) + 40px)' : 'calc(4rem + env(safe-area-inset-top))' }}
+        >
           <nav className="space-y-1 overflow-y-auto">
             {navItems.map(i => {
               const active = pathname === i.to
@@ -407,6 +415,24 @@ export default function AdminLayout({ children }){
           {children}
         </main>
       </div>
+
+      {/* Logout confirmation modal */}
+      {showLogoutConfirm && createPortal(
+        <div style={{ position:'fixed', inset:0, zIndex:5000 }}>
+          <div className="fixed inset-0 bg-black/40" onClick={() => setShowLogoutConfirm(false)} />
+          <div className="fixed inset-0 flex items-end justify-end p-4 sm:items-center sm:justify-center">
+            <div className="bg-white shadow-2xl ring-1 ring-gray-200 rounded-xl w-full max-w-sm overflow-hidden">
+              <div className="px-4 py-3 border-b border-gray-100 font-semibold text-gray-900">Confirm logout</div>
+              <div className="px-4 py-3 text-sm text-gray-700">Are you sure you want to logout?</div>
+              <div className="px-4 py-3 border-t border-gray-100 flex items-center justify-end gap-2">
+                <button onClick={() => setShowLogoutConfirm(false)} className="px-3 py-1.5 rounded-lg text-sm border bg-white text-gray-700 hover:bg-gray-50">Cancel</button>
+                <button onClick={() => { setShowLogoutConfirm(false); logout() }} className="px-3 py-1.5 rounded-lg text-sm bg-red-600 text-white hover:bg-red-700">Logout</button>
+              </div>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   )
 }

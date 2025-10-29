@@ -712,7 +712,7 @@ export default function Messages(){
             )}
           </div>
         </div>
-        <div ref={chatRef} className="flex-1 overflow-y-auto px-2 sm:px-4 py-3 space-y-2 bg-gray-50">
+        <div ref={chatRef} className="flex-1 overflow-y-auto px-2 sm:px-4 py-3 space-y-2 bg-gray-50 pb-28 sm:pb-4">
           {loading && viewTab!=='system' && <div className="text-sm text-gray-500">Loading...</div>}
           {viewTab==='system' ? (
             <div className="space-y-2">
@@ -781,7 +781,7 @@ export default function Messages(){
           <span />
         </div>
         {viewTab!=='system' && (
-        <form onSubmit={sendToActive} className="min-h-16 border-t p-2 flex items-center gap-2 sticky bottom-0 bg-white">
+        <form onSubmit={sendToActive} className="min-h-16 p-2 flex items-center gap-2 fixed inset-x-0 bottom-0 z-20 bg-white border-t sm:sticky sm:bottom-0">
           {/* Forward banner */}
           {isAdmin && forwardSource && (
             <div className="absolute -top-8 left-0 right-0 px-2">

@@ -146,7 +146,7 @@ export default function FloatingDeliveryLog(){
       aria-label="Message delivery logs"
       title="Message delivery logs"
       style={{
-        order: 2,
+        order: 3,
         width: 44,
         height: 44,
         borderRadius: '9999px',
@@ -160,7 +160,6 @@ export default function FloatingDeliveryLog(){
         justifyContent: 'center',
         padding: 0,
         pointerEvents: 'auto',
-        marginLeft: 8,
       }}
     >
       {/* mail/sms icon */}
@@ -257,12 +256,21 @@ export default function FloatingDeliveryLog(){
 
   return (
     <>
-      {createPortal(
-        <div style={{ position:'fixed', right:16, bottom:24, zIndex:4000, display:'flex', pointerEvents:'none' }}>
-          <div style={{pointerEvents:'auto'}}>{button}{panel}</div>
-        </div>,
-        document.body
-      )}
+      {(() => {
+        const root = typeof document !== 'undefined' ? document.getElementById('floating-actions-root') : null
+        if (root) {
+          return createPortal(button, root)
+        }
+        // Fallback: fixed button at bottom-right if root is missing
+        return createPortal(
+          <div style={{ position:'fixed', right:16, bottom:24, zIndex:4000, display:'flex', pointerEvents:'none' }}>
+            <div style={{ pointerEvents:'auto' }}>{button}</div>
+          </div>,
+          document.body
+        )
+      })()}
+      {/* Panel stays as a body-level portal */}
+      {panel && createPortal(panel, document.body)}
       {fullOpen && createPortal(
         <div style={{ position:'fixed', inset:0, zIndex:5000 }}>
           <div onClick={()=>setFullOpen(false)} className="fixed inset-0 bg-black/40" />
@@ -347,3 +355,4 @@ export default function FloatingDeliveryLog(){
     </>
   )
 }
+

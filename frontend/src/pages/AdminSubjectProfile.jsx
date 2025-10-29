@@ -223,7 +223,7 @@ export default function AdminSubjectProfile(){
   return (
     <AdminLayout>
       <div className="space-y-4">
-        <div className="flex items-start justify-between">
+        <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
           <div className="space-y-1">
             {!editingSubject ? (
               <>
@@ -263,7 +263,7 @@ export default function AdminSubjectProfile(){
           </div>
 
           
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button onClick={() => navigate(-1)} className="px-3 py-1.5 rounded border border-slate-300 text-slate-700 hover:bg-slate-50 bg-white">Back</button>
             <Link to="/admin/subjects" className="px-3 py-1.5 rounded border border-slate-300 text-slate-700 hover:bg-slate-50 bg-white">All Subjects</Link>
             {!editingSubject ? (
@@ -347,7 +347,45 @@ export default function AdminSubjectProfile(){
             {/* Subject Components (Papers) */}
             <div className="md:col-span-3 p-5 rounded-lg border border-gray-200 bg-white shadow-sm border-t-4 border-slate-500">
               <div className="text-sm font-semibold text-gray-900 mb-3">Subject Components (Papers)</div>
-              <div className="overflow-x-auto rounded-md border">
+              {/* Mobile cards */}
+              <div className="space-y-3 md:hidden">
+                {loadingComponents ? (
+                  <div className="text-sm text-gray-500">Loading components…</div>
+                ) : (
+                  (components||[]).map((c, idx) => (
+                    <div key={c.id || `cm-${idx}`} className="border rounded-lg p-3">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="font-medium text-sm">{c.name || 'Component'}</div>
+                        {!compEditMode && (
+                          <button type="button" title="Edit" className="text-gray-600 hover:text-gray-900" onClick={ensureCompEditable}>✏️</button>
+                        )}
+                      </div>
+                      {compEditMode ? (
+                        <div className="grid grid-cols-2 gap-2 text-sm">
+                          <input className="border p-2 rounded" placeholder="Code" value={c.code||''} onChange={e=>updateCompField(idx,'code',e.target.value)} />
+                          <input className="border p-2 rounded col-span-2" placeholder="Name" value={c.name||''} onChange={e=>updateCompField(idx,'name',e.target.value)} />
+                          <input className="border p-2 rounded" type="number" min={0} step="1" placeholder="Max Marks" value={c.max_marks ?? ''} onChange={e=>updateCompField(idx,'max_marks',e.target.value)} />
+                          <input className="border p-2 rounded" type="number" step="0.01" placeholder="Weight" value={c.weight ?? 1} onChange={e=>updateCompField(idx,'weight',e.target.value)} />
+                          <input className="border p-2 rounded" type="number" placeholder="Order" value={c.order ?? idx} onChange={e=>updateCompField(idx,'order',e.target.value)} />
+                          <div className="col-span-2 flex items-center gap-4 pt-1">
+                            <button type="button" onClick={()=>saveCompRow(idx)} className="text-blue-600">Save</button>
+                            <button type="button" onClick={()=>deleteCompRow(idx)} className="text-red-600">Delete</button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="text-sm text-gray-700 space-y-1">
+                          <div><span className="text-gray-500">Code:</span> {c.code||'-'}</div>
+                          <div><span className="text-gray-500">Max Marks:</span> {c.max_marks ?? '-'}</div>
+                          <div><span className="text-gray-500">Weight:</span> {c.weight ?? 1}</div>
+                          <div><span className="text-gray-500">Order:</span> {c.order ?? idx}</div>
+                        </div>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+              {/* Desktop table */}
+              <div className="overflow-x-auto rounded-md border hidden md:block">
                 <table className="min-w-[720px] text-sm">
                   <thead>
                     <tr className="bg-gray-50 text-gray-700">
@@ -425,7 +463,43 @@ export default function AdminSubjectProfile(){
                   <button type="button" onClick={addRow} className="px-2 py-1 rounded border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100">Add Band</button>
                 </div>
               </div>
-              <div className="overflow-x-auto rounded-md border">
+              {/* Mobile cards */}
+              <div className="space-y-3 md:hidden">
+                {(grading||[]).length === 0 ? (
+                  <div className="text-sm text-gray-500">No grading bands yet.</div>
+                ) : (
+                  (grading||[]).map((g, idx) => (
+                    <div key={g.id || `gm-${idx}`} className="border rounded-lg p-3">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="font-medium text-sm">Band {g.grade || '-'}</div>
+                        {!editMode && (
+                          <button type="button" title="Edit" className="text-gray-600 hover:text-gray-900" onClick={ensureEditable}>✏️</button>
+                        )}
+                      </div>
+                      {editMode ? (
+                        <div className="grid grid-cols-2 gap-2 text-sm">
+                          <input className="border p-2 rounded" placeholder="Grade" value={g.grade||''} onChange={e=>updateField(idx,'grade',e.target.value)} />
+                          <input className="border p-2 rounded" type="number" min={0} step="1" placeholder="Min" value={g.min ?? ''} onChange={e=>updateField(idx,'min',e.target.value)} />
+                          <input className="border p-2 rounded" type="number" min={0} step="1" placeholder="Max" value={g.max ?? ''} onChange={e=>updateField(idx,'max',e.target.value)} />
+                          <input className="border p-2 rounded" type="number" placeholder="Order" value={g.order ?? idx} onChange={e=>updateField(idx,'order',e.target.value)} />
+                          <div className="col-span-2 flex items-center gap-4 pt-1">
+                            <button type="button" onClick={()=>saveRow(idx)} className="text-blue-600">Save</button>
+                            <button type="button" onClick={()=>deleteRow(idx)} className="text-red-600">Delete</button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="text-sm text-gray-700 space-y-1">
+                          <div><span className="text-gray-500">Min:</span> {g.min ?? '-'}</div>
+                          <div><span className="text-gray-500">Max:</span> {g.max ?? '-'}</div>
+                          <div><span className="text-gray-500">Order:</span> {g.order ?? idx}</div>
+                        </div>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+              {/* Desktop table */}
+              <div className="overflow-x-auto rounded-md border hidden md:block">
                 <table className="min-w-[640px] text-sm">
                   <thead>
                     <tr className="bg-gray-50 text-gray-700">
@@ -455,12 +529,12 @@ export default function AdminSubjectProfile(){
                           </td>
                           <td className="border px-2 py-1 w-28">
                             {editMode ? (
-                              <input className="border p-1 rounded w-full focus:outline-none focus:ring-2 focus:ring-indigo-500" type="number" min={0} step="1" value={g.min ?? ''} onChange={e=>updateField(idx,'min',e.target.value)} />
+                              <input className="border p-1 rounded w-full focus:outline-none focus:ring-2 focus:ring-indigo-500" type="number" min={0} step={1} value={g.min ?? ''} onChange={e=>updateField(idx,'min',e.target.value)} />
                             ) : (g.min ?? '')}
                           </td>
                           <td className="border px-2 py-1 w-28">
                             {editMode ? (
-                              <input className="border p-1 rounded w-full focus:outline-none focus:ring-2 focus:ring-indigo-500" type="number" min={0} step="1" value={g.max ?? ''} onChange={e=>updateField(idx,'max',e.target.value)} />
+                              <input className="border p-1 rounded w-full focus:outline-none focus:ring-2 focus:ring-indigo-500" type="number" min={0} step={1} value={g.max ?? ''} onChange={e=>updateField(idx,'max',e.target.value)} />
                             ) : (g.max ?? '')}
                           </td>
                           <td className="border px-2 py-1 w-24">
