@@ -188,7 +188,10 @@ export default function LoginPage() {
           <AppLogo size={32} className="w-8 h-8 rounded-md bg-white/10 p-1" />
           <div className="text-xs font-semibold tracking-wider">EDU-TRACK</div>
         </div>
-        <a href="#" className="text-xs underline">Contact</a>
+        <div className="flex items-center gap-3 text-xs font-medium">
+          <a href="/" className="underline hover:text-white/80 transition">Home</a>
+          <a href="mailto:EduTrack46@gmail.com" className="underline hover:text-white/80 transition">Contact</a>
+        </div>
       </div>
 
       {/* Desktop/Tablet Content */}
@@ -348,22 +351,27 @@ export default function LoginPage() {
       </main>
 
       {/* Mobile-only content */}
-      <div className="sm:hidden relative z-10 px-4 pb-10">
-        <div className="max-w-md mx-auto">
+      <div className="sm:hidden relative z-10 flex min-h-screen flex-col items-center px-4 py-8">
+        <div className="w-full max-w-sm flex-1 mx-auto flex flex-col justify-center gap-8">
           {/* Brand */}
-          <div className="text-center text-white mb-5">
-            <div className="font-extrabold tracking-widest">WELCOME</div>
-            <div className="text-xs text-white/80">Sign in to continue</div>
+          <div className="text-center text-white space-y-1">
+            <div className="font-extrabold tracking-[0.3em] text-xs">WELCOME</div>
+            <div className="text-sm font-semibold">Sign in to continue</div>
+            <p className="text-[11px] text-white/80">Tailored dashboards for every school role.</p>
           </div>
 
           {/* Card with gradient border */}
           <div className="relative">
-            <div className="absolute -inset-0.5 rounded-2xl bg-gradient-to-r from-indigo-500/40 via-purple-500/40 to-pink-500/40 blur opacity-75" />
-            <div className="relative bg-white/90 backdrop-blur rounded-2xl shadow-[0_12px_40px_rgba(0,0,0,0.25)] ring-1 ring-white/60 p-4 border-hairline">
+            <div className="absolute -inset-1 rounded-[28px] bg-gradient-to-br from-indigo-500/50 via-purple-500/40 to-pink-500/45 blur opacity-80" />
+            <div className="relative rounded-[28px] bg-white/95 backdrop-blur-lg shadow-[0_18px_48px_rgba(21,23,54,0.28)] ring-1 ring-white/70 border border-white/60 p-6">
             {formStep === 'role' && (
-              <div>
-                <h2 className="text-lg font-bold text-indigo-700 mb-3">Select Your Role</h2>
-                <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Select role">
+              <div className="space-y-5">
+                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-indigo-100 text-indigo-600 text-xl shadow-inner shadow-white/40">🎯</div>
+                <div className="text-center space-y-1">
+                  <h2 className="text-xl font-bold text-indigo-700">Select Your Role</h2>
+                  <p className="text-xs text-gray-500">Choose where you need to go today.</p>
+                </div>
+                <div className="grid grid-cols-2 gap-2.5" role="radiogroup" aria-label="Select role">
                   {roles.map(r => (
                     <button
                       key={r.key}
@@ -371,9 +379,9 @@ export default function LoginPage() {
                       role="radio"
                       aria-checked={role===r.key}
                       aria-label={r.label}
-                      className={`py-2.5 rounded-lg text-sm font-medium border transition flex items-center justify-center gap-2 px-3 ${role===r.key ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-neutral-200 hover:bg-neutral-100'}`}
+                      className={`px-3 py-3 rounded-xl text-sm font-semibold border transition-all duration-200 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300 flex flex-col items-center gap-1 ${role===r.key ? 'bg-gradient-to-br from-indigo-50 via-white to-purple-50 border-indigo-200 text-indigo-700 shadow-[0_8px_24px_rgba(79,70,229,0.25)]' : 'bg-white/90 border-neutral-200 text-gray-600 hover:bg-white hover:border-indigo-100 hover:text-indigo-700'}`}
                     >
-                      <span className="text-base">{r.icon}</span>
+                      <span className="text-lg">{r.icon}</span>
                       <span>{r.label}</span>
                     </button>
                   ))}
@@ -381,9 +389,9 @@ export default function LoginPage() {
                 <button
                   onClick={()=>{ if(!role) return; setFormStep('credentials') }}
                   disabled={!role}
-                  className="mt-4 w-full py-3 rounded-full bg-indigo-600 text-white font-semibold disabled:opacity-60"
+                  className="w-full rounded-full bg-gradient-to-r from-indigo-600 via-indigo-500 to-purple-600 py-3 text-white text-sm font-semibold tracking-wide shadow-lg shadow-indigo-500/30 disabled:opacity-60 disabled:shadow-none transition-transform hover:-translate-y-0.5"
                 >Proceed</button>
-                <div className="mt-2 text-[12px] text-gray-600 text-center">Need help choosing? Contact the school admin.</div>
+                <div className="text-center text-[12px] text-gray-600">Need help choosing? Contact the school admin.</div>
               </div>
             )}
 
@@ -412,7 +420,7 @@ export default function LoginPage() {
                       autoCapitalize="none"
                       autoCorrect="off"
                       aria-label="Email (username)"
-                      className="w-full rounded-lg border border-black/10 bg-white/80 px-3 py-2 text-sm"
+                      className="w-full rounded-lg border border-black/10 bg-white/85 px-3 py-2 text-sm shadow-inner"
                       required
                     />
                     <div className="mt-1 text-[11px] text-gray-500">Admins: use the email you signed up with.</div>
@@ -428,10 +436,10 @@ export default function LoginPage() {
                         onKeyUp={(e)=> setCapsLockOn(e.getModifierState && e.getModifierState('CapsLock'))}
                         autoComplete="current-password"
                         aria-label="Password"
-                        className="w-full rounded-lg border border-black/10 bg-white/80 px-3 py-2 text-sm pr-16"
+                        className="w-full rounded-lg border border-black/10 bg-white/85 px-3 py-2 text-sm pr-16 shadow-inner"
                         required
                       />
-                      <button type="button" aria-pressed={showPassword} aria-label={showPassword ? 'Hide password' : 'Show password'} onClick={()=>setShowPassword(v=>!v)} className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-600">{showPassword?'Hide':'Show'}</button>
+                      <button type="button" aria-pressed={showPassword} aria-label={showPassword ? 'Hide password' : 'Show password'} onClick={()=>setShowPassword(v=>!v)} className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-indigo-600 font-semibold">{showPassword?'Hide':'Show'}</button>
                     </div>
                     {capsLockOn && <div className="mt-1 text-[11px] text-amber-700">Caps Lock is ON</div>}
                   </div>
@@ -442,7 +450,7 @@ export default function LoginPage() {
                     </label>
                     <a href="mailto:EduTrack46@gmail.com?subject=Password%20help" className="text-[12px] text-indigo-700 underline">Forgot password?</a>
                   </div>
-                  <button type="submit" disabled={isLoading} className="w-full rounded-full bg-indigo-600 text-white font-semibold py-2.5 disabled:opacity-60">{isLoading?'Signing In…':'Proceed'}</button>
+                  <button type="submit" disabled={isLoading} className="w-full rounded-full bg-gradient-to-r from-indigo-600 via-indigo-500 to-purple-600 text-white font-semibold py-2.5 disabled:opacity-60 disabled:shadow-none shadow-lg shadow-indigo-500/30">{isLoading?'Signing In…':'Proceed'}</button>
                 </form>
               </div>
             )}

@@ -367,15 +367,15 @@ export default function SchoolHome() {
               <div className="inline-flex items-center gap-2 rounded-full bg-indigo-100 text-indigo-700 px-3 py-1 text-xs font-semibold mb-4 shadow-sm">
                 <span>{school.homepage?.hero?.badge || school.motto}</span>
               </div>
-              <h1 className="text-4xl sm:text-5xl md:text-6xl font-extrabold leading-tight tracking-tight bg-gradient-to-r from-gray-900 via-gray-900 to-indigo-800 bg-clip-text text-transparent">
+              <h1 className="text-3xl sm:text-4xl md:text-5xl font-extrabold leading-tight tracking-tight bg-gradient-to-r from-gray-900 via-gray-900 to-indigo-800 bg-clip-text text-transparent">
                 {school.homepage?.hero?.title || `Welcome to ${school.name}`}
               </h1>
               <div className="mt-3 h-1.5 w-24 rounded-full bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 animate-pulse" />
-              <p className="mt-4 text-xl text-gray-600">
+              <p className="mt-4 text-base sm:text-lg text-gray-600">
                 {school.homepage?.hero?.subtitle || 'A nurturing, diverse and high-achieving community empowering students to thrive in academics, character, and service.'}
               </p>
               <div className="mt-8 grid grid-cols-1 sm:flex gap-3">
-                <a href={school.homepage?.hero?.ctaPrimaryLink || '#admissions'} className="w-full sm:w-auto px-6 py-3 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-semibold shadow-lg hover:shadow-xl hover:opacity-95 transition">
+                <a href={school.homepage?.hero?.ctaPrimaryLink || '#admissions'} className="w-full sm:w-auto px-6 py-3 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-semibold shadow-lg hover:shadow-xl hover:opacity-95 transition ring-1 ring-indigo-500/30">
                   {school.homepage?.hero?.ctaPrimaryText || 'Start Your Application'}
                 </a>
                 <a href={school.homepage?.hero?.ctaSecondaryLink || '#about'} className="w-full sm:w-auto px-6 py-3 rounded-xl border border-gray-300 text-gray-700 font-medium hover:bg-gray-50 transition">
@@ -390,7 +390,7 @@ export default function SchoolHome() {
             </div>
             <div className="relative">
               <div className="rounded-3xl border border-gray-200 shadow-2xl overflow-hidden bg-white ring-1 ring-gray-100 transform transition hover:-translate-y-0.5 hover:shadow-[0_20px_50px_rgba(79,70,229,0.15)]">
-                <div className="relative w-full h-56 sm:h-72 md:h-80">
+                <div className="relative w-full h-64 sm:h-72 md:h-80">
                   {heroImages.map((src, i) => {
                     const isActive = i === heroIndex
                     const common = {
@@ -436,13 +436,22 @@ export default function SchoolHome() {
                 const teachers = st?.teachers ?? '—'
                 const satisfaction = st?.satisfaction || '98%'
                 return (
-                  <div className="hidden md:block pointer-events-none absolute -bottom-5 left-4 right-4 md:left-6 md:right-auto z-10">
-                    <div className="rounded-xl border border-gray-200 bg-white/80 backdrop-blur px-3 py-2 shadow-md flex gap-4 text-sm">
-                      <div className="flex items-baseline gap-1"><CountUp value={students} className="text-indigo-700 font-semibold" /><span className="text-gray-600">Students</span></div>
-                      <div className="flex items-baseline gap-1"><CountUp value={teachers} className="text-indigo-700 font-semibold" /><span className="text-gray-600">Teachers</span></div>
-                      <div className="flex items-baseline gap-1"><CountUp value={satisfaction} className="text-indigo-700 font-semibold" /><span className="text-gray-600">Satisfaction</span></div>
+                  <>
+                    <div className="hidden md:block pointer-events-none absolute -bottom-5 left-4 right-4 md:left-6 md:right-auto z-10">
+                      <div className="rounded-xl border border-gray-200 bg-white/80 backdrop-blur px-3 py-2 shadow-md flex gap-4 text-sm">
+                        <div className="flex items-baseline gap-1"><CountUp value={students} className="text-indigo-700 font-semibold" /><span className="text-gray-600">Students</span></div>
+                        <div className="flex items-baseline gap-1"><CountUp value={teachers} className="text-indigo-700 font-semibold" /><span className="text-gray-600">Teachers</span></div>
+                        <div className="flex items-baseline gap-1"><CountUp value={satisfaction} className="text-indigo-700 font-semibold" /><span className="text-gray-600">Satisfaction</span></div>
+                      </div>
                     </div>
-                  </div>
+                    <div className="md:hidden pointer-events-none absolute -bottom-5 left-3 right-3 z-10">
+                      <div className="rounded-xl border border-gray-200 bg-white/90 backdrop-blur px-3 py-2 shadow flex items-center justify-between text-xs">
+                        <div className="flex items-baseline gap-1"><CountUp value={students} className="text-indigo-700 font-semibold" /><span className="text-gray-600">Students</span></div>
+                        <div className="flex items-baseline gap-1"><CountUp value={teachers} className="text-indigo-700 font-semibold" /><span className="text-gray-600">Teachers</span></div>
+                        <div className="flex items-baseline gap-1"><CountUp value={satisfaction} className="text-indigo-700 font-semibold" /><span className="text-gray-600">Satisfaction</span></div>
+                      </div>
+                    </div>
+                  </>
                 )
               })()}
             </div>
