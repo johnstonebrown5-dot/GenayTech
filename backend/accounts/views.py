@@ -24,6 +24,7 @@ from academics.models import Student
 from django.db.models import Q
 from django.core.files.storage import default_storage
 from django.core.files.base import ContentFile
+import requests
 
 User = get_user_model()
 
@@ -364,6 +365,27 @@ def school_me(request):
     }
     if 'logo' in request.FILES:
         payload['logo'] = request.FILES['logo']
+    # Support URL-only uploads: accept logo_url and fetch remote image
+    logo_url = data.get('logo_url')
+    if not payload.get('logo') and logo_url:
+        try:
+            resp = requests.get(logo_url, timeout=15)
+            resp.raise_for_status()
+            # Derive a safe filename
+            ext = ''
+            try:
+                ct = resp.headers.get('content-type','')
+                if 'png' in ct: ext = '.png'
+                elif 'jpeg' in ct or 'jpg' in ct: ext = '.jpg'
+                elif 'webp' in ct: ext = '.webp'
+            except Exception:
+                pass
+            name_part = slugify(getattr(school, 'code', '') or getattr(school, 'id', 'school')) or 'school'
+            fname = f"logo_{name_part}{ext or '.jpg'}"
+            payload['logo'] = ContentFile(resp.content, name=fname)
+        except Exception:
+            # If fetch fails, ignore; client can retry
+            pass
 
     serializer = SchoolSerializer(school, data=payload, partial=True, context={"request": request})
     serializer.is_valid(raise_exception=True)

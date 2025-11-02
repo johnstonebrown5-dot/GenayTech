@@ -4,6 +4,8 @@ import StudentReportCardViewer from './StudentReportCardViewer'
 import AdminLayout from '../components/AdminLayout'
 import Modal from '../components/Modal'
 import api from '../api'
+import { uploadToCloudinary } from '../utils/cloudinary'
+import { toast } from '../utils/toast'
 
 function Selectors({ examResults, uiSelectedTerm, setUiSelectedTerm, uiSelectedExamId, setUiSelectedExamId }){
   const termOptions = React.useMemo(()=>{
@@ -153,11 +155,12 @@ export default function AdminStudentDashboard() {
     if (!file) return
     try{
       setUploading(true)
-      const fd = new FormData()
-      fd.append('photo', file)
-      await api.patch(`/academics/students/${id}/`, fd, { headers: { 'Content-Type': 'multipart/form-data' }})
+      const { url } = await uploadToCloudinary(file, { folder: 'edu-track/students' })
+      await api.patch(`/academics/students/${id}/`, { photo_url: url })
       const { data } = await api.get(`/academics/students/${id}/`)
       setStudent(data)
+    } catch(err){
+      toast(err?.response?.data?.detail || err?.message || 'Failed to upload student photo', 'error')
     } finally{
       setUploading(false)
       e.target.value = ''

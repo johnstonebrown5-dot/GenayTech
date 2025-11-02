@@ -2,6 +2,8 @@ import React, { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
 import api, { toAbsoluteUrl } from '../api'
+import { uploadToCloudinary } from '../utils/cloudinary'
+import { toast } from '../utils/toast'
 
 export default function AdminWebsite(){
   const [loading, setLoading] = useState(true)
@@ -14,6 +16,11 @@ export default function AdminWebsite(){
   const [pickerOpen, setPickerOpen] = useState(false)
   const mapRef = useRef(null)
   const leafletLoaded = useRef(false)
+  // Upload indicators
+  const [uploadingHero, setUploadingHero] = useState([false,false,false,false])
+  const [uploadingPartner, setUploadingPartner] = useState({})
+  const [uploadingSponsor, setUploadingSponsor] = useState({})
+  const [uploadingGallery, setUploadingGallery] = useState({})
 
   const ensureLeaflet = async () => {
     if (leafletLoaded.current) return true
@@ -177,19 +184,17 @@ export default function AdminWebsite(){
                             {Array.from({length:4}).map((_,idx)=> (
                               <div key={idx} className="flex items-center gap-2">
                                 <input className="border p-1 rounded text-xs w-full sm:w-56" placeholder={idx===0?'Main image URL':'Thumbnail URL'} value={(imgs[idx]||'')} onChange={e=>setForm(f=>{ const arr=[...(f.homepage?.hero?.images||[])]; arr[idx]=e.target.value; return { ...f, homepage:{ ...f.homepage, hero:{ ...hero, images:arr } } } })} />
-                                <label className="text-xs px-2 py-1 rounded bg-gray-100 hover:bg-gray-200 cursor-pointer">
-                                  Upload
+                                <label className={`text-xs px-2 py-1 rounded ${uploadingHero[idx] ? 'bg-gray-200' : 'bg-gray-100 hover:bg-gray-200'} cursor-pointer`}>
+                                  {uploadingHero[idx] ? 'Uploading…' : 'Upload'}
                                   <input type="file" accept="image/*" className="hidden" onChange={async ev=>{
                                     const file = ev.target.files?.[0]
                                     if(!file) return
-                                    const fd = new FormData()
-                                    fd.append('file', file)
                                     try{
-                                      const { data } = await api.post('/communications/upload-admission-letter/', fd, { headers:{'Content-Type':'multipart/form-data'} })
-                                      const url = data?.url || ''
+                                      setUploadingHero(arr=>{ const a=[...arr]; a[idx]=true; return a })
+                                      const { url } = await uploadToCloudinary(file, { folder: 'edu-track/site' })
                                       setForm(f=>{ const arr=[...(f.homepage?.hero?.images||[])]; arr[idx]=url; return { ...f, homepage:{ ...f.homepage, hero:{ ...hero, images:arr } } } })
-                                      ev.target.value = ''
-                                    }catch(e){ /* no-op */ }
+                                    }catch(e){ toast(e?.message || 'Failed to upload to Cloudinary', 'error') }
+                                    finally{ setUploadingHero(arr=>{ const a=[...arr]; a[idx]=false; return a }); ev.target.value = '' }
                                   }} />
                                 </label>
                               </div>
@@ -231,17 +236,16 @@ export default function AdminWebsite(){
                       <div>Logo</div>
                       <div className="mt-1 flex items-center gap-2">
                         <input className="border p-2 rounded w-full" placeholder="Logo URL" value={p.logo || ''} onChange={e=>setForm(f=>{ const arr=[...(f.homepage?.partners||[])]; arr[idx] = { ...(arr[idx]||{}), logo:e.target.value }; return { ...f, homepage:{ ...f.homepage, partners:arr } } })} />
-                        <label className="px-2 py-1 rounded bg-gray-100 hover:bg-gray-200 cursor-pointer text-xs">Upload
+                        <label className={`px-2 py-1 rounded ${uploadingPartner[idx] ? 'bg-gray-200' : 'bg-gray-100 hover:bg-gray-200'} cursor-pointer text-xs`}> {uploadingPartner[idx] ? 'Uploading…' : 'Upload'}
                           <input type="file" accept="image/*" className="hidden" onChange={async ev=>{
                             const file = ev.target.files?.[0]
                             if(!file) return
-                            const fd = new FormData(); fd.append('file', file)
                             try{
-                              const { data } = await api.post('/communications/upload-admission-letter/', fd, { headers:{'Content-Type':'multipart/form-data'} })
-                              const url = data?.url || ''
+                              setUploadingPartner(s=>({ ...s, [idx]:true }))
+                              const { url } = await uploadToCloudinary(file, { folder: 'edu-track/partners' })
                               setForm(f=>{ const arr=[...(f.homepage?.partners||[])]; arr[idx] = { ...(arr[idx]||{}), logo:url }; return { ...f, homepage:{ ...f.homepage, partners:arr } } })
-                              ev.target.value = ''
-                            }catch{}
+                            }catch(e){ toast(e?.message || 'Failed to upload to Cloudinary', 'error') }
+                            finally{ setUploadingPartner(s=>({ ...s, [idx]:false })); ev.target.value = '' }
                           }} />
                         </label>
                       </div>
@@ -277,17 +281,16 @@ export default function AdminWebsite(){
                       <div>Logo</div>
                       <div className="mt-1 flex items-center gap-2">
                         <input className="border p-2 rounded w-full" placeholder="Logo URL" value={p.logo || ''} onChange={e=>setForm(f=>{ const arr=[...(f.homepage?.sponsors||[])]; arr[idx] = { ...(arr[idx]||{}), logo:e.target.value }; return { ...f, homepage:{ ...f.homepage, sponsors:arr } } })} />
-                        <label className="px-2 py-1 rounded bg-gray-100 hover:bg-gray-200 cursor-pointer text-xs">Upload
+                        <label className={`px-2 py-1 rounded ${uploadingSponsor[idx] ? 'bg-gray-200' : 'bg-gray-100 hover:bg-gray-200'} cursor-pointer text-xs`}> {uploadingSponsor[idx] ? 'Uploading…' : 'Upload'}
                           <input type="file" accept="image/*" className="hidden" onChange={async ev=>{
                             const file = ev.target.files?.[0]
                             if(!file) return
-                            const fd = new FormData(); fd.append('file', file)
                             try{
-                              const { data } = await api.post('/communications/upload-admission-letter/', fd, { headers:{'Content-Type':'multipart/form-data'} })
-                              const url = data?.url || ''
+                              setUploadingSponsor(s=>({ ...s, [idx]:true }))
+                              const { url } = await uploadToCloudinary(file, { folder: 'edu-track/sponsors' })
                               setForm(f=>{ const arr=[...(f.homepage?.sponsors||[])]; arr[idx] = { ...(arr[idx]||{}), logo:url }; return { ...f, homepage:{ ...f.homepage, sponsors:arr } } })
-                              ev.target.value = ''
-                            }catch{}
+                            }catch(e){ toast(e?.message || 'Failed to upload to Cloudinary', 'error') }
+                            finally{ setUploadingSponsor(s=>({ ...s, [idx]:false })); ev.target.value = '' }
                           }} />
                         </label>
                       </div>
@@ -396,17 +399,16 @@ export default function AdminWebsite(){
                       <div>Image</div>
                       <div className="mt-1 flex items-center gap-2">
                         <input className="border p-2 rounded w-full" placeholder="Image URL" value={g.url || ''} onChange={e=>setForm(f=>{ const arr=[...(f.homepage?.gallery?.items||[])]; arr[idx] = { ...(arr[idx]||{}), url:e.target.value }; return { ...f, homepage:{ ...f.homepage, gallery:{ items:arr } } } })} />
-                        <label className="px-2 py-1 rounded bg-gray-100 hover:bg-gray-200 cursor-pointer text-xs">Upload
+                        <label className={`px-2 py-1 rounded ${uploadingGallery[idx] ? 'bg-gray-200' : 'bg-gray-100 hover:bg-gray-200'} cursor-pointer text-xs`}> {uploadingGallery[idx] ? 'Uploading…' : 'Upload'}
                           <input type="file" accept="image/*" className="hidden" onChange={async ev=>{
                             const file = ev.target.files?.[0]
                             if(!file) return
-                            const fd = new FormData(); fd.append('file', file)
                             try{
-                              const { data } = await api.post('/communications/upload-admission-letter/', fd, { headers:{'Content-Type':'multipart/form-data'} })
-                              const url = data?.url || ''
+                              setUploadingGallery(s=>({ ...s, [idx]:true }))
+                              const { url } = await uploadToCloudinary(file, { folder: 'edu-track/gallery' })
                               setForm(f=>{ const arr=[...(f.homepage?.gallery?.items||[])]; arr[idx] = { ...(arr[idx]||{}), url }; return { ...f, homepage:{ ...f.homepage, gallery:{ items:arr } } } })
-                              ev.target.value = ''
-                            }catch{}
+                            }catch(e){ toast(e?.message || 'Failed to upload to Cloudinary', 'error') }
+                            finally{ setUploadingGallery(s=>({ ...s, [idx]:false })); ev.target.value = '' }
                           }} />
                         </label>
                       </div>

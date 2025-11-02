@@ -155,7 +155,7 @@ export default function AdminLayout({ children }){
         </div>
       )}
       {/* Top bar */}
-      <header className="sticky top-0 z-30 bg-white/90 backdrop-blur supports-[backdrop-filter]:bg-white/70 border-b border-gray-200/80 px-3 sm:px-4 md:px-6 h-16 pt-[env(safe-area-inset-top)] shadow-soft">
+      <header className="sticky top-0 z-30 bg-white/80 backdrop-blur-xl supports-[backdrop-filter]:bg-white/65 border-b border-gray-200 px-3 sm:px-4 md:px-6 h-16 pt-[env(safe-area-inset-top)] shadow-[0_6px_20px_-8px_rgba(0,0,0,0.2)]">
         <div className="max-w-screen-2xl mx-auto h-full flex items-center gap-2">
           {/* Left: menu + brand */}
           <div className="flex items-center gap-2 min-w-0">
@@ -168,32 +168,33 @@ export default function AdminLayout({ children }){
               </svg>
             </button>
             <button
-              className="p-2.5 rounded-lg hover:bg-gray-100/80 transition-all duration-200 hidden md:inline-flex"
+              className="p-2.5 rounded-xl hover:bg-gray-100 transition-all duration-200 hidden md:inline-flex border border-transparent hover:border-gray-200"
               aria-label="Collapse sidebar"
               onClick={()=>setIsOpen(v=>!v)}>
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 text-gray-700">
                 <path fillRule="evenodd" d="M19.5 3.75a.75.75 0 01.75.75v14.25a.75.75 0 01-.75.75H4.5a.75.75 0 01-.75-.75V4.5a.75.75 0 01.75-.75h15zm-9.53 3.22a.75.75 0 10-1.06 1.06l2.72 2.72-2.72 2.72a.75.75 0 101.06 1.06l3.25-3.25a.75.75 0 000-1.06l-3.25-3.25z" clipRule="evenodd" />
               </svg>
             </button>
-            <div className="hidden sm:flex items-center gap-2 min-w-0">
-              <img src="/logo.jpg" alt="EDU-TRACK Logo" className="w-8 h-8 rounded-lg object-contain" />
-              <div className="font-extrabold tracking-tight text-gray-900 text-lg sm:text-xl">EDU-TRACK</div>
-            </div>
+            <div className="hidden sm:flex items-center gap-2 min-w-0"></div>
           </div>
 
           {/* Center: school chip (scrollable on small) */}
           <div className="flex-1 flex items-center justify-center overflow-x-auto sm:overflow-visible px-1 sm:px-3">
             <div className="flex items-center gap-2">
               {schoolLogo ? (
-                <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-50/90 border border-gray-200 rounded-full shadow-sm">
+                <div className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-gray-50/90 to-white/80 border border-gray-200 rounded-full shadow-sm">
                   <img src={schoolLogo} alt="School logo" className="h-5 w-5 object-contain rounded" />
-                  <span className="text-gray-800 text-sm font-medium truncate max-w-[9rem] sm:max-w-[14rem]">{schoolName || ''}</span>
+                  <span className="sm:hidden text-gray-800 text-sm font-medium truncate max-w-[10rem]">{schoolName || ''}</span>
+                  <span className="hidden sm:inline text-gray-900 text-sm font-semibold tracking-tight">{schoolName || ''}</span>
                 </div>
               ) : (
-                <span className="text-gray-700 truncate max-w-[10rem]">{schoolName || ''}</span>
+                <>
+                  <span className="sm:hidden text-gray-700 truncate max-w-[10rem]">{schoolName || ''}</span>
+                  <span className="hidden sm:inline text-gray-900 font-semibold">{schoolName || ''}</span>
+                </>
               )}
               {currentTerm && currentYear && (
-                <div className="px-2.5 py-1 bg-brand-50 text-brand-700 rounded-full text-[11px] sm:text-xs font-medium border border-brand-200 whitespace-nowrap">
+                <div className="px-2.5 py-1 bg-brand-50/80 text-brand-700 rounded-full text-[11px] sm:text-xs font-medium border border-brand-200 whitespace-nowrap shadow-sm">
                   Term {currentTerm.number} {currentYear.label.split('/')[1] || currentYear.label}
                 </div>
               )}
@@ -206,7 +207,7 @@ export default function AdminLayout({ children }){
             <div className="hidden md:flex items-center gap-2">
               <button
                 onClick={() => navigate(-1)}
-                className="p-2.5 rounded-lg border border-gray-200 text-gray-600 hover:text-brand-700 hover:border-brand-200 hover:bg-brand-50/60 transition-all"
+                className="p-2.5 rounded-xl border border-gray-200 text-gray-600 hover:text-brand-700 hover:border-brand-200 hover:bg-brand-50/60 transition-all"
                 aria-label="Go back"
                 title="Back"
               >
@@ -216,7 +217,7 @@ export default function AdminLayout({ children }){
               </button>
               <button
                 onClick={() => navigate(1)}
-                className="p-2.5 rounded-lg border border-gray-200 text-gray-600 hover:text-brand-700 hover:border-brand-200 hover:bg-brand-50/60 transition-all"
+                className="p-2.5 rounded-xl border border-gray-200 text-gray-600 hover:text-brand-700 hover:border-brand-200 hover:bg-brand-50/60 transition-all"
                 aria-label="Go forward"
                 title="Forward"
               >
@@ -227,7 +228,7 @@ export default function AdminLayout({ children }){
             </div>
             <Link
               to="/admin/messages?tab=system"
-              className="relative inline-flex items-center justify-center w-10 h-10 rounded-lg border border-gray-200 hover:bg-gray-50 transition-all"
+              className="relative inline-flex items-center justify-center w-10 h-10 rounded-xl border border-gray-200 hover:bg-gray-50 transition-all"
               aria-label="Notifications"
               title="System messages"
             >
@@ -241,18 +242,18 @@ export default function AdminLayout({ children }){
               )}
             </Link>
             {user && (
-              <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-full">
+              <Link to="/admin/profile" className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-full shadow-sm hover:bg-gray-100 transition-colors" title="Open my profile">
                 <div className="w-6 h-6 bg-brand-600 rounded-full flex items-center justify-center">
                   <span className="text-white text-xs font-medium">{(user.first_name || user.username || 'U')[0].toUpperCase()}</span>
                 </div>
-                <span className="text-sm text-gray-700 font-medium max-w-[10rem] truncate">{user.first_name || user.username}</span>
+                <span className="text-sm text-gray-800 font-medium max-w-[12rem] truncate">{user.first_name || user.username}</span>
                 {typeof (selfActive ?? user.is_active) === 'boolean' && (
                   <span className={`ml-1 inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full border ${(selfActive ?? user.is_active) ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
                     <span className={`inline-block w-2 h-2 rounded-full ${(selfActive ?? user.is_active) ? 'bg-green-500' : 'bg-red-500'}`}></span>
                     {(selfActive ?? user.is_active) ? 'Active' : 'Inactive'}
                   </span>
                 )}
-              </div>
+              </Link>
             )}
             <button
               onClick={lock}

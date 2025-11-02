@@ -45,6 +45,7 @@ import AdminClasses from './pages/AdminClasses'
 import AdminClassProfile from './pages/AdminClassProfile'
 import AdminUsers from './pages/AdminUsers'
 import AdminSchool from './pages/AdminSchool'
+import AdminProfile from './pages/AdminProfile'
 import AdminExams from './pages/AdminExams'
 import AdminEnterResults from './pages/AdminEnterResults'
 import AdminResults from './pages/AdminResults'
@@ -135,6 +136,7 @@ export default function App() {
             <Route path="/admin/calendar" element={<ProtectedRoute roles={["admin"]}><AdminAcademicCalendar/></ProtectedRoute>} />
             <Route path="/admin/messages" element={<ProtectedRoute roles={["admin"]}><AdminLayout><Messages/></AdminLayout></ProtectedRoute>} />
             <Route path="/admin/website" element={<ProtectedRoute roles={["admin"]}><AdminWebsite/></ProtectedRoute>} />
+            <Route path="/admin/profile" element={<ProtectedRoute roles={["admin"]}><AdminProfile/></ProtectedRoute>} />
             <Route path="/admin/timetable" element={<ProtectedRoute roles={["admin"]}><AdminTimetable/></ProtectedRoute>} />
             <Route path="/admin/timetable/class" element={<ProtectedRoute roles={["admin","teacher"]}><ClassTimetable/></ProtectedRoute>} />
             <Route path="/admin/timetable/teacher" element={<ProtectedRoute roles={["admin"]}><TeacherTimetableView/></ProtectedRoute>} />

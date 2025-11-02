@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react'
 import api, { toAbsoluteUrl } from '../api'
 import AdminLayout from '../components/AdminLayout'
+import { uploadToCloudinary } from '../utils/cloudinary'
+import { toast } from '../utils/toast'
 
 export default function AdminSchool(){
   const [form, setForm] = useState({ name:'', code:'', address:'', motto:'', aim:'', social_links:{ facebook:'', twitter:'', instagram:'', youtube:'', website:'' }, homepage:{ hero:{}, about:{}, stats:{}, admissions:{}, programs:[] }, logo:null, logoUrl:'' })
@@ -8,6 +10,7 @@ export default function AdminSchool(){
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [ok, setOk] = useState('')
+  const [uploadingLogo, setUploadingLogo] = useState(false)
 
   const load = async () => {
     setLoading(true)
@@ -51,7 +54,8 @@ export default function AdminSchool(){
       fd.append('aim', form.aim || '')
       fd.append('social_links', JSON.stringify(form.social_links || {}))
       fd.append('homepage', JSON.stringify(form.homepage || {}))
-      if (form.logo instanceof File) fd.append('logo', form.logo)
+      // Prefer URL-only flow
+      if (form.logoUrl) fd.append('logo_url', form.logoUrl)
       const { data } = await api.put('/auth/school/me/', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
       setOk('Saved successfully')
       setForm({
@@ -149,15 +153,30 @@ export default function AdminSchool(){
             <h2 className="text-base font-semibold">Branding</h2>
             <div className="grid md:grid-cols-2 gap-3 items-start">
               <label className="text-sm">Logo
-                <input type="file" accept="image/*" className="border p-2 rounded w-full mt-1" onChange={e=>{
-                  const file = e.target.files?.[0] || null
-                  setForm(prev=>({ ...prev, logo:file, logoUrl: file ? URL.createObjectURL(file) : prev.logoUrl }))
+                <input type="file" accept="image/*" className="border p-2 rounded w-full mt-1" onChange={async e=>{
+                  const file = e.target.files?.[0]
+                  if (!file) return
+                  // Instant local preview
+                  try { setForm(prev=>({ ...prev, logo:file, logoUrl: URL.createObjectURL(file) })) } catch {}
+                  setUploadingLogo(true)
+                  try{
+                    const { url } = await uploadToCloudinary(file, { folder: 'edu-track/site' })
+                    setForm(prev=>({ ...prev, logo:null, logoUrl:url }))
+                    toast('Logo uploaded to Cloudinary','info')
+                  }catch(err){
+                    toast(err?.message || 'Failed to upload logo to Cloudinary','error')
+                  }finally{
+                    setUploadingLogo(false)
+                    try{ e.target.value = '' }catch{}
+                  }
                 }} />
+                {uploadingLogo && <div className="text-xs text-gray-500 mt-1">Uploading…</div>}
               </label>
               {form.logoUrl && (
                 <div className="text-sm">
                   <div className="text-gray-600 mb-1">Preview</div>
-                  <img src={form.logoUrl} alt="Logo preview" className="h-16 object-contain border rounded" />
+                  <img src={toAbsoluteUrl(form.logoUrl)} alt="Logo preview" className="h-16 object-contain border rounded" />
+                  {/* In case the URL is invalid, the image box will show a broken icon; that's okay */}
                 </div>
               )}
             </div>

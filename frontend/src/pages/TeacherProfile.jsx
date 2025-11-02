@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import api from '../api'
+import { uploadToCloudinary } from '../utils/cloudinary'
+import { toast } from '../utils/toast'
 import ProgressiveImage from '../components/ProgressiveImage'
 
 export default function TeacherProfile(){
@@ -72,22 +74,14 @@ export default function TeacherProfile(){
     if (!avatarFile) return
     setAvatarSaving(true)
     try{
-      const tryKeys = ['avatar','photo','profile_picture']
-      let ok = false
-      for (const key of tryKeys){
-        const fd = new FormData()
-        fd.append(key, avatarFile)
-        try{
-          const res = await api.patch('/auth/me/', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
-          setMe(res.data || me)
-          ok = true
-          break
-        }catch(err){ /* try next key */ }
-      }
-      if (!ok) throw new Error('Upload failed')
+      const { url } = await uploadToCloudinary(avatarFile, { folder: 'edu-track/avatars' })
+      const res = await api.patch('/auth/me/', { avatar_url: url })
+      setMe(res.data || me)
       setSaveMsg('Profile photo updated.')
     }catch(err){
-      setSaveErr(err?.response?.data?.detail || err?.message || 'Failed to upload photo')
+      const msg = err?.response?.data?.detail || err?.message || 'Failed to upload photo'
+      setSaveErr(msg)
+      toast(msg, 'error')
     }finally{
       setAvatarSaving(false)
     }
