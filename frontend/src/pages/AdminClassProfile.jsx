@@ -17,6 +17,7 @@ export default function AdminClassProfile(){
   const [exams, setExams] = useState([])
   const [recentExam, setRecentExam] = useState(null)
   const [recentSummary, setRecentSummary] = useState({ subjects: [], students: [] })
+  const [loadingResults, setLoadingResults] = useState(false)
   const [gradePerf, setGradePerf] = useState([]) // [{klass, klass_name, mean}]
   const [loadingGradePerf, setLoadingGradePerf] = useState(false)
   const [teachers, setTeachers] = useState([])
@@ -302,6 +303,61 @@ export default function AdminClassProfile(){
     w.focus()
     w.print()
   }
+  const handlePrintResults = () => {
+    if (!recentExam) return
+    const w = window.open('', '_blank', 'width=1000,height=800')
+    if (!w) return
+    const title = `${klass?.name || 'Class'} — ${recentExam.name || 'Exam'} Results`
+    const subjHeaders = (recentSummary.subjects||[]).map(s => `<th style="border:1px solid #e5e7eb;padding:6px;text-align:center">${s.code||''}</th>`).join('')
+    const bodyRows = (recentSummary.students||[]).map(st => {
+      const cells = (recentSummary.subjects||[]).map(s => `<td style="border:1px solid #e5e7eb;padding:6px;text-align:center">${st.marks?.[String(s.id)] ?? '-'}</td>`).join('')
+      const avg = typeof st.average === 'number' ? Number(st.average).toFixed(1) : (st.average || '-')
+      return `<tr>
+        <td style="position:sticky;left:0;background:#fff;border:1px solid #e5e7eb;padding:6px">${st.name||''}</td>
+        ${cells}
+        <td style="border:1px solid #e5e7eb;padding:6px;text-align:right;font-weight:600">${st.total ?? '-'}</td>
+        <td style="border:1px solid #e5e7eb;padding:6px;text-align:right">${avg}</td>
+      </tr>`
+    }).join('')
+    const meta = `
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin:0 0 10px 0;font-size:12px;color:#374151">
+        <div style="border:1px solid #e5e7eb;background:#f9fafb;border-radius:8px;padding:6px 10px"><span style="font-size:10px;color:#6b7280">Exam</span> <span style="margin-left:8px;font-weight:600">${recentExam.name||'-'}</span></div>
+        <div style="border:1px solid #e5e7eb;background:#f9fafb;border-radius:8px;padding:6px 10px"><span style="font-size:10px;color:#6b7280">Year</span> <span style="margin-left:8px;font-weight:600">${recentExam.year||'-'}</span></div>
+        <div style="border:1px solid #e5e7eb;background:#f9fafb;border-radius:8px;padding:6px 10px"><span style="font-size:10px;color:#6b7280">Term</span> <span style="margin-left:8px;font-weight:600">T${recentExam.term||'-'}</span></div>
+        <div style="border:1px solid #e5e7eb;background:#f9fafb;border-radius:8px;padding:6px 10px"><span style="font-size:10px;color:#6b7280">Date</span> <span style="margin-left:8px;font-weight:600">${recentExam.date||'-'}</span></div>
+      </div>`
+    w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${title}</title>
+      <style>
+        @media print {
+          thead { position: sticky; top: 0; }
+          .page-break { page-break-inside: avoid; }
+        }
+        table { border-collapse: collapse; width: 100%; font-size: 12px }
+        th { background:#f9fafb }
+      </style>
+    </head><body style="font-family:ui-sans-serif,system-ui,Segoe UI,Roboto,Helvetica,Arial">
+      <h2 style="margin:0 0 6px 0">${title}</h2>
+      ${meta}
+      <div class="page-break">
+        <div style="overflow:auto;border:1px solid #e5e7eb;border-radius:8px">
+          <table>
+            <thead>
+              <tr>
+                <th style="position:sticky;left:0;background:#f9fafb;border:1px solid #e5e7eb;padding:6px;text-align:left">Student</th>
+                ${subjHeaders}
+                <th style="border:1px solid #e5e7eb;padding:6px;text-align:right">Total</th>
+                <th style="border:1px solid #e5e7eb;padding:6px;text-align:right">Average</th>
+              </tr>
+            </thead>
+            <tbody>${bodyRows || ''}</tbody>
+          </table>
+        </div>
+      </div>
+      <script>window.onload = function(){ window.print(); }</script>
+    </body></html>`)
+    w.document.close()
+    w.focus()
+  }
   const genderStats = useMemo(() => {
     const boys = classStudents.filter(s => (s.gender || '').toLowerCase().startsWith('m')).length
     const girls = classStudents.filter(s => (s.gender || '').toLowerCase().startsWith('f')).length
@@ -314,12 +370,13 @@ export default function AdminClassProfile(){
     let cancelled = false
     async function loadExams(){
       try {
-        const { data } = await api.get('/academics/exams/')
+        const { data } = await api.get('/academics/exams/', { params: { include_history: true } })
         if (cancelled) return
-        setExams(Array.isArray(data) ? data : [])
+        const arr = Array.isArray(data) ? data : (Array.isArray(data?.results) ? data.results : [])
+        setExams(arr)
         // filter by class id
         const cid = Number(id)
-        const forClass = (Array.isArray(data) ? data : []).filter(e => Number(e.klass) === cid)
+        const forClass = arr.filter(e => Number(e.klass) === cid)
         if (forClass.length === 0) { setRecentExam(null); return }
         // sort by date then id as fallback
         forClass.sort((a,b)=>{
@@ -484,6 +541,7 @@ export default function AdminClassProfile(){
           <div className="flex items-center gap-2">
             <button onClick={() => navigate(-1)} className="px-3 py-1.5 rounded bg-gray-100 text-gray-800 hover:bg-gray-200">Back</button>
             <Link to="/admin/classes" className="px-3 py-1.5 rounded bg-blue-100 text-blue-700 hover:bg-blue-200">All Classes</Link>
+            <Link to={`/admin/classes/${id}/print-report-cards`} className="px-3 py-1.5 rounded bg-indigo-600 text-white hover:bg-indigo-700">Print Report Cards</Link>
           </div>
         </div>
 
@@ -814,7 +872,8 @@ export default function AdminClassProfile(){
                             </div>
                           </>
                         )}
-                        <div>
+                        <div className="flex items-center gap-2">
+                          <button onClick={handlePrintResults} className="inline-flex items-center gap-2 px-3 py-1.5 rounded border bg-white hover:bg-gray-50 w-fit">Print Results</button>
                           <Link to={`/admin/results?exam=${recentExam.id}&grade=${encodeURIComponent(klass?.grade_level || '')}`} className="inline-flex items-center gap-2 px-3 py-1.5 rounded bg-violet-600 text-white hover:bg-violet-700 w-fit">Open in Results</Link>
                         </div>
                       </div>

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import AdminLayout from '../components/AdminLayout'
 import api from '../api'
-import ProgressiveImage from '../components/ProgressiveImage'
+// Use a simple <img> for reliability in preview
 import { uploadToCloudinary } from '../utils/cloudinary'
 import { toast } from '../utils/toast'
 
@@ -88,7 +88,7 @@ export default function AdminProfile(){
             <div className="flex flex-col sm:flex-row sm:items-center gap-4 mb-6">
               <div className="h-24 w-24 rounded-full overflow-hidden ring-4 ring-white shadow bg-indigo-50 text-indigo-700 flex items-center justify-center text-2xl">
                 {avatarPreview ? (
-                  <ProgressiveImage src={avatarPreview} alt="Avatar" className="h-full w-full object-cover" />
+                  <img src={avatarPreview} alt="Avatar" className="h-full w-full object-cover" />
                 ) : (
                   <span>{(me.first_name?.[0] || me.username?.[0] || 'U').toUpperCase()}</span>
                 )}

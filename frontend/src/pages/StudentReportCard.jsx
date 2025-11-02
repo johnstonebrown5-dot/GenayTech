@@ -17,6 +17,8 @@ export default function StudentReportCard(){
   const [teacherName, setTeacherName] = useState('')
   const [selectedTermYear, setSelectedTermYear] = useState(null) // e.g., '2025-T2'
   const [prevRank, setPrevRank] = useState(null)
+  const [bandsBySubject, setBandsBySubject] = useState(new Map())
+  const [globalBands, setGlobalBands] = useState(null)
 
   // Build unique Term-Year options for published exams only, e.g., '2025-T2'
   const termYearOptions = useMemo(()=>{
@@ -131,14 +133,25 @@ export default function StudentReportCard(){
     return ()=>{ active = false }
   }, [student?.id, termExams])
 
-  // Grade mapping helper (default scale, can be made configurable)
-  const toGrade = (score) => {
-    const s = Number(score || 0)
-    if (s >= 80) return 'A'
-    if (s >= 70) return 'B'
-    if (s >= 60) return 'C'
-    if (s >= 50) return 'D'
+  const letterFromBands = (score, bands) => {
+    const n = Number(score)
+    if (!Number.isFinite(n)) return '-'
+    const arr = Array.isArray(bands) ? [...bands] : []
+    arr.sort((a,b)=> Number(b.min ?? -Infinity) - Number(a.min ?? -Infinity))
+    for (const b of arr){
+      const min = Number.isFinite(Number(b.min)) ? Number(b.min) : -Infinity
+      const max = Number.isFinite(Number(b.max)) ? Number(b.max) : Infinity
+      if (n >= min && n <= max) return String(b.grade||'-')
+    }
+    if (n >= 80) return 'A'
+    if (n >= 70) return 'B'
+    if (n >= 60) return 'C'
+    if (n >= 50) return 'D'
     return 'E'
+  }
+  const toGrade = (score, subjectId) => {
+    const bands = bandsBySubject.get?.(String(subjectId)) || globalBands
+    return letterFromBands(score, bands)
   }
 
   // Subjects present in the selected term across exams
@@ -158,6 +171,33 @@ export default function StudentReportCard(){
     }
     return Array.from(map.values())
   }, [examResults, termExams, parsedTermYear])
+
+  useEffect(()=>{
+    let active = true
+    ;(async ()=>{
+      try{
+        const ids = (subjects||[]).map(s=>s.id).filter(Boolean)
+        if (ids.length===0) return
+        const fetched = await Promise.allSettled(ids.map(async sid => {
+          const res = await api.get(`/academics/subject_grading/?subject=${sid}&_=${Date.now()}`)
+          const bands = Array.isArray(res?.data) ? res.data : (Array.isArray(res?.data?.results) ? res.data.results : [])
+          return { sid, bands }
+        }))
+        if (!active) return
+        const map = new Map(bandsBySubject)
+        let first = null
+        for (const r of fetched){
+          if (r.status==='fulfilled'){
+            map.set(String(r.value.sid), r.value.bands)
+            if (!first && Array.isArray(r.value.bands) && r.value.bands.length>0) first = r.value.bands
+          }
+        }
+        setBandsBySubject(map)
+        if (first) setGlobalBands(first)
+      }catch{}
+    })()
+    return ()=>{ active = false }
+  }, [subjects])
 
   // Build marks per subject per exam for rendering
   const marksByExamAndSubject = useMemo(()=>{
@@ -426,7 +466,7 @@ export default function StudentReportCard(){
                               return (
                                 <>
                                   <td key={`${ex.id}-${subj.id}-m`} className="px-3 py-2 text-right">{Number.isFinite(v) ? v : '-'}</td>
-                                  <td key={`${ex.id}-${subj.id}-g`} className="px-3 py-2 text-center">{Number.isFinite(v) ? toGrade(v) : '-'}</td>
+                                  <td key={`${ex.id}-${subj.id}-g`} className="px-3 py-2 text-center">{Number.isFinite(v) ? toGrade(v, subj.id) : '-'}</td>
                                 </>
                               )
                             })}

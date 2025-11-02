@@ -7,64 +7,47 @@ import api from '../api'
 import { uploadToCloudinary } from '../utils/cloudinary'
 import { toast } from '../utils/toast'
 
-function Selectors({ examResults, uiSelectedTerm, setUiSelectedTerm, uiSelectedExamId, setUiSelectedExamId }){
-  const termOptions = React.useMemo(()=>{
-    const s = new Set()
-    for (const r of (examResults||[])){
-      const ed = r.exam_detail || {}
-      if (!ed?.published) continue
-      if (ed.year && ed.term){ s.add(`${ed.year}-T${ed.term}`) }
-    }
-    return Array.from(s)
-  }, [examResults])
-
-  const parsedTerm = React.useMemo(()=>{
-    if (!uiSelectedTerm) return null
-    const [y,t] = String(uiSelectedTerm).split('-T')
-    const year = Number(y), term = Number(t)
-    if (!Number.isFinite(year) || !Number.isFinite(term)) return null
-    return { year, term }
-  }, [uiSelectedTerm])
-
-  const termExams = React.useMemo(()=>{
-    if (!parsedTerm) return []
+function Selectors({ examResults, uiSelectedExamId, setUiSelectedExamId }){
+  const allExams = React.useMemo(()=>{
     const seen = new Set()
     const out = []
     for (const r of (examResults||[])){
       const ed = r.exam_detail || {}
       const id = ed.id || r.exam
+
       if (!id || seen.has(String(id))) continue
-      if (!ed?.published) continue
-      if (ed.year === parsedTerm.year && ed.term === parsedTerm.term){
-        seen.add(String(id))
-        out.push({ id, name: ed.name || String(r.exam||'') })
-      }
+      seen.add(String(id))
+      // Try to infer year/term if missing
+      let year = ed.year || null
+      if (!year && ed.date){ const d = new Date(ed.date); if (!isNaN(d)) year = d.getFullYear() }
+      const term = ed.term || ed?.inferred_term?.number || null
+      out.push({ id, name: ed.name || String(r.exam||''), year, term })
     }
+    // Sort newest first by year, then term, then id
+    out.sort((a,b)=>{
+      const ya = Number(a.year||0), yb = Number(b.year||0)
+      if (yb !== ya) return yb - ya
+      const ta = Number(a.term||0), tb = Number(b.term||0)
+      if (tb !== ta) return tb - ta
+      return Number(b.id||0) - Number(a.id||0)
+    })
     return out
-  }, [examResults, parsedTerm])
+  }, [examResults])
 
   React.useEffect(()=>{
-    if (!uiSelectedTerm && termOptions.length){
-      setUiSelectedTerm(termOptions[0])
+    if (!uiSelectedExamId && allExams.length){
+      setUiSelectedExamId(allExams[0].id)
     }
-  }, [uiSelectedTerm, termOptions, setUiSelectedTerm])
-
-  React.useEffect(()=>{
-    if (!uiSelectedExamId && termExams.length){
-      setUiSelectedExamId(termExams[0].id)
-    }
-  }, [uiSelectedExamId, termExams, setUiSelectedExamId])
+  }, [uiSelectedExamId, allExams, setUiSelectedExamId])
 
   return (
     <div className="mb-3 flex items-center gap-2">
-      <select className="px-2 py-1.5 border rounded bg-white text-sm" value={uiSelectedTerm || ''} onChange={(e)=> setUiSelectedTerm(e.target.value || null)} title="Select Term">
-        {termOptions.map(k=> (
-          <option key={k} value={k}>{k.replace('-', ' ')}</option>
-        ))}
-      </select>
-      <select className="px-2 py-1.5 border rounded bg-white text-sm" value={uiSelectedExamId || ''} onChange={(e)=> setUiSelectedExamId(e.target.value || null)} title="Select Exam">
-        {termExams.map(ex => (
-          <option key={ex.id} value={ex.id}>{ex.name}</option>
+      <select className="px-2 py-1.5 border rounded bg-white text-sm" value={uiSelectedExamId || ''} onChange={(e)=>{
+        const v = e.target.value || null
+        setUiSelectedExamId(v)
+      }} title="Select Exam">
+        {allExams.map(ex => (
+          <option key={ex.id} value={ex.id}>{ex.name}{ex.year? ` • ${ex.year}`:''}{ex.term? ` • T${ex.term}`:''}</option>
         ))}
       </select>
     </div>
@@ -79,6 +62,7 @@ export default function AdminStudentDashboard() {
   const [examResults, setExamResults] = useState([])
   const [uiSelectedTerm, setUiSelectedTerm] = useState(null)
   const [uiSelectedExamId, setUiSelectedExamId] = useState(null)
+  const [showAllExams, setShowAllExams] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [finance, setFinance] = useState({ total_billed: 0, total_paid: 0, balance: 0 })
@@ -172,6 +156,73 @@ export default function AdminStudentDashboard() {
     if (!k) return student?.klass || '-'
     return `${k.name} • ${k.grade_level}`
   }, [student])
+
+  const examsOverview = useMemo(()=>{
+    try{
+      if (historyData?.exams && historyData.exams.length){
+        return historyData.exams
+      }
+      // Derive from raw examResults if history endpoint doesn't provide exams
+      const map = new Map()
+      for (const r of (examResults||[])){
+        const ed = r.exam_detail || {}
+        const id = ed.id || r.exam
+        if (!id) continue
+        const key = String(id)
+        if (!map.has(key)){
+          let year = ed.year || null
+          if (!year && ed.date){ const d = new Date(ed.date); if (!isNaN(d)) year = d.getFullYear() }
+          const term = ed.term || ed?.inferred_term?.number || null
+          map.set(key, { exam: { id, name: ed.name || String(id), year, term }, subjects: new Set(), total: 0 })
+        }
+        const entry = map.get(key)
+        const sid = r.subject_detail?.id || r.subject
+        if (sid) entry.subjects.add(String(sid))
+        const m = Number(r.marks)
+        if (Number.isFinite(m)) entry.total += m
+      }
+      const list = Array.from(map.values()).map(e => ({
+        exam: e.exam,
+        subjects_count: e.subjects.size,
+        total_marks_obtained: e.total,
+        approx_percentage: null,
+      }))
+      list.sort((a,b)=>{
+        const ya = Number(a.exam?.year||0), yb = Number(b.exam?.year||0)
+        if (yb !== ya) return yb - ya
+        const ta = Number(a.exam?.term||0), tb = Number(b.exam?.term||0)
+        if (tb !== ta) return tb - ta
+        return Number((b.exam?.id)||0) - Number((a.exam?.id)||0)
+      })
+      return list
+    }catch{ return [] }
+  }, [historyData?.exams, examResults])
+
+  const allExamsForStudent = useMemo(()=>{
+    const map = new Map()
+    for (const r of (examResults||[])){
+      const ed = r.exam_detail || {}
+      const id = ed.id || r.exam
+      if (!id) continue
+      if (!map.has(String(id))){
+        let year = ed.year || null
+        if (!year && ed.date){
+          const d = new Date(ed.date); if (!isNaN(d)) year = d.getFullYear()
+        }
+        const term = ed.term || (ed.inferred_term && ed.inferred_term.number) || null
+        map.set(String(id), { id, name: ed.name || String(id), year, term })
+      }
+    }
+    const list = Array.from(map.values())
+    list.sort((a,b)=>{
+      const ya = Number(a.year||0), yb = Number(b.year||0)
+      if (yb !== ya) return yb - ya
+      const ta = Number(a.term||0), tb = Number(b.term||0)
+      if (tb !== ta) return tb - ta
+      return Number(b.id||0) - Number(a.id||0)
+    })
+    return list
+  }, [examResults])
 
   function openEdit(){
     if (!student) return
@@ -421,16 +472,32 @@ export default function AdminStudentDashboard() {
         <div className="bg-white rounded shadow p-4">
           <div className="flex items-center justify-between mb-2">
             <h2 className="font-medium">Exam Results</h2>
-            <Link to={`/admin/students/${id}/report-card`} className="text-sm text-indigo-600 hover:underline">Open Printable</Link>
+            <div className="flex items-center gap-3">
+              <label className="text-sm inline-flex items-center gap-1">
+                <input type="checkbox" checked={showAllExams} onChange={e=>setShowAllExams(e.target.checked)} />
+                <span>Show all exams</span>
+              </label>
+              <Link to={`/admin/students/${id}/report-card`} className="text-sm text-indigo-600 hover:underline">Open Printable</Link>
+            </div>
           </div>
           {examResults.length === 0 ? (
             <div className="text-sm text-gray-500">No exam results yet.</div>
           ) : (
             <>
-              <Selectors examResults={examResults} uiSelectedTerm={uiSelectedTerm} setUiSelectedTerm={setUiSelectedTerm} uiSelectedExamId={uiSelectedExamId} setUiSelectedExamId={setUiSelectedExamId} />
-              <div className="-mx-4">
-                <StudentReportCardViewer embedded hideHistory showTermSelector={false} showExamSelector={false} showBackPrint={false} selectedTermYear={uiSelectedTerm} onSelectedTermYearChange={setUiSelectedTerm} selectedExamId={uiSelectedExamId} onSelectedExamIdChange={setUiSelectedExamId} />
-              </div>
+              {!showAllExams ? (
+                <>
+                  <Selectors examResults={examResults} uiSelectedTerm={uiSelectedTerm} setUiSelectedTerm={setUiSelectedTerm} uiSelectedExamId={uiSelectedExamId} setUiSelectedExamId={setUiSelectedExamId} />
+                  <div className="-mx-4">
+                    <StudentReportCardViewer embedded hideHistory showTermSelector={false} showExamSelector={false} showBackPrint={false} selectedTermYear={uiSelectedTerm} onSelectedTermYearChange={setUiSelectedTerm} selectedExamId={uiSelectedExamId} onSelectedExamIdChange={setUiSelectedExamId} />
+                  </div>
+                </>
+              ) : (
+                <div className="space-y-6 -mx-4">
+                  {allExamsForStudent.map(ex => (
+                    <StudentReportCardViewer key={ex.id} embedded hideHistory hideControls showTermSelector={false} showExamSelector={false} showBackPrint={false} selectedTermYear={`${ex.year}-T${ex.term}`} selectedExamId={ex.id} />
+                  ))}
+                </div>
+              )}
             </>
           )}
         </div>
@@ -475,7 +542,7 @@ export default function AdminStudentDashboard() {
                 <div className="flex items-center justify-between mb-2">
                   <div className="font-medium">Exams Overview</div>
                 </div>
-                {(!historyData.exams || historyData.exams.length === 0) ? (
+                {(historyData.exams || examResults).length === 0 ? (
                   <div className="text-sm text-gray-500">No exams yet.</div>
                 ) : (
                   <div className="overflow-x-auto">
@@ -490,7 +557,7 @@ export default function AdminStudentDashboard() {
                         </tr>
                       </thead>
                       <tbody>
-                        {historyData.exams.map((e)=> {
+                        {(historyData.exams || examResults).map((e)=> {
                           const pct = e.approx_percentage
                           const pctClass = pct == null ? 'bg-slate-100 text-slate-600' : (pct >= 75 ? 'bg-emerald-100 text-emerald-700' : pct >= 50 ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700')
                           return (

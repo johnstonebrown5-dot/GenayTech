@@ -14,6 +14,8 @@ export default function StudentReportCardViewer({ embedded=false, hideControls=f
   const [logoFailed, setLogoFailed] = useState(false)
   const [school, setSchool] = useState(null)
   const [ranks, setRanks] = useState({})
+  const [bandsBySubject, setBandsBySubject] = useState(new Map())
+  const [globalBands, setGlobalBands] = useState(null)
 
   const termYearOptions = useMemo(()=>{
     const set = new Set()
@@ -152,14 +154,78 @@ export default function StudentReportCardViewer({ embedded=false, hideControls=f
     return ()=>{ active = false }
   }, [studentId, termExams])
 
-  const toGrade = (score) => {
-    const s = Number(score || 0)
-    if (s >= 80) return 'A'
-    if (s >= 70) return 'B'
-    if (s >= 60) return 'C'
-    if (s >= 50) return 'D'
+  const letterFromBands = (score, bands) => {
+    const n = Number(score)
+    if (!Number.isFinite(n)) return '-'
+    const arr = Array.isArray(bands) ? [...bands] : []
+    arr.sort((a,b)=> Number(b.min ?? -Infinity) - Number(a.min ?? -Infinity))
+    for (const b of arr){
+      const min = Number.isFinite(Number(b.min)) ? Number(b.min) : -Infinity
+      const max = Number.isFinite(Number(b.max)) ? Number(b.max) : Infinity
+      if (n >= min && n <= max) return String(b.grade||'-')
+    }
+    if (n >= 80) return 'A'
+    if (n >= 70) return 'B'
+    if (n >= 60) return 'C'
+    if (n >= 50) return 'D'
     return 'E'
   }
+
+  const toGrade = (score, subjectId) => {
+    const bands = bandsBySubject.get?.(String(subjectId)) || globalBands
+    return letterFromBands(score, bands)
+  }
+
+  const gradeBadgeClass = (g) => {
+    const x = String(g||'').toUpperCase()
+    if (x === 'A') return 'bg-emerald-100 text-emerald-700'
+    if (x === 'B') return 'bg-blue-100 text-blue-700'
+    if (x === 'C') return 'bg-amber-100 text-amber-800'
+    if (x === 'D') return 'bg-orange-100 text-orange-700'
+    if (x === 'E') return 'bg-rose-100 text-rose-700'
+    return 'bg-gray-100 text-gray-700'
+  }
+
+  useEffect(()=>{
+    let active = true
+    ;(async ()=>{
+      try{
+        // derive subject ids from marks of selected exam if present, else all in term
+        const idsSet = new Set()
+        if (selectedExam){
+          // We will gather from marksByExamAndSubject after it is built
+        }
+        // Build from examResults directly for robustness
+        for (const r of examResults){
+          const ed = r.exam_detail || {}
+          const year = ed.year || (ed?.date ? (isNaN(new Date(ed.date)) ? null : new Date(ed.date).getFullYear()) : null)
+          const term = ed.term || ed?.inferred_term?.number || null
+          if (!parsedTermYear || year !== parsedTermYear.year || term !== parsedTermYear.term) continue
+          const sid = r.subject_detail?.id || r.subject
+          if (sid) idsSet.add(String(sid))
+        }
+        const ids = Array.from(idsSet)
+        if (ids.length===0) return
+        const fetched = await Promise.allSettled(ids.map(async sid => {
+          const res = await api.get(`/academics/subject_grading/?subject=${sid}&_=${Date.now()}`)
+          const bands = Array.isArray(res?.data) ? res.data : (Array.isArray(res?.data?.results) ? res.data.results : [])
+          return { sid, bands }
+        }))
+        if (!active) return
+        const map = new Map(bandsBySubject)
+        let first = null
+        for (const r of fetched){
+          if (r.status==='fulfilled'){
+            map.set(String(r.value.sid), r.value.bands)
+            if (!first && Array.isArray(r.value.bands) && r.value.bands.length>0) first = r.value.bands
+          }
+        }
+        setBandsBySubject(map)
+        if (first) setGlobalBands(first)
+      }catch{}
+    })()
+    return ()=>{ active = false }
+  }, [examResults, parsedTermYear, selectedExam])
 
   // Build marks map first so it can be used by subject derivation below
   const marksByExamAndSubject = useMemo(()=>{
@@ -283,18 +349,7 @@ export default function StudentReportCardViewer({ embedded=false, hideControls=f
     <div className="p-6">
       <div className="max-w-3xl mx-auto">
         <div className={`flex items-center justify-between mb-4 no-print:mb-4 ${hideControls ? 'hidden print:hidden' : ''}`}>
-          <div className="flex items-center gap-3">
-            {(() => {
-              const rawUrl = (school?.logo_url || user?.school?.logo_url || school?.logo || user?.school?.logo || '')
-              const src = rawUrl ? toAbsoluteUrl(String(rawUrl)) + (rawUrl.includes('?') ? '' : `?v=${(school?.id||'')}-${(student?.id||'')}`) : ''
-              return (src && !logoFailed) ? (
-                <img src={src} alt="School Logo" className="w-10 h-10 rounded object-contain bg-white border print:hidden" loading="eager" onError={(e)=>{ try{ e.currentTarget.src=''; }catch(_){} setLogoFailed(true) }} />
-              ) : (
-                <div className="w-10 h-10 rounded bg-gray-100 flex items-center justify-center text-gray-400 text-lg print:hidden" aria-label="School Logo Placeholder">🏫</div>
-              )
-            })()}
-            <div className="hidden print:block" />
-          </div>
+          <div className="hidden" />
           <div className="flex items-center gap-2">
             {showTermSelector && termYearOptions.length>0 && (
               <select className="px-2 py-1.5 border rounded bg-white text-sm" value={effectiveTermYear || ''} onChange={(e)=> { const v = e.target.value || null; onSelectedTermYearChange ? onSelectedTermYearChange(v) : setSelectedTermYear(v) }} title="Select term">
@@ -323,14 +378,40 @@ export default function StudentReportCardViewer({ embedded=false, hideControls=f
         {loading && <div className="bg-white p-4 rounded card shadow border border-gray-100">Loading...</div>}
 
         {!loading && !error && (
-          <div className="bg-[#f6f3ec] border-2 border-[#2e5d5b] relative print:shadow-none shadow rounded-md">
-            <div className="p-8">
-              <div className="text-center mb-6">
-                <div className="text-2xl font-extrabold tracking-wide">{school?.name || user?.school?.name || 'SCHOOL NAME'}</div>
-                {(school?.motto || user?.school?.motto) && (
-                  <div className="text-base font-semibold text-gray-600 mt-1">{school?.motto || user?.school?.motto}</div>
-                )}
-              </div>
+          <div className="relative overflow-hidden rounded-xl border border-gray-300 bg-white shadow-lg print:shadow-none">
+            {(() => {
+              const raw = (school?.logo_url || school?.logo || '')
+              const has = !!raw
+              const bgStyle = has ? {
+                backgroundImage: `url(${raw})`,
+                backgroundRepeat: 'no-repeat',
+                backgroundPosition: 'center',
+                backgroundSize: '65%',
+                opacity: 0.07,
+                filter: 'grayscale(100%)',
+              } : { background: 'linear-gradient(180deg,#f8fafc,rgba(248,250,252,0.7))' }
+              return <div className="absolute inset-0 pointer-events-none" style={bgStyle}></div>
+            })()}
+            <div className="relative m-3 sm:m-4 md:m-6 border-2 border-gray-700 rounded-lg">
+              <div className="h-1.5 bg-gradient-to-r from-indigo-500 via-sky-500 to-violet-500 rounded-t-md"></div>
+              <div className="p-6 md:p-8">
+                <div className="text-center mb-6">
+                  <div className="flex items-center justify-center gap-2 mb-2">
+                    {(() => {
+                      const rawUrl = (school?.logo_url || user?.school?.logo_url || school?.logo || user?.school?.logo || '')
+                      const src = rawUrl ? toAbsoluteUrl(String(rawUrl)) + (rawUrl.includes('?') ? '' : `?v=${(school?.id||'')}-${(student?.id||'')}`) : ''
+                      return (src && !logoFailed) ? (
+                        <img src={src} alt="School Logo" className="w-10 h-10 object-contain" loading="eager" onError={(e)=>{ try{ e.currentTarget.src=''; }catch(_){} setLogoFailed(true) }} />
+                      ) : (
+                        <div className="w-10 h-10 rounded bg-gray-100 flex items-center justify-center text-gray-400">🏫</div>
+                      )
+                    })()}
+                    <div className="text-2xl font-extrabold tracking-wide">{school?.name || user?.school?.name || 'SCHOOL NAME'}</div>
+                  </div>
+                  {(school?.motto || user?.school?.motto) && (
+                    <div className="text-base font-semibold text-gray-600 mt-1">{school?.motto || user?.school?.motto}</div>
+                  )}
+                </div>
 
               <div className="flex items-start justify-between text-sm mb-6">
                 <div className="space-y-1">
@@ -352,12 +433,12 @@ export default function StudentReportCardViewer({ embedded=false, hideControls=f
               <div className="text-center text-sm font-semibold tracking-wide mb-3">{selectedExam?.name || 'EXAM NAME'}</div>
 
               <div className="overflow-hidden">
-                <table className="w-full text-sm border border-[#2e5d5b]">
+                <table className="w-full text-sm">
                   <thead>
                     <tr>
-                      <th className="text-left px-3 py-2 border-b border-[#2e5d5b]">Subject</th>
-                      <th className="text-center px-3 py-2 border-b border-[#2e5d5b]">Marks</th>
-                      <th className="text-center px-3 py-2 border-b border-[#2e5d5b]">Grade</th>
+                      <th className="text-left px-3 py-2 bg-gray-100">Subject</th>
+                      <th className="text-center px-3 py-2 bg-gray-100">Marks</th>
+                      <th className="text-center px-3 py-2 bg-gray-100">Grade</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -365,16 +446,20 @@ export default function StudentReportCardViewer({ embedded=false, hideControls=f
                       const v = selectedExamMarks[String(subj.id)]
                       return (
                         <tr key={String(subj.id)}>
-                          <td className="px-3 py-2 border-t border-gray-300">{subj.label}</td>
-                          <td className="px-3 py-2 text-center border-t border-gray-300">{Number.isFinite(v) ? v : '-'}</td>
-                          <td className="px-3 py-2 text-center border-t border-gray-300">{Number.isFinite(v) ? toGrade(v) : '-'}</td>
+                          <td className="px-3 py-2 border-t border-gray-200">{subj.label}</td>
+                          <td className="px-3 py-2 text-center border-t border-gray-200">{Number.isFinite(v) ? v : '-'}</td>
+                          <td className="px-3 py-2 text-center border-t border-gray-200">{Number.isFinite(v) ? (
+                            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${gradeBadgeClass(toGrade(v, subj.id))}`}>{toGrade(v, subj.id)}</span>
+                          ) : '-'}</td>
                         </tr>
                       )
                     })}
                     <tr>
-                      <td className="px-3 py-2 border-t border-gray-400 font-semibold">Total</td>
-                      <td className="px-3 py-2 text-center border-t border-gray-400 font-semibold">{selectedTotals.sum.toFixed(2)}</td>
-                      <td className="px-3 py-2 text-center border-t border-gray-400 font-semibold">{selectedTotals.avg.toFixed(2)}</td>
+                      <td className="px-3 py-2 border-t border-gray-300 font-semibold">Total</td>
+                      <td className="px-3 py-2 text-center border-t border-gray-300 font-semibold">{selectedTotals.sum.toFixed(2)}</td>
+                      <td className="px-3 py-2 text-center border-t border-gray-300 font-semibold">
+                        {(() => { const g = letterFromBands(selectedTotals.avg, globalBands); return <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${gradeBadgeClass(g)}`}>{g}</span> })()}
+                      </td>
                     </tr>
                   </tbody>
                 </table>
@@ -411,6 +496,7 @@ export default function StudentReportCardViewer({ embedded=false, hideControls=f
                   <div className="font-semibold">Remarks</div>
                   <textarea className="mt-2 w-full border rounded p-2 min-h-[72px] resize-none" placeholder="" />
                 </div>
+              </div>
               </div>
             </div>
           </div>

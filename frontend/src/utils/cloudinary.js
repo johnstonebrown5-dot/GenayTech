@@ -3,9 +3,9 @@ async function sleep(ms){ return new Promise(r=>setTimeout(r, ms)) }
 export async function uploadToCloudinary(file, opts = {}){
   const cloud = (import.meta.env.VITE_CLOUDINARY_CLOUD || '').trim()
   const preset = (import.meta.env.VITE_CLOUDINARY_PRESET || '').trim()
-  if (!cloud || !preset) throw new Error('Cloudinary not configured (VITE_CLOUDINARY_CLOUD, VITE_CLOUDINARY_PRESET)')
+  if (!cloud || !preset) throw new Error('Cloudinary not configured. Set VITE_CLOUDINARY_CLOUD and VITE_CLOUDINARY_PRESET, then restart Vite.')
   const folder = (opts.folder || '').trim()
-  const resourceType = (opts.resourceType || 'image').trim() // 'image' | 'auto' | 'raw' | 'video'
+  const resourceType = (opts.resourceType || 'auto').trim() // default 'auto' to support any file type
   const endpoint = `https://api.cloudinary.com/v1_1/${cloud}/${resourceType}/upload`
   const fd = new FormData()
   fd.append('file', file)

@@ -43,6 +43,7 @@ import AdminCurriculum from './pages/AdminCurriculum'
 import AdminReports from './pages/AdminReports'
 import AdminClasses from './pages/AdminClasses'
 import AdminClassProfile from './pages/AdminClassProfile'
+import AdminClassPrintReportCards from './pages/AdminClassPrintReportCards'
 import AdminUsers from './pages/AdminUsers'
 import AdminSchool from './pages/AdminSchool'
 import AdminProfile from './pages/AdminProfile'
@@ -117,11 +118,12 @@ export default function App() {
             <Route path="/admin/students/:id" element={<ProtectedRoute roles={["admin"]}><AdminStudentDashboard/></ProtectedRoute>} />
             <Route path="/admin/students/:id/invoices" element={<ProtectedRoute roles={["admin"]}><AdminStudentInvoices/></ProtectedRoute>} />
             <Route path="/admin/students/:id/payments" element={<ProtectedRoute roles={["admin"]}><AdminStudentPayments/></ProtectedRoute>} />
-            <Route path="/admin/students/:id/report-card" element={<ProtectedRoute roles={["admin"]}><StudentReportCardViewer/></ProtectedRoute>} />
+            <Route path="/admin/students/:id/report-card" element={<ProtectedRoute roles={["admin"]}><AdminLayout><StudentReportCardViewer/></AdminLayout></ProtectedRoute>} />
             <Route path="/admin/teachers" element={<ProtectedRoute roles={["admin"]}><AdminTeachers/></ProtectedRoute>} />
             <Route path="/admin/teachers/:id" element={<ProtectedRoute roles={["admin"]}><AdminTeacherProfile/></ProtectedRoute>} />
             <Route path="/admin/classes" element={<ProtectedRoute roles={["admin"]}><AdminClasses/></ProtectedRoute>} />
             <Route path="/admin/classes/:id" element={<ProtectedRoute roles={["admin"]}><AdminClassProfile/></ProtectedRoute>} />
+            <Route path="/admin/classes/:id/print-report-cards" element={<ProtectedRoute roles={["admin"]}><AdminClassPrintReportCards/></ProtectedRoute>} />
             <Route path="/admin/fees" element={<ProtectedRoute roles={["admin"]}><AdminFees/></ProtectedRoute>} />
             <Route path="/admin/curriculum" element={<ProtectedRoute roles={["admin"]}><AdminCurriculum/></ProtectedRoute>} />
             <Route path="/admin/subjects" element={<ProtectedRoute roles={["admin"]}><AdminSubjects/></ProtectedRoute>} />

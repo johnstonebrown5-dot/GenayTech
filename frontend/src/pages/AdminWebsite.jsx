@@ -353,13 +353,11 @@ export default function AdminWebsite(){
                                 <input type="file" accept="image/*" className="hidden" onChange={async ev=>{
                                   const file = ev.target.files?.[0]
                                   if(!file) return
-                                  const fd = new FormData(); fd.append('file', file)
                                   try{
-                                    const { data } = await api.post('/communications/upload-admission-letter/', fd, { headers:{'Content-Type':'multipart/form-data'} })
-                                    const url = data?.url || ''
+                                    const { url } = await uploadToCloudinary(file, { folder: 'edu-track/site' })
                                     setForm(f=>{ const arr=[...(f.homepage?.featured||[])]; const imgs = Array.isArray(arr[idx]?.images)? [...arr[idx].images] : (arr[idx]?.image?[arr[idx].image]:[]); imgs[i2] = url; arr[idx] = { ...(arr[idx]||{}), images:imgs }; return { ...f, homepage:{ ...f.homepage, featured:arr } } })
-                                    ev.target.value = ''
-                                  }catch{}
+                                  }catch(e){ toast(e?.message || 'Failed to upload to Cloudinary', 'error') }
+                                  finally{ ev.target.value = '' }
                                 }} />
                               </label>
                               <button type="button" className="text-xs text-red-600" onClick={()=>setForm(f=>{ const arr=[...(f.homepage?.featured||[])]; const imgs = Array.isArray(arr[idx]?.images)? [...arr[idx].images] : []; imgs.splice(i2,1); arr[idx] = { ...(arr[idx]||{}), images:imgs }; return { ...f, homepage:{ ...f.homepage, featured:arr } } })}>Remove</button>

@@ -20,6 +20,8 @@ export default function AdminResults(){
   const [fullListSearch, setFullListSearch] = useState('')
   const [tab, setTab] = useState('class') // class | compare | block | full
   const fullListTableRef = useRef(null)
+  const [bandsBySubject, setBandsBySubject] = useState(new Map()) // subjectId -> bands[]
+  const [globalBands, setGlobalBands] = useState(null) // bands[] to compute overall Grade
 
   const printFullList = () => {
     try{
@@ -290,6 +292,54 @@ export default function AdminResults(){
     }
   }, [compareSummaries, exams, classes, selectedExam])
 
+  // Convert numeric score to letter grade using admin-defined bands (fallback to defaults)
+  const letterFromBands = (score, bands) => {
+    const n = Number(score)
+    if (!Number.isFinite(n)) return '-'
+    const arr = Array.isArray(bands) ? [...bands] : []
+    arr.sort((a,b)=> (a.order??0) - (b.order??0))
+    for (const b of arr){
+      const min = Number(b.min), max = Number(b.max)
+      if (Number.isFinite(min) && Number.isFinite(max)){
+        if (n >= min && n <= max) return String(b.grade || '-')
+      }
+    }
+    if (n >= 80) return 'A'
+    if (n >= 70) return 'B'
+    if (n >= 60) return 'C'
+    if (n >= 50) return 'D'
+    return 'E'
+  }
+
+  const toGrade = (avg) => letterFromBands(avg, globalBands)
+
+  // Fetch grading bands for subjects of the selected exam summary, choose first non-empty as global bands
+  useEffect(() => {
+    let active = true
+    ;(async () => {
+      try{
+        const ids = Array.isArray(summary?.subjects) ? summary.subjects.map(s=>s.id).filter(Boolean) : []
+        if (ids.length === 0) return
+        const fetched = await Promise.allSettled(ids.map(async sid => {
+          const res = await api.get(`/academics/subject_grading/?subject=${sid}`)
+          return { sid, bands: Array.isArray(res?.data) ? res.data : [] }
+        }))
+        if (!active) return
+        const map = new Map(bandsBySubject)
+        let first = null
+        for (const r of fetched){
+          if (r.status === 'fulfilled'){
+            map.set(r.value.sid, r.value.bands)
+            if (!first && Array.isArray(r.value.bands) && r.value.bands.length>0) first = r.value.bands
+          }
+        }
+        setBandsBySubject(map)
+        if (first) setGlobalBands(first)
+      }catch{}
+    })()
+    return () => { active = false }
+  }, [summary?.subjects])
+
   return (
     <AdminLayout>
       <div className="space-y-6">
@@ -367,7 +417,7 @@ export default function AdminResults(){
                       <th key={s.id} className="border px-2 py-1 text-left">{s.code}</th>
                     ))}
                     <th className="border px-2 py-1 text-left">Total</th>
-                    <th className="border px-2 py-1 text-left">Average</th>
+                    <th className="border px-2 py-1 text-left">Grade</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -383,7 +433,7 @@ export default function AdminResults(){
                         )
                       })}
                       <td className="border px-2 py-1 font-medium">{Number.isFinite(Number(st.total)) ? Number(st.total) : 0}</td>
-                      <td className="border px-2 py-1">{Number.isFinite(Number(st.average)) ? Number(st.average) : 0}</td>
+                      <td className="border px-2 py-1">{toGrade(st.average)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -431,7 +481,7 @@ export default function AdminResults(){
                       <th key={s.id} className="border px-2 py-1 text-left">{s.code}</th>
                     ))}
                     <th className="border px-2 py-1 text-left">Total</th>
-                    <th className="border px-2 py-1 text-left">Average</th>
+                    <th className="border px-2 py-1 text-left">Grade</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -452,7 +502,7 @@ export default function AdminResults(){
                           return <td key={s.id} className="border px-2 py-1">{val}</td>
                         })}
                         <td className="border px-2 py-1">{r.total}</td>
-                        <td className="border px-2 py-1">{r.average}</td>
+                        <td className="border px-2 py-1">{toGrade(r.average)}</td>
                       </tr>
                     ))}
                 </tbody>
@@ -506,7 +556,7 @@ export default function AdminResults(){
                     <th className="border px-2 py-1 text-left">Student</th>
                     <th className="border px-2 py-1 text-left">Class</th>
                     <th className="border px-2 py-1 text-left">Total</th>
-                    <th className="border px-2 py-1 text-left">Average</th>
+                    <th className="border px-2 py-1 text-left">Grade</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -516,7 +566,7 @@ export default function AdminResults(){
                       <td className="border px-2 py-1">{r.name}</td>
                       <td className="border px-2 py-1">{r.klass}</td>
                       <td className="border px-2 py-1 font-medium">{r.total}</td>
-                      <td className="border px-2 py-1">{r.average}</td>
+                      <td className="border px-2 py-1">{toGrade(r.average)}</td>
                     </tr>
                   ))}
                 </tbody>
