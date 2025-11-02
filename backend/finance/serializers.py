@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Invoice, Payment, FeeCategory, ClassFee, MpesaConfig, ExpenseCategory, Expense, PocketMoneyWallet, PocketMoneyTransaction, PaymentMethod
+from .models import Invoice, Payment, FeeCategory, ClassFee, MpesaConfig, ExpenseCategory, Expense, PocketMoneyWallet, PocketMoneyTransaction, PaymentMethod, IncomingPayment
 
 class PaymentSerializer(serializers.ModelSerializer):
     recorded_by_name = serializers.SerializerMethodField()
@@ -134,4 +134,10 @@ class PocketMoneyWalletSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = PocketMoneyWallet
+        fields = '__all__'
+
+
+class IncomingPaymentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = IncomingPayment
         fields = '__all__'

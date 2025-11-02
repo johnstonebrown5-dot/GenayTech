@@ -38,6 +38,7 @@ export default function AdminLayout({ children }){
   const [broadcastBanner, setBroadcastBanner] = useState(null)
   const [bannerExpanded, setBannerExpanded] = useState(false)
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
+  const [avatarUrl, setAvatarUrl] = useState('')
 
   // Close mobile drawer on route change
   useEffect(() => { setIsMobileOpen(false) }, [pathname])
@@ -59,18 +60,46 @@ export default function AdminLayout({ children }){
     return () => { mounted = false }
   }, [])
 
-  // Ensure we have an up-to-date active status for the current user
+  // Ensure we have an up-to-date active status for the current user (and avatar)
   useEffect(() => {
     let mounted = true
     ;(async () => {
       try {
         const { data } = await api.get('/auth/me/')
-        if (mounted) setSelfActive(typeof data?.is_active === 'boolean' ? data.is_active : undefined)
+        if (mounted) {
+          setSelfActive(typeof data?.is_active === 'boolean' ? data.is_active : undefined)
+          const avatar = data?.avatar_url || data?.profile_picture_url || ''
+          setAvatarUrl(avatar || '')
+        }
       } catch {
         if (mounted) setSelfActive(undefined)
       }
     })()
     return () => { mounted = false }
+  }, [])
+
+  // Reflect AuthContext changes immediately (e.g., after login)
+  useEffect(() => {
+    const u = user || {}
+    const a = u.avatar_url || u.profile_picture_url || ''
+    if (a) setAvatarUrl(a)
+  }, [user])
+
+  // React to profile updates fired by profile pages
+  useEffect(() => {
+    const onUpdated = (e) => {
+      const url = e?.detail?.avatar_url
+      if (url) {
+        setAvatarUrl(url)
+      } else {
+        api.get('/auth/me/').then(res => {
+          const a = res.data?.avatar_url || res.data?.profile_picture_url || ''
+          setAvatarUrl(a || '')
+        }).catch(()=>{})
+      }
+    }
+    try { window.addEventListener('profile:updated', onUpdated) } catch {}
+    return () => { try { window.removeEventListener('profile:updated', onUpdated) } catch {} }
   }, [])
 
   // Poll unread messages (inbox + system)
@@ -243,8 +272,12 @@ export default function AdminLayout({ children }){
             </Link>
             {user && (
               <Link to="/admin/profile" className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-full shadow-sm hover:bg-gray-100 transition-colors" title="Open my profile">
-                <div className="w-6 h-6 bg-brand-600 rounded-full flex items-center justify-center">
-                  <span className="text-white text-xs font-medium">{(user.first_name || user.username || 'U')[0].toUpperCase()}</span>
+                <div className="w-6 h-6 rounded-full overflow-hidden bg-brand-600 flex items-center justify-center">
+                  {avatarUrl ? (
+                    <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
+                  ) : (
+                    <span className="text-white text-xs font-medium">{(user.first_name || user.username || 'U')[0].toUpperCase()}</span>
+                  )}
                 </div>
                 <span className="text-sm text-gray-800 font-medium max-w-[12rem] truncate">{user.first_name || user.username}</span>
                 {typeof (selfActive ?? user.is_active) === 'boolean' && (

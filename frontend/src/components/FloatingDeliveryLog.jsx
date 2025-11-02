@@ -23,6 +23,14 @@ export default function FloatingDeliveryLog(){
   const [lastCampaignId, setLastCampaignId] = useState(null)
   const [actionBusy, setActionBusy] = useState(false)
   const [showList, setShowList] = useState(false)
+  // Anchor panel to the actual button rendered inside FloatingActions holder
+  const btnRef = useRef(null)
+  const [panelPos, setPanelPos] = useState({ left: 0, top: 0 })
+  const [retryBusy, setRetryBusy] = useState(false)
+  const [retryingMap, setRetryingMap] = useState({})
+  // Retry mode: reset failed to 0 for selected items, count new failures for those only
+  const [retryStart, setRetryStart] = useState(null) // ISO string
+  const [retryIds, setRetryIds] = useState([]) // original DeliveryLog ids retried
 
   const stopOrResume = async () => {
     if (actionBusy) return
@@ -125,6 +133,33 @@ export default function FloatingDeliveryLog(){
     const emailFail = (progress?.email?.failed ?? 0) || counts.emailFail
     return { smsSent, smsFail, emailSent, emailFail }
   }, [progress, counts])
+  // Display failed counts under retry mode
+  const displayFailed = useMemo(() => {
+    if (!retryStart || !Array.isArray(retryIds) || retryIds.length === 0) {
+      return { smsFail: summary.smsFail, emailFail: summary.emailFail }
+    }
+    const since = new Date(retryStart)
+    let smsNew = 0, emailNew = 0
+    try {
+      const wanted = new Set(retryIds.map(Number))
+      for (const it of (items || [])){
+        if (!it || it.ok !== false) continue
+        const t = new Date(it.created_at)
+        if (isNaN(t)) continue
+        if (t < since) continue
+        const ctx = String(it.context || '')
+        // Match any retry_of:<id> present in context
+        let matches = false
+        for (const id of wanted){
+          if (ctx.includes(`retry_of:${id}`)) { matches = true; break }
+        }
+        if (!matches) continue
+        if (it.channel === 'sms') smsNew++
+        else if (it.channel === 'email') emailNew++
+      }
+    } catch {}
+    return { smsFail: smsNew, emailFail: emailNew }
+  }, [summary, retryStart, retryIds, items])
 
   const barStyle = useMemo(() => {
     const pct = Math.max(0, Math.min(100, Number(progress.percent || 0)))
@@ -138,43 +173,75 @@ export default function FloatingDeliveryLog(){
     }
   }, [progress.percent])
 
+  // When panel opens, compute its position near the button, and keep synced on resize/scroll
+  const updatePanelPos = () => {
+    const el = btnRef.current
+    if (!el) return
+    const r = el.getBoundingClientRect()
+    const panelWidth = 384 // 24rem
+    const panelHeight = 360 // approx for clamping
+    const w = window.innerWidth
+    const h = window.innerHeight
+    const left = Math.max(8, Math.min(r.left - panelWidth - 12, w - panelWidth - 8))
+    const top = Math.max(8, Math.min(Math.round(r.top + r.height/2 - panelHeight/2), h - panelHeight - 8))
+    setPanelPos({ left, top })
+  }
+  useEffect(() => {
+    if (!open) return
+    updatePanelPos()
+    const onEvt = () => updatePanelPos()
+    window.addEventListener('resize', onEvt)
+    window.addEventListener('scroll', onEvt, true)
+    return () => { window.removeEventListener('resize', onEvt); window.removeEventListener('scroll', onEvt, true) }
+  }, [open])
+
   if (!canSee) return null
 
   const button = (
-    <button
-      onClick={() => setOpen(v=>!v)}
-      aria-label="Message delivery logs"
-      title="Message delivery logs"
-      style={{
-        order: 3,
-        width: 44,
-        height: 44,
-        borderRadius: '9999px',
-        border: '1px solid rgba(255,255,255,0.4)',
-        background: 'linear-gradient(135deg, #3b82f6 0%, #06b6d4 100%)',
-        color: 'white',
-        boxShadow: '0 8px 22px rgba(59,130,246,0.35)',
-        cursor: 'pointer',
-        display: 'inline-flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: 0,
-        pointerEvents: 'auto',
-      }}
-    >
-      {/* mail/sms icon */}
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width={18} height={18}>
-        <path d="M1.5 6.75A2.25 2.25 0 013.75 4.5h16.5A2.25 2.25 0 0122.5 6.75v10.5A2.25 2.25 0 0120.25 19.5H3.75A2.25 2.25 0 011.5 17.25V6.75z" />
-        <path fill="#fff" d="M3 7l9 6 9-6" />
-      </svg>
-      {hasNew && !open && (
-        <span style={{ position:'absolute', top:-2, right:-2 }} className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-pink-500 ring-2 ring-white animate-ping"></span>
+    <div style={{ position:'relative', pointerEvents:'auto' }}>
+      <button
+        ref={btnRef}
+        onClick={() => setOpen(v=>!v)}
+        aria-label="Message delivery logs"
+        title="Message delivery logs"
+        style={{
+          width: 44,
+          height: 44,
+          borderRadius: '9999px',
+          border: '1px solid rgba(255,255,255,0.4)',
+          background: 'linear-gradient(135deg, #3b82f6 0%, #06b6d4 100%)',
+          color: 'white',
+          boxShadow: '0 8px 22px rgba(59,130,246,0.35)',
+          cursor: 'pointer',
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: 0,
+        }}
+      >
+        {/* mail/sms icon */}
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width={18} height={18}>
+          <path d="M1.5 6.75A2.25 2.25 0 013.75 4.5h16.5A2.25 2.25 0 0122.5 6.75v10.5A2.25 2.25 0 0120.25 19.5H3.75A2.25 2.25 0 011.5 17.25V6.75z" />
+          <path fill="#fff" d="M3 7l9 6 9-6" />
+        </svg>
+        {hasNew && !open && (
+          <span style={{ position:'absolute', top:-2, right:-2 }} className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-pink-500 ring-2 ring-white animate-ping"></span>
+        )}
+      </button>
+      {open && (
+        <button
+          aria-label="Close delivery logs"
+          onClick={(e)=>{ e.stopPropagation(); setOpen(false) }}
+          style={{ position:'absolute', top:-6, right:-6, width:18, height:18, borderRadius:9999, background:'#ef4444', color:'#fff', border:'2px solid #fff', display:'inline-flex', alignItems:'center', justifyContent:'center', boxShadow:'0 2px 8px rgba(0,0,0,0.2)' }}
+        >
+          ×
+        </button>
       )}
-    </button>
+    </div>
   )
 
   const panel = open ? (
-    <div style={{ position:'fixed', right:16, bottom:112, zIndex:4000 }}>
+    <div style={{ position:'fixed', left: panelPos.left, top: panelPos.top, zIndex:4000 }}>
       <div className="bg-white/80 supports-[backdrop-filter]:bg-white/60 backdrop-blur-md shadow-2xl ring-1 ring-gray-200/70 rounded-2xl w-[24rem] max-h-[60vh] overflow-hidden">
         <div className="px-3.5 py-2.5 border-b border-gray-200/70 flex items-center gap-2">
           <span className="inline-flex items-center gap-2 font-semibold text-gray-900 text-sm flex-1">
@@ -186,7 +253,8 @@ export default function FloatingDeliveryLog(){
             <option value="sms">SMS</option>
             <option value="email">Email</option>
           </select>
-          <button onClick={()=>load()} className="text-xs px-2.5 py-1 rounded-lg bg-gray-100 hover:bg-gray-200 shadow-sm">Refresh</button>
+          <button onClick={()=>{ setRetryStart(null); setRetryIds([]); load() }} className="text-xs px-2.5 py-1 rounded-lg bg-gray-100 hover:bg-gray-200 shadow-sm">Refresh</button>
+          <button onClick={()=>{ setOpen(false); setRetryStart(null); setRetryIds([]) }} className="ml-1 text-xs px-2 py-1 rounded-lg bg-white border border-gray-300 hover:bg-gray-50">Close</button>
         </div>
         {/* Progress bar */}
         <div className="px-3 pt-1 pb-2 border-b border-gray-100">
@@ -205,7 +273,7 @@ export default function FloatingDeliveryLog(){
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> SMS Sent <span className="ml-1 font-semibold">{summary.smsSent}</span>
             </span>
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200 shadow-sm">
-              <span className="h-1.5 w-1.5 rounded-full bg-rose-500" /> Failed <span className="ml-1 font-semibold">{summary.smsFail}</span>
+              <span className="h-1.5 w-1.5 rounded-full bg-rose-500" /> Failed <span className="ml-1 font-semibold">{displayFailed.smsFail}</span>
             </span>
           </div>
           <div className="flex items-center gap-2 justify-end">
@@ -213,13 +281,32 @@ export default function FloatingDeliveryLog(){
               <span className="h-1.5 w-1.5 rounded-full bg-indigo-500" /> Email Sent <span className="ml-1 font-semibold">{summary.emailSent}</span>
             </span>
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200 shadow-sm">
-              <span className="h-1.5 w-1.5 rounded-full bg-rose-500" /> Failed <span className="ml-1 font-semibold">{summary.emailFail}</span>
+              <span className="h-1.5 w-1.5 rounded-full bg-rose-500" /> Failed <span className="ml-1 font-semibold">{displayFailed.emailFail}</span>
             </span>
           </div>
         </div>
         {/* Actions */}
         <div className="px-3.5 py-2 border-b border-gray-100/80 flex items-center gap-2">
           <button disabled={actionBusy} onClick={stopOrResume} className={`text-xs px-2.5 py-1 rounded-lg border ${paused ? 'bg-yellow-50 text-yellow-700 border-yellow-200' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'} ${actionBusy ? 'opacity-60 cursor-not-allowed' : ''}`}>{paused ? 'Resume sending' : 'Stop sending'}</button>
+          {/* Bulk retry failed */}
+          {(() => {
+            const failedIds = (Array.isArray(items) ? items : []).filter(it => it && it.ok === false).map(it => it.id)
+            return (
+              <button
+                disabled={retryBusy || !failedIds.length}
+                onClick={async () => {
+                  if (!failedIds.length) return
+                  setRetryBusy(true)
+                  // Enter retry mode: reset failed display to 0 for the selected logs
+                  setRetryStart(new Date().toISOString())
+                  setRetryIds(failedIds)
+                  try { await api.post('/communications/delivery-logs/retry/', { ids: failedIds }); await load() } catch (e) { setError('Retry failed') } finally { setRetryBusy(false) }
+                }}
+                className={`text-xs px-2.5 py-1 rounded-lg border ${failedIds.length? 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100':'bg-white text-gray-400 border-gray-200 cursor-not-allowed'} ${retryBusy ? 'opacity-60 cursor-wait' : ''}`}
+                title={failedIds.length? 'Retry failed sends' : 'No failed entries to retry'}
+              >{retryBusy? 'Retrying…' : `Retry failed${failedIds.length? ` (${failedIds.length})`: ''}`}</button>
+            )
+          })()}
           <button onClick={() => setShowList(v=>!v)} className="ml-auto text-xs px-2.5 py-1 rounded-lg border bg-white text-gray-700 border-gray-300 hover:bg-gray-50">{showList ? 'Hide' : 'View more'}</button>
           <button onClick={() => { setFullOpen(true); setCollapsed(true); setOpen(false); setHasNew(false) }} className="text-xs px-2.5 py-1 rounded-lg border bg-white text-gray-700 border-gray-300 hover:bg-gray-50">View detailed logs</button>
         </div>
@@ -243,9 +330,27 @@ export default function FloatingDeliveryLog(){
               {it.message_snippet && (
                 <div className="mt-0.5 text-xs text-gray-600 line-clamp-2">{it.message_snippet}</div>
               )}
-              {it.context && (
-                <div className="mt-0.5 text-[11px] text-gray-400">{it.context}</div>
-              )}
+              <div className="mt-1 flex items-center gap-2">
+                {it.context && (
+                  <span className="text-[11px] text-gray-400 truncate">{it.context}</span>
+                )}
+                {retryStart && (retryIds||[]).includes(it.id) && (
+                  <span className="ml-auto text-[11px] px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">Queued</span>
+                )}
+                {!it.ok && (
+                  <button
+                    onClick={async () => {
+                      setRetryingMap(prev => ({ ...prev, [it.id]: true }))
+                      // Per-item retry mode
+                      setRetryStart(new Date().toISOString())
+                      setRetryIds(prev => Array.from(new Set([...(prev||[]), it.id])))
+                      try { await api.post('/communications/delivery-logs/retry/', { id: it.id }); await load() } catch (e) { setError('Retry failed') } finally { setRetryingMap(prev => ({ ...prev, [it.id]: false })) }
+                    }}
+                    disabled={!!retryingMap[it.id]}
+                    className={`ml-auto text-xs px-2 py-0.5 rounded border ${retryingMap[it.id] ? 'opacity-60 cursor-wait' : 'bg-white hover:bg-gray-50'} border-gray-300 text-gray-700`}
+                  >{retryingMap[it.id] ? 'Retrying…' : 'Retry'}</button>
+                )}
+              </div>
             </div>
           ))}
         </div>
@@ -258,18 +363,13 @@ export default function FloatingDeliveryLog(){
     <>
       {(() => {
         const root = typeof document !== 'undefined' ? document.getElementById('floating-actions-root') : null
-        if (root) {
-          return createPortal(button, root)
-        }
-        // Fallback: fixed button at bottom-right if root is missing
+        if (root) return createPortal(button, root)
+        // Fallback if holder missing
         return createPortal(
-          <div style={{ position:'fixed', right:16, bottom:24, zIndex:4000, display:'flex', pointerEvents:'none' }}>
-            <div style={{ pointerEvents:'auto' }}>{button}</div>
-          </div>,
+          <div style={{ position:'fixed', right:16, bottom:24, zIndex:4000 }}>{button}</div>,
           document.body
         )
       })()}
-      {/* Panel stays as a body-level portal */}
       {panel && createPortal(panel, document.body)}
       {fullOpen && createPortal(
         <div style={{ position:'fixed', inset:0, zIndex:5000 }}>

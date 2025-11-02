@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Invoice, Payment, FeeCategory, ClassFee, MpesaConfig
+from .models import Invoice, Payment, FeeCategory, ClassFee, MpesaConfig, IncomingPayment
 
 @admin.register(Invoice)
 class InvoiceAdmin(admin.ModelAdmin):
@@ -29,3 +29,10 @@ class MpesaConfigAdmin(admin.ModelAdmin):
     list_display = ("id", "school", "short_code", "environment", "updated_at")
     list_filter = ("environment", "school")
     search_fields = ("school__name", "short_code")
+
+
+@admin.register(IncomingPayment)
+class IncomingPaymentAdmin(admin.ModelAdmin):
+    list_display = ("id", "source", "external_id", "amount", "currency", "reference", "status", "matched_student", "created_at")
+    list_filter = ("source", "status", "currency")
+    search_fields = ("external_id", "reference", "narration", "account_ref", "matched_student__admission_no", "matched_student__name")

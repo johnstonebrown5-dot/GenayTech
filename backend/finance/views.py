@@ -14,8 +14,8 @@ import os
 import logging
 from .mpesa import MpesaClient
 from .coop_stk import CoopStkClient
-from .models import Invoice, Payment, FeeCategory, ClassFee, MpesaConfig, ExpenseCategory, Expense, PocketMoneyWallet, PocketMoneyTransaction, PaymentMethod
-from .serializers import InvoiceSerializer, PaymentSerializer, FeeCategorySerializer, ClassFeeSerializer, MpesaConfigSerializer, ExpenseCategorySerializer, ExpenseSerializer, PocketMoneyWalletSerializer, PocketMoneyTransactionSerializer, PaymentMethodSerializer
+from .models import Invoice, Payment, FeeCategory, ClassFee, MpesaConfig, ExpenseCategory, Expense, PocketMoneyWallet, PocketMoneyTransaction, PaymentMethod, IncomingPayment
+from .serializers import InvoiceSerializer, PaymentSerializer, FeeCategorySerializer, ClassFeeSerializer, MpesaConfigSerializer, ExpenseCategorySerializer, ExpenseSerializer, PocketMoneyWalletSerializer, PocketMoneyTransactionSerializer, PaymentMethodSerializer, IncomingPaymentSerializer
 from academics.models import Student
 
 class IsFinanceOrAdmin(permissions.BasePermission):
@@ -496,6 +496,313 @@ class InvoiceViewSet(viewsets.ModelViewSet):
             'amount_allocated': float(amount - remaining),
             'amount_unallocated': float(remaining),
         }, status=201)
+
+
+class IncomingPaymentViewSet(viewsets.ModelViewSet):
+    queryset = IncomingPayment.objects.all()
+    serializer_class = IncomingPaymentSerializer
+    permission_classes = [IsFinanceOrAdmin]
+    filter_backends = [DjangoFilterBackend]
+    filterset_fields = ['status', 'source', 'matched_student']
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        # Scope by school when possible (if matched_student exists)
+        school = getattr(getattr(self.request, 'user', None), 'school', None)
+        if school:
+            qs = qs.filter(matched_student__klass__school=school) | qs.filter(matched_student__isnull=True)
+        return qs.order_by('-created_at')
+
+    def _extract_admission_tokens(self, text: str) -> list[str]:
+        try:
+            import re
+            raw = (text or '').strip()
+            if not raw:
+                return []
+            # Split on non-alphanumeric, also include contiguous alphanum strings
+            toks = re.split(r"[^A-Za-z0-9]+", raw.upper())
+            toks = [t for t in toks if t]
+            # Also keep versions without leading zeros
+            out = set()
+            for t in toks:
+                out.add(t)
+                out.add(t.lstrip('0'))
+            return [t for t in out if t]
+        except Exception:
+            return []
+
+    def _find_student_by_any(self, combined: str):
+        tokens = self._extract_admission_tokens(combined)
+        if not tokens:
+            return None, 0.0
+        # Try exact admission_no match among tokens
+        qs = Student.objects.filter(admission_no__in=tokens)
+        count = qs.count()
+        if count == 1:
+            return qs.first(), 1.0
+        # Try case-insensitive exact
+        qs = Student.objects.filter(admission_no__iexact=tokens[0])
+        if qs.count() == 1:
+            return qs.first(), 0.9
+        # No confident match
+        return None, 0.0
+
+    def _allocate_fifo(self, student: Student, amount: float, method: str, reference: str, recorded_by):
+        created_ids = []
+        remaining = float(amount)
+        inv_qs = Invoice.objects.filter(student=student).order_by('due_date', 'created_at', 'id')
+        for inv in inv_qs:
+            if remaining <= 0:
+                break
+            paid_so_far = float(inv.payments.aggregate(s=Sum('amount'))['s'] or 0)
+            inv_balance = float(inv.amount) - paid_so_far
+            if inv_balance <= 0:
+                continue
+            alloc = min(remaining, inv_balance)
+            pay = Payment.objects.create(
+                invoice=inv,
+                amount=float(alloc),
+                method=method,
+                reference=reference,
+                recorded_by=recorded_by if getattr(recorded_by, 'is_authenticated', False) else None,
+            )
+            created_ids.append(pay.id)
+            # update invoice status
+            new_paid = paid_so_far + float(alloc)
+            if new_paid >= float(inv.amount):
+                inv.status = 'paid'
+            elif new_paid > 0:
+                inv.status = 'partial'
+            else:
+                inv.status = 'unpaid'
+            inv.save(update_fields=['status'])
+            remaining -= alloc
+        return created_ids, remaining
+
+    @action(detail=False, methods=['post'], url_path='auto_match')
+    def auto_match(self, request):
+        """Try to match pending incoming payments to students by admission number.
+        Returns counts and sample matches. Does not reconcile.
+        Body: { limit?: number, status?: 'pending'|'matched' }
+        """
+        limit = 200
+        try:
+            if request.data.get('limit'):
+                limit = min(1000, int(request.data.get('limit')))
+        except Exception:
+            pass
+        status_filter = str(request.data.get('status') or 'pending')
+        qs = self.get_queryset().filter(status=status_filter)[:limit]
+        updated = 0
+        results = []
+        for item in qs:
+            combined = ' '.join(filter(None, [item.reference, item.narration, item.account_ref]))
+            stu, conf = self._find_student_by_any(combined)
+            if stu:
+                item.matched_student = stu
+                item.status = 'matched'
+                item.match_confidence = conf
+                item.save(update_fields=['matched_student','status','match_confidence'])
+                updated += 1
+                results.append({'id': item.id, 'student_id': stu.id, 'admission_no': stu.admission_no, 'confidence': conf})
+        return Response({'matched': updated, 'samples': results[:20]})
+
+    @action(detail=True, methods=['post'], url_path='reconcile')
+    def reconcile(self, request, pk=None):
+        """Reconcile a single incoming payment by allocating it to a student's invoices.
+        Body: { student?: id, admission_no?: string, invoice?: id, method?: 'bank'|'mpesa'|'cash' }
+        - If invoice provided, allocate to that invoice only (up to remaining).
+        - Otherwise allocate FIFO across student's invoices.
+        Marks IncomingPayment as 'reconciled' and stores linkage.
+        """
+        try:
+            inc = self.get_queryset().get(pk=pk)
+        except IncomingPayment.DoesNotExist:
+            return Response({'detail': 'Incoming payment not found'}, status=404)
+
+        # Resolve student
+        student = None
+        sid = request.data.get('student')
+        adm = request.data.get('admission_no')
+        if sid:
+            student = Student.objects.filter(id=sid).first()
+        if not student and adm:
+            student = Student.objects.filter(admission_no__iexact=str(adm).strip()).first()
+        if not student and inc.matched_student_id:
+            student = inc.matched_student
+        if not student:
+            # Try one more time from text
+            combined = ' '.join(filter(None, [inc.reference, inc.narration, inc.account_ref]))
+            student, _ = self._find_student_by_any(combined)
+        if not student:
+            return Response({'detail': 'No student resolved for reconciliation'}, status=400)
+
+        method = str(request.data.get('method') or 'bank').lower()
+        reference = inc.reference or inc.external_id or ''
+        amount = float(inc.amount)
+
+        created_ids = []
+        remaining = amount
+
+        inv_id = request.data.get('invoice')
+        if inv_id:
+            inv = Invoice.objects.filter(id=inv_id, student=student).first()
+            if not inv:
+                return Response({'detail': 'Invoice not found for student'}, status=404)
+            paid_so_far = float(inv.payments.aggregate(s=Sum('amount'))['s'] or 0)
+            inv_balance = float(inv.amount) - paid_so_far
+            alloc = min(remaining, inv_balance)
+            if alloc > 0:
+                pay = Payment.objects.create(
+                    invoice=inv,
+                    amount=float(alloc),
+                    method=method,
+                    reference=reference,
+                    recorded_by=request.user if request.user.is_authenticated else None,
+                )
+                created_ids.append(pay.id)
+                new_paid = paid_so_far + float(alloc)
+                if new_paid >= float(inv.amount):
+                    inv.status = 'paid'
+                elif new_paid > 0:
+                    inv.status = 'partial'
+                else:
+                    inv.status = 'unpaid'
+                inv.save(update_fields=['status'])
+                remaining -= alloc
+        else:
+            created_ids, remaining = self._allocate_fifo(student, remaining, method, reference, request.user)
+
+        # Update incoming payment status and links
+        inc.matched_student = student
+        if inv_id:
+            inc.matched_invoice = Invoice.objects.filter(id=inv_id).first()
+        inc.status = 'reconciled' if remaining <= 0.0001 or created_ids else 'matched'
+        inc.save(update_fields=['matched_student','matched_invoice','status'])
+
+        return Response({
+            'incoming_payment': IncomingPaymentSerializer(inc).data,
+            'created_payments': created_ids,
+            'amount_allocated': float(amount - remaining),
+            'amount_unallocated': float(remaining),
+        }, status=200)
+
+    @action(detail=False, methods=['post'], url_path='import-csv', parser_classes=[MultiPartParser, FormParser])
+    def import_csv(self, request):
+        """Import bank statement CSV as IncomingPayment entries.
+        Expects a file under key 'file'. Optional fields in CSV (case-insensitive):
+        amount, currency, reference, narration, account_ref, phone, value_date, external_id, source
+        Query/body options:
+          - auto_match: bool (default false) – run auto-match on created rows
+        """
+        file = request.FILES.get('file')
+        if not file:
+            return Response({'detail': 'file is required (CSV)'}, status=400)
+        try:
+            import csv
+            import io
+            from datetime import datetime
+            content = file.read()
+            if isinstance(content, bytes):
+                text = content.decode('utf-8', errors='ignore')
+            else:
+                text = str(content)
+            reader = csv.DictReader(io.StringIO(text))
+        except Exception as e:
+            return Response({'detail': f'Invalid CSV: {e}'}, status=400)
+
+        def parse_float(v):
+            try:
+                return float(str(v).strip())
+            except Exception:
+                return None
+
+        def parse_date(v):
+            if not v:
+                return None
+            s = str(v).strip()
+            for fmt in ('%Y-%m-%d', '%d/%m/%Y', '%m/%d/%Y', '%Y-%m-%d %H:%M:%S'):
+                try:
+                    # naive datetime; DB will store as naive/aware depending on settings
+                    return datetime.strptime(s, fmt)
+                except Exception:
+                    continue
+            try:
+                return datetime.fromisoformat(s)
+            except Exception:
+                return None
+
+        created = 0
+        skipped = []
+        created_ids = []
+        for row in reader:
+            try:
+                low = { (k or '').strip().lower(): (v if v is not None else '') for k, v in row.items() }
+                amount = parse_float(low.get('amount'))
+                if amount is None or amount <= 0:
+                    skipped.append({'row': low, 'reason': 'invalid amount'})
+                    continue
+                currency = (low.get('currency') or 'KES').strip() or 'KES'
+                reference = (low.get('reference') or '').strip()
+                narration = (low.get('narration') or '').strip()
+                account_ref = (low.get('account_ref') or low.get('accountreference') or low.get('billrefnumber') or '').strip()
+                phone = (low.get('phone') or '').strip()
+                ext_id = (low.get('external_id') or low.get('externalid') or '').strip()
+                source = (low.get('source') or 'bank').strip().lower()
+                value_date = parse_date(low.get('value_date') or low.get('date'))
+
+                # Simple de-duplication: prefer (source, external_id), otherwise (reference, amount, date)
+                exists = False
+                q = IncomingPayment.objects.all()
+                if ext_id:
+                    exists = q.filter(source=source, external_id=ext_id).exists()
+                if not exists and reference and value_date:
+                    exists = q.filter(reference=reference, amount=amount, value_date=value_date).exists()
+                if exists:
+                    skipped.append({'row': low, 'reason': 'duplicate'})
+                    continue
+
+                inc = IncomingPayment.objects.create(
+                    source=source,
+                    external_id=ext_id,
+                    amount=amount,
+                    currency=currency,
+                    reference=reference,
+                    narration=narration,
+                    account_ref=account_ref,
+                    phone=phone,
+                    value_date=value_date,
+                    status='pending',
+                )
+                created += 1
+                created_ids.append(inc.id)
+            except Exception as e:
+                skipped.append({'row': row, 'reason': str(e)})
+
+        # Optional auto-match
+        auto_match = str(request.data.get('auto_match', 'false')).lower() in ('1','true','yes')
+        matched_count = 0
+        if auto_match and created_ids:
+            for inc_id in created_ids:
+                item = IncomingPayment.objects.filter(id=inc_id).first()
+                if not item:
+                    continue
+                combined = ' '.join(filter(None, [item.reference, item.narration, item.account_ref]))
+                stu, conf = self._find_student_by_any(combined)
+                if stu:
+                    item.matched_student = stu
+                    item.status = 'matched'
+                    item.match_confidence = conf
+                    item.save(update_fields=['matched_student','status','match_confidence'])
+                    matched_count += 1
+
+        return Response({
+            'created': created,
+            'matched': matched_count,
+            'skipped': len(skipped),
+            'skipped_samples': skipped[:10],
+            'created_ids': created_ids[:50],
+        }, status=201 if created else 200)
 
     @action(detail=True, methods=['post'], url_path='stk_push', permission_classes=[permissions.IsAuthenticated])
     def stk_push(self, request, pk=None):
@@ -1068,6 +1375,7 @@ def mpesa_callback(request):
     receipt = meta.get('MpesaReceiptNumber') or meta.get('M-PESAReceiptNumber')
     amount = meta.get('Amount')
     phone = meta.get('PhoneNumber') or meta.get('MSISDN')
+    account_ref = meta.get('AccountReference') or meta.get('BillRefNumber')
 
     # Find invoice by previously saved CheckoutRequestID
     invoice = None
@@ -1096,6 +1404,22 @@ def mpesa_callback(request):
             invoice.status = 'unpaid'
         invoice.save(update_fields=['status'])
 
+    elif result_code == 0 and amount and not invoice:
+        # Create an IncomingPayment for later reconciliation if invoice unknown
+        try:
+            IncomingPayment.objects.create(
+                source='mpesa',
+                external_id=str(checkout_id or ''),
+                amount=float(amount),
+                currency='KES',
+                reference=str(receipt or ''),
+                narration='STK Callback',
+                account_ref=str(account_ref or ''),
+                phone=str(phone or ''),
+                status='pending',
+            )
+        except Exception:
+            pass
     # Respond to Daraja per spec
     return JsonResponse({'ResultCode': 0, 'ResultDesc': 'Accepted'})
 

@@ -18,6 +18,7 @@ export default function SchoolHome() {
     logo_url: '',
     homepage: {}
   })
+  const [showStickyCta, setShowStickyCta] = useState(false)
 
   // Simple scroll-reveal helper
   function Reveal({ className = '', children }){
@@ -103,7 +104,7 @@ export default function SchoolHome() {
                   <>
                     <div className="absolute inset-x-0 bottom-2 flex items-center justify-center gap-1">
                       {sources.map((_, di)=> (
-                        <span key={di} className={`h-1.5 w-1.5 rounded-full ${di===ix? 'bg-white' : 'bg-white/60'}`} />
+                        <span key={`dot-${di}`} className={`h-1.5 w-1.5 rounded-full ${di===ix? 'bg-white' : 'bg-white/60'}`} />
                       ))}
                     </div>
                     <button type="button" aria-label="Previous" onClick={prev} className="absolute left-2 top-1/2 -translate-y-1/2 p-2 rounded-full bg-black/35 text-white hover:bg-black/50">‹</button>
@@ -163,6 +164,16 @@ export default function SchoolHome() {
       }
     })()
     return () => { mounted = false }
+  }, [])
+
+  // Show a sticky CTA on small screens after a short scroll
+  useEffect(() => {
+    const onScroll = () => {
+      try { setShowStickyCta(window.scrollY > 240) } catch {}
+    }
+    onScroll()
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => window.removeEventListener('scroll', onScroll)
   }, [])
 
   const heroImages = (() => {
@@ -371,10 +382,10 @@ export default function SchoolHome() {
                   {school.homepage?.hero?.ctaSecondaryText || 'Learn More'}
                 </a>
               </div>
-              <div className="mt-6 flex items-center gap-4 text-sm text-gray-500">
-                <div className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-green-500"/>Safe Environment</div>
-                <div className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-indigo-500"/>Dedicated Staff</div>
-                <div className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-purple-500"/>Holistic Learning</div>
+              <div className="mt-6 flex flex-wrap gap-2 text-xs text-gray-600">
+                <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-gray-200 bg-white"><span className="h-1.5 w-1.5 rounded-full bg-green-500"/>Safe Environment</span>
+                <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-gray-200 bg-white"><span className="h-1.5 w-1.5 rounded-full bg-indigo-500"/>Dedicated Staff</span>
+                <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-gray-200 bg-white"><span className="h-1.5 w-1.5 rounded-full bg-purple-500"/>Holistic Learning</span>
               </div>
             </div>
             <div className="relative">
@@ -395,7 +406,7 @@ export default function SchoolHome() {
                     }
                     return (
                       <ProgressiveImage
-                        key={src + i}
+                        key={`hero-${i}`}
                         src={src}
                         candidates={imageCandidates(src)}
                         alt="Hero"
@@ -407,7 +418,7 @@ export default function SchoolHome() {
                 </div>
                 <div className="grid grid-cols-3 divide-x divide-gray-100">
                   {heroImages.slice(0, 3).map((src, i) => (
-                    <button key={src + 't' + i} type="button" onClick={() => setHeroIndex(i)} className="relative group">
+                    <button key={`thumb-${i}`} type="button" onClick={() => setHeroIndex(i)} className="relative group">
                       <ProgressiveImage
                         src={src}
                         candidates={imageCandidates(src)}
@@ -460,8 +471,8 @@ export default function SchoolHome() {
                 'Strong STEM and Humanities programs',
                 'Sports, arts, clubs and community service',
                 'Safe, inclusive and diverse community'
-              ]).map((b)=> (
-                <li key={b} className="flex gap-2"><span className="text-indigo-600">•</span> {b}</li>
+              ]).map((b, idx)=> (
+                <li key={`${idx}-${b}`} className="flex gap-2"><span className="text-indigo-600">•</span> {b}</li>
               ))}
             </ul>
           </Reveal>
@@ -553,7 +564,7 @@ export default function SchoolHome() {
               { title: 'Sports & Arts', desc: 'Football, athletics, music, drama and visual arts.' },
               { title: 'Clubs & Societies', desc: 'Debate, wildlife, Red Cross, Scouts and more.' },
             ]).map((f, idx) => (
-              <Reveal key={f.title} className={`rounded-xl border border-gray-200 p-6 hover:shadow-lg transition bg-gradient-to-br ${['from-indigo-50 to-indigo-100','from-emerald-50 to-emerald-100','from-violet-50 to-violet-100','from-rose-50 to-rose-100','from-amber-50 to-amber-100','from-sky-50 to-sky-100'][idx % 6]}`}>
+              <Reveal key={`${idx}-${f.title || 'program'}`} className={`rounded-xl border border-gray-200 p-6 hover:shadow-lg transition bg-gradient-to-br ${['from-indigo-50 to-indigo-100','from-emerald-50 to-emerald-100','from-violet-50 to-violet-100','from-rose-50 to-rose-100','from-amber-50 to-amber-100','from-sky-50 to-sky-100'][idx % 6]}`}>
                 <div className="h-10 w-10 rounded-lg grid place-items-center mb-4 bg-indigo-600/10 text-indigo-700">★</div>
                 <h3 className="font-semibold text-gray-900">{f.title}</h3>
                 <p className="mt-2 text-sm text-gray-600">{f.desc}</p>
@@ -578,8 +589,8 @@ export default function SchoolHome() {
                 'Day and Boarding options',
                 'Scholarships and financial aid available',
                 'Rolling admissions (space permitting)'
-              ]).map((b) => (
-                <li key={b} className="flex gap-2"><span className="text-green-600">✓</span> {b}</li>
+              ]).map((b, idx) => (
+                <li key={`${idx}-${b}`} className="flex gap-2"><span className="text-green-600">✓</span> {b}</li>
               ))}
             </ul>
             <div className="mt-6 flex flex-wrap gap-3">
@@ -631,7 +642,7 @@ export default function SchoolHome() {
               { title: 'Inter-County Football Champions', date: 'Aug 30, 2025', url: '' },
               { title: 'New ICT Lab Commissioned', date: 'Aug 05, 2025', url: '' },
             ]).map((n, idx) => (
-              <Reveal key={n.title || idx} className="rounded-xl border border-gray-200 bg-white overflow-hidden hover:shadow-lg">
+              <Reveal key={`${idx}-${n.title || 'news'}`} className="rounded-xl border border-gray-200 bg-white overflow-hidden hover:shadow-lg">
                 {n.image ? (
                   <img src={toAbsoluteUrl(n.image)} alt={n.title || 'News image'} className="w-full aspect-[16/9] object-cover" loading="lazy" />
                 ) : (
@@ -666,8 +677,40 @@ export default function SchoolHome() {
               { title: 'Championship Team', desc: 'Regional football champions for two consecutive years.', images: [new URL('../../images/pexels-gabby-k-6289065.jpg', import.meta.url).href] },
               { title: 'Arts & Culture', desc: 'Vibrant music and drama productions.', images: [new URL('../../images/pexels-kwakugriffn-14554003.jpg', import.meta.url).href] },
             ]).map((f, idx) => (
-              <FeaturedCard key={f.title || idx} item={f} />
+              <FeaturedCard key={`${idx}-${f.title || 'featured'}`} item={f} />
             ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Testimonials */}
+      <section id="testimonials" className="relative overflow-hidden bg-gradient-to-b from-white via-slate-50 to-white">
+        <div aria-hidden className="absolute inset-0 pointer-events-none opacity-10 [background:radial-gradient(rgba(99,102,241,0.12)_1px,transparent_1px)] [background-size:22px_22px]" />
+        <div className="mx-auto max-w-7xl px-4 md:px-6 py-14 md:py-16">
+          <div className="text-center max-w-2xl mx-auto">
+            <h2 className="text-3xl font-bold text-gray-900">What Parents Say</h2>
+            <p className="mt-2 text-gray-600">Real stories from our community.</p>
+          </div>
+          <div className="mt-8 overflow-x-auto -mx-4 px-4">
+            <div className="flex gap-4 snap-x snap-mandatory">
+              {(school.homepage?.testimonials && school.homepage.testimonials.length ? school.homepage.testimonials : [
+                { name: 'Parent of Form 2', quote: 'Teachers here truly care. My child has grown in confidence and academics.', avatar: '' },
+                { name: 'Alumnus 2024', quote: 'Great balance of academics and co‑curriculars. I felt prepared for KCSE.', avatar: '' },
+                { name: 'Parent', quote: 'Safe, welcoming environment with excellent communication from staff.', avatar: '' },
+              ]).map((t, idx) => (
+                <figure key={`t-${idx}`} className="min-w-[85%] sm:min-w-[420px] snap-center rounded-2xl border border-gray-200 bg-white p-5 shadow-card">
+                  <div className="flex items-center gap-3">
+                    {t.avatar ? (
+                      <img src={/^https?:/.test(t.avatar)? t.avatar : toAbsoluteUrl(t.avatar)} alt={t.name || 'Avatar'} className="h-10 w-10 rounded-full object-cover" loading="lazy" />
+                    ) : (
+                      <div className="h-10 w-10 rounded-full bg-indigo-100 text-indigo-700 grid place-items-center text-sm">★</div>
+                    )}
+                    <div className="font-medium text-gray-900">{t.name}</div>
+                  </div>
+                  <blockquote className="mt-3 text-sm leading-relaxed text-gray-700">“{t.quote}”</blockquote>
+                </figure>
+              ))}
+            </div>
           </div>
         </div>
       </section>
@@ -694,13 +737,13 @@ export default function SchoolHome() {
                   </div>
                   <div className="inline-flex items-center gap-1 rounded-lg border border-gray-200 p-1 bg-white">
                     {cats.map(c => (
-                      <button key={c} type="button" onClick={() => setGalleryCat(c)} className={`px-3 py-1.5 rounded-md text-sm ${galleryCat===c ? 'bg-indigo-600 text-white' : 'text-gray-700 hover:bg-gray-50'}`}>{c}</button>
+                      <button key={`cat-${c}`} type="button" onClick={() => setGalleryCat(c)} className={`px-3 py-1.5 rounded-md text-sm ${galleryCat===c ? 'bg-indigo-600 text-white' : 'text-gray-700 hover:bg-gray-50'}`}>{c}</button>
                     ))}
                   </div>
                 </div>
                 <div className="mt-6 grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
                   {filtered.map((g, idx) => (
-                    <Reveal key={g.url || idx} className="group rounded-xl overflow-hidden border border-gray-200 bg-white">
+                    <Reveal key={`${idx}-${g.url}`} className="group rounded-xl overflow-hidden border border-gray-200 bg-white">
                       <div className="relative">
                         <img src={/^https?:/.test(g.url)? g.url : toAbsoluteUrl(g.url)} alt={g.title || 'Gallery'} className="w-full aspect-square object-cover" loading="lazy"/>
                         <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent opacity-0 group-hover:opacity-100 transition" />
@@ -912,6 +955,14 @@ export default function SchoolHome() {
           </div>
         </div>
       </footer>
+
+      {/* Sticky mobile CTA */}
+      <div className={`md:hidden fixed inset-x-3 bottom-4 z-40 transition-all duration-300 ${showStickyCta ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4 pointer-events-none'}`}>
+        <div className="rounded-2xl border border-gray-200 bg-white/90 backdrop-blur p-2 shadow-elevated flex items-center gap-2">
+          <a href={school.homepage?.hero?.ctaPrimaryLink || '#admissions'} className="flex-1 px-4 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white text-sm font-semibold text-center">Apply</a>
+          <a href={`tel:${(school.phone||'').replace(/\s/g,'')}`} className="px-4 py-2 rounded-xl border border-gray-300 text-gray-700 text-sm font-medium bg-white">Call</a>
+        </div>
+      </div>
 
       {/* Contact Modal */}
       {contactOpen && (

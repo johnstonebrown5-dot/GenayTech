@@ -56,6 +56,36 @@ def me(request):
     if file_key:
         user.profile_picture = request.FILES[file_key]
         changed_fields.append('profile_picture')
+    # Support URL-only avatar updates (e.g., uploaded to Cloudinary on the client)
+    # If no file uploaded but an avatar_url is provided, fetch and store it
+    if not file_key:
+        try:
+            avatar_url = data.get('avatar_url') or data.get('avatar') or data.get('photo_url')
+        except Exception:
+            avatar_url = None
+        if avatar_url:
+            try:
+                resp = requests.get(str(avatar_url), timeout=15)
+                resp.raise_for_status()
+                # Infer a safe extension
+                ext = ''
+                try:
+                    ct = resp.headers.get('content-type', '')
+                    if 'png' in ct:
+                        ext = '.png'
+                    elif 'jpeg' in ct or 'jpg' in ct:
+                        ext = '.jpg'
+                    elif 'webp' in ct:
+                        ext = '.webp'
+                except Exception:
+                    ext = ''
+                name_part = f"user_{getattr(user, 'id', 'me')}"
+                fname = f"avatar_{name_part}{ext or '.jpg'}"
+                user.profile_picture = ContentFile(resp.content, name=fname)
+                changed_fields.append('profile_picture')
+            except Exception:
+                # Ignore failures; client can retry or upload a file directly
+                pass
     if changed_fields:
         user.save(update_fields=list(set(changed_fields)))
     return Response(UserSerializer(user, context={"request": request}).data)

@@ -1,6 +1,6 @@
 from rest_framework.routers import DefaultRouter
 from django.urls import path
-from .views import InvoiceViewSet, PaymentViewSet, FeeCategoryViewSet, ClassFeeViewSet, mpesa_callback, coop_mpesa_callback, MpesaConfigViewSet, ExpenseCategoryViewSet, ExpenseViewSet, PocketMoneyWalletViewSet, PocketMoneyTransactionViewSet, PaymentMethodViewSet
+from .views import InvoiceViewSet, PaymentViewSet, FeeCategoryViewSet, ClassFeeViewSet, mpesa_callback, coop_mpesa_callback, MpesaConfigViewSet, ExpenseCategoryViewSet, ExpenseViewSet, PocketMoneyWalletViewSet, PocketMoneyTransactionViewSet, PaymentMethodViewSet, IncomingPaymentViewSet
 
 router = DefaultRouter()
 router.register('invoices', InvoiceViewSet)
@@ -13,6 +13,7 @@ router.register('expense-categories', ExpenseCategoryViewSet)
 router.register('expenses', ExpenseViewSet)
 router.register('pocket-money-wallets', PocketMoneyWalletViewSet)
 router.register('pocket-money-transactions', PocketMoneyTransactionViewSet)
+router.register('incoming-payments', IncomingPaymentViewSet, basename='incoming-payments')
 
 urlpatterns = [
     # Public callback URL for Daraja STK push

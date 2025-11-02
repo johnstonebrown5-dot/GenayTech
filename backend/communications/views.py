@@ -12,7 +12,7 @@ from .serializers import NotificationSerializer, EventSerializer, ArrearsMessage
 from .models import ArrearsMessageCampaign, Message, MessageRecipient
 from .serializers import MessageSerializer
 from academics.models import Student
-from .utils import render_template, send_sms, send_email_safe, process_arrears_campaign, queue_message_delivery, deliver_message_collect
+from .utils import render_template, send_sms, send_email_safe, process_arrears_campaign, queue_message_delivery, deliver_message_collect, log_delivery
 import threading
 from django.utils import timezone
 from django.conf import settings
@@ -143,6 +143,53 @@ class DeliveryLogViewSet(viewsets.ReadOnlyModelViewSet):
         qs = self.get_queryset()[:limit]
         ser = self.get_serializer(qs, many=True)
         return Response(ser.data)
+
+    @action(detail=False, methods=["post"])
+    def retry(self, request):
+        """Retry delivery for one or more DeliveryLog records.
+        Body: {id: <int>} or {ids: [<int>, ...]}
+        Resends using the stored recipient and message_snippet via the same channel.
+        Creates a new DeliveryLog entry with context 'retry_of:<id>'.
+        """
+        user = request.user
+        school_id = getattr(user, 'school_id', None)
+        if not school_id:
+            return Response({"detail": "No school"}, status=status.HTTP_400_BAD_REQUEST)
+
+        ids = request.data.get('ids') or request.data.get('id')
+        if ids is None:
+            return Response({"detail": "id or ids required"}, status=status.HTTP_400_BAD_REQUEST)
+        if not isinstance(ids, (list, tuple)):
+            ids = [ids]
+        # Coerce to ints safely
+        cleaned = []
+        for x in ids:
+            try:
+                cleaned.append(int(x))
+            except Exception:
+                continue
+        if not cleaned:
+            return Response({"detail": "No valid ids"}, status=status.HTTP_400_BAD_REQUEST)
+
+        logs = DeliveryLog.objects.filter(id__in=cleaned, school_id=school_id)
+        results = []
+        for rec in logs:
+            ok = False
+            try:
+                if rec.channel == 'sms':
+                    ok = send_sms(rec.recipient, rec.message_snippet or '')
+                elif rec.channel == 'email':
+                    subj = "Delivery retry"
+                    ok = send_email_safe(subj, rec.message_snippet or '', rec.recipient)
+            except Exception:
+                ok = False
+            try:
+                ctx = (f"retry_of:{rec.id};" + (rec.context or ''))[:100]
+                log_delivery(school_id=rec.school_id, channel=rec.channel, recipient=rec.recipient, ok=bool(ok), message=rec.message_snippet or '', context=ctx)
+            except Exception:
+                pass
+            results.append({"id": rec.id, "ok": bool(ok), "channel": rec.channel, "recipient": rec.recipient})
+        return Response({"results": results})
 
 
 class ArrearsMessageCampaignViewSet(viewsets.ModelViewSet):

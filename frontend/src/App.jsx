@@ -33,6 +33,7 @@ import FinanceStudentWallet from './pages/FinanceStudentWallet';
 import FinanceFeeCategories from './pages/FinanceFeeCategories';
 import FinanceClassFees from './pages/FinanceClassFees';
 import FinanceFees from './pages/FinanceFees';
+import FinanceIncomingPayments from './pages/FinanceIncomingPayments';
 import AdminStudents from './pages/AdminStudents'
 import AdminTeachers from './pages/AdminTeachers'
 import AdminTeacherProfile from './pages/AdminTeacherProfile'
@@ -164,6 +165,7 @@ export default function App() {
             <Route path="/finance" element={<ProtectedRoute roles={["finance","admin"]}><FinanceLayout><FinanceDashboard/></FinanceLayout></ProtectedRoute>} />
             <Route path="/finance/messages" element={<ProtectedRoute roles={["finance","admin"]}><FinanceLayout><Messages/></FinanceLayout></ProtectedRoute>} />
             <Route path="/finance/expenses" element={<ProtectedRoute roles={["finance","admin"]}><FinanceLayout><FinanceExpenses/></FinanceLayout></ProtectedRoute>} />
+            <Route path="/finance/incoming" element={<ProtectedRoute roles={["finance","admin"]}><FinanceLayout><FinanceIncomingPayments/></FinanceLayout></ProtectedRoute>} />
             {/* Invoices route removed */}
             <Route path="/finance/payments" element={<ProtectedRoute roles={["finance","admin"]}><FinanceLayout><FinancePayments/></FinanceLayout></ProtectedRoute>} />
             <Route path="/finance/reports" element={<ProtectedRoute roles={["finance","admin"]}><FinanceLayout><FinanceReports/></FinanceLayout></ProtectedRoute>} />

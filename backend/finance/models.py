@@ -129,6 +129,58 @@ class PaymentMethod(models.Model):
         return f"{self.school} – {self.get_key_display()} ({'Enabled' if self.enabled else 'Disabled'})"
 
 
+class IncomingPayment(models.Model):
+    """External/unreconciled payment inbox entry.
+
+    Used to capture inflows fetched from bank/M-Pesa statements or webhooks before
+    allocating them to a specific student and invoice. Auto-matching tries to find
+    a Student by admission number in the reference/narration/account reference.
+    """
+    STATUS_CHOICES = (
+        ('pending', 'Pending'),
+        ('matched', 'Matched (Student identified)'),
+        ('reconciled', 'Reconciled (Applied to invoices)'),
+        ('ignored', 'Ignored'),
+    )
+    SOURCE_CHOICES = (
+        ('coop', 'Co-op'),
+        ('mpesa', 'M-Pesa'),
+        ('bank', 'Bank'),
+        ('manual', 'Manual'),
+    )
+
+    source = models.CharField(max_length=20, choices=SOURCE_CHOICES, default='bank')
+    external_id = models.CharField(max_length=100, blank=True, help_text='Provider reference/unique id')
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    currency = models.CharField(max_length=10, default='KES')
+    reference = models.CharField(max_length=100, blank=True, help_text='Receipt/transaction code')
+    narration = models.TextField(blank=True)
+    account_ref = models.CharField(max_length=100, blank=True, help_text='Account reference passed to gateway (e.g., INV123, admission no)')
+    phone = models.CharField(max_length=50, blank=True)
+    payer_name = models.CharField(max_length=255, blank=True)
+    value_date = models.DateTimeField(null=True, blank=True)
+
+    matched_student = models.ForeignKey('academics.Student', null=True, blank=True, on_delete=models.SET_NULL, related_name='incoming_payments')
+    matched_invoice = models.ForeignKey('finance.Invoice', null=True, blank=True, on_delete=models.SET_NULL, related_name='incoming_matches')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending', db_index=True)
+    match_confidence = models.FloatField(null=True, blank=True)
+    notes = models.TextField(blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['status']),
+            models.Index(fields=['source', 'external_id']),
+        ]
+        verbose_name = 'Incoming Payment'
+        verbose_name_plural = 'Incoming Payments'
+
+    def __str__(self):
+        return f"Inbox {self.source} {self.external_id or self.reference or ''} {self.amount} {self.currency}"
+
+
 class ExpenseCategory(models.Model):
     """A category for expenses, e.g., Salaries, Utilities, Supplies."""
     name = models.CharField(max_length=100)
