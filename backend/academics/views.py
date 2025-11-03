@@ -3241,6 +3241,60 @@ class TeacherProfileViewSet(viewsets.ModelViewSet):
     serializer_class = TeacherProfileSerializer
     permission_classes = [IsAdmin]
 
+    @action(detail=True, methods=['post'], permission_classes=[IsAdmin], url_path='release')
+    def release(self, request, pk=None):
+        """Release a teacher from the school.
+        Clears class/timetable assignments and disables the teacher's portal access."""
+        profile = self.get_object()
+        teacher_user = getattr(profile, 'user', None)
+        if not teacher_user:
+            return Response({'detail': 'Teacher profile is not linked to a user.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        school = getattr(request.user, 'school', None)
+        if school and teacher_user.school_id and teacher_user.school_id != school.id:
+            return Response({'detail': 'You can only release teachers from your school.'}, status=status.HTTP_403_FORBIDDEN)
+
+        summary = {}
+        with transaction.atomic():
+            classes_qs = Class.objects.filter(teacher=teacher_user)
+            if school:
+                classes_qs = classes_qs.filter(school=school)
+            summary['classes_unassigned'] = classes_qs.update(teacher=None)
+
+            cst_qs = ClassSubjectTeacher.objects.filter(teacher=teacher_user)
+            if school:
+                cst_qs = cst_qs.filter(klass__school=school)
+            summary['subject_assignments_removed'] = cst_qs.count()
+            if summary['subject_assignments_removed']:
+                cst_qs.delete()
+
+            timetable_qs = TimetableEntry.objects.filter(teacher=teacher_user)
+            if school:
+                timetable_qs = timetable_qs.filter(klass__school=school)
+            summary['timetable_entries_cleared'] = timetable_qs.update(teacher=None)
+
+            availability_qs = TeacherAvailability.objects.filter(teacher=teacher_user)
+            summary['availability_removed'] = availability_qs.delete()[0]
+
+            profile_updates = []
+            if profile.klass_id is not None:
+                profile.klass = None
+                profile_updates.append('klass')
+            if profile.subjects:
+                profile.subjects = ''
+                profile_updates.append('subjects')
+            if getattr(profile, 'can_manage_timetable', False):
+                profile.can_manage_timetable = False
+                profile_updates.append('can_manage_timetable')
+            if profile_updates:
+                profile.save(update_fields=profile_updates)
+
+            if teacher_user.is_active:
+                teacher_user.is_active = False
+                teacher_user.save(update_fields=['is_active'])
+
+        return Response({'detail': 'Teacher released successfully.', 'summary': summary})
+
     @action(detail=False, methods=['get'], permission_classes=[IsTeacherOrAdmin], url_path='mine')
     def mine(self, request):
         """Return the authenticated user's TeacherProfile.

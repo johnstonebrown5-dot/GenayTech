@@ -440,7 +440,7 @@ export default function AdminTimetable() {
     try{
       if(teachers.length===0){
         const { data } = await api.get('/academics/teachers/')
-        const list = Array.isArray(data)? data : (data?.results||[])
+        const list = (Array.isArray(data)? data : (data?.results||[])).filter(t => t?.user?.is_active !== false)
         setTeachers(list)
       }
     }catch(e){ setTeachers([]) }

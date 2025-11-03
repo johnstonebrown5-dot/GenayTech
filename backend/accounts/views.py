@@ -542,7 +542,7 @@ def school_public(request):
     except Exception:
         student_count = 0
     try:
-        teacher_count = User.objects.filter(role='teacher', school_id=school.id).count()
+        teacher_count = User.objects.filter(role='teacher', school_id=school.id, is_active=True).count()
     except Exception:
         teacher_count = 0
     # Merge into homepage.stats and overwrite with live values for these keys

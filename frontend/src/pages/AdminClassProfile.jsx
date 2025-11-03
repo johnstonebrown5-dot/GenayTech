@@ -421,7 +421,7 @@ export default function AdminClassProfile(){
       try {
         const { data } = await api.get('/academics/teachers/')
         if (!cancelled) {
-          const list = Array.isArray(data) ? data : (Array.isArray(data?.results) ? data.results : [])
+          const list = (Array.isArray(data) ? data : (Array.isArray(data?.results) ? data.results : [])).filter(t => t?.user?.is_active !== false)
           setTeachers(list)
           setAllTeachers(list)
         }
@@ -432,7 +432,7 @@ export default function AdminClassProfile(){
       try {
         const res = await api.get('/auth/users/?role=teacher')
         if (!cancelled) {
-          const uArr = Array.isArray(res.data) ? res.data : (Array.isArray(res.data?.results) ? res.data.results : [])
+          const uArr = (Array.isArray(res.data) ? res.data : (Array.isArray(res.data?.results) ? res.data.results : [])).filter(u => u?.is_active !== false)
           // Normalize into teacher-like objects
           const mapped = uArr.map(u=>({ id: null, user: u, subjects: '', klass: null, klass_detail: null }))
           setTeacherUsers(mapped)
@@ -462,7 +462,7 @@ export default function AdminClassProfile(){
         let out = []
         try {
           const r1 = await api.get(`/academics/teachers/?subject=${subjId}`)
-          out = Array.isArray(r1.data) ? r1.data : (Array.isArray(r1.data?.results) ? r1.data.results : [])
+          out = (Array.isArray(r1.data) ? r1.data : (Array.isArray(r1.data?.results) ? r1.data.results : [])).filter(t => t?.user?.is_active !== false)
         } catch {}
         // If empty, try by code or name
         if (!out.length) {
@@ -472,20 +472,20 @@ export default function AdminClassProfile(){
           if (code) {
             try {
               const r2 = await api.get(`/academics/teachers/?code=${code}`)
-              out = Array.isArray(r2.data) ? r2.data : (Array.isArray(r2.data?.results) ? r2.data.results : out)
+              out = (Array.isArray(r2.data) ? r2.data : (Array.isArray(r2.data?.results) ? r2.data.results : out)).filter(t => t?.user?.is_active !== false)
             } catch {}
           }
           if (!out.length && name) {
             try {
               const r3 = await api.get(`/academics/teachers/?name=${name}&school=`)
-              out = Array.isArray(r3.data) ? r3.data : (Array.isArray(r3.data?.results) ? r3.data.results : out)
+              out = (Array.isArray(r3.data) ? r3.data : (Array.isArray(r3.data?.results) ? r3.data.results : out)).filter(t => t?.user?.is_active !== false)
             } catch {}
           }
         }
         if (!out.length) {
           try {
             const r4 = await api.get('/academics/teachers/?school=')
-            out = Array.isArray(r4.data) ? r4.data : (Array.isArray(r4.data?.results) ? r4.data.results : [])
+            out = (Array.isArray(r4.data) ? r4.data : (Array.isArray(r4.data?.results) ? r4.data.results : [])).filter(t => t?.user?.is_active !== false)
           } catch {}
         }
         setSubjectTeachers(out)

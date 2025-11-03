@@ -31,8 +31,10 @@ export default function AdminSubjects(){
       ])
       const sArr = Array.isArray(s.data) ? s.data : (Array.isArray(s.data?.results) ? s.data.results : [])
       const cArr = Array.isArray(c.data) ? c.data : (Array.isArray(c.data?.results) ? c.data.results : [])
-      const tArr = Array.isArray(t.data) ? t.data : (Array.isArray(t.data?.results) ? t.data.results : [])
-      const uArr = Array.isArray(u.data) ? u.data : (Array.isArray(u.data?.results) ? u.data.results : [])
+      const tArrRaw = Array.isArray(t.data) ? t.data : (Array.isArray(t.data?.results) ? t.data.results : [])
+      const tArr = tArrRaw.filter(teacher => teacher?.user?.is_active !== false)
+      const uArrRaw = Array.isArray(u.data) ? u.data : (Array.isArray(u.data?.results) ? u.data.results : [])
+      const uArr = uArrRaw.filter(user => user?.is_active !== false)
       setSubjects(sArr); setClasses(cArr); setTeachers(tArr); setTeacherUsers(uArr)
     } catch (e) {
       showError('Failed to Load Data', 'Could not load subjects/classes/teachers')

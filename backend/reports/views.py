@@ -29,7 +29,7 @@ def summary(request):
     att_qs = Attendance.objects.select_related('student__klass')
     inv_qs = Invoice.objects.select_related('student__klass')
     pay_qs = Payment.objects.select_related('invoice__student')
-    teach_qs = User.objects.filter(role='teacher')
+    teach_qs = User.objects.filter(role='teacher', is_active=True)
     assess_qs = Assessment.objects.select_related('student__klass')
     exam_results_qs = ExamResult.objects.select_related('student__klass', 'exam', 'subject')
 

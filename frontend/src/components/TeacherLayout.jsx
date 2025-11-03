@@ -228,10 +228,6 @@ export default function TeacherLayout({ children }){
             </svg>
           </button>
         </div>
-        <div className="flex items-center gap-2">
-          <img src="/logo.jpg" alt="EDU-TRACK Logo" className="h-6 w-6 md:h-7 md:w-7 rounded object-contain" />
-          <div className="font-bold tracking-wide text-base md:text-lg">EDU-TRACK</div>
-        </div>
         <div className="flex-1 flex items-center justify-center gap-2 text-xs md:text-sm px-1 md:px-2 text-gray-700 truncate">
           {schoolLogo ? (
             <img src={schoolLogo} alt="School logo" className="h-5 w-5 md:h-6 md:w-6 object-contain rounded" />
@@ -309,10 +305,10 @@ export default function TeacherLayout({ children }){
             })}
           </nav>
           <div className="mt-auto p-3 text-xs text-blue-200/80">
-            {isOpen && (
+            {isOpen && schoolName && (
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></div>
-                <span>© {new Date().getFullYear()} EDU-TRACK</span>
+                <span>© {new Date().getFullYear()} {schoolName}</span>
               </div>
             )}
           </div>
@@ -347,10 +343,12 @@ export default function TeacherLayout({ children }){
             })}
           </nav>
           <div className="mt-auto p-3 text-xs text-blue-200/80">
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></div>
-              <span>© {new Date().getFullYear()} EDU-TRACK</span>
-            </div>
+            {schoolName && (
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></div>
+                <span>© {new Date().getFullYear()} {schoolName}</span>
+              </div>
+            )}
           </div>
         </aside>
 

@@ -10,6 +10,7 @@ export default function AdminTeachers(){
   const [classes, setClasses] = useState([])
   const [subjects, setSubjects] = useState([])
   const [users, setUsers] = useState([])
+  const [pastTeachers, setPastTeachers] = useState([])
   const [form, setForm] = useState({ user_id:'', subjects:'', klass:'' })
   const [newTeacher, setNewTeacher] = useState({ username:'', password:'', first_name:'', last_name:'', email:'' })
   const [creating, setCreating] = useState(false)
@@ -18,6 +19,9 @@ export default function AdminTeachers(){
   const [search, setSearch] = useState('')
   const [showCreateUser, setShowCreateUser] = useState(false)
   const [showAssign, setShowAssign] = useState(false)
+  const [showRelease, setShowRelease] = useState(false)
+  const [releaseTarget, setReleaseTarget] = useState(null)
+  const [releasing, setReleasing] = useState(false)
 
   const { showSuccess, showError } = useNotification()
 
@@ -34,9 +38,13 @@ export default function AdminTeachers(){
       const clArr = Array.isArray(cl.data) ? cl.data : (Array.isArray(cl.data?.results) ? cl.data.results : [])
       const uArr = Array.isArray(u.data) ? u.data : (Array.isArray(u.data?.results) ? u.data.results : [])
       const sArr = Array.isArray(s.data) ? s.data : (Array.isArray(s.data?.results) ? s.data.results : [])
-      setTeachers(tArr)
+      const activeTeachers = tArr.filter(t => t?.user?.is_active !== false)
+      const archivedTeachers = tArr.filter(t => t?.user?.is_active === false)
+      setTeachers(activeTeachers)
+      setPastTeachers(archivedTeachers)
       setClasses(clArr)
-      setUsers(uArr)
+      const activeUsers = uArr.filter(u => u?.is_active !== false)
+      setUsers(activeUsers)
       setSubjects(sArr)
     } catch (e) {
       showError('Failed to Load Teachers', 'There was a problem loading teachers data. Please refresh.')
@@ -100,6 +108,19 @@ export default function AdminTeachers(){
     })
   }, [directory, search])
 
+  const filteredPastTeachers = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    const base = Array.isArray(pastTeachers) ? pastTeachers : []
+    if (!q) return base
+    return base.filter(t => {
+      const u = t.user || {}
+      const name = `${u.username || ''} ${u.first_name || ''} ${u.last_name || ''}`.toLowerCase()
+      const subjects = (t.subjects || '').toLowerCase()
+      const klass = `${t.klass_detail?.name || ''}`.toLowerCase()
+      return name.includes(q) || subjects.includes(q) || klass.includes(q)
+    })
+  }, [pastTeachers, search])
+
   // Quick assign subjects modal
   const [showQuickAssign, setShowQuickAssign] = useState(false)
   const [qaTeacher, setQaTeacher] = useState({ teacherId:'', userId:'', name:'' })
@@ -123,6 +144,31 @@ export default function AdminTeachers(){
 
   const toggleQa = (id) => {
     setQaSelected(a => a.includes(id) ? a.filter(x=>x!==id) : [...a, id])
+  }
+
+  const openRelease = (teacher) => {
+    if (!teacher?.id) return
+    setReleaseTarget(teacher)
+    setShowRelease(true)
+  }
+
+  const releaseTeacher = async () => {
+    if (!releaseTarget?.id) return
+    try {
+      setReleasing(true)
+      const summary = await api.post(`/academics/teachers/${releaseTarget.id}/release/`).then(res => res.data?.summary || {})
+      await load()
+      const classesCleared = summary?.classes_unassigned || 0
+      const subjectsCleared = summary?.subject_assignments_removed || 0
+      const timetableCleared = summary?.timetable_entries_cleared || 0
+      showSuccess('Teacher Released', `Portal access disabled. Cleared ${classesCleared} class, ${subjectsCleared} subject and ${timetableCleared} timetable assignments.`)
+    } catch (err) {
+      showError('Release Failed', err?.response?.data?.detail || 'Could not release this teacher. Please try again.')
+    } finally {
+      setReleasing(false)
+      setShowRelease(false)
+      setReleaseTarget(null)
+    }
   }
 
   const saveQuickAssign = async (e) => {
@@ -180,6 +226,26 @@ export default function AdminTeachers(){
             </div>
           </form>
           <p className="text-xs text-gray-500 mt-2">After creating a teacher user, they will appear in the selector for assignment.</p>
+        </Modal>
+
+        <Modal open={showRelease} onClose={()=>!releasing && setShowRelease(false)} title="Release Teacher" size="md">
+          <div className="space-y-3">
+            <p className="text-sm text-gray-700">
+              This will disable the teacher's portal access, unassign them from their class and subjects, and clear any timetable allocations.
+            </p>
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-amber-700 text-sm">
+              <strong>Teacher:</strong> {releaseTarget?.user?.first_name} {releaseTarget?.user?.last_name} (@{releaseTarget?.user?.username})
+            </div>
+            <p className="text-sm text-gray-600">This action cannot be undone automatically. Are you sure you want to proceed?</p>
+          </div>
+          <div className="mt-6 flex justify-end gap-2">
+            <button type="button" onClick={()=>!releasing && setShowRelease(false)} className="px-3 py-1.5 rounded border text-sm" disabled={releasing}>
+              Cancel
+            </button>
+            <button type="button" onClick={releaseTeacher} className="px-3 py-1.5 rounded text-sm bg-red-600 text-white hover:bg-red-700 disabled:opacity-60" disabled={releasing}>
+              {releasing ? 'Releasing...' : 'Release Teacher'}
+            </button>
+          </div>
         </Modal>
 
         <Modal open={showAssign} onClose={()=>setShowAssign(false)} title="Assign Subjects & Class" size="lg">
@@ -246,6 +312,15 @@ export default function AdminTeachers(){
                         <span className="px-2 py-0.5 rounded-full text-xs bg-emerald-100 text-emerald-700">{t.klass_detail.name}</span>
                       ) : <span className="text-xs text-gray-500">-</span>}
                       <button type="button" onClick={(e)=>{ e.preventDefault(); openQuickAssign(t) }} className="px-2 py-1 rounded border text-xs hover:bg-gray-50">Assign Subjects</button>
+                      {t.id && (
+                        <button
+                          type="button"
+                          onClick={(e)=>{ e.preventDefault(); openRelease(t) }}
+                          className="px-2 py-1 rounded border border-red-200 text-xs text-red-600 hover:bg-red-50"
+                        >
+                          Release
+                        </button>
+                      )}
                     </div>
                   </Container>
                 )
@@ -314,6 +389,15 @@ export default function AdminTeachers(){
                         </td>
                         <td className="py-2 px-3 text-right">
                           <button type="button" onClick={()=>openQuickAssign(t)} className="px-2 py-1 rounded border text-xs hover:bg-gray-50">Assign Subjects</button>
+                          {t.id && (
+                            <button
+                              type="button"
+                              onClick={()=>openRelease(t)}
+                              className="ml-2 px-2 py-1 rounded border border-red-200 text-xs text-red-600 hover:bg-red-50"
+                            >
+                              Release
+                            </button>
+                          )}
                         </td>
                       </tr>
                     )
@@ -348,6 +432,100 @@ export default function AdminTeachers(){
             </form>
           </Modal>
         </div>
+
+        {pastTeachers.length > 0 && (
+          <div className="bg-white rounded-2xl shadow-card border border-gray-200 p-4 md:p-5">
+            <div className="flex items-center justify-between gap-3 mb-3">
+              <div className="flex items-center gap-2">
+                <h2 className="text-base font-semibold">Past Participants</h2>
+                <span className="px-2 py-0.5 rounded-full text-[11px] bg-gray-100 text-gray-600">{filteredPastTeachers.length}</span>
+              </div>
+              <div className="text-xs text-gray-500">Released teachers archived for reference.</div>
+            </div>
+
+            <div className="grid gap-2 md:hidden">
+              {filteredPastTeachers.length === 0 ? (
+                <div className="py-6 text-center text-gray-500">No matching past participants.</div>
+              ) : (
+                filteredPastTeachers.map(t => {
+                  const subj = (t.subjects || '')
+                    .split(',')
+                    .map(s => s.trim())
+                    .filter(Boolean)
+                  return (
+                    <div key={t.id} className="flex items-center justify-between gap-3 p-3 rounded-xl border border-gray-200 bg-gray-50">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="h-10 w-10 rounded-full bg-gray-200 text-gray-600 flex items-center justify-center font-semibold">
+                          {(t.user?.first_name?.[0] || t.user?.username?.[0] || '?').toUpperCase()}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="font-medium truncate">{t.user?.first_name} {t.user?.last_name}</div>
+                          <div className="text-xs text-gray-500 truncate">@{t.user?.username}</div>
+                          <div className="mt-1 flex flex-wrap gap-1.5">
+                            {subj.length ? subj.slice(0,3).map((s, idx) => (
+                              <span key={idx} className="px-2 py-0.5 rounded-full text-[11px] bg-purple-50 text-purple-600">{s}</span>
+                            )) : <span className="text-[11px] text-gray-500">No subjects recorded</span>}
+                            {subj.length>3 && <span className="text-[11px] text-gray-500">+{subj.length-3} more</span>}
+                          </div>
+                        </div>
+                      </div>
+                      <span className="px-2 py-0.5 rounded-full text-[11px] bg-gray-200 text-gray-600">Released</span>
+                    </div>
+                  )
+                })
+              )}
+            </div>
+
+            <div className="hidden md:block overflow-x-auto rounded-lg border border-gray-100">
+              <table className="w-full text-left text-sm">
+                <thead className="bg-gray-50 text-gray-600">
+                  <tr>
+                    <th className="py-2 px-3">User</th>
+                    <th className="py-2 px-3">Subjects</th>
+                    <th className="py-2 px-3 text-right">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredPastTeachers.length === 0 ? (
+                    <tr><td colSpan={3} className="py-6 text-center text-gray-500">No matching past participants.</td></tr>
+                  ) : (
+                    filteredPastTeachers.map(t => {
+                      const subj = (t.subjects || '')
+                        .split(',')
+                        .map(s => s.trim())
+                        .filter(Boolean)
+                      return (
+                        <tr key={t.id} className="border-t">
+                          <td className="py-2 px-3">
+                            <div className="flex items-center gap-2">
+                              <div className="h-8 w-8 rounded-full bg-gray-200 text-gray-600 flex items-center justify-center font-semibold">
+                                {(t.user?.first_name?.[0] || t.user?.username?.[0] || '?').toUpperCase()}
+                              </div>
+                              <div>
+                                <div className="font-medium">{t.user?.first_name} {t.user?.last_name}</div>
+                                <div className="text-xs text-gray-500">@{t.user?.username}</div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="py-2 px-3">
+                            <div className="flex flex-wrap gap-1.5">
+                              {subj.length ? subj.map((s, idx) => (
+                                <span key={idx} className="px-2 py-0.5 rounded-full text-xs bg-purple-50 text-purple-600">{s}</span>
+                              )) : <span className="text-gray-500">-</span>}
+                            </div>
+                          </td>
+                          <td className="py-2 px-3 text-right">
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-gray-200 text-gray-600">Released</span>
+                          </td>
+                        </tr>
+                      )
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
       </div>
     </AdminLayout>
   )
