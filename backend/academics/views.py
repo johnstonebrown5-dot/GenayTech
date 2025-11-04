@@ -12,6 +12,9 @@ import threading
 from io import BytesIO, StringIO
 from datetime import date
 from django.utils import timezone
+import uuid
+import requests
+from django.core.files.base import ContentFile
 try:
     from reportlab.lib.pagesizes import A4
     from reportlab.pdfgen import canvas
@@ -2514,6 +2517,7 @@ class StudentViewSet(viewsets.ModelViewSet):
     queryset = Student.objects.all()
     serializer_class = StudentSerializer
     filter_backends = [DjangoFilterBackend]
+
     # Allow server-side filtering by class, gender, active/graduation status, and year
     filterset_fields = ['klass', 'gender', 'is_graduated', 'graduation_year', 'is_active']
     # Support JSON (default axios), form, and multipart (for photo uploads)
@@ -2531,6 +2535,7 @@ class StudentViewSet(viewsets.ModelViewSet):
         if act in ('list', 'retrieve') or self.request.method in permissions.SAFE_METHODS:
             return [IsTeacherOrAdmin()]
         return [IsAdmin()]
+
     def get_queryset(self):
         qs = super().get_queryset()
         user = getattr(self.request, 'user', None)
@@ -2576,6 +2581,69 @@ class StudentViewSet(viewsets.ModelViewSet):
             # For detailed views/updates, include related klass
             qs = qs.select_related('klass')
         return qs
+
+    def _build_remote_photo_kwargs(self, serializer):
+        request = getattr(self, 'request', None)
+        if not request:
+            return {}
+        # Skip when file upload already provided/processed
+        try:
+            if serializer.validated_data.get('photo'):
+                return {}
+        except Exception:
+            pass
+        try:
+            files = getattr(request, 'FILES', None)
+            if files and files.get('photo'):
+                return {}
+        except Exception:
+            pass
+
+        photo_url = None
+        try:
+            data = getattr(request, 'data', {})
+            photo_url = data.get('photo_url') or data.get('avatar_url')
+        except Exception:
+            photo_url = None
+
+        if not photo_url:
+            return {}
+
+        remote = self._download_remote_photo(photo_url, getattr(serializer, 'instance', None))
+        if not remote:
+            return {}
+        return {'photo': remote}
+
+    def _download_remote_photo(self, url, instance=None):
+        try:
+            resp = requests.get(str(url), timeout=15)
+            resp.raise_for_status()
+        except Exception:
+            return None
+
+        content_type = str(resp.headers.get('content-type', '')).lower()
+        ext = '.jpg'
+        if 'png' in content_type:
+            ext = '.png'
+        elif 'jpeg' in content_type or 'jpg' in content_type:
+            ext = '.jpg'
+        elif 'webp' in content_type:
+            ext = '.webp'
+
+        base = 'student'
+        try:
+            if instance and getattr(instance, 'id', None):
+                base = f"student_{instance.id}"
+            else:
+                base = f"student_{uuid.uuid4().hex[:8]}"
+        except Exception:
+            base = f"student_{uuid.uuid4().hex[:8]}"
+
+        filename = f"{base}{ext}"
+        try:
+            return ContentFile(resp.content, name=filename)
+        except Exception:
+            return None
 
     @action(detail=True, methods=['get'], permission_classes=[permissions.IsAuthenticated], url_path='history')
     def history(self, request, pk=None):
@@ -2933,7 +3001,8 @@ class StudentViewSet(viewsets.ModelViewSet):
             raise ValidationError({'klass': 'Class must belong to your school'})
         # Persist school for scoping (when klass is later cleared on graduation)
         payload_school = getattr(klass, 'school', None) or school
-        serializer.save(school=payload_school)
+        photo_kwargs = self._build_remote_photo_kwargs(serializer)
+        serializer.save(school=payload_school, **photo_kwargs)
 
     def perform_update(self, serializer):
         """Validate admin edit and maintain school scoping when class changes.
@@ -2947,11 +3016,13 @@ class StudentViewSet(viewsets.ModelViewSet):
         if klass is not None:
             if school and getattr(klass, 'school_id', None) not in (None, getattr(school, 'id', None)):
                 raise ValidationError({'klass': 'Class must belong to your school'})
-            serializer.save(school=getattr(klass, 'school', None))
+            photo_kwargs = self._build_remote_photo_kwargs(serializer)
+            serializer.save(school=getattr(klass, 'school', None), **photo_kwargs)
         else:
             # klass cleared (e.g., graduation or temporary unassignment)
             current_school = getattr(serializer.instance, 'school', None)
-            serializer.save(school=current_school or school)
+            photo_kwargs = self._build_remote_photo_kwargs(serializer)
+            serializer.save(school=current_school or school, **photo_kwargs)
 
     @action(detail=True, methods=['post'], permission_classes=[IsAdmin], url_path='set-active')
     def set_active(self, request, pk=None):
