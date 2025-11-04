@@ -39,21 +39,28 @@ export default function FinancePocketMoney() {
     const [walletModalLoading, setWalletModalLoading] = useState(false);
     const [studentsLoading, setStudentsLoading] = useState(false);
 
+    const normaliseList = (data) => {
+        if (Array.isArray(data)) return data;
+        if (data && Array.isArray(data.results)) return data.results;
+        return [];
+    };
+
     // helper to ensure students are loaded
     const ensureStudents = async (pageSize=20000) => {
         if (studentsLoading) return;
         setStudentsLoading(true);
         try{
             const res = await api.get(`/academics/students/?page_size=${pageSize}`);
-            const payload = Array.isArray(res.data) ? res.data : (res.data?.results || []);
+            const payload = normaliseList(res.data);
             setStudents(payload);
             // Also ensure wallets exist
             try{
-                const have = new Set((wallets||[]).map(w=>w.student))
+                const currentWallets = Array.isArray(wallets) ? wallets : normaliseList(wallets);
+                const have = new Set((currentWallets||[]).map(w=>w.student))
                 const missing = payload.filter(s=> !have.has(s.id))
                 for (const s of missing){ try { await api.post('/finance/pocket-money-wallets/', { student: s.id, balance: 0 }) } catch(_) {} }
-                if (missing.length){ const refreshed = await api.get('/finance/pocket-money-wallets/'); setWallets(refreshed.data) }
-            }catch(_){}
+                if (missing.length){ const refreshed = await api.get('/finance/pocket-money-wallets/'); setWallets(normaliseList(refreshed.data)) }
+            }catch(_){ }
         }catch(e){ /* ignore */ }
         finally{ setStudentsLoading(false) }
     }
@@ -65,23 +72,24 @@ export default function FinancePocketMoney() {
                     api.get('/finance/pocket-money-wallets/'),
                     api.get('/academics/students/?page_size=10000'),
                 ]);
-                setWallets(walletRes.data);
-                const studentsPayload = Array.isArray(studentRes.data) ? studentRes.data : (studentRes.data?.results || []);
+                const walletsPayload = normaliseList(walletRes.data);
+                const studentsPayload = normaliseList(studentRes.data);
+                setWallets(walletsPayload);
                 setStudents(studentsPayload);
                 // Ensure every student has a wallet in the background
                 try {
-                    const have = new Set((walletRes.data||[]).map(w=>w.student))
+                    const have = new Set((walletsPayload||[]).map(w=>w.student))
                     const missing = studentsPayload.filter(s=> !have.has(s.id))
                     if (missing.length){
                         for (const s of missing){
                             try { await api.post('/finance/pocket-money-wallets/', { student: s.id, balance: 0 }) } catch(_) {}
                         }
                         const refreshed = await api.get('/finance/pocket-money-wallets/')
-                        setWallets(refreshed.data)
+                        setWallets(normaliseList(refreshed.data))
                     }
                 } catch(_) {}
                 // Kick off transactions fetch but don't block first paint
-                fetchTransactions(1, pageSize, filterStudentId, filterType, dateFrom, dateTo, walletRes.data, studentsPayload);
+                fetchTransactions(1, pageSize, filterStudentId, filterType, dateFrom, dateTo);
             } catch (e) {
                 console.error("Failed to load data:", e);
             } finally {
@@ -178,7 +186,7 @@ export default function FinancePocketMoney() {
             setWalletModalOpen(true);
             setWalletModalLoading(true);
             const res = await api.get(`/finance/pocket-money-transactions/?wallet=${wallet.id}&page_size=50&ordering=-created_at`);
-            const payload = Array.isArray(res.data) ? res.data : (res.data?.results || []);
+            const payload = normaliseList(res.data);
             payload.sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
             setWalletModalTx(payload);
         } catch (e) {
@@ -219,7 +227,7 @@ export default function FinancePocketMoney() {
             setTableLoading(true);
             const query = buildTxQuery(p, ps, studentId, type);
             const res = await api.get(`/finance/pocket-money-transactions/?${query}`, { signal: controller.signal });
-            const payload = Array.isArray(res.data) ? res.data : (res.data?.results || []);
+            const payload = normaliseList(res.data);
             setTotalCount(typeof res.data?.count === 'number' ? res.data.count : payload.length);
             payload.sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
             const filtered = applyClientDateFilter(payload);
@@ -262,8 +270,9 @@ export default function FinancePocketMoney() {
                     try {
                         await api.post('/finance/pocket-money-wallets/', { student: selectedStudentId, balance: 0 });
                         const refresh = await api.get('/finance/pocket-money-wallets/');
-                        setWallets(refresh.data);
-                        w = refresh.data.find(x => x.student === selectedStudentId);
+                        const refreshedPayload = normaliseList(refresh.data);
+                        setWallets(refreshedPayload);
+                        w = refreshedPayload.find(x => x.student === selectedStudentId);
                     } catch (err) {
                         console.error('Failed to auto-create wallet:', err);
                     }
@@ -290,20 +299,21 @@ export default function FinancePocketMoney() {
                 api.get('/finance/pocket-money-wallets/'),
                 api.get(`/finance/pocket-money-transactions/?${buildTxQuery(page, pageSize, filterStudentId, filterType)}`),
             ]);
-            setWallets(resWallets.data);
-            const txPayload2 = Array.isArray(resTx.data) ? resTx.data : (resTx.data?.results || []);
+            const walletsPayload = normaliseList(resWallets.data);
+            setWallets(walletsPayload);
+            const txPayload2 = normaliseList(resTx.data);
             txPayload2.sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
             const filtered = applyClientDateFilter(txPayload2);
             setTransactions(filtered);
             // If wallet modal is open, refresh its balance and transactions
             if (walletModalOpen && walletModalWallet) {
-                const updatedWallet = resWallets.data.find(w => w.id === walletId);
+                const updatedWallet = walletsPayload.find(w => w.id === walletId);
                 if (updatedWallet) {
                     setWalletModalWallet(updatedWallet);
                 }
                 try {
                     const modalRes = await api.get(`/finance/pocket-money-transactions/?wallet=${walletId}&page_size=50&ordering=-created_at`);
-                    const modalPayload = Array.isArray(modalRes.data) ? modalRes.data : (modalRes.data?.results || []);
+                    const modalPayload = normaliseList(modalRes.data);
                     modalPayload.sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
                     setWalletModalTx(modalPayload);
                 } catch (e) {
