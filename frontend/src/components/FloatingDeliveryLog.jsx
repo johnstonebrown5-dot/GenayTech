@@ -197,6 +197,29 @@ export default function FloatingDeliveryLog(){
     }
   }, [progress.percent])
 
+  const clearLogs = async () => {
+    if (resetBusy) return
+    try {
+      // Simple confirm to prevent accidental clears
+      if (typeof window !== 'undefined') {
+        const ok = window.confirm('Clear all recent message delivery logs?')
+        if (!ok) return
+      }
+    } catch {}
+    try {
+      setResetBusy(true)
+      await api.post('/communications/delivery-logs/reset/')
+      setItems([])
+      setProgress({ percent: 0, expected_total: 0, processed_total: 0, sms: { sent: 0, failed: 0 }, email: { sent: 0, failed: 0 } })
+      setRetryStart(null); setRetryIds([]); setHasNew(false)
+      await load()
+    } catch (e) {
+      setError('Clear logs failed')
+    } finally {
+      setResetBusy(false)
+    }
+  }
+
   // When panel opens, compute its position near the button, and keep synced on resize/scroll
   const updatePanelPos = () => {
     const el = btnRef.current
@@ -310,8 +333,8 @@ export default function FloatingDeliveryLog(){
           </div>
         </div>
         {/* Actions */}
-        <div className="px-3.5 py-2 border-b border-gray-100/80 flex items-center gap-2">
-          <button disabled={actionBusy} onClick={stopOrResume} className={`text-xs px-2.5 py-1 rounded-lg border ${paused ? 'bg-yellow-50 text-yellow-700 border-yellow-200' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'} ${actionBusy ? 'opacity-60 cursor-not-allowed' : ''}`}>{paused ? 'Resume sending' : 'Stop sending'}</button>
+        <div className="px-3.5 py-2 border-b border-gray-100/80 flex flex-wrap items-center gap-2">
+          <button disabled={actionBusy} onClick={stopOrResume} className={`text-xs px-2.5 py-1 rounded-lg border ${paused ? 'bg-yellow-50 text-yellow-700 border-yellow-200' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'} ${actionBusy ? 'opacity-60 cursor-not-allowed' : ''} w-full sm:w-auto`}>{paused ? 'Resume sending' : 'Stop sending'}</button>
           {/* Bulk retry failed */}
           {(() => {
             const failedIds = (Array.isArray(items) ? items : []).filter(it => it && it.ok === false).map(it => it.id)
@@ -326,32 +349,19 @@ export default function FloatingDeliveryLog(){
                   setRetryIds(failedIds)
                   try { await api.post('/communications/delivery-logs/retry/', { ids: failedIds }); await load() } catch (e) { setError('Retry failed') } finally { setRetryBusy(false) }
                 }}
-                className={`text-xs px-2.5 py-1 rounded-lg border ${failedIds.length? 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100':'bg-white text-gray-400 border-gray-200 cursor-not-allowed'} ${retryBusy ? 'opacity-60 cursor-wait' : ''}`}
+                className={`text-xs px-2.5 py-1 rounded-lg border ${failedIds.length? 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100':'bg-white text-gray-400 border-gray-200 cursor-not-allowed'} ${retryBusy ? 'opacity-60 cursor-wait' : ''} w-full sm:w-auto`}
                 title={failedIds.length? 'Retry failed sends' : 'No failed entries to retry'}
               >{retryBusy? 'Retrying…' : `Retry failed${failedIds.length? ` (${failedIds.length})`: ''}`}</button>
             )
           })()}
           <button
             disabled={resetBusy}
-            onClick={async () => {
-              try {
-                setResetBusy(true)
-                await api.post('/communications/delivery-logs/reset/')
-                setItems([])
-                setProgress({ percent: 0, expected_total: 0, processed_total: 0, sms: { sent: 0, failed: 0 }, email: { sent: 0, failed: 0 } })
-                setRetryStart(null); setRetryIds([]); setHasNew(false)
-                await load()
-              } catch (e) {
-                setError('Reset failed')
-              } finally {
-                setResetBusy(false)
-              }
-            }}
-            className={`text-xs px-2.5 py-1 rounded-lg border ${resetBusy? 'opacity-60 cursor-wait':''} bg-white text-red-600 border-red-200 hover:bg-red-50`}
-            title="Reset message logs to zero"
-          >{resetBusy? 'Resetting…' : 'Reset'}</button>
-          <button onClick={() => setShowList(v=>!v)} className="ml-auto text-xs px-2.5 py-1 rounded-lg border bg-white text-gray-700 border-gray-300 hover:bg-gray-50">{showList ? 'Hide' : 'View more'}</button>
-          <button onClick={() => { setFullOpen(true); setCollapsed(true); setOpen(false); setHasNew(false) }} className="text-xs px-2.5 py-1 rounded-lg border bg-white text-gray-700 border-gray-300 hover:bg-gray-50">View detailed logs</button>
+            onClick={clearLogs}
+            className={`text-xs px-2.5 py-1 rounded-lg border ${resetBusy? 'opacity-60 cursor-wait':''} bg-white text-red-600 border-red-200 hover:bg-red-50 w-full sm:w-auto`}
+            title="Clear message logs"
+          >{resetBusy? 'Clearing…' : 'Clear logs'}</button>
+          <button onClick={() => setShowList(v=>!v)} className="sm:ml-auto text-xs px-2.5 py-1 rounded-lg border bg-white text-gray-700 border-gray-300 hover:bg-gray-50 w-full sm:w-auto">{showList ? 'Hide' : 'View more'}</button>
+          <button onClick={() => { setFullOpen(true); setCollapsed(true); setOpen(false); setHasNew(false) }} className="text-xs px-2.5 py-1 rounded-lg border bg-white text-gray-700 border-gray-300 hover:bg-gray-50 w-full sm:w-auto">View detailed logs</button>
         </div>
         {error && <div className="px-3 py-2 text-xs text-red-600">{error}</div>}
         {showList && (
@@ -461,6 +471,7 @@ export default function FloatingDeliveryLog(){
                     <option value="email">Email</option>
                   </select>
                   <button onClick={()=>load()} className="text-xs px-2 py-1 rounded bg-gray-100 hover:bg-gray-200">Refresh</button>
+                  <button onClick={clearLogs} disabled={resetBusy} className={`text-xs px-2 py-1 rounded border ${resetBusy? 'opacity-60 cursor-wait':''} bg-white text-red-600 border-red-200 hover:bg-red-50`}>Clear logs</button>
                 </div>
                 <div className="overflow-y-auto max-h-[60vh] divide-y divide-gray-100">
                   {loading && items.length === 0 && (
