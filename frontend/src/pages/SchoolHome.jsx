@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import api, { toAbsoluteUrl, imageCandidates } from '../api'
 import ProgressiveImage from '../components/ProgressiveImage'
 
@@ -20,6 +20,8 @@ export default function SchoolHome() {
     homepage: {}
   })
   const [showStickyCta, setShowStickyCta] = useState(false)
+  const [installPrompt, setInstallPrompt] = useState(null)
+  const navigate = useNavigate()
 
   // Reveal now renders content immediately (lazy/scroll animation disabled site-section wide)
   function Reveal({ className = '', children }){
@@ -159,6 +161,46 @@ export default function SchoolHome() {
     const id = setTimeout(() => setSlowLoading(true), timeoutMs)
     return () => clearTimeout(id)
   }, [loading])
+
+  useEffect(() => {
+    function onBIP(e){
+      try { e.preventDefault() } catch {}
+      setInstallPrompt(e)
+    }
+    function onInstalled(){
+      setInstallPrompt(null)
+      try { navigate('/app', { replace: true }) } catch {}
+    }
+    window.addEventListener('beforeinstallprompt', onBIP)
+    window.addEventListener('appinstalled', onInstalled)
+    return () => {
+      window.removeEventListener('beforeinstallprompt', onBIP)
+      window.removeEventListener('appinstalled', onInstalled)
+    }
+  }, [navigate])
+
+  const onOpenApp = async (e) => {
+    const isStandalone = window.matchMedia && window.matchMedia('(display-mode: standalone)').matches
+    const isiOSStandalone = typeof window !== 'undefined' && 'standalone' in window.navigator && window.navigator.standalone
+    if (isStandalone || isiOSStandalone) {
+      return
+    }
+    if (installPrompt) {
+      try {
+        e?.preventDefault && e.preventDefault()
+      } catch {}
+      try {
+        await installPrompt.prompt()
+        const choice = await installPrompt.userChoice
+        setInstallPrompt(null)
+        if (choice && choice.outcome === 'accepted') {
+          try { navigate('/app') } catch {}
+          return
+        }
+      } catch {}
+    }
+    try { navigate('/app') } catch {}
+  }
 
   // Keep browser tab title in sync with public school
   useEffect(() => {
@@ -415,7 +457,7 @@ export default function SchoolHome() {
           </nav>
           <div className="hidden md:flex items-center gap-3">
             <Link to="/login" className="px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 rounded-md hover:bg-gray-50">Portal Login</Link>
-            <Link to="/app" className="px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-indigo-600 to-purple-600 rounded-lg shadow hover:opacity-95">Open App</Link>
+            <Link to="/app" onClick={onOpenApp} className="px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-indigo-600 to-purple-600 rounded-lg shadow hover:opacity-95">Open App</Link>
           </div>
           <button
             className="md:hidden inline-flex items-center justify-center p-2 rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50"
@@ -444,7 +486,7 @@ export default function SchoolHome() {
               <a href="#contact" onClick={() => setMobileOpen(false)} className="py-2">Contact</a>
               <div className="flex gap-3 pt-2">
                 <Link to="/login" onClick={() => setMobileOpen(false)} className="flex-1 px-4 py-2 text-sm font-medium text-gray-700 border border-gray-200 rounded-lg text-center">Portal Login</Link>
-                <Link to="/app" onClick={() => setMobileOpen(false)} className="flex-1 px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg text-center">Open App</Link>
+                <Link to="/app" onClick={(e) => { setMobileOpen(false); onOpenApp(e) }} className="flex-1 px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg text-center">Open App</Link>
               </div>
             </div>
           </div>

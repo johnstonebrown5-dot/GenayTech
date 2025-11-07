@@ -24,6 +24,7 @@ export default function LoginPage() {
   const [capsLockOn, setCapsLockOn] = useState(false)
   const [remember, setRemember] = useState(true)
   const [mounted, setMounted] = useState(false)
+  const [installReady, setInstallReady] = useState(false)
 
   // Carousel state
   const slides = [img1, img2, img3, img4, img5, img6]
@@ -42,6 +43,34 @@ export default function LoginPage() {
     const t = setTimeout(() => setMounted(true), 50)
     return () => clearTimeout(t)
   }, [])
+
+  // Listen for global PWA readiness and installed events
+  useEffect(() => {
+    function update() {
+      try { setInstallReady(Boolean(window.__pwaInstallEvent)) } catch { setInstallReady(false) }
+    }
+    update()
+    window.addEventListener('pwa:ready', update)
+    window.addEventListener('pwa:installed', update)
+    return () => {
+      window.removeEventListener('pwa:ready', update)
+      window.removeEventListener('pwa:installed', update)
+    }
+  }, [])
+
+  const onInstallClick = async (e) => {
+    e?.preventDefault?.()
+    try {
+      if (typeof window.requestPWAInstall === 'function') {
+        const choice = await window.requestPWAInstall()
+        if (choice && choice.outcome === 'accepted') {
+          // Optional: navigate after install
+        }
+      }
+    } catch (err) {
+      // If install not available, no-op; user can use the omnibox install icon
+    }
+  }
 
   const roles = [
     { key: 'staff', label: 'Staff', icon: '👥' },
@@ -166,7 +195,14 @@ export default function LoginPage() {
           <a href="/" className="hidden sm:block text-sm hover:underline">Home</a>
         </div>
         <div className="text-center font-semibold tracking-widest drop-shadow">EDU-TRACK</div>
-        <a href="mailto:EduTrack46@gmail.com" className="text-sm hover:underline">Contact Us</a>
+        <div className="flex items-center gap-3">
+          {installReady && (
+            <button onClick={onInstallClick} className="text-sm px-3 py-1.5 rounded-md bg-white/15 hover:bg-white/25 border border-white/20 shadow-sm">
+              Install App
+            </button>
+          )}
+          <a href="mailto:EduTrack46@gmail.com" className="text-sm hover:underline">Contact Us</a>
+        </div>
       </header>
 
       {/* Mobile header */}
@@ -398,6 +434,11 @@ export default function LoginPage() {
                       Proceed
                     </span>
                   </button>
+                  {installReady && (
+                    <button onClick={onInstallClick} className="w-full rounded-full border border-white/70 bg-white/70 text-indigo-700 font-semibold py-3 shadow hover:bg-white">
+                      Install App
+                    </button>
+                  )}
                   <div className="text-center text-[12px] text-gray-600">Need help choosing? Contact the school admin.</div>
                 </div>
               )}

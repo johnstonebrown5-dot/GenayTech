@@ -56,7 +56,7 @@ export default function FinanceIncomingPayments(){
     const html = printRef.current?.innerHTML || ''
     const w = window.open('', '_blank')
     if (!w) return
-    w.document.write(`<!doctype html><html><head><meta charset="utf-8"/><title>Incoming Payments</title><style>
+    w.document.write(`<!doctype html><html><head><meta charset="utf-8"/><title>Bank</title><style>
       body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#111827}
       table{width:100%;border-collapse:collapse}
       th,td{padding:8px 10px;border-top:1px solid #e5e7eb;font-size:12px}
@@ -138,7 +138,7 @@ export default function FinanceIncomingPayments(){
     <div className="space-y-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Incoming Payments</h1>
+          <h1 className="text-2xl font-semibold text-gray-900">Bank</h1>
           <p className="text-sm text-gray-500">Bank/M-Pesa receipts not initiated on the website. Auto-match by admission number, then reconcile to invoices.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
@@ -216,7 +216,7 @@ export default function FinanceIncomingPayments(){
         <div className="fixed inset-0 bg-black/30 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-xl border shadow-xl w-full max-w-xl p-4">
             <div className="flex items-center justify-between mb-2">
-              <div className="text-sm font-semibold text-gray-800">Reconcile Incoming Payment</div>
+              <div className="text-sm font-semibold text-gray-800">Reconcile Bank Entry</div>
               <button onClick={()=>setReconcilingId(null)} className="text-gray-500 hover:text-gray-700">×</button>
             </div>
             {reconcileError && <div className="text-sm text-rose-600 bg-rose-50 border border-rose-200 rounded px-3 py-2 mb-3">{reconcileError}</div>}

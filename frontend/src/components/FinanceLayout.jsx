@@ -8,7 +8,7 @@ import FloatingDeliveryLog from './FloatingDeliveryLog';
 const navItems = [
     { to: '/finance', label: 'Dashboard', icon: '📊' },
     { to: '/finance/payments', label: 'Payments', icon: '💳' },
-    { to: '/finance/incoming', label: 'Incoming', icon: '📨' },
+    { to: '/finance/incoming', label: 'Bank', icon: '🏦' },
     { to: '/finance/expenses', label: 'Expenses', icon: '💸' },
     { to: '/finance/pocket-money', label: 'Pocket Money', icon: '💰' },
     { to: '/finance/fees', label: 'Fees', icon: '🏷️' },

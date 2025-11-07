@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 import api from '../api'
 import { Line, Doughnut, Bar } from 'react-chartjs-2'
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Tooltip, Legend, TimeScale } from 'chart.js'
@@ -177,6 +178,18 @@ export default function FinanceReports(){
           <button onClick={exportCsvPayments} className="px-3 py-2 bg-emerald-600 text-white rounded-lg text-sm shadow-sm hover:bg-emerald-700">Export Payments CSV</button>
           <button onClick={exportCsvExpenses} className="px-3 py-2 bg-rose-600 text-white rounded-lg text-sm shadow-sm hover:bg-rose-700">Export Expenses CSV</button>
         </div>
+      </div>
+
+      {/* Quick links to detailed reports */}
+      <div className="flex flex-wrap gap-2">
+        <Link to="/finance/cashbook" className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm border bg-white hover:bg-gray-50 shadow-sm">
+          <span>📘</span>
+          <span>Cashbook</span>
+        </Link>
+        <Link to="/finance/fee-register" className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm border bg-white hover:bg-gray-50 shadow-sm">
+          <span>🧾</span>
+          <span>Fee Register</span>
+        </Link>
       </div>
 
       <div className="flex flex-wrap gap-2">

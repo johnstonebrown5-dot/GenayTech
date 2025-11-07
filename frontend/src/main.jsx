@@ -4,6 +4,28 @@ import { BrowserRouter } from 'react-router-dom'
 import App from './App'
 import './index.css'
 
+// Global PWA install wiring: capture the beforeinstallprompt event and expose a helper
+if (typeof window !== 'undefined') {
+  window.__pwaInstallEvent = window.__pwaInstallEvent || null
+  window.addEventListener('beforeinstallprompt', (e) => {
+    try { e.preventDefault() } catch {}
+    window.__pwaInstallEvent = e
+    try { window.dispatchEvent(new CustomEvent('pwa:ready')) } catch {}
+  })
+  window.addEventListener('appinstalled', () => {
+    window.__pwaInstallEvent = null
+    try { window.dispatchEvent(new CustomEvent('pwa:installed')) } catch {}
+  })
+  window.requestPWAInstall = async () => {
+    const ev = window.__pwaInstallEvent
+    if (!ev) throw new Error('install-not-available')
+    await ev.prompt()
+    const choice = await ev.userChoice
+    window.__pwaInstallEvent = null
+    return choice
+  }
+}
+
 createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <BrowserRouter>

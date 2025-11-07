@@ -2,10 +2,12 @@ import React, { useEffect, useRef } from 'react'
 import api from '../api'
 import { useNotification } from './NotificationContext'
 import { useAuth } from '../auth'
+import { useLock } from './LockProvider'
 
 // Global message notifier: polls inbox and system messages and pops notifications
 export default function MessageNotifier(){
   const { user } = useAuth()
+  const { locked } = useLock()
   const { showInfo, addNotification } = useNotification()
   const lastChatTsRef = useRef(null)
   const lastSystemTsRef = useRef(null)
@@ -16,7 +18,7 @@ export default function MessageNotifier(){
   const sysKey = user?.id ? `notify:lastSystemTs:${user.id}` : null
 
   useEffect(()=>{
-    if(!user) return
+    if(!user || locked) return
     // initialize last seen from storage
     try{
       if(chatKey){ lastChatTsRef.current = localStorage.getItem(chatKey) || null }
@@ -124,7 +126,7 @@ export default function MessageNotifier(){
     timerRef.current = setInterval(tick, 10000)
     return ()=> { if(timerRef.current) clearInterval(timerRef.current) }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id])
+  }, [user?.id, locked])
 
   return null
 }

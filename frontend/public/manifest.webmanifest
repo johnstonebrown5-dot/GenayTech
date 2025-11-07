@@ -1,0 +1,40 @@
+{
+  "name": "EduTrack — Modern School Management",
+  "short_name": "EduTrack",
+  "description": "All-in-one school management for academics, finance, messaging, timetables, exams, and analytics.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "theme_color": "#4f46e5",
+  "background_color": "#ffffff",
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["education", "productivity"],
+  "shortcuts": [
+    {
+      "name": "Open Dashboard",
+      "short_name": "Dashboard",
+      "url": "/",
+      "description": "Open your EduTrack dashboard"
+    },
+    {
+      "name": "Finance",
+      "short_name": "Finance",
+      "url": "/finance",
+      "description": "Go to Finance Suite"
+    }
+  ]
+}

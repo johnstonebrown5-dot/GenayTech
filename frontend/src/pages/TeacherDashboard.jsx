@@ -15,8 +15,45 @@ export default function TeacherDashboard(){
   const [periods, setPeriods] = useState([])
   const [blockAssignments, setBlockAssignments] = useState({})
   const [nextClass, setNextClass] = useState(null) // {label, start: Date}
+
+function DutiesPanel({ duties=[], onChanged }){
+  const [busyId, setBusyId] = React.useState(null)
+  const markDone = async (id) => {
+    if (!id) return
+    setBusyId(id)
+    try{ await api.post(`/academics/teacher_duties/${id}/mark-done/`); await onChanged?.() }catch{} finally{ setBusyId(null) }
+  }
+  const list = Array.isArray(duties) ? duties.slice(0,5) : []
+  return (
+    <div className="rounded-2xl border border-gray-200 bg-white/90 backdrop-blur p-4 shadow-sm">
+      <div className="flex items-center justify-between mb-2">
+        <div className="font-medium text-slate-900">My Duties</div>
+        <span className="text-xs text-slate-500">{duties?.length || 0} pending</span>
+      </div>
+      {list.length === 0 ? (
+        <div className="text-sm text-slate-600">No pending duties.</div>
+      ) : (
+        <ul className="grid gap-2">
+          {list.map(d => (
+            <li key={d.id} className="p-2 rounded-lg border border-gray-100 hover:bg-slate-50/60 transition">
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="text-sm font-medium truncate">{d.title}</div>
+                  {d.due_date && <div className="text-xs text-slate-600">Due {d.due_date}</div>}
+                </div>
+                <button onClick={()=> markDone(d.id)} disabled={busyId===d.id} className="text-sm px-2.5 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 shadow-xs">{busyId===d.id? '...':'Done'}</button>
+              </div>
+              {d.description && <div className="mt-1 text-xs text-slate-600 line-clamp-2">{d.description}</div>}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
   const [countdown, setCountdown] = useState('')
   const [todayPlanCount, setTodayPlanCount] = useState(0)
+  const [duties, setDuties] = useState([])
 
   useEffect(()=>{
     let mounted = true
@@ -50,11 +87,12 @@ export default function TeacherDashboard(){
           return out
         }
 
-        const [clsAll, sch, ev, meRes] = await Promise.all([
+        const [clsAll, sch, ev, meRes, myDuties] = await Promise.all([
           fetchAll('/academics/classes/mine/'),
           api.get('/auth/school/info/'),
           api.get('/communications/events/'),
           api.get('/auth/me/'),
+          api.get('/academics/teacher_duties/?mine=1&status=pending').catch(()=>({ data:{ results:[] } })),
         ])
         if (!mounted) return
         // dedupe by id and sort by name for stable display
@@ -64,6 +102,10 @@ export default function TeacherDashboard(){
         if (sch?.data) setSchool(sch.data)
         if (ev?.data) setEvents(Array.isArray(ev.data) ? ev.data : (ev.data?.results || []))
         if (meRes?.data) setMe(meRes.data)
+        try{
+          const list = Array.isArray(myDuties?.data) ? myDuties.data : (myDuties?.data?.results || [])
+          setDuties(list)
+        }catch{}
 
         // Load minimal timetable data to derive next class
         try{
@@ -220,6 +262,13 @@ export default function TeacherDashboard(){
         <div className="space-y-4">
           <QuickPanel title="Lesson Plans" description="Plan upcoming lessons, objectives and activities." link="/teacher/lessons" actionLabel="Create Plan"/>
           <QuickPanel title="Profile" description="Update your info or change your password." link="/teacher/profile" actionLabel="Open Profile"/>
+          <DutiesPanel duties={duties} onChanged={async ()=>{
+            try{
+              const res = await api.get('/academics/teacher_duties/?mine=1&status=pending')
+              const list = Array.isArray(res?.data) ? res.data : (res?.data?.results || [])
+              setDuties(list)
+            }catch{}
+          }} />
         </div>
       </div>
 

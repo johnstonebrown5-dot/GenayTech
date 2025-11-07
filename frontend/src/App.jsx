@@ -36,6 +36,8 @@ import FinanceClassFees from './pages/FinanceClassFees';
 import FinanceFees from './pages/FinanceFees';
 import FinanceIncomingPayments from './pages/FinanceIncomingPayments';
 import FinanceStaffPayroll from './pages/FinanceStaffPayroll';
+import FinanceCashbook from './pages/FinanceCashbook';
+import FinanceFeeRegister from './pages/FinanceFeeRegister';
 import AdminStaffPayroll from './pages/AdminStaffPayroll';
 import AdminStudents from './pages/AdminStudents'
 import AdminTeachers from './pages/AdminTeachers'
@@ -56,6 +58,7 @@ import AdminExams from './pages/AdminExams'
 import AdminEnterResults from './pages/AdminEnterResults'
 import AdminResults from './pages/AdminResults'
 import AdminFees from './pages/AdminFees'
+import AdminDuties from './pages/AdminDuties'
 import AdminEvents from './pages/AdminEvents'
 import AdminAcademicCalendar from './pages/AdminAcademicCalendar'
 import AdminSubjects from './pages/AdminSubjects'
@@ -87,6 +90,7 @@ import Unauthorized from './pages/Unauthorized'
 import ReAuth from './pages/ReAuth'
 import HelpCenter from './pages/HelpCenter'
 import FloatingHelpAction from './components/Help/FloatingHelpAction'
+import LockPage from './pages/LockPage'
 
 function ProtectedRoute({ children, roles, ownerRole }) {
   const { user, loading } = useAuth()
@@ -135,6 +139,7 @@ export default function App() {
             <Route path="/login" element={<LoginPage />} />
             <Route path="/trial" element={<TrialOnboarding />} />
             <Route path="/help" element={<ProtectedRoute roles={["admin","teacher","student","finance"]}><HelpCenter/></ProtectedRoute>} />
+            <Route path="/lock" element={<ProtectedRoute roles={["admin","teacher","student","finance"]}><LockPage/></ProtectedRoute>} />
             <Route path="/app" element={<RoleRedirect />} />
             <Route path="/admin" element={<ProtectedRoute roles={["admin"]}><AdminDashboard/></ProtectedRoute>} />
             <Route path="/admin/students" element={<ProtectedRoute roles={["admin"]}><AdminStudents/></ProtectedRoute>} />
@@ -157,6 +162,7 @@ export default function App() {
             <Route path="/admin/exams/:id/enter" element={<ProtectedRoute roles={["admin"]}><AdminEnterResults/></ProtectedRoute>} />
             <Route path="/admin/results" element={<ProtectedRoute roles={["admin"]}><AdminResults/></ProtectedRoute>} />
             <Route path="/admin/reports" element={<ProtectedRoute roles={["admin"]}><AdminReports/></ProtectedRoute>} />
+            <Route path="/admin/duties" element={<ProtectedRoute roles={["admin"]}><AdminDuties/></ProtectedRoute>} />
             <Route path="/admin/school" element={<ProtectedRoute roles={["admin"]}><AdminSchool/></ProtectedRoute>} />
             <Route path="/admin/users" element={<ProtectedRoute roles={["admin"]}><AdminUsers/></ProtectedRoute>} />
             <Route path="/admin/events" element={<ProtectedRoute roles={["admin"]}><AdminEvents/></ProtectedRoute>} />
@@ -196,6 +202,8 @@ export default function App() {
             {/* Invoices route removed */}
             <Route path="/finance/payments" element={<ProtectedRoute roles={["finance"]}><FinanceLayout><FinancePayments/></FinanceLayout></ProtectedRoute>} />
             <Route path="/finance/reports" element={<ProtectedRoute roles={["finance"]}><FinanceLayout><FinanceReports/></FinanceLayout></ProtectedRoute>} />
+            <Route path="/finance/cashbook" element={<ProtectedRoute roles={["finance"]}><FinanceLayout><FinanceCashbook/></FinanceLayout></ProtectedRoute>} />
+            <Route path="/finance/fee-register" element={<ProtectedRoute roles={["finance"]}><FinanceLayout><FinanceFeeRegister/></FinanceLayout></ProtectedRoute>} />
             <Route path="/finance/settings" element={<ProtectedRoute roles={["finance"]}><FinanceLayout><FinanceSettings/></FinanceLayout></ProtectedRoute>} />
             <Route path="/finance/pocket-money" element={<ProtectedRoute roles={["finance"]}><FinanceLayout><FinancePocketMoney/></FinanceLayout></ProtectedRoute>} />
             <Route path="/finance/pocket-money/wallet/:studentId" element={<ProtectedRoute roles={["finance"]}><FinanceLayout><FinanceStudentWallet/></FinanceLayout></ProtectedRoute>} />

@@ -3,9 +3,11 @@ import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import api from '../api'
 import { useAuth } from '../auth'
+import { useLock } from './LockProvider'
 
 export default function FloatingDeliveryLog(){
   const { user } = useAuth()
+  const { locked } = useLock()
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [items, setItems] = useState([])
@@ -62,6 +64,7 @@ export default function FloatingDeliveryLog(){
 
   const load = async (signal) => {
     if (!canSee) return
+    if (locked) return
     if (paused) return
     try {
       setLoading(true)
@@ -111,11 +114,13 @@ export default function FloatingDeliveryLog(){
 
   useEffect(() => {
     const ctrl = new AbortController()
-    load(ctrl.signal)
-    if (intervalRef.current) clearInterval(intervalRef.current)
-    intervalRef.current = setInterval(() => load(ctrl.signal), 10000)
+    if (!locked) {
+      load(ctrl.signal)
+      if (intervalRef.current) clearInterval(intervalRef.current)
+      intervalRef.current = setInterval(() => load(ctrl.signal), 10000)
+    }
     return () => { clearInterval(intervalRef.current); ctrl.abort() }
-  }, [filter, canSee, paused])
+  }, [filter, canSee, paused, locked])
 
   // Observe DOM to find the floating actions holder as soon as it exists
   useEffect(() => {
@@ -242,7 +247,7 @@ export default function FloatingDeliveryLog(){
     return () => { window.removeEventListener('resize', onEvt); window.removeEventListener('scroll', onEvt, true) }
   }, [open])
 
-  if (!canSee) return null
+  if (!canSee || locked) return null
 
   const button = (
     <div style={{ position:'relative', pointerEvents:'auto' }}>

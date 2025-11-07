@@ -23,52 +23,64 @@ export default function AssistantPanel(){
   const listRef = React.useRef(null)
 
   // Known routes and aliases across the app (tabs, page names, common words)
-  const ROUTES = React.useMemo(() => ([
-    // Admin
-    ['dashboard', '/admin'],
-    ['students', '/admin/students'],
-    ['teachers', '/admin/teachers'],
-    ['classes', '/admin/classes'],
-    ['exams', '/admin/exams'],
-    ['results', '/admin/results'],
-    ['fees', '/admin/fees'],
-    ['subjects', '/admin/subjects'],
-    ['reports', '/admin/reports'],
-    ['events', '/admin/events'],
-    ['timetable', '/admin/timetable'],
-    ['messages', '/admin/messages'],
-    ['calendar', '/admin/calendar'],
-    ['school', '/admin/school'],
-    ['users', '/admin/users'],
-    ['curriculum', '/admin/curriculum'],
-    ['cbc', '/admin/curriculum'],
-    // Teacher
-    ['teacher dashboard', '/teacher'],
-    ['teacher classes', '/teacher/classes'],
-    ['attendance', '/teacher/attendance'],
-    ['lessons', '/teacher/lessons'],
-    ['grades', '/teacher/grades'],
-    ['teacher results', '/teacher/results'],
-    ['analytics', '/teacher/analytics'],
-    ['teacher profile', '/teacher/profile'],
-    ['teacher timetable', '/teacher/timetable'],
-    ['block timetable', '/teacher/block-timetable'],
-    ['teacher events', '/teacher/events'],
-    // Student
-    ['student dashboard', '/student'],
-    ['report card', '/student/report-card'],
-    // Finance
-    ['finance', '/finance'],
-    ['expenses', '/finance/expenses'],
-    ['invoices', '/finance/invoices'],
-    ['payments', '/finance/payments'],
-    ['finance reports', '/finance/reports'],
-    ['settings', '/finance/settings'],
-    ['pocket money', '/finance/pocket-money'],
-    ['fee categories', '/finance/fee-categories'],
-    ['class fees', '/finance/class-fees'],
-    ['help', '/help'],
-  ]), [])
+  const ROUTES = React.useMemo(() => {
+    const role = (user?.role || '').toLowerCase()
+    const base = [
+      // Admin
+      ['admin dashboard', '/admin'],
+      ['students', '/admin/students'],
+      ['teachers', '/admin/teachers'],
+      ['classes', '/admin/classes'],
+      ['exams', '/admin/exams'],
+      ['results', '/admin/results'],
+      ['fees', '/admin/fees'],
+      ['subjects', '/admin/subjects'],
+      ['reports', '/admin/reports'],
+      ['events', '/admin/events'],
+      ['timetable', '/admin/timetable'],
+      ['admin messages', '/admin/messages'],
+      ['calendar', '/admin/calendar'],
+      ['school', '/admin/school'],
+      ['users', '/admin/users'],
+      ['curriculum', '/admin/curriculum'],
+      ['cbc', '/admin/curriculum'],
+      // Teacher
+      ['teacher dashboard', '/teacher'],
+      ['teacher classes', '/teacher/classes'],
+      ['attendance', '/teacher/attendance'],
+      ['lessons', '/teacher/lessons'],
+      ['grades', '/teacher/grades'],
+      ['teacher results', '/teacher/results'],
+      ['analytics', '/teacher/analytics'],
+      ['teacher profile', '/teacher/profile'],
+      ['teacher timetable', '/teacher/timetable'],
+      ['block timetable', '/teacher/block-timetable'],
+      ['teacher events', '/teacher/events'],
+      ['teacher messages', '/teacher/messages'],
+      // Student
+      ['student dashboard', '/student'],
+      ['report card', '/student/report-card'],
+      ['student messages', '/student/messages'],
+      // Finance
+      ['finance', '/finance'],
+      ['expenses', '/finance/expenses'],
+      ['invoices', '/finance/invoices'],
+      ['payments', '/finance/payments'],
+      ['finance reports', '/finance/reports'],
+      ['settings', '/finance/settings'],
+      ['pocket money', '/finance/pocket-money'],
+      ['fee categories', '/finance/fee-categories'],
+      ['class fees', '/finance/class-fees'],
+      ['finance messages', '/finance/messages'],
+      ['help', '/help'],
+    ]
+    // Generic keys based on active role
+    if (role === 'teacher') base.push(['dashboard', '/teacher'], ['messages', '/teacher/messages'])
+    else if (role === 'student') base.push(['dashboard', '/student'], ['messages', '/student/messages'])
+    else if (role === 'finance') base.push(['dashboard', '/finance'], ['messages', '/finance/messages'])
+    else base.push(['dashboard', '/admin'], ['messages', '/admin/messages'])
+    return base
+  }, [user])
 
   // Phrase templates to reduce monotony
   const pick = React.useCallback((arr) => arr[Math.floor(Math.random()*arr.length)], [])
@@ -333,7 +345,42 @@ export default function AssistantPanel(){
         return
       }
     }
-    // Suggest opening help with a prefilled query
+    // Try to suggest a relevant page/tab and base response on it
+    const PAGE_HINTS = {
+      'attendance': 'Mark daily presence/absence for your assigned classes. You can set All Present/All Absent quickly then adjust per student.',
+      'grades': 'Enter assessment marks for your classes and subjects. Save frequently and review before publishing.',
+      'results': 'Review computed results, print or share report cards once finalized.',
+      'messages': 'View system and school communications. Check the System tab for announcements.',
+      'exams': 'Create exams, enter results and publish when ready.',
+      'fees': 'Configure school fees, categories and class-specific amounts.',
+      'payments': 'Record student payments and issue receipts.',
+      'report card': 'View or download your current term performance.',
+      'timetable': 'See or manage weekly lesson schedules.',
+      'students': 'Manage student profiles, invoices and payments.',
+      'teachers': 'Manage teacher profiles and assignments.',
+      'classes': 'Manage class profiles, enrollment and related actions.'
+    }
+    const allKeys = ROUTES.map(([k]) => k)
+    const norm = (s)=> String(s||'').toLowerCase()
+    const bestKey = (() => {
+      const term = norm(q)
+      // direct includes first
+      const direct = ROUTES
+        .filter(([k]) => term.includes(k) || k.includes(term))
+        .sort((a,b)=> b[0].length - a[0].length)[0]?.[0]
+      if (direct) return direct
+      // fallback fuzzy via bestFuzzy helper
+      try { return bestFuzzy(term, allKeys, 0.55) } catch { return null }
+    })()
+    if (bestKey){
+      const path = ROUTES.find(([k]) => k === bestKey)?.[1]
+      const hintKey = Object.keys(PAGE_HINTS).find(h => bestKey.includes(h))
+      const hint = hintKey ? PAGE_HINTS[hintKey] : `Open the ${bestKey} page to continue.`
+      const actions = [{ type: 'open', value: 'help', label: 'Help Center' }]
+      if (path && canAccessPath(path)) actions.unshift({ type: 'open', value: bestKey, label: `Open ${bestKey}` })
+      append('assistant', hint, actions)
+      return
+    }
     append('assistant', 'I can guide you through procedures. Opening the Help Center may also help.', [
       { type: 'text', value: q || 'help', label: 'Ask this', autoSend: !!q },
       { type: 'open', value: 'help', label: 'Open Help Center' },
