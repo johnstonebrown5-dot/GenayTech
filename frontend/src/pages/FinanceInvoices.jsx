@@ -29,11 +29,17 @@ export default function FinanceInvoices() {
                     api.get('/academics/students/'), // Assuming an endpoint to fetch students
                     api.get('/finance/fee-categories/'),
                 ]);
-                setInvoices(invRes.data);
-                setStudents(stuRes.data);
-                setCategories(catRes.data);
+
+                const toArr = (data) => Array.isArray(data) ? data : (Array.isArray(data?.results) ? data.results : []);
+
+                setInvoices(toArr(invRes?.data));
+                setStudents(toArr(stuRes?.data));
+                setCategories(toArr(catRes?.data));
             } catch (e) {
                 console.error("Failed to load data:", e);
+                setInvoices([]);
+                setStudents([]);
+                setCategories([]);
             } finally {
                 setLoading(false);
             }
@@ -117,12 +123,12 @@ export default function FinanceInvoices() {
                             </tr>
                         </thead>
                         <tbody>
-                            {invoices.map(i => (
+                            {(Array.isArray(invoices) ? invoices : []).map(i => (
                                 <tr key={i.id} className="bg-white border-b">
-                                    <td className="px-6 py-4 font-medium text-gray-900 whitespace-nowrap">{students.find(s => s.id === i.student)?.name}</td>
-                                    <td className="px-6 py-4">{categories.find(c => c.id === i.category)?.name}</td>
+                                    <td className="px-6 py-4 font-medium text-gray-900 whitespace-nowrap">{(Array.isArray(students)?students:[]).find(s => s.id === i.student)?.name || i.student_name || i.student}</td>
+                                    <td className="px-6 py-4">{(Array.isArray(categories)?categories:[]).find(c => c.id === i.category)?.name || i.category_name || i.category}</td>
                                     <td className="px-6 py-4">KES {Number(i.amount || 0).toLocaleString()}</td>
-                                    <td className="px-6 py-4">{new Date(i.due_date).toLocaleDateString()}</td>
+                                    <td className="px-6 py-4">{i.due_date ? new Date(i.due_date).toLocaleDateString() : '-'}</td>
                                     <td className="px-6 py-4">
                                         <span className={`px-2 py-1 text-xs font-medium rounded-full ${i.status === 'paid' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}`}>
                                             {i.status}
