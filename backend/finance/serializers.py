@@ -113,9 +113,42 @@ class StudentFeeSerializer(serializers.ModelSerializer):
 class InvoiceSerializer(serializers.ModelSerializer):
     payments = PaymentSerializer(many=True, read_only=True)
     category_detail = FeeCategorySerializer(source='category', read_only=True)
+    student_name = serializers.SerializerMethodField()
+    student_admission = serializers.SerializerMethodField()
+    paid_amount = serializers.SerializerMethodField()
+
+    def get_student_name(self, obj):
+        try:
+            s = getattr(obj, 'student', None)
+            if not s:
+                return ''
+            return getattr(s, 'name', None) or str(s)
+        except Exception:
+            return ''
+
+    def get_student_admission(self, obj):
+        try:
+            s = getattr(obj, 'student', None)
+            return getattr(s, 'admission_no', '') or ''
+        except Exception:
+            return ''
+
+    def get_paid_amount(self, obj):
+        try:
+            # Sum related payments; guard against None values
+            total = 0
+            for p in getattr(obj, 'payments', []).all():
+                try:
+                    total += float(getattr(p, 'amount', 0) or 0)
+                except Exception:
+                    pass
+            return total
+        except Exception:
+            return 0
+
     class Meta:
         model = Invoice
-        fields = ['id','student','amount','status','category','category_detail','year','term','mpesa_transaction_id','due_date','created_at','payments']
+        fields = ['id','student','student_name','student_admission','amount','paid_amount','status','category','category_detail','year','term','mpesa_transaction_id','due_date','created_at','payments']
 
 class MpesaConfigSerializer(serializers.ModelSerializer):
     class Meta:

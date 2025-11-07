@@ -1,6 +1,8 @@
 from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import api_view, permission_classes, parser_classes, action
-from rest_framework.parsers import MultiPartParser, JSONParser, FormParser
+from rest_framework import viewsets, permissions, status
+from rest_framework.decorators import action
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.response import Response
 from rest_framework.exceptions import ValidationError
 from django.db.models import Q
@@ -29,16 +31,16 @@ from django_filters.rest_framework import DjangoFilterBackend
 from .models import (
     Class, Student, Competency, Assessment, Attendance, TeacherProfile, Subject, SubjectComponent,
     Exam, ExamResult, AcademicYear, Term, Stream, LessonPlan, ClassSubjectTeacher, SubjectGradingBand,
-    Room, TimetableEntry,
-    TimetableTemplate, PeriodSlotTemplate, TimetablePlan, TimetableClassConfig, ClassSubjectQuota,
-    TeacherAvailability, TimetableVersion,
-    StudentClassHistory
+    Room, TimetableEntry, TimetableTemplate, PeriodSlotTemplate, TimetablePlan, TimetableClassConfig,
+    ClassSubjectQuota, TeacherAvailability, TimetableVersion, TeacherDuty, StudentClassHistory
 )
 from .serializers import (
-    ClassSerializer, StudentSerializer, CompetencySerializer,
-    AssessmentSerializer, AttendanceSerializer, LessonPlanSerializer, TeacherProfileSerializer, SubjectSerializer, SubjectComponentSerializer,
-    ExamSerializer, ExamResultSerializer, AcademicYearSerializer, TermSerializer, StreamSerializer, ClassSubjectTeacherSerializer, SubjectGradingBandSerializer, RoomSerializer, TimetableEntrySerializer,
-    TimetableTemplateSerializer, PeriodSlotTemplateSerializer, TimetablePlanSerializer, TimetableClassConfigSerializer, ClassSubjectQuotaSerializer, TeacherAvailabilitySerializer, TimetableVersionSerializer
+    ClassSerializer, StudentSerializer, CompetencySerializer, AssessmentSerializer, AttendanceSerializer,
+    TeacherProfileSerializer, SubjectSerializer, SubjectComponentSerializer, ExamSerializer,
+    ExamResultSerializer, AcademicYearSerializer, TermSerializer, StreamSerializer, LessonPlanSerializer,
+    ClassSubjectTeacherSerializer, SubjectGradingBandSerializer, RoomSerializer, TimetableEntrySerializer,
+    TimetableTemplateSerializer, PeriodSlotTemplateSerializer, TimetablePlanSerializer, TimetableClassConfigSerializer,
+    ClassSubjectQuotaSerializer, TeacherAvailabilitySerializer, TimetableVersionSerializer, TeacherDutySerializer
 )
 
 class IsTeacherOrAdmin(permissions.BasePermission):
@@ -71,6 +73,70 @@ class IsAdminOrTeacherReadOnly(permissions.BasePermission):
             except Exception:
                 return False
         return is_admin
+
+
+class TeacherDutyViewSet(viewsets.ModelViewSet):
+    queryset = TeacherDuty.objects.all()
+    serializer_class = TeacherDutySerializer
+    permission_classes = [IsTeacherOrAdmin]
+
+    def get_queryset(self):
+        qs = super().get_queryset().select_related('teacher', 'created_by')
+        user = getattr(self.request, 'user', None)
+        school = getattr(user, 'school', None)
+        if school:
+            qs = qs.filter(school=school)
+        # Teachers only see their own by default
+        if getattr(user, 'role', None) == 'teacher' and self.request.method in permissions.SAFE_METHODS:
+            qs = qs.filter(teacher=user)
+        # Filters
+        if self.request.query_params.get('mine'):
+            qs = qs.filter(teacher=user)
+        status_param = self.request.query_params.get('status')
+        if status_param:
+            qs = qs.filter(status=status_param)
+        teacher_param = self.request.query_params.get('teacher')
+        if teacher_param:
+            try:
+                qs = qs.filter(teacher_id=int(teacher_param))
+            except Exception:
+                qs = qs.filter(teacher_id=teacher_param)
+        return qs
+
+    def perform_create(self, serializer):
+        user = getattr(self.request, 'user', None)
+        if not (user and (user.role == 'admin' or user.is_staff or user.is_superuser)):
+            raise ValidationError({'detail': 'Only admin can create duties'})
+        school = getattr(user, 'school', None)
+        serializer.save(created_by=user, school=school)
+
+    def perform_update(self, serializer):
+        user = getattr(self.request, 'user', None)
+        is_admin = bool(user and (user.role == 'admin' or user.is_staff or user.is_superuser))
+        if not is_admin:
+            # Allow assignee to update status only
+            instance = self.get_object()
+            data = serializer.validated_data
+            if instance.teacher_id != getattr(user, 'id', None):
+                raise ValidationError({'detail': 'Not allowed'})
+            # Restrict updates
+            allowed = {k: v for k, v in data.items() if k in ('status',)}
+            for k, v in allowed.items():
+                setattr(instance, k, v)
+            instance.save(update_fields=list(allowed.keys()) or ['status'])
+            return instance
+        serializer.save()
+
+    @action(detail=True, methods=['post'], permission_classes=[IsTeacherOrAdmin], url_path='mark-done')
+    def mark_done(self, request, pk=None):
+        duty = self.get_object()
+        user = getattr(request, 'user', None)
+        is_admin = bool(user and (user.role == 'admin' or user.is_staff or user.is_superuser))
+        if not is_admin and duty.teacher_id != getattr(user, 'id', None):
+            return Response({'detail': 'Not allowed'}, status=status.HTTP_403_FORBIDDEN)
+        duty.status = 'done'
+        duty.save(update_fields=['status'])
+        return Response({'detail': 'Marked done'})
 
 class StreamViewSet(viewsets.ModelViewSet):
     queryset = Stream.objects.all()

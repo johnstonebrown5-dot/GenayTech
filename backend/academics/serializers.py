@@ -4,7 +4,7 @@ from .models import (
     Exam, ExamResult, AcademicYear, Term, Stream, LessonPlan, ClassSubjectTeacher, SubjectGradingBand,
     Room, TimetableEntry,
     TimetableTemplate, PeriodSlotTemplate, TimetablePlan, TimetableClassConfig, ClassSubjectQuota,
-    TeacherAvailability, TimetableVersion
+    TeacherAvailability, TimetableVersion, TeacherDuty
 )
 from django.contrib.auth import get_user_model
 
@@ -38,6 +38,17 @@ class TeacherUserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ['id','username','first_name','last_name','email','role','is_active']
+
+class TeacherDutySerializer(serializers.ModelSerializer):
+    teacher_detail = TeacherUserSerializer(source='teacher', read_only=True)
+    created_by_detail = TeacherUserSerializer(source='created_by', read_only=True)
+    class Meta:
+        model = TeacherDuty
+        fields = [
+            'id','title','description','teacher','teacher_detail','created_by','created_by_detail',
+            'due_date','status','remind_daily','last_reminded_at','school','created_at','updated_at'
+        ]
+        read_only_fields = ['created_by','school','last_reminded_at','created_at','updated_at']
 
 class ClassSubjectTeacherSerializer(serializers.ModelSerializer):
     teacher_detail = TeacherUserSerializer(source='teacher', read_only=True)

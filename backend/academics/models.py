@@ -248,6 +248,33 @@ class Student(models.Model):
     )
     is_active = models.BooleanField(default=True, help_text='When false, the student is inactive: excluded from exams, fees, messaging, and login disabled.')
 
+class TeacherDuty(models.Model):
+    STATUS_CHOICES = (
+        ('pending', 'Pending'),
+        ('done', 'Done'),
+        ('canceled', 'Canceled'),
+    )
+    title = models.CharField(max_length=200)
+    description = models.TextField(blank=True)
+    teacher = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='assigned_duties')
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='created_duties')
+    due_date = models.DateField(null=True, blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    remind_daily = models.BooleanField(default=True)
+    last_reminded_at = models.DateTimeField(null=True, blank=True)
+    school = models.ForeignKey('accounts.School', null=True, blank=True, on_delete=models.SET_NULL)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['teacher','status']),
+        ]
+
+    def __str__(self):
+        return f"{self.title} -> {getattr(self.teacher, 'username', self.teacher_id)} ({self.status})"
+
 class StudentClassHistory(models.Model):
     ACTION_CHOICES = (
         ('assigned', 'Assigned'),
