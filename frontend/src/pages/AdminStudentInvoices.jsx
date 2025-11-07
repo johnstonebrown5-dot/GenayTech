@@ -17,10 +17,13 @@ export default function AdminStudentInvoices(){
         setError('')
         const { data } = await api.get(`/finance/invoices/?student=${id}`)
         if (!alive) return
-        setInvoices(data)
+        const list = Array.isArray(data) ? data : (Array.isArray(data?.results) ? data.results : [])
+        setInvoices(list)
       }catch(e){
         if (!alive) return
-        setError(e?.response?.data?.detail || e?.message || 'Failed to load invoices')
+        const msg = e?.response?.data?.detail || e?.message || 'Failed to load invoices'
+        setError(msg)
+        setInvoices([])
       }finally{
         alive && setLoading(false)
       }
@@ -55,7 +58,7 @@ export default function AdminStudentInvoices(){
               </tr>
             </thead>
             <tbody>
-              {invoices.map(inv => (
+              {(Array.isArray(invoices)?invoices:[]).map(inv => (
                 <tr key={inv.id} className="border-t">
                   <td>{inv.id}</td>
                   <td>{money(inv.amount)}</td>
@@ -64,7 +67,7 @@ export default function AdminStudentInvoices(){
                   <td>{inv.created_at?.slice(0,10)}</td>
                 </tr>
               ))}
-              {invoices.length === 0 && !loading && (
+              {(Array.isArray(invoices) ? invoices.length===0 : true) && !loading && (
                 <tr><td colSpan={5} className="text-center text-gray-500 py-6">No invoices found</td></tr>
               )}
             </tbody>

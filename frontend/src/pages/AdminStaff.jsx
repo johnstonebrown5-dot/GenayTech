@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { useAuth } from '../auth'
 import api from '../api'
 import AdminLayout from '../components/AdminLayout'
 import Modal from '../components/Modal'
@@ -19,6 +20,7 @@ export default function AdminStaff(){
   const [search, setSearch] = useState('')
 
   const { showSuccess, showError } = useNotification()
+  const { user: me } = useAuth()
 
   const load = async () => {
     try{
@@ -150,14 +152,14 @@ export default function AdminStaff(){
                           {row.profile && (
                             <>
                               <Link
-                                to={`/finance/staff-payroll?staff=${row.profile.id}`}
+                                to={`/admin/staff-payroll?staff=${row.profile.id}`}
                                 className="px-2 py-1 rounded border text-xs hover:bg-gray-50"
                                 title="Manage Payroll"
                               >
                                 Payroll
                               </Link>
                               <Link
-                                to={`/finance/staff-payroll?staff=${row.profile.id}`}
+                                to={`/admin/staff-payroll?staff=${row.profile.id}`}
                                 className="px-2 py-1 rounded border text-xs hover:bg-gray-50"
                                 title="View Payslips"
                               >

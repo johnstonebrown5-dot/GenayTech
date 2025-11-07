@@ -5,7 +5,7 @@ import FinanceLayout from '../components/FinanceLayout'
 import Modal from '../components/Modal'
 import { useNotification } from '../components/NotificationContext'
 
-export default function FinanceStaffPayroll(){
+export function FinanceStaffPayrollContent(){
   const [staff, setStaff] = useState([])
   const [payrolls, setPayrolls] = useState([])
   const [payslips, setPayslips] = useState([])
@@ -114,7 +114,6 @@ export default function FinanceStaffPayroll(){
   }
 
   return (
-    <FinanceLayout>
       <div className="space-y-6">
         <div className="flex items-center justify-between gap-3">
           <div>
@@ -226,6 +225,13 @@ export default function FinanceStaffPayroll(){
           </form>
         </Modal>
       </div>
+  )
+}
+
+export default function FinanceStaffPayroll(){
+  return (
+    <FinanceLayout>
+      <FinanceStaffPayrollContent />
     </FinanceLayout>
   )
 }

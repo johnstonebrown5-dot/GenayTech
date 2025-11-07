@@ -33,14 +33,18 @@ export default function AdminStudentPayments(){
           api.get('/finance/payment-methods/')
         ])
         if (!alive) return
-        setPayments(payRes.data)
-        setInvoices(invRes.data)
+        const payList = Array.isArray(payRes.data) ? payRes.data : (Array.isArray(payRes.data?.results) ? payRes.data.results : [])
+        const invList = Array.isArray(invRes.data) ? invRes.data : (Array.isArray(invRes.data?.results) ? invRes.data.results : [])
+        setPayments(payList)
+        setInvoices(invList)
         const mlist = Array.isArray(methodsRes.data)? methodsRes.data : (methodsRes.data?.results||[])
         const enabled = mlist.filter(m=>m.enabled).map(m=>String(m.key).toLowerCase())
         if (enabled.length>0) setEnabledMethods(enabled)
       }catch(e){
         if (!alive) return
         setError(e?.response?.data?.detail || e?.message || 'Failed to load payments')
+        setPayments([])
+        setInvoices([])
       }finally{
         alive && setLoading(false)
       }
@@ -103,8 +107,10 @@ export default function AdminStudentPayments(){
         api.get(`/finance/payments/?invoice__student=${id}`),
         api.get(`/finance/invoices/?student=${id}`)
       ])
-      setPayments(payRes.data)
-      setInvoices(invRes.data)
+      const payList = Array.isArray(payRes.data) ? payRes.data : (Array.isArray(payRes.data?.results) ? payRes.data.results : [])
+      const invList = Array.isArray(invRes.data) ? invRes.data : (Array.isArray(invRes.data?.results) ? invRes.data.results : [])
+      setPayments(payList)
+      setInvoices(invList)
     } catch(e){
       setPayError(e?.response?.data?.detail || e?.message || 'Failed to record payment')
     } finally {

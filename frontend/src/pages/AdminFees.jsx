@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import AdminLayout from '../components/AdminLayout'
-import api from '../api'
+import api, { toAbsoluteUrl, backendBase } from '../api'
 import Modal from '../components/Modal'
 import { useNotification } from '../components/NotificationContext'
 
@@ -11,6 +11,75 @@ export default function AdminFees({ embed=false, initialTab='categories' }){
   const [loadingCounts, setLoadingCounts] = useState({ categories: true, classFees: true, studentFees: true, specialAssignments: true, arrears: true, payments: true, methods: true })
   const onCount = (key, value) => setCounts(prev=>({ ...prev, [key]: value }))
   const onLoading = (key, value) => setLoadingCounts(prev=>({ ...prev, [key]: value }))
+  const [gallery, setGallery] = useState([])
+  const [loadingGallery, setLoadingGallery] = useState(false)
+  const [showReport, setShowReport] = useState(false)
+  const [reportForm, setReportForm] = useState({ kind:'payments', format:'graph', scope:'all', classId:'', grade:'' })
+  const [reportClasses, setReportClasses] = useState([])
+  const [reportLoading, setReportLoading] = useState(false)
+  useEffect(()=>{
+    let mounted = true
+    async function loadSchool(){
+      try{
+        setLoadingGallery(true)
+        const { data } = await api.get('/auth/school/me/')
+        const items = Array.isArray(data?.homepage?.gallery?.items) ? data.homepage.gallery.items : []
+        if (mounted) setGallery(items.filter(it=>it && it.url))
+      }catch{
+        if (mounted) setGallery([])
+      }finally{
+        if (mounted) setLoadingGallery(false)
+      }
+    }
+    loadSchool()
+    return ()=>{ mounted = false }
+  }, [])
+  useEffect(()=>{
+    if (showReport) {
+      let mounted = true
+      ;(async()=>{
+        try{
+          setReportLoading(true)
+          const { data } = await api.get('/academics/classes/')
+          if (!mounted) return
+          const list = Array.isArray(data) ? data : (Array.isArray(data?.results) ? data.results : [])
+          setReportClasses(list)
+        }catch{ if (mounted) setReportClasses([]) }
+        finally{ if (mounted) setReportLoading(false) }
+      })()
+      return ()=>{ mounted = false }
+    }
+  }, [showReport])
+
+  const onGenerateReport = () => {
+    try{
+      const kind = reportForm.kind
+      const format = reportForm.format
+      const scope = reportForm.scope
+      const params = new URLSearchParams()
+      if (scope==='class' && reportForm.classId) params.set('class', String(reportForm.classId))
+      if (scope==='grade' && reportForm.grade) params.set('grade', String(reportForm.grade))
+      // Graphical -> open analytics dashboard
+      if (format==='graph'){
+        const qs = new URLSearchParams({ tab: kind, ...Object.fromEntries(params) }).toString()
+        const path = '/admin/reports' // FinanceReports page
+        window.open(`${path}?${qs}`, '_blank')
+        setShowReport(false)
+        return
+      }
+      // Tabular -> CSV export endpoints (best-effort)
+      const base = backendBase.replace(/\/$/, '')
+      let endpoint = ''
+      if (kind==='payments') endpoint = `${base}/api/finance/payments/export`
+      else if (kind==='assignments') endpoint = `${base}/api/finance/student-fees/export`
+      else if (kind==='arrears') endpoint = `${base}/api/finance/arrears/export`
+      const href = endpoint + (params.toString()?`?${params.toString()}`:'')
+      window.open(href, '_blank')
+      setShowReport(false)
+    }catch(e){
+      showError?.('Failed to Generate Report', e?.message || 'Unknown error')
+    }
+  }
   const content = (
       <div className="min-h-screen bg-gray-50">
         {/* Header Section */}
@@ -28,8 +97,30 @@ export default function AdminFees({ embed=false, initialTab='categories' }){
                   <h1 className="text-2xl font-bold text-gray-900">Fees Management</h1>
                   <p className="text-sm text-gray-600 mt-1">Manage fee categories, assignments, and student balances</p>
                 </div>
+                <div className="flex-1" />
+                <div>
+                  <button onClick={()=>setShowReport(true)} className="inline-flex items-center gap-2 px-3 py-2 rounded-md bg-indigo-600 text-white text-sm shadow-sm hover:bg-indigo-700">
+                    <span>📊</span>
+                    <span>Generate Report</span>
+                  </button>
+                </div>
               </div>
             </div>
+            {(loadingGallery && gallery.length===0) ? (
+              <div className="pb-6">
+                <div className="h-24 rounded-lg bg-gray-100 animate-pulse" />
+              </div>
+            ) : (gallery && gallery.length>0 ? (
+              <div className="pb-6">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+                  {gallery.slice(0,12).map((g, i)=> (
+                    <div key={`${i}-${g.url}`} className="relative overflow-hidden rounded-lg border border-gray-200 bg-gray-50">
+                      <img src={/^https?:/.test(g.url)? g.url : toAbsoluteUrl(g.url)} alt={g.title||'Gallery'} className="w-full h-24 object-cover" loading="lazy"/>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null)}
           </div>
         </div>
 
@@ -97,9 +188,65 @@ export default function AdminFees({ embed=false, initialTab='categories' }){
   return embed ? content : (
     <AdminLayout>
       {content}
+      {/* Report Builder Modal */}
+      {showReport && (
+        <Modal open={showReport} onClose={()=>setShowReport(false)} title="Generate Fee Reports" size="md">
+          <form className="space-y-4" onSubmit={e=>{ e.preventDefault(); onGenerateReport() }}>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm text-gray-700 mb-1">Type</label>
+                <select className="w-full border rounded px-3 py-2" value={reportForm.kind} onChange={e=>setReportForm(f=>({...f, kind:e.target.value}))}>
+                  <option value="payments">Payments</option>
+                  <option value="assignments">Fee Assignments</option>
+                  <option value="arrears">Arrears & Balances</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm text-gray-700 mb-1">Format</label>
+                <select className="w-full border rounded px-3 py-2" value={reportForm.format} onChange={e=>setReportForm(f=>({...f, format:e.target.value}))}>
+                  <option value="graph">Graphical</option>
+                  <option value="table">Tabular / CSV</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm text-gray-700 mb-1">Scope</label>
+                <select className="w-full border rounded px-3 py-2" value={reportForm.scope} onChange={e=>setReportForm(f=>({...f, scope:e.target.value}))}>
+                  <option value="all">Whole School</option>
+                  <option value="class">By Class</option>
+                  <option value="grade">By Grade</option>
+                </select>
+              </div>
+              {reportForm.scope==='class' && (
+                <div>
+                  <label className="block text-sm text-gray-700 mb-1">Class</label>
+                  <select className="w-full border rounded px-3 py-2" value={reportForm.classId} onChange={e=>setReportForm(f=>({...f, classId:e.target.value}))}>
+                    <option value="">Select class</option>
+                    {(reportClasses||[]).map(c=> (<option key={c.id} value={c.id}>{c.name}{c.grade_level? ` • ${c.grade_level}`:''}</option>))}
+                  </select>
+                  {reportLoading && <div className="text-xs text-gray-500 mt-1">Loading classes…</div>}
+                </div>
+              )}
+              {reportForm.scope==='grade' && (
+                <div>
+                  <label className="block text-sm text-gray-700 mb-1">Grade</label>
+                  <input className="w-full border rounded px-3 py-2" placeholder="e.g. Grade 7" value={reportForm.grade} onChange={e=>setReportForm(f=>({...f, grade:e.target.value}))} />
+                </div>
+              )}
+            </div>
+            <div className="flex justify-between items-center text-xs text-gray-500">
+              <div>Graphical reports open the Finance Analytics dashboard. Tabular opens CSV exports when available.</div>
+            </div>
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={()=>setShowReport(false)} className="px-4 py-2 rounded border">Cancel</button>
+              <button type="submit" className="px-4 py-2 rounded bg-indigo-600 text-white">Generate</button>
+            </div>
+          </form>
+        </Modal>
+      )}
     </AdminLayout>
   )
 }
+
 
 function StudentFees({ showSuccess, showError, onCount, onLoading }){
   const [items, setItems] = useState([])
