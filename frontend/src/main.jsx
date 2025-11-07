@@ -3,9 +3,13 @@ import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import App from './App'
 import './index.css'
+import { unlockAudioOnUserGesture } from './utils/sounds'
 
 // Global PWA install wiring: capture the beforeinstallprompt event and expose a helper
 if (typeof window !== 'undefined') {
+  // Set up audio unlock once per page load
+  try { unlockAudioOnUserGesture() } catch {}
+
   window.__pwaInstallEvent = window.__pwaInstallEvent || null
   window.addEventListener('beforeinstallprompt', (e) => {
     try { e.preventDefault() } catch {}
