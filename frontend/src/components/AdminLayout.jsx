@@ -41,6 +41,17 @@ export default function AdminLayout({ children }){
   const [bannerExpanded, setBannerExpanded] = useState(false)
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
   const [avatarUrl, setAvatarUrl] = useState('')
+  const [dismissedIds, setDismissedIds] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('dismissed_broadcast_ids') || '[]') } catch { return [] }
+  })
+
+  const dismissBanner = (id) => {
+    if (!id) return
+    const next = Array.from(new Set([...(Array.isArray(dismissedIds)? dismissedIds:[]), id]))
+    setDismissedIds(next)
+    try { localStorage.setItem('dismissed_broadcast_ids', JSON.stringify(next)) } catch {}
+    if (broadcastBanner?.id === id) setBroadcastBanner(null)
+  }
 
   // Close mobile drawer on route change
   useEffect(() => { setIsMobileOpen(false) }, [pathname])
@@ -138,7 +149,8 @@ export default function AdminLayout({ children }){
           const bCount = computeUnread(bOnly)
           setBroadcastUnread(bCount)
           const latest = Array.isArray(bOnly) && bOnly.length > 0 ? bOnly[0] : null
-          setBroadcastBanner(latest || null)
+          const candidate = latest && !dismissedIds.includes(latest.id) ? latest : null
+          setBroadcastBanner(candidate)
         }
       } catch {
         if (mounted) { setUnreadCount(0); setBroadcastUnread(0); setBroadcastBanner(null) }
@@ -148,7 +160,7 @@ export default function AdminLayout({ children }){
     load()
     const id = setInterval(load, 15000)
     return () => { mounted = false; clearInterval(id) }
-  }, [user])
+  }, [user, dismissedIds])
 
   // Load current term and year for header display
   useEffect(() => {
@@ -188,6 +200,16 @@ export default function AdminLayout({ children }){
             </a>
             <button onClick={()=>setBannerExpanded(v=>!v)} className="sm:hidden text-xs underline decoration-white/70 underline-offset-2 px-2 py-1">
               {bannerExpanded ? 'Show less' : 'Read more'}
+            </button>
+            <button
+              onClick={() => dismissBanner(broadcastBanner?.id)}
+              aria-label="Hide alert"
+              title="Hide this alert"
+              className="ml-1 inline-flex items-center justify-center w-7 h-7 rounded-full hover:bg-white/20"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
             </button>
           </div>
         </div>

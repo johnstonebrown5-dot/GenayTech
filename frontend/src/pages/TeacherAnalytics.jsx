@@ -383,15 +383,15 @@ export default function TeacherAnalytics(){
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-6 px-3 sm:px-0">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
         <div>
           <h1 className="text-lg font-semibold">Analytics</h1>
           <div className="text-xs text-gray-600">Analyze results and compare exams or subjects</div>
         </div>
-        <div className="flex items-center gap-2">
-          <label className="text-sm">Class
-            <select className="border p-2 rounded ml-2" value={selectedClass} onChange={e=>setSelectedClass(e.target.value)}>
+        <div className="flex items-center gap-2 w-full sm:w-auto">
+          <label className="text-sm w-full sm:w-auto">Class
+            <select className="border p-2 rounded ml-2 w-full sm:w-auto" value={selectedClass} onChange={e=>setSelectedClass(e.target.value)}>
               {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </label>
@@ -401,28 +401,28 @@ export default function TeacherAnalytics(){
       {error && <div className="bg-red-50 text-red-700 text-sm p-2 rounded border border-red-200">{error}</div>}
 
       {/* Mode switcher */}
-      <div className="flex items-center gap-2">
-        <div className="text-sm text-gray-700">View:</div>
-        <div className="inline-flex rounded border overflow-hidden">
+      <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
+        <div className="text-sm text-gray-700 shrink-0">View:</div>
+        <div className="inline-flex rounded border overflow-hidden shrink-0">
           <button type="button" onClick={()=>setMode('exam')} className={`px-3 py-1 text-sm ${mode==='exam' ? 'bg-gray-900 text-white' : 'bg-white hover:bg-gray-50'}`}>Exam vs Exam</button>
           <button type="button" onClick={()=>setMode('subject')} className={`px-3 py-1 text-sm border-l ${mode==='subject' ? 'bg-gray-900 text-white' : 'bg-white hover:bg-gray-50'}`}>Subject vs Subject</button>
         </div>
       </div>
 
       {mode === 'exam' && (
-        <div className="bg-white rounded shadow p-4">
-          <div className="flex items-center justify-between mb-3">
+        <div className="bg-white rounded-2xl shadow p-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-3">
             <div className="font-medium">Compare Exams</div>
-            <button onClick={doCompareExams} className="px-3 py-1.5 rounded bg-gray-900 text-white text-sm hover:bg-gray-800">Compare</button>
+            <button onClick={doCompareExams} className="px-3 py-2 rounded-xl bg-gray-900 text-white text-sm hover:bg-gray-800 w-full sm:w-auto">Compare</button>
           </div>
-          <div className="flex flex-wrap items-center gap-2 mb-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
             <label className="text-sm">Exam A
-              <select className="border p-2 rounded ml-2" value={examA} onChange={e=>setExamA(e.target.value)}>
+              <select className="border p-2 rounded ml-2 w-full" value={examA} onChange={e=>setExamA(e.target.value)}>
                 {exams.map(ex => <option key={ex.id} value={ex.id}>{examLabel(ex)}</option>)}
               </select>
             </label>
             <label className="text-sm">Exam B
-              <select className="border p-2 rounded ml-2" value={examB} onChange={e=>setExamB(e.target.value)}>
+              <select className="border p-2 rounded ml-2 w-full" value={examB} onChange={e=>setExamB(e.target.value)}>
                 {exams.map(ex => <option key={ex.id} value={ex.id}>{examLabel(ex)}</option>)}
               </select>
             </label>
@@ -474,21 +474,21 @@ export default function TeacherAnalytics(){
       )}
 
       {mode === 'subject' && (
-        <div className="bg-white rounded shadow p-4">
-          <div className="flex items-center justify-between mb-3">
+        <div className="bg-white rounded-2xl shadow p-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-3">
             <div className="font-medium">Compare Subjects (within an exam)</div>
-            <button onClick={doCompareSubjects} className="px-3 py-1.5 rounded bg-gray-900 text-white text-sm hover:bg-gray-800">Compare</button>
+            <button onClick={doCompareSubjects} className="px-3 py-2 rounded-xl bg-gray-900 text-white text-sm hover:bg-gray-800 w-full sm:w-auto">Compare</button>
           </div>
           {/* Subject trends controls */}
-          <div className="flex flex-wrap items-center gap-2 mb-3">
+          <div className="grid grid-cols-1 sm:flex sm:flex-wrap items-center gap-2 mb-3">
             <label className="text-sm">From
-              <input type="date" className="border p-2 rounded ml-2" value={trendStart} onChange={e=>setTrendStart(e.target.value)} />
+              <input type="date" className="border p-2 rounded ml-2 w-full sm:w-auto" value={trendStart} onChange={e=>setTrendStart(e.target.value)} />
             </label>
             <label className="text-sm">To
-              <input type="date" className="border p-2 rounded ml-2" value={trendEnd} onChange={e=>setTrendEnd(e.target.value)} />
+              <input type="date" className="border p-2 rounded ml-2 w-full sm:w-auto" value={trendEnd} onChange={e=>setTrendEnd(e.target.value)} />
             </label>
             <label className="text-sm">Subjects
-              <select multiple className="border p-2 rounded ml-2 min-w-[180px]" value={trendSubjects} onChange={e=> setTrendSubjects(Array.from(e.target.selectedOptions).map(o=>o.value))}>
+              <select multiple className="border p-2 rounded ml-2 min-w-[180px] w-full sm:w-auto" value={trendSubjects} onChange={e=> setTrendSubjects(Array.from(e.target.selectedOptions).map(o=>o.value))}>
                 {(currentClass?.subjects || []).map(s => (
                   <option key={s.id} value={String(s.id)}>{s.name || s.code}</option>
                 ))}
@@ -501,19 +501,19 @@ export default function TeacherAnalytics(){
               <Line data={subjectTrendChartData} options={subjectTrendChartOpts} />
             </div>
           )}
-          <div className="flex flex-wrap items-center gap-2 mb-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-3">
             <label className="text-sm">Exam
-              <select className="border p-2 rounded ml-2" value={subjectExam} onChange={e=>setSubjectExam(e.target.value)}>
+              <select className="border p-2 rounded ml-2 w-full" value={subjectExam} onChange={e=>setSubjectExam(e.target.value)}>
                 {exams.map(ex => <option key={ex.id} value={ex.id}>{examLabel(ex)}</option>)}
               </select>
             </label>
             <label className="text-sm">Subject A
-              <select className="border p-2 rounded ml-2" value={subjectA} onChange={e=>setSubjectA(e.target.value)}>
+              <select className="border p-2 rounded ml-2 w-full" value={subjectA} onChange={e=>setSubjectA(e.target.value)}>
                 {subjectOptions.map(s => <option key={s.id} value={s.id}>{s.name || s.code}</option>)}
               </select>
             </label>
             <label className="text-sm">Subject B
-              <select className="border p-2 rounded ml-2" value={subjectB} onChange={e=>setSubjectB(e.target.value)}>
+              <select className="border p-2 rounded ml-2 w-full" value={subjectB} onChange={e=>setSubjectB(e.target.value)}>
                 {subjectOptions.map(s => <option key={s.id} value={s.id}>{s.name || s.code}</option>)}
               </select>
             </label>
