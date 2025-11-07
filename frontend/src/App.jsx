@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from './auth'
 import { NotificationProvider } from './components/NotificationContext'
 import NotificationContainer from './components/NotificationContainer'
 import MessageNotifier from './components/MessageNotifier'
+import BrowserNotificationPrompt from './components/BrowserNotificationPrompt'
 import LoginPage from './pages/LoginPage'
 import SchoolHome from './pages/SchoolHome'
 import FeaturedPost from './pages/FeaturedPost'
@@ -78,12 +79,14 @@ import FloatingButton from './components/Assistant/FloatingButton'
 import AssistantPanel from './components/Assistant/AssistantPanel'
 import FloatingActions from './components/FloatingActions'
 import ReportIssuePrompt from './components/ReportIssuePrompt'
+import ServiceReviewPopup from './components/ServiceReviewPopup'
 import LockProvider from './components/LockProvider'
 import PublicReceipt from './pages/PublicReceipt'
 import NotFound from './pages/NotFound'
 import Unauthorized from './pages/Unauthorized'
+import ReAuth from './pages/ReAuth'
 
-function ProtectedRoute({ children, roles }) {
+function ProtectedRoute({ children, roles, ownerRole }) {
   const { user, loading } = useAuth()
   const location = useLocation()
   if (loading) return <div className="p-8">Loading...</div>
@@ -92,7 +95,13 @@ function ProtectedRoute({ children, roles }) {
   // Treat superuser/staff as admin
   const isAdminAccess = roles.includes('admin') && (user?.is_superuser || user?.is_staff || user?.role === 'admin')
   const hasRole = roles.includes(user?.role)
-  if (isAdminAccess || hasRole) return children
+  if (isAdminAccess || hasRole) {
+    // If user is accessing a route owned by a different role (e.g., admin -> teacher), require re-auth
+    if (ownerRole && user?.role !== ownerRole) {
+      return <Navigate to="/reauth" state={{ redirectTo: location.pathname }} replace />
+    }
+    return children
+  }
   // If user has no explicit role but is superuser, allow admin
   if ((user?.is_superuser || user?.is_staff) && roles.includes('admin')) return children
   return <Navigate to="/unauthorized" state={{ from: location.pathname }} replace />
@@ -105,6 +114,8 @@ function RoleRedirect() {
 }
 
 export default function App() {
+  const { pathname } = useLocation()
+  const hideAssistant = pathname === '/login' || pathname === '/' || pathname === '/report-issue'
   return (
     <NotificationProvider>
       <AssistantProvider>
@@ -149,6 +160,8 @@ export default function App() {
             <Route path="/admin/calendar" element={<ProtectedRoute roles={["admin"]}><AdminAcademicCalendar/></ProtectedRoute>} />
             <Route path="/admin/messages" element={<ProtectedRoute roles={["admin"]}><AdminLayout><Messages/></AdminLayout></ProtectedRoute>} />
             <Route path="/admin/report-issue" element={<ProtectedRoute roles={["admin"]}><AdminLayout><ReportIssue/></AdminLayout></ProtectedRoute>} />
+            {/* Public report issue page */}
+            <Route path="/report-issue" element={<ReportIssue/>} />
             <Route path="/admin/website" element={<ProtectedRoute roles={["admin"]}><AdminWebsite/></ProtectedRoute>} />
             <Route path="/admin/profile" element={<ProtectedRoute roles={["admin"]}><AdminProfile/></ProtectedRoute>} />
             <Route path="/admin/timetable" element={<ProtectedRoute roles={["admin"]}><AdminTimetable/></ProtectedRoute>} />
@@ -192,9 +205,11 @@ export default function App() {
             <Route path="*" element={<NotFound/>} />
             </Routes>
             <NotificationContainer />
+            <BrowserNotificationPrompt />
             <ReportIssuePrompt />
-            <FloatingActions />
-            <FloatingButton />
+            <ServiceReviewPopup />
+            {!hideAssistant && <FloatingActions />}
+            {!hideAssistant && <FloatingButton />}
             <AssistantPanel />
           </LockProvider>
         </AuthProvider>

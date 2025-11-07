@@ -35,6 +35,38 @@ export const NotificationProvider = ({ children }) => {
       }, newNotification.duration)
     }
 
+    // Mirror to desktop notification when allowed
+    try {
+      const allowBrowser = notification.browser !== false
+      if (allowBrowser && typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+        const title = newNotification.title || 'Notification'
+        const options = {
+          body: newNotification.message || '',
+          icon: '/favicon.ico',
+          badge: '/favicon.ico',
+          data: { url: newNotification.route || '/' },
+          tag: `edu-track-${newNotification.type}`,
+        }
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker.getRegistration().then((reg) => {
+            if (reg && reg.showNotification) {
+              reg.showNotification(title, options)
+            } else {
+              // Fallback to direct Notification
+              // eslint-disable-next-line no-new
+              new Notification(title, options)
+            }
+          }).catch(() => {
+            // eslint-disable-next-line no-new
+            new Notification(title, options)
+          })
+        } else {
+          // eslint-disable-next-line no-new
+          new Notification(title, options)
+        }
+      }
+    } catch {}
+
     return id
   }, [])
 

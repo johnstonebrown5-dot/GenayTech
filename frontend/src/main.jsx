@@ -11,3 +11,17 @@ createRoot(document.getElementById('root')).render(
     </BrowserRouter>
   </React.StrictMode>
 )
+
+// Register a simple service worker for notifications
+if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.getRegistration().then((reg) => {
+      if (!reg) {
+        navigator.serviceWorker.register('/sw.js').catch(() => {})
+      }
+    }).catch(() => {
+      // Try register anyway
+      navigator.serviceWorker.register('/sw.js').catch(() => {})
+    })
+  })
+}

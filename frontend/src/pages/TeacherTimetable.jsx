@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useAuth } from '../auth'
-import api from '../api'
+import api, { toAbsoluteUrl } from '../api'
 
 export default function TeacherTimetable() {
   const [sp] = useSearchParams()
@@ -18,6 +18,7 @@ export default function TeacherTimetable() {
   const [currentTerm, setCurrentTerm] = useState(null)
   const [currentYear, setCurrentYear] = useState(null)
   const [serverAssignments, setServerAssignments] = useState(null)
+  const [school, setSchool] = useState(null)
 
   const activeDays = useMemo(()=>{
     const arr = (template?.days_active || [1,2,3,4,5]).filter(d=>d>=1&&d<=7)
@@ -190,6 +191,11 @@ export default function TeacherTimetable() {
         setCurrentYear(year || null)
         setCurrentTerm(term || null)
       } catch {}
+      // Load school branding (safe for teacher)
+      try {
+        const { data } = await api.get('/auth/school/info/')
+        setSchool(data || null)
+      } catch {}
     } finally { setLoading(false) }
   })() }, [user?.id, refreshTick])
 
@@ -297,6 +303,9 @@ export default function TeacherTimetable() {
           body * { visibility: hidden; }
           #print-area, #print-area * { visibility: visible; }
           #print-area { position: absolute; left: 0; top: 0; width: 100%; }
+          .no-print { display: none !important; }
+          .print-header h1 { font-size: 18px; }
+          .print-header p { font-size: 12px; }
         }
       `}</style>
 
@@ -334,6 +343,16 @@ export default function TeacherTimetable() {
       </div>
 
       <div id="print-area">
+        {/* Print header with school branding */}
+        <div className="print-header mb-4 flex flex-col items-center gap-2 text-center">
+          {school?.logo_url && (
+            <img src={toAbsoluteUrl(school.logo_url)} alt="School Logo" className="h-12 w-12 object-contain mx-auto" />
+          )}
+          <div className="min-w-0">
+            <h1 className="font-extrabold text-gray-900 leading-tight">{school?.name || ''}</h1>
+            {school?.motto && <p className="text-gray-600 italic leading-tight">{school.motto}</p>}
+          </div>
+        </div>
         <div className="flex flex-wrap items-center gap-8 mb-3 text-[15px]">
           <div>Teacher: <span className="font-bold text-lg">{teacherName || '—'}</span></div>
           <div>Term: <span className="font-semibold">{plan?.term_detail?.name || (currentTerm ? (`T${currentTerm?.number||''}`) : (currentYear?.terms?.find(t=>t.is_current)?.name || ''))}</span></div>

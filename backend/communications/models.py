@@ -115,6 +115,28 @@ class ArrearsMessageCampaign(models.Model):
     def __str__(self):
         return f"Arrears Campaign #{self.id} ({self.school})"
 
+# New: store service reviews/ratings
+class ServiceReview(models.Model):
+    school = models.ForeignKey('accounts.School', null=True, blank=True, on_delete=models.SET_NULL, related_name='service_reviews')
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='service_reviews')
+    name = models.CharField(max_length=120, blank=True, default='')
+    email = models.EmailField(blank=True, default='')
+    rating = models.PositiveSmallIntegerField(help_text='1-5')
+    comment = models.TextField(blank=True, default='')
+    page_url = models.CharField(max_length=500, blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['created_at']),
+            models.Index(fields=['rating', 'created_at']),
+        ]
+        ordering = ['-created_at', 'id']
+
+    def __str__(self):
+        who = self.name or getattr(self.user, 'username', '') or 'Guest'
+        return f"{who} rated {self.rating}"
+
 
 # Messaging models: simple in-app messaging with role/user targeting within a school
 class Message(models.Model):

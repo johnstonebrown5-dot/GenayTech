@@ -216,27 +216,38 @@ export default function LoginPage() {
                 </div>
 
                 {formStep === 'role' && (
-                  <div className="mt-5">
-                    <div className="grid grid-cols-2 gap-3" role="radiogroup" aria-label="Select role">
-                      {roles.map((r) => (
-                        <button
-                          key={r.key}
-                          onClick={() => handleRoleSelect(r.key)}
-                          role="radio"
-                          aria-checked={role===r.key}
-                          aria-label={r.label}
-                          className={`px-4 py-2.5 rounded-lg text-sm font-medium border transition flex items-center justify-center gap-2 ${role===r.key ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-gray-200 hover:bg-gray-50'}`}
-                        >
-                          <span className="text-base">{r.icon}</span>
-                          <span>{r.label}</span>
-                        </button>
-                      ))}
+                  <div className="mt-6">
+                    <div className="grid grid-cols-2 gap-4" role="radiogroup" aria-label="Select role">
+                      {roles.map((r) => {
+                        const selected = role === r.key
+                        return (
+                          <button
+                            key={r.key}
+                            type="button"
+                            onClick={() => handleRoleSelect(r.key)}
+                            role="radio"
+                            aria-checked={selected}
+                            aria-label={r.label}
+                            className={`group relative rounded-xl border p-4 flex flex-col items-center justify-center gap-2 text-sm font-semibold transition-all duration-200 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300 ${selected ? 'bg-gradient-to-br from-indigo-50 via-white to-purple-50 border-indigo-200 text-indigo-700 shadow-[0_10px_30px_rgba(79,70,229,0.22)]' : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50 hover:border-indigo-100 hover:shadow-md'}`}
+                          >
+                            <span className={`text-2xl ${selected ? 'scale-105' : ''}`}>{r.icon}</span>
+                            <span>{r.label}</span>
+                            {/* corner check */}
+                            <span className={`pointer-events-none absolute top-2 right-2 inline-flex h-5 w-5 items-center justify-center rounded-full border ${selected ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-transparent border-gray-300'} transition`}>
+                              ✓
+                            </span>
+                          </button>
+                        )
+                      })}
                     </div>
-                    <button
-                      onClick={() => { if(!role) return; setFormStep('credentials') }}
-                      disabled={!role}
-                      className="mt-6 w-full py-3 rounded-lg bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-semibold disabled:opacity-60 transition-transform hover:translate-y-[-1px]"
-                    >Proceed</button>
+                    <div className="mt-6 flex items-center gap-3">
+                      <button
+                        onClick={() => { if(!role) return; setFormStep('credentials') }}
+                        disabled={!role}
+                        className="flex-1 py-3 rounded-lg bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-semibold disabled:opacity-60 transition-transform hover:translate-y-[-1px]"
+                      >Proceed</button>
+                      <span className="text-xs text-gray-500">{role ? `Selected: ${role}` : 'Choose a role'}</span>
+                    </div>
                     <div className="mt-3 text-xs text-gray-600">Not sure of your role? Contact your school admin.</div>
                   </div>
                 )}
@@ -349,98 +360,107 @@ export default function LoginPage() {
 
           {/* Card with gradient border */}
           <div className="relative">
-            <div className="absolute -inset-1 rounded-[28px] bg-gradient-to-br from-indigo-500/50 via-purple-500/40 to-pink-500/45 blur opacity-80" />
-            <div className="relative rounded-[28px] bg-white/95 backdrop-blur-lg shadow-[0_18px_48px_rgba(21,23,54,0.28)] ring-1 ring-white/70 border border-white/60 p-6">
-            {formStep === 'role' && (
-              <div className="space-y-5">
-                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-indigo-100 text-indigo-600 text-xl shadow-inner shadow-white/40">🎯</div>
-                <div className="text-center space-y-1">
-                  <h2 className="text-xl font-bold text-indigo-700">Select Your Role</h2>
-                  <p className="text-xs text-gray-500">Choose where you need to go today.</p>
+            <div className="absolute -inset-[6px] rounded-[28px] bg-gradient-to-br from-indigo-500/60 via-purple-500/45 to-fuchsia-500/55 blur opacity-90" />
+            <div className="relative rounded-[28px] bg-white/90 backdrop-blur-xl shadow-[0_20px_60px_rgba(15,23,42,0.35)] ring-1 ring-white/70 border border-white/60 p-6">
+              {formStep === 'role' && (
+                <div className="space-y-5">
+                  <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-indigo-100 text-indigo-600 text-xl shadow-inner shadow-white/40">🎯</div>
+                  <div className="text-center space-y-1">
+                    <h2 className="text-xl font-bold text-indigo-700">Select Your Role</h2>
+                    <p className="text-xs text-gray-500">Choose where you need to go today.</p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3" role="radiogroup" aria-label="Select role">
+                    {roles.map(r => {
+                      const selected = role === r.key;
+                      return (
+                        <button
+                          key={r.key}
+                          onClick={()=>handleRoleSelect(r.key)}
+                          role="radio"
+                          aria-checked={selected}
+                          aria-label={r.label}
+                          className={`group relative px-3 py-3 rounded-2xl text-sm font-semibold border transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300 flex flex-col items-center justify-center gap-1 active:scale-[0.99] ${selected ? 'bg-gradient-to-br from-indigo-50 via-white to-purple-50 border-indigo-200 text-indigo-700 shadow-[0_10px_26px_rgba(79,70,229,0.25)]' : 'bg-white/95 border-neutral-200 text-gray-700 hover:bg-white hover:border-indigo-200 hover:text-indigo-700 hover:shadow-md'}`}
+                        >
+                          <span className={`absolute top-2 right-2 inline-flex h-5 w-5 items-center justify-center rounded-full border transition-all ${selected ? 'bg-indigo-600 text-white border-indigo-600 shadow-[0_6px_14px_rgba(79,70,229,0.45)] scale-100' : 'bg-white/80 text-transparent border-gray-300 scale-90'}`}>✓</span>
+                          <span className={`text-lg transition-transform ${selected ? 'scale-105' : 'group-hover:scale-105'}`}>{r.icon}</span>
+                          <span>{r.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <button
+                    onClick={()=>{ if(!role) return; setFormStep('credentials') }}
+                    disabled={!role}
+                    className="w-full rounded-full bg-gradient-to-r from-indigo-600 via-indigo-500 to-purple-600 py-3 text-white text-sm font-semibold tracking-wide shadow-lg shadow-indigo-500/30 disabled:opacity-60 disabled:shadow-none transition-all hover:-translate-y-0.5 active:translate-y-0"
+                  >
+                    <span className="inline-flex items-center justify-center gap-2">
+                      <span className="inline-block h-2 w-2 rounded-full bg-white/80 shadow-[0_0_12px_rgba(255,255,255,0.8)]" />
+                      Proceed
+                    </span>
+                  </button>
+                  <div className="text-center text-[12px] text-gray-600">Need help choosing? Contact the school admin.</div>
                 </div>
-                <div className="grid grid-cols-2 gap-2.5" role="radiogroup" aria-label="Select role">
-                  {roles.map(r => (
-                    <button
-                      key={r.key}
-                      onClick={()=>handleRoleSelect(r.key)}
-                      role="radio"
-                      aria-checked={role===r.key}
-                      aria-label={r.label}
-                      className={`px-3 py-3 rounded-xl text-sm font-semibold border transition-all duration-200 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300 flex flex-col items-center gap-1 ${role===r.key ? 'bg-gradient-to-br from-indigo-50 via-white to-purple-50 border-indigo-200 text-indigo-700 shadow-[0_8px_24px_rgba(79,70,229,0.25)]' : 'bg-white/90 border-neutral-200 text-gray-600 hover:bg-white hover:border-indigo-100 hover:text-indigo-700'}`}
-                    >
-                      <span className="text-lg">{r.icon}</span>
-                      <span>{r.label}</span>
-                    </button>
-                  ))}
-                </div>
-                <button
-                  onClick={()=>{ if(!role) return; setFormStep('credentials') }}
-                  disabled={!role}
-                  className="w-full rounded-full bg-gradient-to-r from-indigo-600 via-indigo-500 to-purple-600 py-3 text-white text-sm font-semibold tracking-wide shadow-lg shadow-indigo-500/30 disabled:opacity-60 disabled:shadow-none transition-transform hover:-translate-y-0.5"
-                >Proceed</button>
-                <div className="text-center text-[12px] text-gray-600">Need help choosing? Contact the school admin.</div>
-              </div>
-            )}
+              )}
 
-            {formStep === 'credentials' && (
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <h2 className="text-lg font-bold text-indigo-700">Log In</h2>
-                  <button onClick={handleBackToRole} className="text-xs text-indigo-700 underline">Change role</button>
-                </div>
-                {role && (
-                  <div className="mb-3 text-xs">
-                    Signing in as: <span className="px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">{role}</span>
+              {formStep === 'credentials' && (
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <h2 className="text-lg font-bold text-indigo-700">Log In</h2>
+                    <button onClick={handleBackToRole} className="text-xs text-indigo-700 underline">Change role</button>
                   </div>
-                )}
-                {error && <div className="mb-3 text-xs text-red-700 bg-red-100 border border-red-200 rounded px-2 py-1.5">{error}</div>}
-                <form onSubmit={submit} className="space-y-3">
-                  <div>
-                    <label htmlFor="m-login-username" className="block text-[12px] text-gray-700 mb-1">Email (username)</label>
-                    <input
-                      id="m-login-username"
-                      type="text"
-                      value={username}
-                      onChange={e=>setUsername(e.target.value)}
-                      autoComplete="username"
-                      inputMode="email"
-                      autoCapitalize="none"
-                      autoCorrect="off"
-                      aria-label="Email (username)"
-                      className="w-full rounded-lg border border-black/10 bg-white/85 px-3 py-2 text-sm shadow-inner"
-                      required
-                    />
-                    <div className="mt-1 text-[11px] text-gray-500">Admins: use the email you signed up with.</div>
-                  </div>
-                  <div>
-                    <label htmlFor="m-login-password" className="block text-[12px] text-gray-700 mb-1">Password</label>
-                    <div className="relative">
+                  {role && (
+                    <div className="mb-3 text-xs">
+                      Signing in as: <span className="px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">{role}</span>
+                    </div>
+                  )}
+                  {error && <div className="mb-3 text-xs text-red-700 bg-red-100 border border-red-200 rounded px-2 py-1.5">{error}</div>}
+                  <form onSubmit={submit} className="space-y-3">
+                    <div>
+                      <label htmlFor="m-login-username" className="block text-[12px] text-gray-700 mb-1">Email (username)</label>
                       <input
-                        id="m-login-password"
-                        type={showPassword ? 'text' : 'password'}
-                        value={password}
-                        onChange={e=>setPassword(e.target.value)}
-                        onKeyUp={(e)=> setCapsLockOn(e.getModifierState && e.getModifierState('CapsLock'))}
-                        autoComplete="current-password"
-                        aria-label="Password"
-                        className="w-full rounded-lg border border-black/10 bg-white/85 px-3 py-2 text-sm pr-16 shadow-inner"
+                        id="m-login-username"
+                        type="text"
+                        value={username}
+                        onChange={e=>setUsername(e.target.value)}
+                        autoComplete="username"
+                        inputMode="email"
+                        autoCapitalize="none"
+                        autoCorrect="off"
+                        aria-label="Email (username)"
+                        className="w-full rounded-lg border border-black/10 bg-white/85 px-3 py-2 text-sm shadow-inner"
                         required
                       />
-                      <button type="button" aria-pressed={showPassword} aria-label={showPassword ? 'Hide password' : 'Show password'} onClick={()=>setShowPassword(v=>!v)} className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-indigo-600 font-semibold">{showPassword?'Hide':'Show'}</button>
+                      <div className="mt-1 text-[11px] text-gray-500">Admins: use the email you signed up with.</div>
                     </div>
-                    {capsLockOn && <div className="mt-1 text-[11px] text-amber-700">Caps Lock is ON</div>}
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <label className="inline-flex items-center gap-2 text-[12px] text-gray-700 select-none">
-                      <input type="checkbox" className="accent-indigo-600" checked={remember} onChange={(e)=>setRemember(e.target.checked)} />
-                      Remember me
-                    </label>
-                    <a href="mailto:EduTrack46@gmail.com?subject=Password%20help" className="text-[12px] text-indigo-700 underline">Forgot password?</a>
-                  </div>
-                  <button type="submit" disabled={isLoading} className="w-full rounded-full bg-gradient-to-r from-indigo-600 via-indigo-500 to-purple-600 text-white font-semibold py-2.5 disabled:opacity-60 disabled:shadow-none shadow-lg shadow-indigo-500/30">{isLoading?'Signing In…':'Proceed'}</button>
-                </form>
-              </div>
-            )}
+                    <div>
+                      <label htmlFor="m-login-password" className="block text-[12px] text-gray-700 mb-1">Password</label>
+                      <div className="relative">
+                        <input
+                          id="m-login-password"
+                          type={showPassword ? 'text' : 'password'}
+                          value={password}
+                          onChange={e=>setPassword(e.target.value)}
+                          onKeyUp={(e)=> setCapsLockOn(e.getModifierState && e.getModifierState('CapsLock'))}
+                          autoComplete="current-password"
+                          aria-label="Password"
+                          className="w-full rounded-lg border border-black/10 bg-white/85 px-3 py-2 text-sm pr-16 shadow-inner"
+                          required
+                        />
+                        <button type="button" aria-pressed={showPassword} aria-label={showPassword ? 'Hide password' : 'Show password'} onClick={()=>setShowPassword(v=>!v)} className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-indigo-600 font-semibold">{showPassword?'Hide':'Show'}</button>
+                      </div>
+                      {capsLockOn && <div className="mt-1 text-[11px] text-amber-700">Caps Lock is ON</div>}
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <label className="inline-flex items-center gap-2 text-[12px] text-gray-700 select-none">
+                        <input type="checkbox" className="accent-indigo-600" checked={remember} onChange={(e)=>setRemember(e.target.checked)} />
+                        Remember me
+                      </label>
+                      <a href="mailto:EduTrack46@gmail.com?subject=Password%20help" className="text-[12px] text-indigo-700 underline">Forgot password?</a>
+                    </div>
+                    <button type="submit" disabled={isLoading} className="w-full rounded-full bg-gradient-to-r from-indigo-600 via-indigo-500 to-purple-600 text-white font-semibold py-2.5 disabled:opacity-60 disabled:shadow-none shadow-lg shadow-indigo-500/30">{isLoading?'Signing In…':'Proceed'}</button>
+                  </form>
+                </div>
+              )}
             </div>
           </div>
 

@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
-from .models import Notification, Event, ArrearsMessageCampaign, Message, MessageRecipient, DeliveryLog
+from .models import Notification, Event, ArrearsMessageCampaign, Message, MessageRecipient, DeliveryLog, ServiceReview
 from accounts.models import School
 
 User = get_user_model()
@@ -188,3 +188,31 @@ class MessageSerializer(serializers.ModelSerializer):
             MessageRecipient.objects.bulk_create(recipients, ignore_conflicts=True)
 
         return msg
+
+
+class ServiceReviewSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ServiceReview
+        fields = ['id','school','user','name','email','rating','comment','page_url','created_at']
+        read_only_fields = ['id','school','user','created_at']
+
+    def validate_rating(self, value):
+        if value is None:
+            raise serializers.ValidationError('rating is required')
+        try:
+            v = int(value)
+        except Exception:
+            raise serializers.ValidationError('rating must be an integer from 1 to 5')
+        if v < 1 or v > 5:
+            raise serializers.ValidationError('rating must be between 1 and 5')
+        return v
+
+    def create(self, validated_data):
+        request = self.context.get('request')
+        user = getattr(request, 'user', None)
+        school = getattr(user, 'school', None)
+        return ServiceReview.objects.create(
+            school=school,
+            user=user if getattr(user, 'is_authenticated', False) else None,
+            **validated_data
+        )

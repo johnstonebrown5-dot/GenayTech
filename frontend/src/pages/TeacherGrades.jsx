@@ -725,6 +725,16 @@ export default function TeacherGrades(){
     }
   }
 
+  const nudge = (studentId, delta) => {
+    const total = Number(outOf) || Number(examMeta.total_marks) || 100
+    const curr = Number(marks[studentId] || 0)
+    const base = Number.isNaN(curr) ? 0 : curr
+    let next = base + delta
+    if (next < 0) next = 0
+    if (next > total) next = total
+    handleMarkChange(studentId, String(next))
+  }
+
   // Auto-collapse controls panel once key selections are present
   useEffect(()=>{
     const ready = selectedClass && selectedSubject && selectedExamId
@@ -937,6 +947,10 @@ export default function TeacherGrades(){
             <button onClick={()=>setUnitModal(true)} type="button" className="text-xs px-2 py-1 rounded border bg-white hover:bg-gray-50">Input: {inputAs==='percent' ? 'Percentage (%)' : 'Marks'}</button>
             <button onClick={()=>setControlsOpen(v=>!v)} className="text-sm px-3 py-1.5 rounded-lg bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-sm">{controlsOpen ? 'Hide Options' : 'Change Selection'}</button>
           </div>
+          <div className="md:hidden flex items-center gap-2">
+            <button onClick={()=>setUnitModal(true)} type="button" className="text-[11px] px-2 py-1 rounded border bg-white">{inputAs==='percent' ? '% Input' : 'Marks'}</button>
+            <button onClick={()=>setControlsOpen(v=>!v)} className="text-xs px-2 py-1.5 rounded-lg bg-indigo-600 text-white shadow">{controlsOpen ? 'Hide' : 'Change'}</button>
+          </div>
         </div>
       </div>
 
@@ -945,7 +959,7 @@ export default function TeacherGrades(){
 
       {/* Selection summary when collapsed */}
       {!controlsOpen && (
-        <div className="rounded-xl border border-gray-200 bg-white shadow-sm p-3 flex items-center justify-between text-sm">
+        <div className="rounded-xl border border-gray-200 bg-white shadow-sm p-3 flex items-center justify-between text-sm sticky top-2 z-20 md:static">
           <div className="flex flex-wrap items-center gap-2">
             <span className="px-2 py-0.5 rounded-full bg-sky-50 text-sky-700 border border-sky-200">Class: <strong className="ml-1">{(classes.find(c=>String(c.id)===String(selectedClass))||{}).name || selectedClass}</strong></span>
             <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">Subject: <strong className="ml-1">{(subjects.find(s=>String(s.id)===String(selectedSubject))||{}).name || selectedSubject}</strong></span>
@@ -1089,27 +1103,32 @@ export default function TeacherGrades(){
           <div className="text-sm font-medium text-gray-800 mb-2 px-1">Students</div>
           <div className="space-y-2">
             {students.map(st => (
-              <div key={st.id} className="flex items-center justify-between gap-2 px-2 py-2 border rounded-lg">
-                <div className="min-w-0">
-                  <div className="text-sm font-medium truncate">{st.name}</div>
-                  <div className="text-xs text-gray-500">{st.admission_no}</div>
+              <div key={st.id} className="flex items-center justify-between gap-3 px-3 py-2 border rounded-xl bg-white shadow-sm">
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="h-8 w-8 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-xs font-semibold">
+                    {(st.name||'').split(' ').map(p=>p[0]).slice(0,2).join('').toUpperCase()}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-sm font-medium whitespace-normal break-words">{st.name}</div>
+                    <div className="text-[11px] text-gray-500">{st.admission_no}</div>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1">
                   <input
                     type="number"
                     inputMode="decimal"
                     min={0}
                     max={inputAs==='percent' ? 100 : (Number(outOf)||Number(examMeta.total_marks)||100)}
-                    step="0.01"
-                    className={`border p-2 rounded w-24 text-right ${invalid[st.id] ? 'border-red-500 bg-red-50' : ''}`}
+                    step="1"
+                    className={`border px-2 py-1.5 rounded-lg w-24 text-right focus:ring-2 focus:ring-indigo-200 ${invalid[st.id] ? 'border-red-500 bg-red-50' : ''}`}
                     value={marks[st.id] || ''}
                     onChange={e=>handleMarkChange(st.id, e.target.value)}
                   />
-                  <span className="text-xs text-gray-500 w-16 text-right">{inputAs==='percent' ? '%' : toPercent(marks[st.id], outOf)}</span>
+                  <span className="text-xs text-gray-500 w-14 text-right">{inputAs==='percent' ? '%' : toPercent(marks[st.id], outOf)}</span>
                 </div>
               </div>
             ))}
-        </div>
+          </div>
         </div>
 
         <div className="hidden md:block">

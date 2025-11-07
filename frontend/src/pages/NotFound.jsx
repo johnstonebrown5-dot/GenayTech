@@ -1,8 +1,12 @@
 import React from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { useAuth } from '../auth'
 
 export default function NotFound() {
   const navigate = useNavigate()
+  const { user } = useAuth()
+  const homeTo = user ? '/app' : '/login'
+  const homeLabel = user ? 'Go to Dashboard' : 'Login'
   return (
     <div className="relative min-h-screen w-full overflow-hidden bg-gradient-to-b from-slate-50 via-white to-slate-100 flex items-center justify-center p-6">
       <div className="pointer-events-none absolute -top-32 -right-20 h-80 w-80 rounded-full bg-gradient-to-br from-blue-500/10 to-indigo-500/10 blur-3xl" />
@@ -24,17 +28,19 @@ export default function NotFound() {
             Go Back
           </button>
           <Link
-            to="/"
+            to={homeTo}
             className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-5 py-2.5 text-sm font-medium text-white shadow-sm transition hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
           >
-            Go Home
+            {homeLabel}
           </Link>
-          <Link
-            to="/login"
-            className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-5 py-2.5 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-300 focus:ring-offset-2"
-          >
-            Login
-          </Link>
+          {!user && (
+            <Link
+              to="/"
+              className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-5 py-2.5 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-300 focus:ring-offset-2"
+            >
+              Go Home
+            </Link>
+          )}
         </div>
       </div>
     </div>

@@ -18,6 +18,9 @@ export default function Messages(){
   const [sending, setSending] = useState(false)
   const [fileToSend, setFileToSend] = useState(null)
   const [filePreview, setFilePreview] = useState(null)
+  const [uploading, setUploading] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState(0)
+  const [uploadedUrl, setUploadedUrl] = useState('')
   const [viewTab, setViewTab] = useState('chats') // chats | system | role | broadcast (admin only)
   const [roleTarget, setRoleTarget] = useState('teacher')
   const [roleMessage, setRoleMessage] = useState('')
@@ -233,6 +236,34 @@ export default function Messages(){
   const getAttachmentUrl = (m)=> m?.attachment_url || m?.file_url || m?.media_url || m?.attachment || m?.file || ''
   const isImageUrl = (url)=> typeof url === 'string' && /(\.png|\.jpg|\.jpeg|\.gif|\.webp|\.bmp)$/i.test(url)
 
+  // Cloudinary config and helper (inside component so it can access state setters)
+  const CLOUDINARY_CLOUD = 'dfjntwelp'
+  const CLOUDINARY_UPLOAD_PRESET = 'edutrack_unsigned'
+  const uploadImageToCloudinary = async (file) => {
+    if (!file || !file.type?.startsWith('image/')) throw new Error('Only image uploads are allowed')
+    const url = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD}/image/upload`
+    const fd = new FormData()
+    fd.append('file', file)
+    fd.append('upload_preset', CLOUDINARY_UPLOAD_PRESET)
+    fd.append('folder', 'edutrack/messages')
+    setUploading(true); setUploadProgress(0)
+    const res = await new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest()
+      xhr.open('POST', url)
+      xhr.upload.onprogress = (e) => { if (e.lengthComputable) setUploadProgress(Math.round((e.loaded/e.total)*100)) }
+      xhr.onload = () => {
+        try { resolve({ status: xhr.status, data: JSON.parse(xhr.responseText) }) } catch (e) { reject(e) }
+      }
+      xhr.onerror = () => reject(new Error('Upload failed'))
+      xhr.send(fd)
+    })
+    setUploading(false)
+    if (res.status>=200 && res.status<300 && res.data?.secure_url){
+      return res.data.secure_url
+    }
+    throw new Error('Cloudinary upload error')
+  }
+
   // Aggregate unread counts for tabs
   const chatsUnread = useMemo(() => {
     const myId = user?.id
@@ -388,44 +419,24 @@ export default function Messages(){
     if (targetIds.length===0 || (!message.trim() && !fileToSend)) return
     setSending(true)
     try {
-      // If a file is selected, attempt multipart upload; otherwise JSON
+      // If image is selected, ensure it is uploaded to Cloudinary first, then send URL to backend
       if (fileToSend){
-        // Strategy: try a few field shapes until one succeeds
-        const trySend = async (builder, fileFieldName) => {
-          const fd = new FormData()
-          builder(fd)
-          // attach under chosen field name
-          fd.append(fileFieldName, fileToSend)
-          return api.post('/communications/messages/', fd)
+        if (!fileToSend.type?.startsWith('image/')) {
+          throw new Error('Only image files are allowed')
         }
-        let sent = false
-        let lastErr = null
-        const variants = [
-          // V1: JSON array as recipient_ids
-          (fd)=>{ fd.append('body', message || ''); fd.append('audience','users'); fd.append('recipient_ids', JSON.stringify(targetIds)) },
-          // V2: repeated recipient_ids
-          (fd)=>{ fd.append('body', message || ''); fd.append('audience','users'); for(const id of targetIds){ fd.append('recipient_ids', String(id)) } },
-          // V3: repeated recipient_ids[]
-          (fd)=>{ fd.append('body', message || ''); fd.append('audience','users'); for(const id of targetIds){ fd.append('recipient_ids[]', String(id)) } },
-          // V4: repeated recipients
-          (fd)=>{ fd.append('body', message || ''); fd.append('audience','users'); for(const id of targetIds){ fd.append('recipients', String(id)) } },
-          // V5: omit audience, repeated recipient_ids
-          (fd)=>{ fd.append('body', message || ''); for(const id of targetIds){ fd.append('recipient_ids', String(id)) } },
-          // V6: single 'recipient' if exactly one target
-          (fd)=>{ fd.append('body', message || ''); if(targetIds.length===1){ fd.append('recipient', String(targetIds[0])) } },
-          // V7: JSON under 'to_ids'
-          (fd)=>{ fd.append('body', message || ''); fd.append('to_ids', JSON.stringify(targetIds)) },
-          // V8: repeated 'to'
-          (fd)=>{ fd.append('body', message || ''); for(const id of targetIds){ fd.append('to', String(id)) } },
-        ]
-        const fileFields = ['attachment','file','upload','media']
-        for (const field of fileFields){
-          for (const v of variants){
-            try { await trySend(v, field); sent = true; break } catch (err){ lastErr = err; try{ console.error('Attachment send variant failed', { fileField: field, status: err?.response?.status, data: err?.response?.data }) }catch{} }
-          }
-          if (sent) break
+        let url = uploadedUrl
+        if (!url) { url = await uploadImageToCloudinary(fileToSend); setUploadedUrl(url) }
+        let sent = false; let lastErr = null
+        const base = { body: message || '', audience: 'users', recipient_ids: targetIds }
+        const urlFields = ['attachment_url','file_url','media_url','image_url','attachment','file','media','image']
+        for (const f of urlFields){
+          try {
+            const payload = { ...base, [f]: url }
+            await api.post('/communications/messages/', payload)
+            sent = true; break
+          } catch (err) { lastErr = err; try{ console.error('Send with URL failed', { field:f, status: err?.response?.status, data: err?.response?.data }) }catch{} }
         }
-        if(!sent){ throw lastErr || new Error('Attachment send failed') }
+        if (!sent) throw lastErr || new Error('Send failed')
       } else {
         await api.post('/communications/messages/', {
           body: message,
@@ -435,6 +446,7 @@ export default function Messages(){
       }
       setMessage('')
       setFileToSend(null)
+      setUploadedUrl('')
       if (filePreview){ URL.revokeObjectURL(filePreview); setFilePreview(null) }
       setForwardSource(null)
       setForwardRecipients([])
@@ -670,7 +682,7 @@ export default function Messages(){
       )}
 
       {/* Chat section */}
-      <section className={`relative flex-1 flex flex-col ${!activeUser && viewTab!=='system' ? 'hidden sm:flex' : ''}`}>
+      <section className={`relative flex-1 flex flex-col overflow-y-auto ${!activeUser && viewTab!=='system' ? 'hidden sm:flex' : ''}`}>
         <div className="h-14 border-b px-2 sm:px-4 flex items-center justify-between sticky top-0 bg-white z-10">
           <div className="font-medium">
             <div className="flex items-center gap-2">
@@ -712,7 +724,7 @@ export default function Messages(){
             )}
           </div>
         </div>
-        <div ref={chatRef} className="flex-1 overflow-y-auto px-2 sm:px-4 py-3 space-y-2 bg-gray-50 pb-28 sm:pb-4">
+        <div ref={chatRef} className="flex-1 px-2 sm:px-4 py-3 space-y-2 bg-gray-50 pb-28 sm:pb-4">
           {loading && viewTab!=='system' && <div className="text-sm text-gray-500">Loading...</div>}
           {viewTab==='system' ? (
             <div className="space-y-2">
@@ -837,15 +849,21 @@ export default function Messages(){
             disabled={!activeUser}
           />
           {/* Attach */}
-          <label className={`flex items-center justify-center rounded-full w-11 h-11 shrink-0 cursor-pointer border ${!activeUser? 'opacity-50 cursor-not-allowed':''}`} title="Attach file">
+          <label className={`flex items-center justify-center rounded-full w-11 h-11 shrink-0 cursor-pointer border ${!activeUser? 'opacity-50 cursor-not-allowed':''}`} title="Attach image">
             <input
               type="file"
               className="hidden"
               disabled={!activeUser}
-              accept="image/*,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/zip"
+              accept="image/*"
               onChange={(e)=>{
                 const f = e.target.files && e.target.files[0]
-                if (f){ setFileToSend(f); try{ setFilePreview(URL.createObjectURL(f)) }catch{ setFilePreview(null) } }
+                if (f){
+                  if (!f.type?.startsWith('image/')){ showError('Invalid file','Only image files are allowed'); try{ e.target.value=''}catch{}; return }
+                  setFileToSend(f)
+                  try{ setFilePreview(URL.createObjectURL(f)) }catch{ setFilePreview(null) }
+                  // Start upload immediately so send is instant
+                  uploadImageToCloudinary(f).then(url=>{ setUploadedUrl(url) }).catch(err=>{ showError('Upload failed', err?.message||'Could not upload image'); setFileToSend(null); setUploadedUrl(''); if(filePreview){ try{ URL.revokeObjectURL(filePreview) }catch{}; setFilePreview(null) } })
+                }
                 // allow selecting the same file again next time
                 try{ e.target.value = '' }catch{}
               }}

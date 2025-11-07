@@ -171,12 +171,35 @@ export default function TeacherClasses(){
               Loading students…
             </span>
           )}
-          <div className="ml-auto grid grid-cols-2 sm:flex gap-2 w-full sm:w-auto">
-            <button onClick={()=>navigate(`/teacher/attendance?class=${selected}`)} disabled={loading || loadingStudents || !selected} className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 text-white text-sm disabled:opacity-60 w-full sm:w-auto">Mark Attendance</button>
-            <button onClick={()=>navigate(`/teacher/grades?class=${selected}`)} disabled={loading || loadingStudents || !selected} className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-indigo-600 to-purple-600 text-white text-sm disabled:opacity-60 w-full sm:w-auto">Enter Grades</button>
-            <button onClick={()=>navigate('/teacher/messages')} disabled={loading || loadingStudents} className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-sky-500 to-blue-600 text-white text-sm disabled:opacity-60 w-full sm:w-auto">Message Class</button>
-            <button onClick={handlePrint} disabled={loading || loadingStudents || filtered.length===0} className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-amber-500 to-orange-600 text-white text-sm disabled:opacity-60 w-full sm:w-auto">Print</button>
-            <button onClick={handleDownloadCSV} disabled={loading || loadingStudents || filtered.length===0} className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-pink-600 to-rose-600 text-white text-sm disabled:opacity-60 w-full sm:w-auto">Download CSV</button>
+          <div className="ml-0 sm:ml-auto w-full">
+            <div className="text-xs text-gray-600 mb-1 sm:hidden">Quick Actions</div>
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 w-full">
+              <button
+                onClick={()=>navigate(`/teacher/attendance?class=${selected}`)}
+                disabled={loading || loadingStudents || !selected}
+                className="h-12 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 text-white text-xs sm:text-sm disabled:opacity-60 flex items-center justify-center px-2"
+              >Mark Attendance</button>
+              <button
+                onClick={()=>navigate(`/teacher/grades?class=${selected}`)}
+                disabled={loading || loadingStudents || !selected}
+                className="h-12 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white text-xs sm:text-sm disabled:opacity-60 flex items-center justify-center px-2"
+              >Enter Grades</button>
+              <button
+                onClick={()=>navigate('/teacher/messages')}
+                disabled={loading || loadingStudents}
+                className="h-12 rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 text-white text-xs sm:text-sm disabled:opacity-60 flex items-center justify-center px-2"
+              >Message Class</button>
+              <button
+                onClick={handlePrint}
+                disabled={loading || loadingStudents || filtered.length===0}
+                className="h-12 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 text-white text-xs sm:text-sm disabled:opacity-60 flex items-center justify-center px-2"
+              >Print</button>
+              <button
+                onClick={handleDownloadCSV}
+                disabled={loading || loadingStudents || filtered.length===0}
+                className="h-12 rounded-xl bg-gradient-to-r from-pink-600 to-rose-600 text-white text-xs sm:text-sm disabled:opacity-60 flex items-center justify-center px-2"
+              >Download CSV</button>
+            </div>
           </div>
         </div>
 

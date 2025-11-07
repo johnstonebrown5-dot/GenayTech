@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.contrib.auth import get_user_model
-from .models import Notification, Event, ArrearsMessageCampaign, Message, MessageRecipient
+from .models import Notification, Event, ArrearsMessageCampaign, Message, MessageRecipient, ServiceReview
 
 @admin.register(Notification)
 class NotificationAdmin(admin.ModelAdmin):
@@ -85,3 +85,10 @@ class MessageRecipientAdmin(admin.ModelAdmin):
     list_display = ("id", "message", "user", "read", "read_at")
     list_filter = ("read",)
     search_fields = ("message__body", "user__username")
+
+
+@admin.register(ServiceReview)
+class ServiceReviewAdmin(admin.ModelAdmin):
+    list_display = ("id", "school", "user", "name", "rating", "created_at")
+    list_filter = ("rating", "created_at", "school")
+    search_fields = ("name", "email", "comment", "user__username", "school__name")

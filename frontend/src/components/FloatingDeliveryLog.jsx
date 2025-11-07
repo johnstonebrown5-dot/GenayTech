@@ -31,6 +31,9 @@ export default function FloatingDeliveryLog(){
   // Retry mode: reset failed to 0 for selected items, count new failures for those only
   const [retryStart, setRetryStart] = useState(null) // ISO string
   const [retryIds, setRetryIds] = useState([]) // original DeliveryLog ids retried
+  const [resetBusy, setResetBusy] = useState(false)
+  // Detect and cache the floating actions holder so the FAB mounts there immediately once available
+  const [holderEl, setHolderEl] = useState(null)
 
   const stopOrResume = async () => {
     if (actionBusy) return
@@ -113,6 +116,27 @@ export default function FloatingDeliveryLog(){
     intervalRef.current = setInterval(() => load(ctrl.signal), 10000)
     return () => { clearInterval(intervalRef.current); ctrl.abort() }
   }, [filter, canSee, paused])
+
+  // Observe DOM to find the floating actions holder as soon as it exists
+  useEffect(() => {
+    if (typeof document === 'undefined') return
+    // If already present, cache and stop
+    const existing = document.getElementById('floating-actions-root')
+    if (existing && holderEl !== existing) {
+      setHolderEl(existing)
+      return
+    }
+    // Otherwise, watch for it to appear
+    const obs = new MutationObserver(() => {
+      const el = document.getElementById('floating-actions-root')
+      if (el) {
+        setHolderEl(el)
+        try { obs.disconnect() } catch {}
+      }
+    })
+    try { obs.observe(document.body, { childList: true, subtree: true }) } catch {}
+    return () => { try { obs.disconnect() } catch {} }
+  }, [holderEl])
 
   const counts = useMemo(() => {
     let smsSent = 0, smsFail = 0, emailSent = 0, emailFail = 0
@@ -242,8 +266,8 @@ export default function FloatingDeliveryLog(){
 
   const panel = open ? (
     <div style={{ position:'fixed', left: panelPos.left, top: panelPos.top, zIndex:4000 }}>
-      <div className="bg-white/80 supports-[backdrop-filter]:bg-white/60 backdrop-blur-md shadow-2xl ring-1 ring-gray-200/70 rounded-2xl w-[24rem] max-h-[60vh] overflow-hidden">
-        <div className="px-3.5 py-2.5 border-b border-gray-200/70 flex items-center gap-2">
+      <div className="bg-white/80 supports-[backdrop-filter]:bg-white/60 backdrop-blur-xl shadow-2xl ring-1 ring-gray-200/70 rounded-2xl w-[24rem] max-h-[60vh] overflow-hidden">
+        <div className="px-3.5 py-2.5 border-b border-gray-200/70 flex items-center gap-2 bg-gradient-to-r from-white to-sky-50/60">
           <span className="inline-flex items-center gap-2 font-semibold text-gray-900 text-sm flex-1">
             <span className="inline-flex h-5 w-5 items-center justify-center rounded-md bg-blue-100 text-blue-700">✉️</span>
             Delivery logs
@@ -307,6 +331,25 @@ export default function FloatingDeliveryLog(){
               >{retryBusy? 'Retrying…' : `Retry failed${failedIds.length? ` (${failedIds.length})`: ''}`}</button>
             )
           })()}
+          <button
+            disabled={resetBusy}
+            onClick={async () => {
+              try {
+                setResetBusy(true)
+                await api.post('/communications/delivery-logs/reset/')
+                setItems([])
+                setProgress({ percent: 0, expected_total: 0, processed_total: 0, sms: { sent: 0, failed: 0 }, email: { sent: 0, failed: 0 } })
+                setRetryStart(null); setRetryIds([]); setHasNew(false)
+                await load()
+              } catch (e) {
+                setError('Reset failed')
+              } finally {
+                setResetBusy(false)
+              }
+            }}
+            className={`text-xs px-2.5 py-1 rounded-lg border ${resetBusy? 'opacity-60 cursor-wait':''} bg-white text-red-600 border-red-200 hover:bg-red-50`}
+            title="Reset message logs to zero"
+          >{resetBusy? 'Resetting…' : 'Reset'}</button>
           <button onClick={() => setShowList(v=>!v)} className="ml-auto text-xs px-2.5 py-1 rounded-lg border bg-white text-gray-700 border-gray-300 hover:bg-gray-50">{showList ? 'Hide' : 'View more'}</button>
           <button onClick={() => { setFullOpen(true); setCollapsed(true); setOpen(false); setHasNew(false) }} className="text-xs px-2.5 py-1 rounded-lg border bg-white text-gray-700 border-gray-300 hover:bg-gray-50">View detailed logs</button>
         </div>
@@ -361,15 +404,12 @@ export default function FloatingDeliveryLog(){
 
   return (
     <>
-      {(() => {
-        const root = typeof document !== 'undefined' ? document.getElementById('floating-actions-root') : null
-        if (root) return createPortal(button, root)
-        // Fallback if holder missing
-        return createPortal(
-          <div style={{ position:'fixed', right:16, bottom:24, zIndex:4000 }}>{button}</div>,
-          document.body
-        )
-      })()}
+      {holderEl
+        ? createPortal(button, holderEl)
+        : createPortal(
+            <div style={{ position:'fixed', right:16, bottom:24, zIndex:4000 }}>{button}</div>,
+            document.body
+          )}
       {panel && createPortal(panel, document.body)}
       {fullOpen && createPortal(
         <div style={{ position:'fixed', inset:0, zIndex:5000 }}>

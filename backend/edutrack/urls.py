@@ -34,8 +34,8 @@ urlpatterns = [
     # Health check endpoint
     path('health/', health, name='health'),
 
-    # Django admin at /admin
-    path('admin/', admin.site.urls),
+    # Django admin moved to /dj-admin to free /admin/* for the SPA
+    path('dj-admin/', admin.site.urls),
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
     path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema')),
     path('api/auth/', include('accounts.urls')),
@@ -43,8 +43,10 @@ urlpatterns = [
     path('api/finance/', include('finance.urls')),
     path('api/communications/', include('communications.urls')),
     path('api/reports/', include('reports.urls')),
-    # Catch-all for any non-API, non-media, non-admin route: send to frontend SPA, preserving path
-    re_path(r'^(?P<path>(?!api/|media/|admin/).*)$', spa_redirect),
+    # Legacy redirect: any /admin/* path should go to the SPA (frontend handles admin routes)
+    re_path(r'^admin/(?P<path>.*)$', spa_redirect),
+    # Catch-all for any non-API, non-media, non-django-admin route: send to frontend SPA, preserving path
+    re_path(r'^(?P<path>(?!api/|media/|dj-admin/).*)$', spa_redirect),
 ]
 
 # Serve media files (e.g., uploaded logos) in development

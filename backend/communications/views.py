@@ -8,7 +8,7 @@ from django.db.models import Q
 from django.db.models import Sum, F, Value, DecimalField
 from django.db.models.functions import Coalesce
 from .models import Notification, Event, DeliveryLog
-from .serializers import NotificationSerializer, EventSerializer, ArrearsMessageCampaignSerializer, DeliveryLogSerializer
+from .serializers import NotificationSerializer, EventSerializer, ArrearsMessageCampaignSerializer, MessageSerializer, DeliveryLogSerializer, ServiceReviewSerializer
 from .models import ArrearsMessageCampaign, Message, MessageRecipient
 from .serializers import MessageSerializer
 from academics.models import Student
@@ -190,6 +190,21 @@ class DeliveryLogViewSet(viewsets.ReadOnlyModelViewSet):
                 pass
             results.append({"id": rec.id, "ok": bool(ok), "channel": rec.channel, "recipient": rec.recipient})
         return Response({"results": results})
+
+    @action(detail=False, methods=["post"], url_path="reset")
+    def reset(self, request):
+        """Delete all DeliveryLog rows for the current user's school.
+        This effectively resets the dashboard counters to 0.
+        """
+        user = request.user
+        school_id = getattr(user, 'school_id', None)
+        if not school_id:
+            return Response({"detail": "No school"}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            deleted_count, _ = DeliveryLog.objects.filter(school_id=school_id).delete()
+        except Exception:
+            return Response({"detail": "Reset failed"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response({"deleted": deleted_count})
 
 
 class ArrearsMessageCampaignViewSet(viewsets.ModelViewSet):
@@ -488,10 +503,11 @@ class ContactInquiryView(APIView):
 
 @method_decorator(csrf_exempt, name='dispatch')
 class ReportIssueView(APIView):
-    """Authenticated endpoint to report an issue to developers.
+    """Public endpoint to report an issue to developers.
     Accepts JSON or multipart with fields: title, description, severity, page_url, screenshot (file) or screenshot_url.
+    If the user is authenticated, their identity is included; otherwise marked as Guest.
     """
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.AllowAny]
     parser_classes = [JSONParser, FormParser, MultiPartParser]
 
     def post(self, request):
@@ -522,7 +538,15 @@ class ReportIssueView(APIView):
 
             who = ''
             try:
-                who = f"{getattr(user, 'username', '')} (id={getattr(user,'id','')}, role={getattr(user,'role','')})"
+                if getattr(user, 'is_authenticated', False):
+                    who = f"{getattr(user, 'username', '')} (id={getattr(user,'id','')}, role={getattr(user,'role','')})"
+                else:
+                    # Try accept name/email from request for guests
+                    guest_name = str(request.data.get('name', '')).strip()
+                    guest_email = str(request.data.get('email', '')).strip()
+                    who = guest_name or 'Guest'
+                    if guest_email:
+                        who += f" <{guest_email}>"
             except Exception:
                 pass
             school_id = getattr(getattr(user, 'school', None), 'id', None) or getattr(user, 'school_id', None)
@@ -550,9 +574,9 @@ class ReportIssueView(APIView):
             to_addr = getattr(settings, 'SUPPORT_EMAIL', 'edutrack46@gmail.com')
             ok = False
             try:
-                # Prefer replies to go directly to the reporting user
-                user_email = str(getattr(user, 'email', '') or '').strip()
-                display_name = (str(getattr(user, 'first_name', '') or '').strip() or getattr(user, 'username', '') or 'User')
+                # Prefer replies to go directly to the reporting user (or provided guest email)
+                user_email = str(getattr(user, 'email', '') or request.data.get('email') or '').strip()
+                display_name = (str(getattr(user, 'first_name', '') or '').strip() or getattr(user, 'username', '') or str(request.data.get('name') or 'User'))
                 reply_list = [user_email] if user_email else None
                 ok = send_email_safe(subject, body, to_addr, reply_to=reply_list, from_name=display_name)
             except Exception:
@@ -593,3 +617,23 @@ class UploadAdmissionLetterView(APIView):
         except Exception:
             logger.exception("Failed to upload admission letter")
             return Response({"detail": "upload_failed"}, status=500)
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class ServiceReviewView(APIView):
+    """Public endpoint for posting a service review (rating 1-5, optional comment, name/email).
+    Authenticated user and school are attached automatically if available.
+    """
+    permission_classes = [permissions.AllowAny]
+    parser_classes = [JSONParser, FormParser]
+
+    def post(self, request):
+        data = request.data.copy()
+        # Normalize field names
+        if 'pageUrl' in data and 'page_url' not in data:
+            data['page_url'] = data.get('pageUrl')
+        serializer = ServiceReviewSerializer(data=data, context={'request': request})
+        if serializer.is_valid():
+            obj = serializer.save()
+            return Response({"detail": "ok", "id": obj.id}, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

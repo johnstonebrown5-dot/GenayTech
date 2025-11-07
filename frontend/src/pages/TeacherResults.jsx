@@ -14,6 +14,8 @@ export default function TeacherResults(){
   const [gradeStudents, setGradeStudents] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  // Grading bands (admin-defined). We'll pick the first subject with configured bands as the global for overall Grade.
+  const [globalBands, setGlobalBands] = useState(null)
 
   // Load teacher's classes
   useEffect(() => {
@@ -173,6 +175,45 @@ export default function TeacherResults(){
 
   const classNameById = (id) => classes.find(c=>String(c.id)===String(id))?.name || id
 
+  // Convert numeric score to letter grade using admin-defined bands (fallback to defaults)
+  const letterFromBands = (score, bands) => {
+    const n = Number(score)
+    if (!Number.isFinite(n)) return '-'
+    const arr = Array.isArray(bands) ? [...bands] : []
+    arr.sort((a,b)=> (a.order??0) - (b.order??0))
+    for (const b of arr){
+      const min = Number(b.min), max = Number(b.max)
+      if (Number.isFinite(min) && Number.isFinite(max)){
+        if (n >= min && n <= max) return String(b.grade || '-')
+      }
+    }
+    if (n >= 80) return 'A'
+    if (n >= 70) return 'B'
+    if (n >= 60) return 'C'
+    if (n >= 50) return 'D'
+    return 'E'
+  }
+  const toGrade = (avg) => letterFromBands(avg, globalBands)
+
+  // Fetch grading bands for subjects of the current summary; choose first non-empty as global bands
+  useEffect(() => {
+    let active = true
+    ;(async () => {
+      try{
+        const ids = Array.isArray(summary?.subjects) ? summary.subjects.map(s=>s.id).filter(Boolean) : []
+        if (ids.length === 0) { setGlobalBands(null); return }
+        for (const sid of ids){
+          try{
+            const res = await api.get(`/academics/subject_grading/?subject=${sid}`)
+            const bands = Array.isArray(res?.data) ? res.data : []
+            if (active && bands.length){ setGlobalBands(bands); break }
+          }catch{}
+        }
+      }catch{}
+    })()
+    return () => { active = false }
+  }, [summary?.subjects])
+
   const downloadCSV = (filename, rows) => {
     const csv = rows.map(r=> r.map(v=>`"${String(v??'').replaceAll('"','""')}"`).join(',')).join('\n')
     const blob = new Blob([csv], { type:'text/csv;charset=utf-8;' })
@@ -184,8 +225,8 @@ export default function TeacherResults(){
   }
   const handleClassPrint = () => {
     if (!summary) return
-    const cols = [ 'Position','Student', ...summary.subjects.map(s=> s.name || s.code), 'Total','Average' ]
-    const rows = summary.students.map(st=> [ st.position, st.name, ...summary.subjects.map(s=> st.marks?.[String(s.id)] ?? ''), st.total, st.average ])
+    const cols = [ 'Position','Student', ...summary.subjects.map(s=> s.name || s.code), 'Total','Grade' ]
+    const rows = summary.students.map(st=> [ st.position, st.name, ...summary.subjects.map(s=> st.marks?.[String(s.id)] ?? ''), st.total, toGrade(st.average) ])
     const thead = `<tr>${cols.map(c=>`<th>${c}</th>`).join('')}</tr>`
     const tbody = rows.map(r=> `<tr>${r.map(c=>`<td>${c}</td>`).join('')}</tr>`).join('')
     const title = `${summary?.exam?.name||'Exam'} - ${classNameById(summary?.exam?.klass) || ''}`
@@ -193,8 +234,8 @@ export default function TeacherResults(){
   }
   const handleClassCSV = () => {
     if (!summary) return
-    const header = [ 'Position','Student', ...summary.subjects.map(s=> s.name || s.code), 'Total','Average' ]
-    const data = summary.students.map(st=> [ st.position, st.name, ...summary.subjects.map(s=> st.marks?.[String(s.id)] ?? ''), st.total, st.average ])
+    const header = [ 'Position','Student', ...summary.subjects.map(s=> s.name || s.code), 'Total','Grade' ]
+    const data = summary.students.map(st=> [ st.position, st.name, ...summary.subjects.map(s=> s.marks?.[String(s.id)] ?? ''), st.total, toGrade(st.average) ])
     downloadCSV(`${(summary?.exam?.name||'exam').replaceAll(' ','_')}_class_results.csv`, [header, ...data])
   }
   const handleGradePrint = () => {
@@ -296,7 +337,7 @@ export default function TeacherResults(){
                       <th key={s.id} className="border border-gray-200 px-2 py-2 text-left">{s.name || s.code}</th>
                     ))}
                     <th className="border border-gray-200 px-2 py-2 text-left">Total</th>
-                    <th className="border border-gray-200 px-2 py-2 text-left">Average</th>
+                    <th className="border border-gray-200 px-2 py-2 text-left">Grade</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -308,7 +349,7 @@ export default function TeacherResults(){
                         <td key={s.id} className="border border-gray-200 px-2 py-2">{st.marks?.[String(s.id)] ?? '-'}</td>
                       ))}
                       <td className="border border-gray-200 px-2 py-2 font-medium">{st.total}</td>
-                      <td className="border border-gray-200 px-2 py-2">{st.average}</td>
+                      <td className="border border-gray-200 px-2 py-2">{toGrade(st.average)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -363,7 +404,7 @@ export default function TeacherResults(){
                     <th className="border border-gray-200 px-2 py-2 text-left w-56">Student</th>
                     <th className="border border-gray-200 px-2 py-2 text-left w-48">Class</th>
                     <th className="border border-gray-200 px-2 py-2 text-left">Total</th>
-                    <th className="border border-gray-200 px-2 py-2 text-left">Average</th>
+                    <th className="border border-gray-200 px-2 py-2 text-left">Grade</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -373,7 +414,7 @@ export default function TeacherResults(){
                       <td className="border border-gray-200 px-2 py-2">{s.name}</td>
                       <td className="border border-gray-200 px-2 py-2">{s.className}</td>
                       <td className="border border-gray-200 px-2 py-2 font-medium">{s.total ?? '-'}</td>
-                      <td className="border border-gray-200 px-2 py-2">{s.average ?? '-'}</td>
+                      <td className="border border-gray-200 px-2 py-2">{toGrade(s.average)}</td>
                     </tr>
                   ))}
                   {gradeStudents.length===0 && (

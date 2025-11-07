@@ -11,10 +11,10 @@ export default function ReportIssuePrompt(){
 
   // Do not show on login or the report page itself
   const block = (
-    !user ||
     pathname.startsWith('/login') ||
     pathname.startsWith('/trial') ||
-    pathname.startsWith('/admin/report-issue')
+    pathname.startsWith('/admin/report-issue') ||
+    pathname.startsWith('/report-issue')
   )
 
   useEffect(() => {
@@ -26,10 +26,10 @@ export default function ReportIssuePrompt(){
     const dismissed = sessionStorage.getItem('report_issue_prompt_dismissed') === '1'
     if (block || dismissed) return
 
-    const id = setTimeout(() => setVisible(true), 60_000)
+    const id = setTimeout(() => setVisible(true), 30_000)
     setTimerId(id)
     return () => clearTimeout(id)
-  }, [pathname, user])
+  }, [pathname])
 
   if (!visible) return null
 
@@ -88,7 +88,7 @@ export default function ReportIssuePrompt(){
               Cancel
             </button>
             <button
-              onClick={() => { sessionStorage.setItem('report_issue_prompt_dismissed', '1'); navigate('/admin/report-issue') }}
+              onClick={() => { sessionStorage.setItem('report_issue_prompt_dismissed', '1'); navigate('/report-issue') }}
               className="px-3 py-1.5 rounded-lg text-sm bg-blue-600 text-white hover:bg-blue-700"
             >
               Report an Issue
