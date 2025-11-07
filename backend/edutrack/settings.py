@@ -265,6 +265,9 @@ EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')
 EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
 DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', EMAIL_HOST_USER)
 SERVER_EMAIL = os.getenv('SERVER_EMAIL', DEFAULT_FROM_EMAIL)
+SUPPORT_EMAIL = os.getenv('SUPPORT_EMAIL', 'edutrack46@gmail.com')
+# When True, skip real SMTP and pretend emails were sent successfully (for local dev/tests)
+EMAIL_LOOPBACK = os.getenv('EMAIL_LOOPBACK', 'False') == 'True'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 

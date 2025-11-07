@@ -1,6 +1,6 @@
 from rest_framework.routers import DefaultRouter
 from django.urls import path
-from .views import NotificationViewSet, EventViewSet, ArrearsMessageCampaignViewSet, MessageViewSet, ATSMSCallbackView, ContactInquiryView, UploadAdmissionLetterView, DeliveryLogViewSet
+from .views import NotificationViewSet, EventViewSet, ArrearsMessageCampaignViewSet, MessageViewSet, ATSMSCallbackView, ContactInquiryView, UploadAdmissionLetterView, DeliveryLogViewSet, ReportIssueView
 
 router = DefaultRouter()
 router.register('notifications', NotificationViewSet, basename='notification')
@@ -14,6 +14,8 @@ urlpatterns = router.urls + [
     path('at/sms/callback/', ATSMSCallbackView.as_view(), name='at-sms-callback'),
     # Public contact inquiry endpoint
     path('contact-inquiry/', ContactInquiryView.as_view(), name='contact-inquiry'),
+    # Authenticated report issue endpoint
+    path('report-issue/', ReportIssueView.as_view(), name='report-issue'),
     # Public admission letter upload endpoint
     path('upload-admission-letter/', UploadAdmissionLetterView.as_view(), name='upload-admission-letter'),
 ]

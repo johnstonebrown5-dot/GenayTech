@@ -44,10 +44,8 @@ export default function LoginPage() {
   }, [])
 
   const roles = [
-    { key: 'admin', label: 'ADMINISTRATOR', icon: '👑' },
-    { key: 'teacher', label: 'Teacher', icon: '👩‍🏫' },
+    { key: 'staff', label: 'Staff', icon: '👥' },
     { key: 'student', label: 'Student', icon: '🎓' },
-    { key: 'finance', label: 'Finance', icon: '💼' },
   ]
 
   const submit = async (e) => {
@@ -64,50 +62,39 @@ export default function LoginPage() {
 
     try {
       const me = await login(username, password)
-      const isAdminUser = me?.is_superuser || me?.is_staff || me?.role === 'admin'
       const normalizedRole = role.toLowerCase()
 
-      // Validate selected role against user permissions/profile
-      if (normalizedRole === 'admin') {
-        if (!isAdminUser) {
-          setError('Your account does not have Admin access')
+      const actualRole = (me?.role || '').toLowerCase()
+      const isAdminUser = me?.is_superuser || me?.is_staff || actualRole === 'admin'
+      const isFinance = actualRole === 'finance' || actualRole === 'finance officer'
+      const isTeacher = actualRole === 'teacher'
+
+      if (normalizedRole === 'staff') {
+        const isStaff = isAdminUser || isTeacher || isFinance
+        if (!isStaff) {
+          setError('Your account is not Staff. Please choose Student or contact your school admin.')
           setFormStep('credentials')
           setIsLoading(false)
           return
         }
-        nav('/admin')
+        // Route staff to their dashboard by actual role
+        if (isAdminUser) { nav('/admin'); return }
+        if (isTeacher) { nav('/teacher'); return }
+        if (isFinance) { nav('/finance'); return }
+        // Fallback to role-based path
+        nav(`/${me.role}`)
         return
       }
 
-      // Non-admin roles must match profile role
-      if (!me?.role) {
-        setError('No role is assigned to your account. Contact support.')
-        setFormStep('credentials')
-        setIsLoading(false)
+      if (normalizedRole === 'student') {
+        if (actualRole !== 'student') {
+          setError(`Your account role is '${me.role}'. Please choose Staff to continue.`)
+          setFormStep('credentials')
+          setIsLoading(false)
+          return
+        }
+        nav('/student')
         return
-      }
-
-      if (me.role.toLowerCase() !== normalizedRole) {
-        setError(`Your account role is '${me.role}', not '${role}'.`)
-        setFormStep('credentials')
-        setIsLoading(false)
-        return
-      }
-
-      // Route by selected role
-      switch (normalizedRole) {
-        case 'student':
-          nav('/student')
-          break
-        case 'teacher':
-          nav('/teacher')
-          break
-        case 'finance':
-        case 'finance officer':
-          nav('/finance')
-          break
-        default:
-          nav(`/${me.role}`)
       }
     } catch (e) {
       if (e.response) {

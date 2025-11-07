@@ -263,21 +263,42 @@ def send_sms(phone: str, message: str) -> bool:
             pass
 
 
-def send_email_safe(subject: str, message: str, recipient: str) -> bool:
+def send_email_safe(subject: str, message: str, recipient: str, reply_to: list[str] | None = None, from_name: str | None = None) -> bool:
     if not recipient:
         return False
+    # In local/dev, allow skipping real SMTP to avoid timeouts
+    try:
+        if getattr(settings, 'EMAIL_LOOPBACK', False):
+            logger.info("EMAIL_LOOPBACK enabled; pretending to send email to %s (subject=%r)", recipient, subject)
+            return True
+    except Exception:
+        pass
     host_user = getattr(settings, 'EMAIL_HOST_USER', '')
     host_pass = getattr(settings, 'EMAIL_HOST_PASSWORD', '')
     if not host_user or not host_pass:
         logger.warning("Email credentials missing; skipping email to %s", recipient)
         return False
-    from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', host_user or 'no-reply@example.com')
+    base_from = getattr(settings, 'DEFAULT_FROM_EMAIL', host_user or 'no-reply@example.com')
+    from_email = base_from
+    try:
+        if from_name:
+            from_email = f"{from_name} <{base_from}>"
+    except Exception:
+        from_email = base_from
 
     # 1) Try using current Django settings (usually TLS on 587)
     try:
-        sent = send_mail(subject or 'Notification', message, from_email, [recipient], fail_silently=False)
-        if sent > 0:
+        if reply_to or from_name:
+            email = EmailMessage(subject or 'Notification', message or '', from_email, [recipient])
+            if reply_to:
+                try: email.reply_to = reply_to
+                except Exception: pass
+            email.send(fail_silently=False)
             return True
+        else:
+            sent = send_mail(subject or 'Notification', message, from_email, [recipient], fail_silently=False)
+            if sent > 0:
+                return True
     except Exception as e:
         logger.warning("Primary SMTP send failed (TLS/port from settings): %s", e)
 
@@ -296,6 +317,9 @@ def send_email_safe(subject: str, message: str, recipient: str) -> bool:
         conn.open()
         try:
             email = EmailMessage(subject or 'Notification', message or '', from_email, [recipient], connection=conn)
+            if reply_to:
+                try: email.reply_to = reply_to
+                except Exception: pass
             email.send(fail_silently=False)
             return True
         finally:

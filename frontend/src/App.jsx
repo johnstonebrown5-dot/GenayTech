@@ -1,5 +1,5 @@
 import React from 'react'
-import { Routes, Route, Navigate, useNavigate } from 'react-router-dom'
+import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom'
 import { AuthProvider, useAuth } from './auth'
 import { NotificationProvider } from './components/NotificationContext'
 import NotificationContainer from './components/NotificationContainer'
@@ -60,6 +60,7 @@ import AdminAcademicCalendar from './pages/AdminAcademicCalendar'
 import AdminSubjects from './pages/AdminSubjects'
 import AdminSubjectProfile from './pages/AdminSubjectProfile'
 import AdminWebsite from './pages/AdminWebsite'
+import ReportIssue from './pages/ReportIssue'
 import PublicTeachers from './pages/PublicTeachers'
 import PublicTeacherProfile from './pages/PublicTeacherProfile'
 import PublicAdmissions from './pages/PublicAdmissions'
@@ -76,11 +77,15 @@ import { AssistantProvider } from './components/Assistant/AssistantContext'
 import FloatingButton from './components/Assistant/FloatingButton'
 import AssistantPanel from './components/Assistant/AssistantPanel'
 import FloatingActions from './components/FloatingActions'
+import ReportIssuePrompt from './components/ReportIssuePrompt'
 import LockProvider from './components/LockProvider'
 import PublicReceipt from './pages/PublicReceipt'
+import NotFound from './pages/NotFound'
+import Unauthorized from './pages/Unauthorized'
 
 function ProtectedRoute({ children, roles }) {
   const { user, loading } = useAuth()
+  const location = useLocation()
   if (loading) return <div className="p-8">Loading...</div>
   if (!user) return <Navigate to="/login" />
   if (!roles) return children
@@ -90,7 +95,7 @@ function ProtectedRoute({ children, roles }) {
   if (isAdminAccess || hasRole) return children
   // If user has no explicit role but is superuser, allow admin
   if ((user?.is_superuser || user?.is_staff) && roles.includes('admin')) return children
-  return <Navigate to={`/${user?.role || 'login'}`} />
+  return <Navigate to="/unauthorized" state={{ from: location.pathname }} replace />
 }
 
 function RoleRedirect() {
@@ -143,6 +148,7 @@ export default function App() {
             <Route path="/admin/events" element={<ProtectedRoute roles={["admin"]}><AdminEvents/></ProtectedRoute>} />
             <Route path="/admin/calendar" element={<ProtectedRoute roles={["admin"]}><AdminAcademicCalendar/></ProtectedRoute>} />
             <Route path="/admin/messages" element={<ProtectedRoute roles={["admin"]}><AdminLayout><Messages/></AdminLayout></ProtectedRoute>} />
+            <Route path="/admin/report-issue" element={<ProtectedRoute roles={["admin"]}><AdminLayout><ReportIssue/></AdminLayout></ProtectedRoute>} />
             <Route path="/admin/website" element={<ProtectedRoute roles={["admin"]}><AdminWebsite/></ProtectedRoute>} />
             <Route path="/admin/profile" element={<ProtectedRoute roles={["admin"]}><AdminProfile/></ProtectedRoute>} />
             <Route path="/admin/timetable" element={<ProtectedRoute roles={["admin"]}><AdminTimetable/></ProtectedRoute>} />
@@ -167,22 +173,26 @@ export default function App() {
             <Route path="/student/academics" element={<ProtectedRoute roles={["student","admin"]}><StudentLayout><StudentDashboard/></StudentLayout></ProtectedRoute>} />
             <Route path="/student/report-card" element={<ProtectedRoute roles={["student","admin"]}><StudentLayout><StudentReportCard/></StudentLayout></ProtectedRoute>} />
             <Route path="/student/finance" element={<ProtectedRoute roles={["student","admin"]}><StudentLayout><StudentDashboard/></StudentLayout></ProtectedRoute>} />
-            <Route path="/finance" element={<ProtectedRoute roles={["finance","admin"]}><FinanceLayout><FinanceDashboard/></FinanceLayout></ProtectedRoute>} />
-            <Route path="/finance/messages" element={<ProtectedRoute roles={["finance","admin"]}><FinanceLayout><Messages/></FinanceLayout></ProtectedRoute>} />
-            <Route path="/finance/expenses" element={<ProtectedRoute roles={["finance","admin"]}><FinanceLayout><FinanceExpenses/></FinanceLayout></ProtectedRoute>} />
-            <Route path="/finance/incoming" element={<ProtectedRoute roles={["finance","admin"]}><FinanceLayout><FinanceIncomingPayments/></FinanceLayout></ProtectedRoute>} />
+            <Route path="/finance" element={<ProtectedRoute roles={["finance"]}><FinanceLayout><FinanceDashboard/></FinanceLayout></ProtectedRoute>} />
+            <Route path="/finance/messages" element={<ProtectedRoute roles={["finance"]}><FinanceLayout><Messages/></FinanceLayout></ProtectedRoute>} />
+            <Route path="/finance/expenses" element={<ProtectedRoute roles={["finance"]}><FinanceLayout><FinanceExpenses/></FinanceLayout></ProtectedRoute>} />
+            <Route path="/finance/incoming" element={<ProtectedRoute roles={["finance"]}><FinanceLayout><FinanceIncomingPayments/></FinanceLayout></ProtectedRoute>} />
             {/* Invoices route removed */}
-            <Route path="/finance/payments" element={<ProtectedRoute roles={["finance","admin"]}><FinanceLayout><FinancePayments/></FinanceLayout></ProtectedRoute>} />
-            <Route path="/finance/reports" element={<ProtectedRoute roles={["finance","admin"]}><FinanceLayout><FinanceReports/></FinanceLayout></ProtectedRoute>} />
-            <Route path="/finance/settings" element={<ProtectedRoute roles={["finance","admin"]}><FinanceLayout><FinanceSettings/></FinanceLayout></ProtectedRoute>} />
-            <Route path="/finance/pocket-money" element={<ProtectedRoute roles={["finance","admin"]}><FinanceLayout><FinancePocketMoney/></FinanceLayout></ProtectedRoute>} />
-            <Route path="/finance/pocket-money/wallet/:studentId" element={<ProtectedRoute roles={["finance","admin"]}><FinanceLayout><FinanceStudentWallet/></FinanceLayout></ProtectedRoute>} />
-            <Route path="/finance/fee-categories" element={<ProtectedRoute roles={["finance","admin"]}><FinanceLayout><FinanceFeeCategories/></FinanceLayout></ProtectedRoute>} />
-            <Route path="/finance/class-fees" element={<ProtectedRoute roles={["finance","admin"]}><FinanceLayout><FinanceClassFees/></FinanceLayout></ProtectedRoute>} />
-            <Route path="/finance/fees" element={<ProtectedRoute roles={["finance","admin"]}><FinanceFees/></ProtectedRoute>} />
-            <Route path="/finance/staff-payroll" element={<ProtectedRoute roles={["finance","admin"]}><FinanceStaffPayroll/></ProtectedRoute>} />
+            <Route path="/finance/payments" element={<ProtectedRoute roles={["finance"]}><FinanceLayout><FinancePayments/></FinanceLayout></ProtectedRoute>} />
+            <Route path="/finance/reports" element={<ProtectedRoute roles={["finance"]}><FinanceLayout><FinanceReports/></FinanceLayout></ProtectedRoute>} />
+            <Route path="/finance/settings" element={<ProtectedRoute roles={["finance"]}><FinanceLayout><FinanceSettings/></FinanceLayout></ProtectedRoute>} />
+            <Route path="/finance/pocket-money" element={<ProtectedRoute roles={["finance"]}><FinanceLayout><FinancePocketMoney/></FinanceLayout></ProtectedRoute>} />
+            <Route path="/finance/pocket-money/wallet/:studentId" element={<ProtectedRoute roles={["finance"]}><FinanceLayout><FinanceStudentWallet/></FinanceLayout></ProtectedRoute>} />
+            <Route path="/finance/fee-categories" element={<ProtectedRoute roles={["finance"]}><FinanceLayout><FinanceFeeCategories/></FinanceLayout></ProtectedRoute>} />
+            <Route path="/finance/class-fees" element={<ProtectedRoute roles={["finance"]}><FinanceLayout><FinanceClassFees/></FinanceLayout></ProtectedRoute>} />
+            <Route path="/finance/fees" element={<ProtectedRoute roles={["finance"]}><FinanceFees/></ProtectedRoute>} />
+            <Route path="/finance/staff-payroll" element={<ProtectedRoute roles={["finance"]}><FinanceStaffPayroll/></ProtectedRoute>} />
+            <Route path="/unauthorized" element={<Unauthorized/>} />
+            {/* Catch-all 404 */}
+            <Route path="*" element={<NotFound/>} />
             </Routes>
             <NotificationContainer />
+            <ReportIssuePrompt />
             <FloatingActions />
             <FloatingButton />
             <AssistantPanel />

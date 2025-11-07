@@ -20,6 +20,7 @@ const navItems = [
   { to: '/admin/timetable', label: 'Timetable', icon: '📆' },
   { to: '/admin/messages', label: 'Messages', icon: '✉️' },
   { to: '/admin/website', label: 'Website', icon: '🌐' },
+  { to: '/admin/report-issue', label: 'Report Issue', icon: '🐞' },
 ]
 
 export default function AdminLayout({ children }){

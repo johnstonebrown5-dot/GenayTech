@@ -487,6 +487,85 @@ class ContactInquiryView(APIView):
 
 
 @method_decorator(csrf_exempt, name='dispatch')
+class ReportIssueView(APIView):
+    """Authenticated endpoint to report an issue to developers.
+    Accepts JSON or multipart with fields: title, description, severity, page_url, screenshot (file) or screenshot_url.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+    parser_classes = [JSONParser, FormParser, MultiPartParser]
+
+    def post(self, request):
+        try:
+            user = getattr(request, 'user', None)
+            title = str(request.data.get('title', '')).strip() or 'Issue Report'
+            description = str(request.data.get('description', '')).strip()
+            severity = str(request.data.get('severity', '')).strip() or 'normal'
+            page_url = str(request.data.get('page_url', '')).strip() or request.META.get('HTTP_REFERER', '')
+            screenshot_url = str(request.data.get('screenshot_url', '')).strip()
+
+            # Optional file upload
+            uploaded_url = ''
+            f = request.FILES.get('screenshot') or request.FILES.get('file')
+            if f:
+                ts = int(time.time())
+                name = f"issues/{ts}_{os.path.basename(f.name)}"
+                try:
+                    path = default_storage.save(name, ContentFile(f.read()))
+                    try:
+                        uploaded_url = default_storage.url(path)
+                    except Exception:
+                        uploaded_url = f"/{path.lstrip('/')}"
+                    if not (uploaded_url.startswith('http://') or uploaded_url.startswith('https://')):
+                        uploaded_url = request.build_absolute_uri(uploaded_url)
+                except Exception:
+                    uploaded_url = ''
+
+            who = ''
+            try:
+                who = f"{getattr(user, 'username', '')} (id={getattr(user,'id','')}, role={getattr(user,'role','')})"
+            except Exception:
+                pass
+            school_id = getattr(getattr(user, 'school', None), 'id', None) or getattr(user, 'school_id', None)
+            origin = request.META.get('HTTP_ORIGIN', '') or request.META.get('HTTP_HOST', '')
+
+            lines = [
+                f"Title: {title}",
+                f"Severity: {severity}",
+                f"From User: {who}",
+                f"School ID: {school_id}",
+                f"Page URL: {page_url}",
+                f"Origin: {origin}",
+                "",
+                description or "(No description provided)",
+            ]
+            if uploaded_url:
+                lines += ["", f"Screenshot: {uploaded_url}"]
+            elif screenshot_url:
+                lines += ["", f"Screenshot: {screenshot_url}"]
+
+            body = "\n".join(lines)
+            subject = f"Issue Report: {title}"
+
+            # Send to developer/support mailbox
+            to_addr = getattr(settings, 'SUPPORT_EMAIL', 'edutrack46@gmail.com')
+            ok = False
+            try:
+                # Prefer replies to go directly to the reporting user
+                user_email = str(getattr(user, 'email', '') or '').strip()
+                display_name = (str(getattr(user, 'first_name', '') or '').strip() or getattr(user, 'username', '') or 'User')
+                reply_list = [user_email] if user_email else None
+                ok = send_email_safe(subject, body, to_addr, reply_to=reply_list, from_name=display_name)
+            except Exception:
+                ok = False
+            if not ok:
+                return Response({"detail": "email_failed"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({"detail": "sent"}, status=status.HTTP_200_OK)
+        except Exception:
+            logger.exception("Failed to submit issue report")
+            return Response({"detail": "failed"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@method_decorator(csrf_exempt, name='dispatch')
 class UploadAdmissionLetterView(APIView):
     """Public endpoint to upload an admission letter PDF (multipart/form-data, field name 'file').
     Returns: {url: <absolute_url>}"""
