@@ -1,0 +1,147 @@
+{
+  "Admin": [
+    {
+      "id": "add-student",
+      "title": "Add a new student",
+      "description": "Create a student profile and assign to a class.",
+      "steps": [
+        "Go to Admin > Students",
+        "Click New Student",
+        "Fill personal and guardian details",
+        "Assign class and Save"
+      ],
+      "deepLink": "/admin/students",
+      "tags": ["students", "enrollment", "admin"]
+    },
+    {
+      "id": "setup-fees",
+      "title": "Set up class fees",
+      "description": "Configure fee categories and class fees.",
+      "steps": [
+        "Go to Admin > Fees",
+        "Open Fee Categories and add categories",
+        "Open Class Fees and assign per class",
+        "Save changes"
+      ],
+      "deepLink": "/admin/fees",
+      "tags": ["fees", "finance", "admin"]
+    },
+    {
+      "id": "enter-results",
+      "title": "Enter and publish exam results",
+      "description": "Record results for a specific exam and publish.",
+      "steps": [
+        "Go to Admin > Exams",
+        "Create or choose an exam",
+        "Click Enter Results",
+        "Fill marks and Save",
+        "Publish results when ready"
+      ],
+      "deepLink": "/admin/exams",
+      "tags": ["exams", "results", "academics"]
+    }
+  ],
+  "Teacher": [
+    {
+      "id": "take-attendance",
+      "title": "Take class attendance",
+      "description": "Record daily attendance per class.",
+      "steps": [
+        "Go to Teacher > Attendance",
+        "Select class and date",
+        "Mark present/absent",
+        "Save"
+      ],
+      "deepLink": "/teacher/attendance",
+      "tags": ["attendance", "teacher"]
+    },
+    {
+      "id": "record-grades",
+      "title": "Record grades",
+      "description": "Enter student grades for assignments or exams.",
+      "steps": [
+        "Go to Teacher > Grades",
+        "Select class and subject",
+        "Enter grades",
+        "Save"
+      ],
+      "deepLink": "/teacher/grades",
+      "tags": ["grades", "results", "teacher"]
+    },
+    {
+      "id": "view-timetable",
+      "title": "View my timetable",
+      "description": "See your weekly schedule.",
+      "steps": [
+        "Go to Teacher > Timetable",
+        "Switch weeks if needed",
+        "Click a lesson to view details"
+      ],
+      "deepLink": "/teacher/timetable",
+      "tags": ["timetable", "schedule"]
+    }
+  ],
+  "Student": [
+    {
+      "id": "check-report-card",
+      "title": "Check my report card",
+      "description": "View term performance.",
+      "steps": [
+        "Go to Student > Report Card",
+        "Select term if needed"
+      ],
+      "deepLink": "/student/report-card",
+      "tags": ["report", "grades"]
+    },
+    {
+      "id": "view-messages",
+      "title": "View system messages",
+      "description": "Read school communications.",
+      "steps": [
+        "Open Messages from the header",
+        "Use tabs to filter system updates"
+      ],
+      "deepLink": "/student/messages?tab=system",
+      "tags": ["messages", "communication"]
+    }
+  ],
+  "Finance": [
+    {
+      "id": "record-payment",
+      "title": "Record student payments",
+      "description": "Receipt payments made by students.",
+      "steps": [
+        "Go to Finance > Payments",
+        "Search student",
+        "Enter amount and method",
+        "Save receipt"
+      ],
+      "deepLink": "/finance/payments",
+      "tags": ["payments", "receipts", "finance"]
+    },
+    {
+      "id": "manage-fee-categories",
+      "title": "Manage fee categories",
+      "description": "Create and edit fee categories.",
+      "steps": [
+        "Go to Finance > Fee Categories",
+        "Add or edit categories",
+        "Save"
+      ],
+      "deepLink": "/finance/fee-categories",
+      "tags": ["fees", "categories"]
+    },
+    {
+      "id": "class-fees",
+      "title": "Assign class fees",
+      "description": "Map categories to class fee amounts.",
+      "steps": [
+        "Go to Finance > Class Fees",
+        "Select class and set amounts",
+        "Save"
+      ],
+      "deepLink": "/finance/class-fees",
+      "tags": ["fees", "classes"]
+    }
+  ]
+}

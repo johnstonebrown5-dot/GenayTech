@@ -132,11 +132,27 @@ export default function TeacherAttendance(){
         </div>
         {/* Actions and search */}
         <div className="space-y-2">
-          <div className="grid grid-cols-3 gap-2 sm:flex sm:gap-2">
-            <button onClick={()=>setAll('present')} disabled={!isClassTeacher} className={`h-10 rounded-xl text-white text-sm bg-gradient-to-r from-emerald-600 to-teal-600 disabled:opacity-60 ${!isClassTeacher?'opacity-60 cursor-not-allowed':''}`}>All Present</button>
-            <button onClick={()=>setAll('absent')} disabled={!isClassTeacher} className={`h-10 rounded-xl text-white text-sm bg-gradient-to-r from-rose-600 to-pink-600 disabled:opacity-60 ${!isClassTeacher?'opacity-60 cursor-not-allowed':''}`}>All Absent</button>
-            <button onClick={()=>setAll('late')} disabled={!isClassTeacher} className={`h-10 rounded-xl text-white text-sm bg-gradient-to-r from-amber-500 to-orange-600 disabled:opacity-60 ${!isClassTeacher?'opacity-60 cursor-not-allowed':''}`}>All Late</button>
-            <button onClick={save} disabled={submitting || !isClassTeacher} className="sm:ml-auto h-10 rounded-xl text-white text-sm bg-gradient-to-r from-indigo-600 to-purple-600 disabled:opacity-60 col-span-3 sm:col-span-1">{submitting?'Saving...':'Save'}</button>
+          <div className="grid grid-cols-3 gap-2 sm:flex sm:gap-3">
+            <button
+              onClick={()=>setAll('present')}
+              disabled={!isClassTeacher}
+              className={`h-10 md:h-12 px-3 md:px-4 rounded-xl text-white text-sm md:text-base bg-gradient-to-r from-emerald-600 to-teal-600 disabled:opacity-60 ${!isClassTeacher?'opacity-60 cursor-not-allowed':''}`}
+            >All Present</button>
+            <button
+              onClick={()=>setAll('absent')}
+              disabled={!isClassTeacher}
+              className={`h-10 md:h-12 px-3 md:px-4 rounded-xl text-white text-sm md:text-base bg-gradient-to-r from-rose-600 to-pink-600 disabled:opacity-60 ${!isClassTeacher?'opacity-60 cursor-not-allowed':''}`}
+            >All Absent</button>
+            <button
+              onClick={()=>setAll('late')}
+              disabled={!isClassTeacher}
+              className={`h-10 md:h-12 px-3 md:px-4 rounded-xl text-white text-sm md:text-base bg-gradient-to-r from-amber-500 to-orange-600 disabled:opacity-60 ${!isClassTeacher?'opacity-60 cursor-not-allowed':''}`}
+            >All Late</button>
+            <button
+              onClick={save}
+              disabled={submitting || !isClassTeacher}
+              className="sm:ml-auto h-10 md:h-12 px-4 md:px-5 rounded-xl text-white text-sm md:text-base bg-gradient-to-r from-indigo-600 to-purple-600 disabled:opacity-60 col-span-3 sm:col-span-1"
+            >{submitting?'Saving...':'Save'}</button>
           </div>
           <div className="flex items-center gap-2">
             <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search name or admission no..." className="w-full border rounded-xl px-3 py-2 bg-gray-50 focus:ring-2 focus:ring-indigo-200" />

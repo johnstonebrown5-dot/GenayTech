@@ -85,6 +85,8 @@ import PublicReceipt from './pages/PublicReceipt'
 import NotFound from './pages/NotFound'
 import Unauthorized from './pages/Unauthorized'
 import ReAuth from './pages/ReAuth'
+import HelpCenter from './pages/HelpCenter'
+import FloatingHelpAction from './components/Help/FloatingHelpAction'
 
 function ProtectedRoute({ children, roles, ownerRole }) {
   const { user, loading } = useAuth()
@@ -132,6 +134,7 @@ export default function App() {
             <Route path="/news/:id" element={<PublicNewsDetail />} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/trial" element={<TrialOnboarding />} />
+            <Route path="/help" element={<ProtectedRoute roles={["admin","teacher","student","finance"]}><HelpCenter/></ProtectedRoute>} />
             <Route path="/app" element={<RoleRedirect />} />
             <Route path="/admin" element={<ProtectedRoute roles={["admin"]}><AdminDashboard/></ProtectedRoute>} />
             <Route path="/admin/students" element={<ProtectedRoute roles={["admin"]}><AdminStudents/></ProtectedRoute>} />
@@ -209,6 +212,7 @@ export default function App() {
             <ReportIssuePrompt />
             <ServiceReviewPopup />
             {!hideAssistant && <FloatingActions />}
+            {!hideAssistant && <FloatingHelpAction />}
             {!hideAssistant && <FloatingButton />}
             <AssistantPanel />
           </LockProvider>

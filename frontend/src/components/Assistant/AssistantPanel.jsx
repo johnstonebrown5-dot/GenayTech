@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import api from '../../api'
 import { parseIntent, bestFuzzy } from './intentParser'
 import { useAuth } from '../../auth'
+import helpContent from '../../content/helpContent.json'
 
 export default function AssistantPanel(){
   const { open, closePanel, memory, setMemory, pushIntent } = useAssistant()
@@ -66,6 +67,7 @@ export default function AssistantPanel(){
     ['pocket money', '/finance/pocket-money'],
     ['fee categories', '/finance/fee-categories'],
     ['class fees', '/finance/class-fees'],
+    ['help', '/help'],
   ]), [])
 
   // Phrase templates to reduce monotony
@@ -130,6 +132,8 @@ export default function AssistantPanel(){
     if (!user || (!user.role && !user.is_superuser && !user.is_staff)) return true
     const role = (user?.role || '').toLowerCase()
     const isAdmin = user?.is_superuser || user?.is_staff || role === 'admin'
+    // Help Center is allowed for all authenticated roles
+    if (path === '/help') return true
     if (isAdmin) return true
     if (role === 'teacher'){
       if (path.startsWith('/teacher')) return true
@@ -169,6 +173,14 @@ export default function AssistantPanel(){
 
   const executeIntent = React.useCallback(async (intent, rawText) => {
     // If in a flow, interpret text as answers to the flow when possible
+    if (flow === 'help_steps'){
+      const t = (rawText||'').toLowerCase()
+      if (/\b(next|forward|continue)\b/.test(t)) { setFlowData(d=>({ ...d, index: Math.min((d.index||0)+1, (d.steps?.length||1)-1) })); showHelpStep(); return }
+      if (/\b(back|previous|prev)\b/.test(t)) { setFlowData(d=>({ ...d, index: Math.max((d.index||0)-1, 0) })); showHelpStep(true); return }
+      if (/\b(done|finish|close|stop)\b/.test(t)) { append('assistant', 'Guide finished.'); setFlow(null); setFlowData({}); return }
+      if (/\bopen\b/.test(t) && flowData?.deepLink) { navigate(flowData.deepLink); append('assistant', pick(phrases.opening)('page')); return }
+      // fallthrough to normal handling otherwise
+    }
     if (flow === 'create_exam'){
       // try to auto-fill fields from natural text like: "Mid Term for Grade 7 East on 2025-10-20, total 100"
       const name = (rawText.match(/^(.*?)(?:\s+for\s+|,| on |$)/i) || [])[1]
@@ -220,7 +232,7 @@ export default function AssistantPanel(){
         append('assistant', pick(phrases.back)())
         return
       case 'help':
-        return handleHelp()
+        return handleHelp(rawText)
       case 'open':
         setMemory(prev => ({ ...prev, lastRoute: intent.target }))
         return handleOpen(intent.target)
@@ -255,24 +267,78 @@ export default function AssistantPanel(){
     }
   }, [append, navigate])
 
-  const handleHelp = React.useCallback(() => {
-    const role = (user?.role || 'admin').toLowerCase()
-    if (role === 'admin'){
-      append('assistant', [
-        'Here are some things I can do for Admin:',
-        '',
-        '- open pages: open dashboard, open students, open teachers, open classes, open exams, open results, open fees',
-        '- publish exam: publish exam 42 | publish exam Mid Term for class Grade 7 North',
-        '- delete items: delete student 123 | delete exam 42 (asks confirmation)',
-        '- search data: search students amina | find exams 2025 term 2',
-        '- shortcuts: Ctrl/Cmd+K to toggle me',
-        '',
-        'You can be polite or make typos; I will still try to understand you.'
-      ].join('\n'))
-    } else {
-      append('assistant', 'I can help with navigation and basic actions. Try "open ..." or "search ...". Admin-only actions like delete/publish may be restricted by your role.')
+  const showHelpStep = React.useCallback((back=false) => {
+    setTimeout(() => {
+      setFlowData(d => {
+        const idx = Math.max(0, Math.min(d.index||0, (d.steps?.length||1)-1))
+        const total = d.steps?.length || 0
+        const body = `${d.title ? d.title + '\n' : ''}${total ? `Step ${idx+1} of ${total}` : ''}${total ? '\n' : ''}${d.steps?.[idx] || ''}`
+        const suggestions = [
+          idx > 0 ? { type: 'help_back', label: 'Back' } : null,
+          idx < total-1 ? { type: 'help_next', label: 'Next' } : { type: 'help_done', label: 'Done' },
+          d.deepLink ? { type: 'open_link', label: 'Open Page', href: d.deepLink } : null,
+          { type: 'open', value: 'help', label: 'Help Center' },
+        ].filter(Boolean)
+        append('assistant', body, suggestions)
+        return d
+      })
+    }, 0)
+  }, [append])
+
+  const handleHelp = React.useCallback((rawText) => {
+    const r = (user?.role || 'admin').toLowerCase()
+    const pretty = (x) => {
+      if (!x) return x
+      const m = { admin: 'Admin', teacher: 'Teacher', student: 'Student', finance: 'Finance' }
+      return m[x] || (x.charAt(0).toUpperCase() + x.slice(1))
     }
-  }, [append, user])
+    const roleKey = pretty(r)
+    const items = Array.isArray(helpContent?.[roleKey]) ? helpContent[roleKey] : []
+    const t = (rawText || '').toLowerCase().trim()
+    let q = t
+    const stop = ['help', 'how to', 'guide', 'show', 'about']
+    for (const s of stop){
+      if (q.startsWith(s + ' ')) { q = q.slice(s.length).trim(); break }
+      if (q === s) { q = '' }
+    }
+    if (q) {
+      const norm = (s)=> String(s||'').toLowerCase()
+      const sim = (a,b)=>{
+        a = norm(a); b = norm(b); if(!a||!b) return 0
+        const m = Array.from(new Set(a.split(/\s+/))).filter(Boolean)
+        const n = Array.from(new Set(b.split(/\s+/))).filter(Boolean)
+        const inter = m.filter(t => n.includes(t)).length
+        const jacc = inter / Math.max(1, new Set([...m, ...n]).size)
+        const substr = b.includes(a) ? 0.2 : 0
+        return Math.min(1, jacc + substr)
+      }
+      const scored = items.map(it => {
+        const hay = [it.title, it.description, Array.isArray(it.tags)? it.tags.join(' '): ''].join(' ')
+        return { it, score: sim(q, hay) }
+      }).sort((a,b)=> b.score - a.score)
+      const best = scored[0]
+      if (best && best.score > 0) {
+        const it = best.it
+        const steps = Array.isArray(it.steps) ? it.steps : []
+        const body = [
+          it.title,
+          it.description || '',
+          steps.length ? ('\n' + steps.map((s,i)=> `${i+1}. ${s}`).join('\n')) : ''
+        ].filter(Boolean).join('\n')
+        const suggestions = [
+          it.deepLink ? { type: 'open_link', label: 'Open Page', href: it.deepLink } : null,
+          { type: 'open', value: 'help', label: 'Help Center' },
+        ].filter(Boolean)
+        append('assistant', body, suggestions)
+        return
+      }
+    }
+    // Suggest opening help with a prefilled query
+    append('assistant', 'I can guide you through procedures. Opening the Help Center may also help.', [
+      { type: 'text', value: q || 'help', label: 'Ask this', autoSend: !!q },
+      { type: 'open', value: 'help', label: 'Open Help Center' },
+    ])
+  }, [append, user, setFlow, setFlowData, showHelpStep])
 
   const handleOpen = React.useCallback(async (targetRaw) => {
     const target = (targetRaw || '').toLowerCase().trim()
@@ -339,8 +405,12 @@ export default function AssistantPanel(){
   const onSuggestionClick = React.useCallback(async (s) => {
     if (!s) return
     if (s.type === 'open') { await handleOpen(s.value); return }
+    if (s.type === 'open_link' && s.href) { navigate(s.href); append('assistant', pick(phrases.opening)('page')); return }
     if (s.type === 'intent') { await executeIntent(s.value, s.value?.raw || ''); return }
     if (s.type === 'text') { setInput(s.text || s.value || ''); if (s.autoSend) setTimeout(()=>{ handleSubmit() },0) }
+    if (s.type === 'help_next') { setFlowData(d => ({ ...d, index: Math.min((d.index||0)+1, (d.steps?.length||1)-1) })); showHelpStep(); return }
+    if (s.type === 'help_back') { setFlowData(d => ({ ...d, index: Math.max((d.index||0)-1, 0) })); showHelpStep(true); return }
+    if (s.type === 'help_done') { append('assistant', 'Great! If you need anything else, just ask.'); setFlow(null); setFlowData({}); return }
   }, [handleOpen, executeIntent, handleSubmit])
 
   const handlePublishExam = React.useCallback(async ({ id, name, klass }) => {
@@ -579,6 +649,28 @@ export default function AssistantPanel(){
     }
   }, [messages, open])
 
+  // Listen for external ask events from other components (e.g., Help Center)
+  React.useEffect(() => {
+    const handler = (e) => {
+      const q = (e?.detail?.q || '').trim()
+      if (!q) return
+      setInput('')
+      append('user', q)
+      setBusy(true)
+      try {
+        const intent = parseIntent(q)
+        pushIntent({ type: intent.type, raw: q })
+        executeIntent(intent, q)
+      } catch (err) {
+        append('assistant', `Error: ${err?.message || 'Something went wrong'}`)
+      } finally {
+        setBusy(false)
+      }
+    }
+    window.addEventListener('assistant:ask', handler)
+    return () => window.removeEventListener('assistant:ask', handler)
+  }, [append, executeIntent, pushIntent])
+
   // Sizing + resizing handlers
   const [boxSize, setBoxSize] = React.useState({ width: 380, height: 520 })
   const resizingRef = React.useRef(false)
@@ -705,6 +797,22 @@ export default function AssistantPanel(){
                 <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
                   <button onClick={()=>{ setFlow(null); setFlowData({}); }} disabled={busy} style={{ height: 36, padding: '0 12px' }}>Cancel</button>
                   <button onClick={submitAddStudent} disabled={busy} style={{ height: 36, padding: '0 12px', background: '#2563eb', color: 'white', border: 'none', borderRadius: 6 }}>Add Student</button>
+                </div>
+              </div>
+            )}
+            {flow === 'help_steps' && (
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ fontSize: 13, color: '#475569' }}>{flowData?.title || 'Procedure'}</div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button onClick={()=> onSuggestionClick({ type: 'help_back' })} disabled={(flowData?.index||0)===0} style={{ height: 36, padding: '0 12px' }}>Back</button>
+                  {flowData?.deepLink && (
+                    <button onClick={()=> onSuggestionClick({ type: 'open_link', href: flowData.deepLink })} style={{ height: 36, padding: '0 12px' }}>Open Page</button>
+                  )}
+                  {(flowData?.steps?.length||0) > 0 && (flowData.index || 0) < (flowData.steps.length - 1) ? (
+                    <button onClick={()=> onSuggestionClick({ type: 'help_next' })} style={{ height: 36, padding: '0 12px', background: '#2563eb', color: 'white', border: 'none', borderRadius: 6 }}>Next</button>
+                  ) : (
+                    <button onClick={()=> onSuggestionClick({ type: 'help_done' })} style={{ height: 36, padding: '0 12px', background: '#22c55e', color: 'white', border: 'none', borderRadius: 6 }}>Done</button>
+                  )}
                 </div>
               </div>
             )}

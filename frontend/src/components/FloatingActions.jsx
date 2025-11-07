@@ -9,13 +9,21 @@ export default function FloatingActions(){
   const movedRef = useRef(false)
   const startRef = useRef({ x: 0, y: 0 })
   const offsetRef = useRef({ x: 0, y: 0 })
+  // Responsive FAB size (mobile: 48, tablet: 52, desktop: 60)
+  const getFabSize = () => {
+    if (typeof window === 'undefined' || !window.matchMedia) return 48
+    if (window.matchMedia('(min-width: 1024px)').matches) return 60
+    if (window.matchMedia('(min-width: 768px)').matches) return 52
+    return 48
+  }
+  const [fabSize, setFabSize] = useState(() => getFabSize())
   const [pos, setPos] = useState(() => {
     if (typeof window === 'undefined') return { x: 0, y: 0 }
     try {
       const saved = JSON.parse(localStorage.getItem('fab_pos') || 'null')
       if (saved && typeof saved.x === 'number' && typeof saved.y === 'number') return saved
     } catch {}
-    const size = 48
+    const size = getFabSize()
     const x = Math.max(8, (window.innerWidth || 0) - 16 - size)
     const y = Math.max(8, (window.innerHeight || 0) - 24 - size)
     return { x, y }
@@ -82,7 +90,7 @@ export default function FloatingActions(){
 
   // Clamp helper
   const clampToViewport = (x, y) => {
-    const size = 48
+    const size = fabSize
     const margin = 8
     const maxX = Math.max(margin, (window.innerWidth || 0) - size - margin)
     const maxY = Math.max(margin, (window.innerHeight || 0) - size - margin)
@@ -92,6 +100,7 @@ export default function FloatingActions(){
   // Keep inside viewport on resize
   useEffect(() => {
     const onResize = () => {
+      setFabSize(getFabSize())
       setPos(prev => {
         const clamped = clampToViewport(prev.x, prev.y)
         if (clamped.x !== prev.x || clamped.y !== prev.y) {
@@ -192,8 +201,8 @@ export default function FloatingActions(){
         onClick={(e) => { if (!movedRef.current) toggle(); e.stopPropagation(); }}
         aria-label={expanded ? 'Collapse actions' : 'More actions'}
         style={{
-          width: 48,
-          height: 48,
+          width: fabSize,
+          height: fabSize,
           borderRadius: 9999,
           border: 'none',
           background: expanded
@@ -218,13 +227,13 @@ export default function FloatingActions(){
       >
         {expanded ? (
           // Close (X)
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width={Math.round(fabSize*0.42)} height={Math.round(fabSize*0.42)} fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
             <line x1="18" y1="6" x2="6" y2="18" />
             <line x1="6" y1="6" x2="18" y2="18" />
           </svg>
         ) : (
           // Plus (+)
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width={Math.round(fabSize*0.46)} height={Math.round(fabSize*0.46)} fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
             <line x1="12" y1="5" x2="12" y2="19" />
             <line x1="5" y1="12" x2="19" y2="12" />
           </svg>
