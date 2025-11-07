@@ -6,6 +6,7 @@ import ProgressiveImage from '../components/ProgressiveImage'
 export default function SchoolHome() {
   const [mobileOpen, setMobileOpen] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [slowLoading, setSlowLoading] = useState(false)
   const [contactOpen, setContactOpen] = useState(false)
   const [contactChannel, setContactChannel] = useState('email') // 'email' | 'whatsapp'
   const [contactForm, setContactForm] = useState({ name:'', from:'', message:'' })
@@ -150,6 +151,14 @@ export default function SchoolHome() {
     })()
     return () => { mounted = false }
   }, [])
+
+  // If loading takes too long, prompt user to refresh
+  useEffect(() => {
+    if (!loading) { setSlowLoading(false); return }
+    const timeoutMs = 12000
+    const id = setTimeout(() => setSlowLoading(true), timeoutMs)
+    return () => clearTimeout(id)
+  }, [loading])
 
   // Keep browser tab title in sync with public school
   useEffect(() => {
@@ -319,11 +328,28 @@ export default function SchoolHome() {
     return (
       <div className="min-h-screen grid place-items-center bg-white text-gray-600">
         <div className="flex flex-col items-center gap-3">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" className="h-8 w-8 animate-spin text-indigo-600" aria-hidden="true" role="status">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 0 1 8-8v4a4 4 0 0 0-4 4H4z" />
-          </svg>
-          <div>Loading school…</div>
+          {!slowLoading ? (
+            <>
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" className="h-8 w-8 animate-spin text-indigo-600" aria-hidden="true" role="status">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 0 1 8-8v4a4 4 0 0 0-4 4H4z" />
+              </svg>
+              <div>Loading school…</div>
+            </>
+          ) : (
+            <div className="text-center max-w-sm">
+              <div className="mx-auto mb-3 h-10 w-10 rounded-full bg-amber-100 text-amber-700 grid place-items-center">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-5 w-5">
+                  <path fillRule="evenodd" d="M12 2a10 10 0 1 0 9.39 6.59 1 1 0 1 0-1.88.68A8 8 0 1 1 12 4a1 1 0 0 0 0-2Zm-.75 6.5a.75.75 0 0 1 1.5 0v5a.75.75 0 0 1-1.5 0v-5ZM12 17a1 1 0 1 0 0 2 1 1 0 0 0 0-2Z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="font-semibold text-gray-900">This is taking longer than usual</div>
+              <p className="mt-1 text-sm text-gray-600">Please check your connection and try refreshing the page.</p>
+              <button type="button" onClick={() => { try { window.location.reload() } catch {} }} className="mt-3 inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">
+                Refresh Page
+              </button>
+            </div>
+          )}
         </div>
       </div>
     )
