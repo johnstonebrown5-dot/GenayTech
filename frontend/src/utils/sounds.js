@@ -42,29 +42,63 @@ export function playSound(type) {
       ctx.resume().catch(() => {})
     }
     const now = ctx.currentTime
-    const o = ctx.createOscillator()
-    const g = ctx.createGain()
 
-    let freq = 880
-    let dur = 0.20
-    let typeName = 'sine'
-    let peak = 0.10
-    if (type === 'login') { freq = 980; dur = 0.26; typeName = 'triangle'; peak = 0.14 }
-    else if (type === 'logout') { freq = 420; dur = 0.24; typeName = 'sawtooth'; peak = 0.12 }
-    else if (type === 'lock') { freq = 660; dur = 0.28; typeName = 'square'; peak = 0.12 }
-    else if (type === 'notify') { freq = 1250; dur = 0.16; typeName = 'triangle'; peak = 0.12 }
+    function beep({ freq=880, dur=0.2, type='sine', peak=0.15, when=now }){
+      const o = ctx.createOscillator()
+      const g = ctx.createGain()
+      o.type = type
+      o.frequency.setValueAtTime(freq, when)
+      g.gain.setValueAtTime(0.0001, when)
+      g.gain.exponentialRampToValueAtTime(peak, when + 0.02)
+      g.gain.exponentialRampToValueAtTime(0.0001, when + dur)
+      o.connect(g); g.connect(ctx.destination)
+      o.start(when); o.stop(when + dur)
+    }
 
-    o.type = typeName
-    o.frequency.setValueAtTime(freq, now)
-
-    g.gain.setValueAtTime(0.0001, now)
-    g.gain.exponentialRampToValueAtTime(peak, now + 0.01)
-    g.gain.exponentialRampToValueAtTime(0.0001, now + dur)
-
-    o.connect(g)
-    g.connect(ctx.destination)
-
-    o.start(now)
-    o.stop(now + dur)
+    switch (type) {
+      case 'success': {
+        // Rising two-tone: pleasant confirmation
+        beep({ freq: 740, dur: 0.14, type: 'triangle', peak: 0.24, when: now })
+        beep({ freq: 1040, dur: 0.16, type: 'triangle', peak: 0.24, when: now + 0.12 })
+        break
+      }
+      case 'error':
+      case 'fail': {
+        // Falling two-tone: clear negative
+        beep({ freq: 700, dur: 0.16, type: 'sawtooth', peak: 0.26, when: now })
+        beep({ freq: 480, dur: 0.18, type: 'sawtooth', peak: 0.22, when: now + 0.12 })
+        break
+      }
+      case 'alert':
+      case 'warning': {
+        // Short triad ping
+        beep({ freq: 880, dur: 0.12, type: 'square', peak: 0.22, when: now })
+        beep({ freq: 1175, dur: 0.12, type: 'square', peak: 0.20, when: now + 0.08 })
+        beep({ freq: 1480, dur: 0.12, type: 'square', peak: 0.18, when: now + 0.16 })
+        break
+      }
+      case 'info':
+      case 'notify': {
+        // Single concise ping
+        beep({ freq: 1250, dur: 0.16, type: 'triangle', peak: 0.18, when: now })
+        break
+      }
+      case 'login': {
+        beep({ freq: 980, dur: 0.22, type: 'triangle', peak: 0.22, when: now })
+        beep({ freq: 1310, dur: 0.18, type: 'triangle', peak: 0.20, when: now + 0.12 })
+        break
+      }
+      case 'logout': {
+        beep({ freq: 520, dur: 0.22, type: 'sawtooth', peak: 0.22, when: now })
+        break
+      }
+      case 'lock': {
+        beep({ freq: 660, dur: 0.24, type: 'square', peak: 0.22, when: now })
+        break
+      }
+      default: {
+        beep({ freq: 900, dur: 0.16, type: 'sine', peak: 0.16, when: now })
+      }
+    }
   } catch {}
 }
