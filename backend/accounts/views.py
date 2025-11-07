@@ -5,14 +5,14 @@ from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from django.contrib.auth import get_user_model
-from .serializers import UserSerializer, SchoolSerializer
+from .serializers import UserSerializer, SchoolSerializer, NonTeachingStaffSerializer
 from .permissions import IsAdminOrStaff
 from django.db import IntegrityError
 from django.db.models import Q
 from django.utils.text import slugify
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
-from .models import School, EmailVerificationToken
+from .models import School, EmailVerificationToken, NonTeachingStaff
 from django.core.cache import cache
 from django.core.mail import send_mail
 from django.conf import settings
@@ -312,6 +312,56 @@ def school_me(request):
         if not school:
             return Response({"detail": "No school linked to this admin"}, status=404)
         return Response(SchoolSerializer(school, context={"request": request}).data)
+
+
+@api_view(["GET","POST"])
+@permission_classes([IsAuthenticated, IsAdminOrStaff])
+def non_teaching_staff(request):
+    user_school_id = getattr(getattr(request.user, 'school', None), 'id', None)
+    if request.method == 'GET':
+        qs = NonTeachingStaff.objects.all().select_related('user','school')
+        if user_school_id:
+            qs = qs.filter(school_id=user_school_id)
+        ser = NonTeachingStaffSerializer(qs, many=True, context={"request": request})
+        return Response(ser.data)
+    # POST
+    data = dict(request.data)
+    if not user_school_id:
+        return Response({"detail": "User has no linked school"}, status=400)
+    data['school'] = user_school_id
+    try:
+        # Coerce user_id to int
+        if 'user_id' in data and data['user_id'] is not None:
+            data['user_id'] = int(data['user_id'])
+    except Exception:
+        pass
+    ser = NonTeachingStaffSerializer(data=data, context={"request": request})
+    ser.is_valid(raise_exception=True)
+    obj = ser.save()
+    return Response(NonTeachingStaffSerializer(obj, context={"request": request}).data, status=201)
+
+
+@api_view(["GET","PATCH","DELETE"])
+@permission_classes([IsAuthenticated, IsAdminOrStaff])
+def non_teaching_staff_detail(request, id: int):
+    user_school_id = getattr(getattr(request.user, 'school', None), 'id', None)
+    try:
+        obj = NonTeachingStaff.objects.select_related('user','school').get(id=id)
+    except NonTeachingStaff.DoesNotExist:
+        return Response({"detail": "Not found"}, status=404)
+    if user_school_id and obj.school_id != user_school_id and not (request.user.is_staff or request.user.is_superuser):
+        return Response({"detail": "Not allowed"}, status=403)
+    if request.method == 'GET':
+        return Response(NonTeachingStaffSerializer(obj, context={"request": request}).data)
+    if request.method == 'DELETE':
+        obj.delete()
+        return Response(status=204)
+    # PATCH
+    data = request.data
+    ser = NonTeachingStaffSerializer(obj, data=data, partial=True, context={"request": request})
+    ser.is_valid(raise_exception=True)
+    ser.save()
+    return Response(NonTeachingStaffSerializer(obj, context={"request": request}).data)
 
     # update
     if not school:

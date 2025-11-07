@@ -20,24 +20,9 @@ export default function SchoolHome() {
   })
   const [showStickyCta, setShowStickyCta] = useState(false)
 
-  // Simple scroll-reveal helper
+  // Reveal now renders content immediately (lazy/scroll animation disabled site-section wide)
   function Reveal({ className = '', children }){
-    const ref = useRef(null)
-    const [on, setOn] = useState(false)
-    useEffect(()=>{
-      const el = ref.current
-      if(!el) return
-      const io = new IntersectionObserver((entries)=>{
-        entries.forEach(e=>{ if(e.isIntersecting) setOn(true) })
-      }, { threshold: 0.12 })
-      io.observe(el)
-      return ()=> io.disconnect()
-    },[])
-    return (
-      <div ref={ref} className={`${className} transition-all duration-700 will-change-transform ${on? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'}`}>
-        {children}
-      </div>
-    )
+    return <div className={className}>{children}</div>
   }
 
   
@@ -166,6 +151,13 @@ export default function SchoolHome() {
     return () => { mounted = false }
   }, [])
 
+  // Keep browser tab title in sync with public school
+  useEffect(() => {
+    if (typeof document !== 'undefined') {
+      document.title = school?.name ? school.name : 'EDU-TRACK'
+    }
+  }, [school?.name])
+
   // Show a sticky CTA on small screens after a short scroll
   useEffect(() => {
     const onScroll = () => {
@@ -190,6 +182,31 @@ export default function SchoolHome() {
   const [heroIndex, setHeroIndex] = useState(0)
   const [heroColor, setHeroColor] = useState('rgba(79,70,229,0.12)')
   const [galleryCat, setGalleryCat] = useState('All')
+
+  // Typewriter animation for school name
+  const typingText = school?.name || 'Our School'
+  const [typed, setTyped] = useState('')
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [typeIdx, setTypeIdx] = useState(0)
+  useEffect(() => {
+    const baseSpeed = 90
+    const speed = isDeleting ? baseSpeed / 2 : baseSpeed
+    const t = setTimeout(() => {
+      const full = typingText
+      if (!isDeleting) {
+        const next = full.slice(0, typeIdx + 1)
+        setTyped(next)
+        setTypeIdx(typeIdx + 1)
+        if (next === full) setIsDeleting(true)
+      } else {
+        const next = full.slice(0, Math.max(0, typeIdx - 1))
+        setTyped(next)
+        setTypeIdx(Math.max(0, typeIdx - 1))
+        if (next.length === 0) setIsDeleting(false)
+      }
+    }, typeIdx === 0 && !isDeleting ? 500 : speed)
+    return () => clearTimeout(t)
+  }, [typeIdx, isDeleting, typingText])
 
   function extractDominantColor(src) {
     return new Promise((resolve) => {
@@ -245,6 +262,57 @@ export default function SchoolHome() {
     })()
     return () => { mounted = false }
   }, [heroIndex, heroImages])
+
+  // Testimonials data and component
+  const testimonialsList = (school.homepage?.testimonials && school.homepage.testimonials.length ? school.homepage.testimonials : [
+    { name: 'Parent of Form 2', quote: 'Teachers here truly care. My child has grown in confidence and academics.', avatar: '' },
+    { name: 'Alumnus 2024', quote: 'Great balance of academics and co‑curriculars. I felt prepared for KCSE.', avatar: '' },
+    { name: 'Parent', quote: 'Safe, welcoming environment with excellent communication from staff.', avatar: '' },
+  ])
+  const testimonialsInterval = Math.max(4000, Number(school?.homepage?.testimonialsInterval) || 6000)
+
+  function TestimonialsCarousel({ items, interval }){
+    const [ti, setTi] = useState(0)
+    useEffect(() => {
+      if (!items.length) return
+      const id = setInterval(() => setTi(i => (i + 1) % items.length), interval)
+      return () => clearInterval(id)
+    }, [items.length, interval])
+    return (
+      <div className="mt-8 relative">
+        <div className="relative overflow-hidden">
+          {items.map((t, idx) => (
+            <figure key={`t-${idx}`} className={`absolute inset-0 transition-all duration-500 ${idx===ti? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-6 pointer-events-none'}`}>
+              <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-card">
+                <div className="flex items-center gap-3">
+                  {t.avatar ? (
+                    <img src={/^https?:/.test(t.avatar)? t.avatar : toAbsoluteUrl(t.avatar)} alt={t.name || 'Avatar'} className="h-10 w-10 rounded-full object-cover" loading="lazy" />
+                  ) : (
+                    <div className="h-10 w-10 rounded-full bg-indigo-100 text-indigo-700 grid place-items-center text-sm">★</div>
+                  )}
+                  <div className="font-medium text-gray-900">{t.name}</div>
+                </div>
+                <blockquote className="mt-3 text-base leading-relaxed text-gray-700">“{t.quote}”</blockquote>
+              </div>
+            </figure>
+          ))}
+          {/* spacer to lock height */}
+          <div className="opacity-0"> 
+            <div className="rounded-2xl border p-6"><div className="h-16" /></div>
+          </div>
+        </div>
+        <div className="mt-6 flex items-center justify-between">
+          <button type="button" aria-label="Prev" className="px-3 py-2 rounded-lg border text-gray-700 hover:bg-gray-50" onClick={() => setTi(i => (i - 1 + items.length) % items.length)}>Prev</button>
+          <div className="flex items-center gap-2">
+            {items.map((_, d) => (
+              <span key={`dot-${d}`} className={`h-2 w-2 rounded-full ${d===ti? 'bg-indigo-600' : 'bg-gray-300'}`} />
+            ))}
+          </div>
+          <button type="button" aria-label="Next" className="px-3 py-2 rounded-lg border text-gray-700 hover:bg-gray-50" onClick={() => setTi(i => (i + 1) % items.length)}>Next</button>
+        </div>
+      </div>
+    )
+  }
 
   // Show a loading screen while fetching school data
   if (loading) {
@@ -359,7 +427,7 @@ export default function SchoolHome() {
 
       {/* Hero */}
       <section className="relative overflow-hidden">
-        <div className="absolute inset-0" style={{ backgroundImage: `radial-gradient(1200px 600px at -10% -10%, ${heroColor}, transparent 60%), radial-gradient(1200px 600px at 110% 30%, rgba(147,51,234,0.12), transparent 60%), linear-gradient(to bottom, white, rgba(248,250,252,0.6))` }} />
+        <div className="absolute inset-0" style={{ backgroundImage: `radial-gradient(1200px 600px at -10% -10%, ${heroColor}, transparent 60%), radial-gradient(700px 420px at 85% 45%, ${heroColor}, transparent 65%), radial-gradient(1200px 600px at 110% 30%, rgba(147,51,234,0.12), transparent 60%), linear-gradient(to bottom, white, rgba(248,250,252,0.6))` }} />
         {/* decorative blobs removed to reduce motion */}
         <div className="relative mx-auto max-w-7xl px-4 md:px-6 pt-12 md:pt-16 pb-16 md:pb-24">
           <div className="grid lg:grid-cols-2 gap-12 items-center">
@@ -367,8 +435,21 @@ export default function SchoolHome() {
               <div className="inline-flex items-center gap-2 rounded-full bg-indigo-100 text-indigo-700 px-3 py-1 text-xs font-semibold mb-4 shadow-sm">
                 <span>{school.homepage?.hero?.badge || school.motto}</span>
               </div>
-              <h1 className="text-3xl sm:text-4xl md:text-5xl font-extrabold leading-tight tracking-tight bg-gradient-to-r from-gray-900 via-gray-900 to-indigo-800 bg-clip-text text-transparent">
-                {school.homepage?.hero?.title || `Welcome to ${school.name}`}
+              <h1 className="text-3xl sm:text-4xl md:text-5xl font-extrabold leading-tight tracking-tight text-gray-900">
+                {school.homepage?.hero?.title ? (
+                  school.homepage?.hero?.title
+                ) : (
+                  <span>
+                    {`Welcome to `}
+                    <span
+                      className="text-gray-950 dark:text-white font-extrabold border-r-2 border-blue-600 pr-1"
+                      aria-label="typing"
+                      style={{ WebkitTextStroke: '0.8px #2563eb', textShadow: '0 1px 0 rgba(37,99,235,0.15)' }}
+                    >
+                      {typed}
+                    </span>
+                  </span>
+                )}
               </h1>
               <div className="mt-3 h-1.5 w-24 rounded-full bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 animate-pulse" />
               <p className="mt-4 text-base sm:text-lg text-gray-600">
@@ -389,7 +470,7 @@ export default function SchoolHome() {
               </div>
             </div>
             <div className="relative">
-              <div className="rounded-3xl border border-gray-200 shadow-2xl overflow-hidden bg-white ring-1 ring-gray-100 transform transition hover:-translate-y-0.5 hover:shadow-[0_20px_50px_rgba(79,70,229,0.15)]">
+              <div className="rounded-3xl border border-gray-200 shadow-2xl overflow-hidden bg-white ring-1 ring-gray-100 transform transition hover:-translate-y-0.5 hover:shadow-[0_20px_50px_rgba(79,70,229,0.15)]" style={{ boxShadow: `0 20px 60px ${heroColor}` }}>
                 <div className="relative w-full h-64 sm:h-72 md:h-80">
                   {heroImages.map((src, i) => {
                     const isActive = i === heroIndex
@@ -471,7 +552,7 @@ export default function SchoolHome() {
         <div aria-hidden className="absolute inset-0 pointer-events-none opacity-10 [background:radial-gradient(rgba(99,102,241,0.14)_1px,transparent_1px)] [background-size:22px_22px]" />
         <div className="mx-auto max-w-7xl px-4 md:px-6 py-14 md:py-20">
           <div className="grid lg:grid-cols-2 gap-12 items-start">
-          <Reveal>
+          <div>
             <h2 className="text-3xl font-bold text-gray-900">{school.homepage?.about?.title || `About ${school.name}`}</h2>
             <p className="mt-4 text-lg text-gray-600">{school.homepage?.about?.text || `Founded on excellence and integrity, ${school.name} offers a rich curriculum, vibrant co-curricular life and a caring environment that inspires students to reach their full potential.`}</p>
             <ul className="mt-6 space-y-3 text-gray-700">
@@ -484,8 +565,8 @@ export default function SchoolHome() {
                 <li key={`${idx}-${b}`} className="flex gap-2"><span className="text-indigo-600">•</span> {b}</li>
               ))}
             </ul>
-          </Reveal>
-          <Reveal className="rounded-2xl border border-gray-200 bg-white p-6 shadow-lg">
+          </div>
+          <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-lg">
             <h3 className="text-lg font-semibold text-gray-900">At a Glance</h3>
             <div className="mt-4 grid grid-cols-2 md:grid-cols-3 gap-4 text-sm text-gray-700">
               <div className="rounded-lg bg-gray-50 p-4">
@@ -515,7 +596,7 @@ export default function SchoolHome() {
                 <div className="mt-1">Co-curricular Clubs</div>
               </div>
             </div>
-          </Reveal>
+          </div>
           </div>
         </div>
         
@@ -532,7 +613,7 @@ export default function SchoolHome() {
             const message = ht.message || 'Welcome to our school. We are committed to academic excellence, character formation, and holistic growth of every learner entrusted to us.'
             return (
               <div className="grid lg:grid-cols-3 gap-8 items-start">
-                <Reveal className="lg:col-span-1">
+                <div className="lg:col-span-1">
                   <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-lg text-center">
                     {photo ? (
                       <ProgressiveImage src={photo} candidates={imageCandidates(photo)} alt={name} className="mx-auto h-36 w-36 rounded-2xl border border-gray-200 overflow-hidden" />
@@ -542,13 +623,13 @@ export default function SchoolHome() {
                     <div className="mt-4 font-semibold text-gray-900">{name}</div>
                     <div className="text-sm text-gray-600">{title}</div>
                   </div>
-                </Reveal>
-                <Reveal className="lg:col-span-2">
+                </div>
+                <div className="lg:col-span-2">
                   <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-lg">
                     <h2 className="text-3xl font-bold text-gray-900">Message from the Headteacher</h2>
                     <p className="mt-4 text-lg leading-relaxed text-gray-700 whitespace-pre-line">{message}</p>
                   </div>
-                </Reveal>
+                </div>
               </div>
             )
           })()}
@@ -695,32 +776,12 @@ export default function SchoolHome() {
       {/* Testimonials */}
       <section id="testimonials" className="relative overflow-hidden bg-gradient-to-b from-white via-slate-50 to-white">
         <div aria-hidden className="absolute inset-0 pointer-events-none opacity-10 [background:radial-gradient(rgba(99,102,241,0.12)_1px,transparent_1px)] [background-size:22px_22px]" />
-        <div className="mx-auto max-w-7xl px-4 md:px-6 py-14 md:py-16">
+        <div className="relative mx-auto max-w-7xl px-4 md:px-6 py-14 md:py-16">
           <div className="text-center max-w-2xl mx-auto">
             <h2 className="text-3xl font-bold text-gray-900">What Parents Say</h2>
             <p className="mt-2 text-gray-600">Real stories from our community.</p>
           </div>
-          <div className="mt-8 overflow-x-auto -mx-4 px-4">
-            <div className="flex gap-4 snap-x snap-mandatory">
-              {(school.homepage?.testimonials && school.homepage.testimonials.length ? school.homepage.testimonials : [
-                { name: 'Parent of Form 2', quote: 'Teachers here truly care. My child has grown in confidence and academics.', avatar: '' },
-                { name: 'Alumnus 2024', quote: 'Great balance of academics and co‑curriculars. I felt prepared for KCSE.', avatar: '' },
-                { name: 'Parent', quote: 'Safe, welcoming environment with excellent communication from staff.', avatar: '' },
-              ]).map((t, idx) => (
-                <figure key={`t-${idx}`} className="min-w-[85%] sm:min-w-[420px] snap-center rounded-2xl border border-gray-200 bg-white p-5 shadow-card">
-                  <div className="flex items-center gap-3">
-                    {t.avatar ? (
-                      <img src={/^https?:/.test(t.avatar)? t.avatar : toAbsoluteUrl(t.avatar)} alt={t.name || 'Avatar'} className="h-10 w-10 rounded-full object-cover" loading="lazy" />
-                    ) : (
-                      <div className="h-10 w-10 rounded-full bg-indigo-100 text-indigo-700 grid place-items-center text-sm">★</div>
-                    )}
-                    <div className="font-medium text-gray-900">{t.name}</div>
-                  </div>
-                  <blockquote className="mt-3 text-sm leading-relaxed text-gray-700">“{t.quote}”</blockquote>
-                </figure>
-              ))}
-            </div>
-          </div>
+          <TestimonialsCarousel items={testimonialsList} interval={testimonialsInterval} />
         </div>
       </section>
 

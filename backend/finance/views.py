@@ -14,8 +14,8 @@ import os
 import logging
 from .mpesa import MpesaClient
 from .coop_stk import CoopStkClient
-from .models import Invoice, Payment, FeeCategory, ClassFee, MpesaConfig, ExpenseCategory, Expense, PocketMoneyWallet, PocketMoneyTransaction, PaymentMethod, IncomingPayment
-from .serializers import InvoiceSerializer, PaymentSerializer, FeeCategorySerializer, ClassFeeSerializer, MpesaConfigSerializer, ExpenseCategorySerializer, ExpenseSerializer, PocketMoneyWalletSerializer, PocketMoneyTransactionSerializer, PaymentMethodSerializer, IncomingPaymentSerializer
+from .models import Invoice, Payment, FeeCategory, ClassFee, MpesaConfig, ExpenseCategory, Expense, PocketMoneyWallet, PocketMoneyTransaction, PaymentMethod, IncomingPayment, StudentFee, StaffPayroll, StaffPayslip
+from .serializers import InvoiceSerializer, PaymentSerializer, FeeCategorySerializer, ClassFeeSerializer, MpesaConfigSerializer, ExpenseCategorySerializer, ExpenseSerializer, PocketMoneyWalletSerializer, PocketMoneyTransactionSerializer, PaymentMethodSerializer, IncomingPaymentSerializer, StudentFeeSerializer, StaffPayrollSerializer, StaffPayslipSerializer
 from academics.models import Student
 
 class IsFinanceOrAdmin(permissions.BasePermission):
@@ -1349,6 +1349,66 @@ class ClassFeeViewSet(viewsets.ModelViewSet):
 
         status_code = 201 if created and not errors else (207 if created and errors else 400)
         return Response({'created': created, 'errors': errors}, status=status_code)
+
+
+class StudentFeeViewSet(viewsets.ModelViewSet):
+    queryset = StudentFee.objects.all()
+    serializer_class = StudentFeeSerializer
+    permission_classes = [IsFinanceOrAdmin]
+    filter_backends = [DjangoFilterBackend]
+    filterset_fields = ['fee_category', 'student', 'year', 'term']
+
+    def get_queryset(self):
+        qs = super().get_queryset().select_related('fee_category', 'student')
+        school = getattr(getattr(self.request, 'user', None), 'school', None)
+        if school:
+            qs = qs.filter(fee_category__school=school, student__school=school)
+        return qs
+
+    def perform_create(self, serializer):
+        instance = serializer.save()
+        # Create/update invoice for this student fee
+        inv, created = Invoice.objects.get_or_create(
+            student=instance.student,
+            category=instance.fee_category,
+            year=instance.year,
+            term=instance.term,
+            defaults={
+                'amount': instance.amount,
+                'due_date': instance.due_date,
+                'status': 'unpaid',
+            }
+        )
+        if not created:
+            updated = False
+            if inv.amount != instance.amount:
+                inv.amount = instance.amount; updated = True
+            if inv.due_date != instance.due_date:
+                inv.due_date = instance.due_date; updated = True
+            if updated:
+                inv.save(update_fields=['amount','due_date'])
+
+    def perform_update(self, serializer):
+        instance = serializer.save()
+        inv, created = Invoice.objects.get_or_create(
+            student=instance.student,
+            category=instance.fee_category,
+            year=instance.year,
+            term=instance.term,
+            defaults={
+                'amount': instance.amount,
+                'due_date': instance.due_date,
+                'status': 'unpaid',
+            }
+        )
+        if not created:
+            updated = False
+            if inv.amount != instance.amount:
+                inv.amount = instance.amount; updated = True
+            if inv.due_date != instance.due_date:
+                inv.due_date = instance.due_date; updated = True
+            if updated:
+                inv.save(update_fields=['amount','due_date'])
         
 
 # Public endpoint for Safaricom Daraja STK callback
@@ -1568,3 +1628,83 @@ class PocketMoneyTransactionViewSet(viewsets.ModelViewSet):
         elif transaction.transaction_type == 'withdrawal':
             wallet.balance -= transaction.amount
         wallet.save()
+
+
+class StaffPayrollViewSet(viewsets.ModelViewSet):
+    queryset = StaffPayroll.objects.all()
+    serializer_class = StaffPayrollSerializer
+    permission_classes = [IsFinanceOrAdmin]
+    filter_backends = [DjangoFilterBackend]
+    filterset_fields = ['staff', 'is_active']
+
+    def get_queryset(self):
+        qs = super().get_queryset().select_related('staff__user', 'school')
+        school = getattr(getattr(self.request, 'user', None), 'school', None)
+        if school:
+            qs = qs.filter(school=school)
+        return qs
+
+    def perform_create(self, serializer):
+        school = getattr(getattr(self.request, 'user', None), 'school', None)
+        serializer.save(school=school)
+
+
+class StaffPayslipViewSet(viewsets.ModelViewSet):
+    queryset = StaffPayslip.objects.all()
+    serializer_class = StaffPayslipSerializer
+    permission_classes = [IsFinanceOrAdmin]
+    filter_backends = [DjangoFilterBackend]
+    filterset_fields = ['staff', 'year', 'month']
+
+    def get_queryset(self):
+        qs = super().get_queryset().select_related('staff__user', 'school')
+        school = getattr(getattr(self.request, 'user', None), 'school', None)
+        if school:
+            qs = qs.filter(school=school)
+        return qs.order_by('-year', '-month', '-id')
+
+    def _sum_list(self, items):
+        try:
+            from decimal import Decimal
+            total = Decimal('0')
+            if isinstance(items, list):
+                for it in items:
+                    try:
+                        total += Decimal(str(it.get('amount', 0)))
+                    except Exception:
+                        total += Decimal('0')
+            return total
+        except Exception:
+            return 0
+
+    def perform_create(self, serializer):
+        school = getattr(getattr(self.request, 'user', None), 'school', None)
+        data = dict(self.request.data)
+        basic = serializer.validated_data.get('basic')
+        allowances = serializer.validated_data.get('allowances') or []
+        deductions = serializer.validated_data.get('deductions') or []
+        try:
+            gross = (basic or 0) + self._sum_list(allowances)
+            net = gross - self._sum_list(deductions)
+        except Exception:
+            gross = serializer.validated_data.get('gross_pay') or 0
+            net = serializer.validated_data.get('net_pay') or 0
+        serializer.save(school=school, gross_pay=gross, net_pay=net)
+
+    def perform_update(self, serializer):
+        basic = serializer.validated_data.get('basic')
+        allowances = serializer.validated_data.get('allowances')
+        deductions = serializer.validated_data.get('deductions')
+        if basic is not None or allowances is not None or deductions is not None:
+            basic = basic if basic is not None else getattr(serializer.instance, 'basic', 0)
+            allowances = allowances if allowances is not None else getattr(serializer.instance, 'allowances', [])
+            deductions = deductions if deductions is not None else getattr(serializer.instance, 'deductions', [])
+            try:
+                gross = (basic or 0) + self._sum_list(allowances)
+                net = gross - self._sum_list(deductions)
+            except Exception:
+                gross = getattr(serializer.instance, 'gross_pay', 0)
+                net = getattr(serializer.instance, 'net_pay', 0)
+            serializer.save(gross_pay=gross, net_pay=net)
+        else:
+            serializer.save()

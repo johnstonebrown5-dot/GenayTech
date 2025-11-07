@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
-from .models import School
+from .models import School, NonTeachingStaff
 
 User = get_user_model()
 
@@ -53,3 +53,35 @@ class UserSerializer(serializers.ModelSerializer):
             except Exception:
                 return url
         return url
+
+
+class NonTeachingStaffSerializer(serializers.ModelSerializer):
+    user_id = serializers.IntegerField(write_only=True, required=True)
+    user = UserSerializer(read_only=True)
+
+    class Meta:
+        model = NonTeachingStaff
+        fields = [
+            'id','user','user_id','school','department','position','national_id','kra_pin','nhif_no','nssf_no','address','emergency_contact','hire_date','is_active','created_at','updated_at'
+        ]
+        read_only_fields = ['school','created_at','updated_at','user']
+
+    def create(self, validated_data):
+        user_id = validated_data.pop('user_id', None)
+        if not user_id:
+            raise serializers.ValidationError({'user_id': 'This field is required'})
+        try:
+            user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            raise serializers.ValidationError({'user_id': 'User not found'})
+        if not validated_data.get('school'):
+            req = self.context.get('request') if isinstance(self.context, dict) else None
+            school = getattr(getattr(getattr(req, 'user', None), 'school', None), 'id', None)
+            if school:
+                validated_data['school_id'] = school
+        obj = NonTeachingStaff.objects.create(user=user, **validated_data)
+        return obj
+
+    def update(self, instance, validated_data):
+        validated_data.pop('user_id', None)
+        return super().update(instance, validated_data)

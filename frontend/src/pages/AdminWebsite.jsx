@@ -21,6 +21,7 @@ export default function AdminWebsite(){
   const [uploadingPartner, setUploadingPartner] = useState({})
   const [uploadingSponsor, setUploadingSponsor] = useState({})
   const [uploadingGallery, setUploadingGallery] = useState({})
+  const [uploadingTestimonials, setUploadingTestimonials] = useState({})
 
   const ensureLeaflet = async () => {
     if (leafletLoaded.current) return true
@@ -104,6 +105,8 @@ export default function AdminWebsite(){
   const galleryItems = Array.isArray(form.homepage?.gallery?.items) ? form.homepage.gallery.items : []
   const partners = Array.isArray(form.homepage?.partners) ? form.homepage.partners : []
   const sponsors = Array.isArray(form.homepage?.sponsors) ? form.homepage.sponsors : []
+  const testimonials = Array.isArray(form.homepage?.testimonials) ? form.homepage.testimonials : []
+  const testimonialsInterval = Number(form.homepage?.testimonialsInterval) || 6000
 
   useEffect(() => {
     if (!pickerOpen) return
@@ -214,6 +217,57 @@ export default function AdminWebsite(){
                     )
                   })()}
                 </div>
+              </div>
+            </section>
+
+            {/* Testimonials */}
+            <section className="mt-16" id="testimonials">
+              <h3 className="text-lg font-semibold text-gray-900">Testimonials</h3>
+              <p className="text-sm text-gray-600 mt-1">These appear in a carousel on the public homepage.</p>
+              <div className="mt-3 flex items-center gap-3">
+                <label className="text-sm">Autoplay interval (ms)
+                  <input type="number" min={3000} step={500} className="ml-2 border p-2 rounded w-32" value={testimonialsInterval} onChange={e=> setForm(f=> ({ ...f, homepage:{ ...f.homepage, testimonialsInterval:Number(e.target.value)||6000 } }))} />
+                </label>
+              </div>
+              <div className="mt-4 grid gap-3">
+                {(testimonials.length ? testimonials : [{ name:'Parent', quote:'Safe, welcoming environment.', avatar:'' }]).map((t, idx) => (
+                  <div key={idx} className="rounded border border-gray-200 p-3 grid md:grid-cols-4 gap-3 items-start bg-white">
+                    <label className="text-sm">
+                      <div>Name</div>
+                      <input className="border p-2 rounded w-full mt-1" value={t.name || ''} onChange={e=> setForm(f=>{ const arr=[...(f.homepage?.testimonials||[])]; arr[idx] = { ...(arr[idx]||{}), name:e.target.value }; return { ...f, homepage:{ ...f.homepage, testimonials:arr } } })} />
+                    </label>
+                    <label className="text-sm md:col-span-2">
+                      <div>Quote</div>
+                      <textarea rows={3} className="border p-2 rounded w-full mt-1" value={t.quote || ''} onChange={e=> setForm(f=>{ const arr=[...(f.homepage?.testimonials||[])]; arr[idx] = { ...(arr[idx]||{}), quote:e.target.value }; return { ...f, homepage:{ ...f.homepage, testimonials:arr } } })} />
+                    </label>
+                    <div className="text-sm">
+                      <div>Avatar</div>
+                      <div className="mt-1 flex items-center gap-2">
+                        <input className="border p-2 rounded w-full" placeholder="Avatar URL" value={t.avatar || ''} onChange={e=> setForm(f=>{ const arr=[...(f.homepage?.testimonials||[])]; arr[idx] = { ...(arr[idx]||{}), avatar:e.target.value }; return { ...f, homepage:{ ...f.homepage, testimonials:arr } } })} />
+                        <label className={`px-2 py-1 rounded ${uploadingTestimonials[idx] ? 'bg-gray-200' : 'bg-gray-100 hover:bg-gray-200'} cursor-pointer text-xs`}>
+                          {uploadingTestimonials[idx] ? 'Uploading…' : 'Upload'}
+                          <input type="file" accept="image/*" className="hidden" onChange={async ev=>{
+                            const file = ev.target.files?.[0]
+                            if(!file) return
+                            try{
+                              setUploadingTestimonials(s=>({ ...s, [idx]:true }))
+                              const { url } = await uploadToCloudinary(file, { folder: 'edu-track/testimonials' })
+                              setForm(f=>{ const arr=[...(f.homepage?.testimonials||[])]; arr[idx] = { ...(arr[idx]||{}), avatar:url }; return { ...f, homepage:{ ...f.homepage, testimonials:arr } } })
+                            }catch(e){ toast(e?.message || 'Failed to upload to Cloudinary', 'error') }
+                            finally{ setUploadingTestimonials(s=>({ ...s, [idx]:false })); ev.target.value = '' }
+                          }} />
+                        </label>
+                      </div>
+                      <div className="mt-2 h-16 bg-gray-50 rounded grid place-items-center">
+                        {t.avatar ? <img src={toAbsoluteUrl(t.avatar)} alt="avatar" className="h-16 w-16 object-cover rounded-full"/> : <span className="text-xs text-gray-500">No avatar</span>}
+                      </div>
+                    </div>
+                    <div className="md:col-span-4 text-right">
+                      <button type="button" className="text-sm text-red-600" onClick={()=> setForm(f=>{ const arr=[...(f.homepage?.testimonials||[])]; arr.splice(idx,1); return { ...f, homepage:{ ...f.homepage, testimonials:arr } } })}>Remove</button>
+                    </div>
+                  </div>
+                ))}
+                <button type="button" className="px-3 py-2 rounded bg-gray-100 text-sm hover:bg-gray-200 w-fit" onClick={()=> setForm(f=>{ const arr=[...(f.homepage?.testimonials||[])]; if(arr.length<8) arr.push({ name:'', quote:'', avatar:'' }); return { ...f, homepage:{ ...f.homepage, testimonials:arr } } })}>Add Testimonial</button>
               </div>
             </section>
 

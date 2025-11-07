@@ -56,6 +56,13 @@ export default function TeacherLayout({ children }){
     return () => { mounted = false }
   }, [])
 
+  // Keep browser tab title in sync with active school
+  useEffect(() => {
+    if (typeof document !== 'undefined') {
+      document.title = schoolName ? schoolName : 'EDU-TRACK'
+    }
+  }, [schoolName])
+
   // Poll unread messages (inbox + system)
   useEffect(() => {
     let mounted = true

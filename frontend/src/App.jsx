@@ -34,8 +34,10 @@ import FinanceFeeCategories from './pages/FinanceFeeCategories';
 import FinanceClassFees from './pages/FinanceClassFees';
 import FinanceFees from './pages/FinanceFees';
 import FinanceIncomingPayments from './pages/FinanceIncomingPayments';
+import FinanceStaffPayroll from './pages/FinanceStaffPayroll';
 import AdminStudents from './pages/AdminStudents'
 import AdminTeachers from './pages/AdminTeachers'
+import AdminStaff from './pages/AdminStaff'
 import AdminTeacherProfile from './pages/AdminTeacherProfile'
 import AdminStudentDashboard from './pages/AdminStudentDashboard'
 import AdminStudentInvoices from './pages/AdminStudentInvoices'
@@ -121,6 +123,7 @@ export default function App() {
             <Route path="/admin/students/:id/payments" element={<ProtectedRoute roles={["admin"]}><AdminStudentPayments/></ProtectedRoute>} />
             <Route path="/admin/students/:id/report-card" element={<ProtectedRoute roles={["admin"]}><AdminLayout><StudentReportCardViewer/></AdminLayout></ProtectedRoute>} />
             <Route path="/admin/teachers" element={<ProtectedRoute roles={["admin"]}><AdminTeachers/></ProtectedRoute>} />
+            <Route path="/admin/staff" element={<ProtectedRoute roles={["admin"]}><AdminStaff/></ProtectedRoute>} />
             <Route path="/admin/teachers/:id" element={<ProtectedRoute roles={["admin"]}><AdminTeacherProfile/></ProtectedRoute>} />
             <Route path="/admin/classes" element={<ProtectedRoute roles={["admin"]}><AdminClasses/></ProtectedRoute>} />
             <Route path="/admin/classes/:id" element={<ProtectedRoute roles={["admin"]}><AdminClassProfile/></ProtectedRoute>} />
@@ -175,6 +178,7 @@ export default function App() {
             <Route path="/finance/fee-categories" element={<ProtectedRoute roles={["finance","admin"]}><FinanceLayout><FinanceFeeCategories/></FinanceLayout></ProtectedRoute>} />
             <Route path="/finance/class-fees" element={<ProtectedRoute roles={["finance","admin"]}><FinanceLayout><FinanceClassFees/></FinanceLayout></ProtectedRoute>} />
             <Route path="/finance/fees" element={<ProtectedRoute roles={["finance","admin"]}><FinanceFees/></ProtectedRoute>} />
+            <Route path="/finance/staff-payroll" element={<ProtectedRoute roles={["finance","admin"]}><FinanceLayout><FinanceStaffPayroll/></FinanceLayout></ProtectedRoute>} />
             </Routes>
             <NotificationContainer />
             <FloatingActions />

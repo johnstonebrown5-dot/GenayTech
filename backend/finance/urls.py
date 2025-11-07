@@ -1,12 +1,13 @@
 from rest_framework.routers import DefaultRouter
 from django.urls import path
-from .views import InvoiceViewSet, PaymentViewSet, FeeCategoryViewSet, ClassFeeViewSet, mpesa_callback, coop_mpesa_callback, MpesaConfigViewSet, ExpenseCategoryViewSet, ExpenseViewSet, PocketMoneyWalletViewSet, PocketMoneyTransactionViewSet, PaymentMethodViewSet, IncomingPaymentViewSet
+from .views import InvoiceViewSet, PaymentViewSet, FeeCategoryViewSet, ClassFeeViewSet, mpesa_callback, coop_mpesa_callback, MpesaConfigViewSet, ExpenseCategoryViewSet, ExpenseViewSet, PocketMoneyWalletViewSet, PocketMoneyTransactionViewSet, PaymentMethodViewSet, IncomingPaymentViewSet, StudentFeeViewSet, StaffPayrollViewSet, StaffPayslipViewSet
 
 router = DefaultRouter()
 router.register('invoices', InvoiceViewSet)
 router.register('payments', PaymentViewSet)
 router.register('fee-categories', FeeCategoryViewSet)
 router.register('class-fees', ClassFeeViewSet)
+router.register('student-fees', StudentFeeViewSet)
 router.register('mpesa-configs', MpesaConfigViewSet, basename='mpesa-configs')
 router.register('payment-methods', PaymentMethodViewSet, basename='payment-methods')
 router.register('expense-categories', ExpenseCategoryViewSet)
@@ -14,6 +15,8 @@ router.register('expenses', ExpenseViewSet)
 router.register('pocket-money-wallets', PocketMoneyWalletViewSet)
 router.register('pocket-money-transactions', PocketMoneyTransactionViewSet)
 router.register('incoming-payments', IncomingPaymentViewSet, basename='incoming-payments')
+router.register('staff-payroll', StaffPayrollViewSet)
+router.register('staff-payslips', StaffPayslipViewSet)
 
 urlpatterns = [
     # Public callback URL for Daraja STK push

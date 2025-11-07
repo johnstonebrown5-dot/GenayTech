@@ -6,6 +6,8 @@ class FeeCategory(models.Model):
     """A fee category such as Tuition, Transport, Lunch, etc., scoped to a School."""
     name = models.CharField(max_length=100)
     description = models.TextField(blank=True)
+    # If true, this category is intended for per-student assignments ("per head")
+    is_special = models.BooleanField(default=False)
     school = models.ForeignKey('accounts.School', on_delete=models.CASCADE)
 
     class Meta:
@@ -46,6 +48,30 @@ class ClassFee(models.Model):
 
     def __str__(self):
         return f"{self.fee_category.name} - {self.klass} {self.year} T{self.term}"
+
+class StudentFee(models.Model):
+    """Assign a FeeCategory to a specific Student for a given academic year/term.
+
+    Used for personalized (per-head) fees. Typically paired with FeeCategory.is_special=True.
+    """
+    TERM_CHOICES = (
+        (1, 'Term 1'),
+        (2, 'Term 2'),
+        (3, 'Term 3'),
+    )
+    fee_category = models.ForeignKey(FeeCategory, on_delete=models.CASCADE, related_name='student_fees')
+    student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='student_fees')
+    amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    year = models.IntegerField()
+    term = models.IntegerField(choices=TERM_CHOICES)
+    due_date = models.DateField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ("fee_category", "student", "year", "term")
+
+    def __str__(self):
+        return f"{self.fee_category.name} - {self.student.name} {self.year} T{self.term}"
 
 # Per-school Mpesa/Daraja configuration
 class MpesaConfig(models.Model):
@@ -237,3 +263,29 @@ class PocketMoneyTransaction(models.Model):
     def __str__(self):
         return f"{self.transaction_type.capitalize()} of {self.amount} for {self.wallet.student.name}"
 
+
+class StaffPayroll(models.Model):
+    staff = models.ForeignKey('accounts.NonTeachingStaff', on_delete=models.CASCADE, related_name='payrolls')
+    school = models.ForeignKey('accounts.School', on_delete=models.CASCADE, related_name='staff_payrolls')
+    base_salary = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    allowances = models.JSONField(default=list, blank=True)
+    deductions = models.JSONField(default=list, blank=True)
+    is_active = models.BooleanField(default=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+
+class StaffPayslip(models.Model):
+    staff = models.ForeignKey('accounts.NonTeachingStaff', on_delete=models.CASCADE, related_name='payslips')
+    school = models.ForeignKey('accounts.School', on_delete=models.CASCADE, related_name='staff_payslips')
+    year = models.IntegerField()
+    month = models.IntegerField()
+    basic = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    allowances = models.JSONField(default=list, blank=True)
+    deductions = models.JSONField(default=list, blank=True)
+    gross_pay = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    net_pay = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    notes = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ("staff", "year", "month")

@@ -26,6 +26,7 @@ class User(AbstractUser):
         TEACHER = 'teacher', 'Teacher'
         STUDENT = 'student', 'Student'
         FINANCE = 'finance', 'Finance'
+        NON_TEACHING = 'non_teaching', 'Non-Teaching Staff'
 
     role = models.CharField(max_length=20, choices=Roles.choices)
     phone = models.CharField(max_length=20, blank=True)
@@ -43,3 +44,27 @@ class EmailVerificationToken(models.Model):
 
     def is_expired(self):
         return timezone.now() >= self.expires_at
+
+
+class NonTeachingStaff(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='non_teaching_profile')
+    school = models.ForeignKey(School, on_delete=models.CASCADE, related_name='non_teaching_staff')
+    department = models.CharField(max_length=100, blank=True)
+    position = models.CharField(max_length=100, blank=True)
+    national_id = models.CharField(max_length=50, blank=True)
+    kra_pin = models.CharField(max_length=50, blank=True)
+    nhif_no = models.CharField(max_length=50, blank=True)
+    nssf_no = models.CharField(max_length=50, blank=True)
+    address = models.CharField(max_length=255, blank=True)
+    emergency_contact = models.JSONField(default=dict, blank=True)
+    hire_date = models.DateField(null=True, blank=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        try:
+            full_name = (self.user.get_full_name() or self.user.username)
+        except Exception:
+            full_name = str(getattr(self.user, 'username', 'Staff'))
+        return f"{full_name} ({self.position or 'Staff'})"

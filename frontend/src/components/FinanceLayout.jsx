@@ -12,6 +12,7 @@ const navItems = [
     { to: '/finance/expenses', label: 'Expenses', icon: '💸' },
     { to: '/finance/pocket-money', label: 'Pocket Money', icon: '💰' },
     { to: '/finance/fees', label: 'Fees', icon: '🏷️' },
+    { to: '/finance/staff-payroll', label: 'Support Staff', icon: '🧑‍🔧' },
     { to: '/finance/reports', label: 'Reports', icon: '📈' },
     { to: '/finance/messages', label: 'Messages', icon: '✉️' },
     { to: '/finance/settings', label: 'Settings', icon: '⚙️' },
@@ -86,6 +87,13 @@ export default function FinanceLayout({ children }) {
         })();
         return () => { mounted = false; };
     }, []);
+
+    // Keep browser tab title in sync with active school
+    useEffect(() => {
+        if (typeof document !== 'undefined') {
+            document.title = schoolName ? schoolName : 'EDU-TRACK';
+        }
+    }, [schoolName]);
 
     const sidebarBase = isOpen ? 'w-64' : 'w-16';
 

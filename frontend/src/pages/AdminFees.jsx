@@ -5,15 +5,16 @@ import Modal from '../components/Modal'
 import { useNotification } from '../components/NotificationContext'
 
 export default function AdminFees({ embed=false, initialTab='categories' }){
-  const [tab, setTab] = useState(initialTab) // categories | classFees | arrears | payments
+  const [tab, setTab] = useState(initialTab) // categories | classFees | specialAssignments | arrears | payments
   const { showSuccess, showError } = useNotification()
-  const [counts, setCounts] = useState({ categories: null, classFees: null, arrears: null, payments: null, methods: null })
-  const [loadingCounts, setLoadingCounts] = useState({ categories: true, classFees: true, arrears: true, payments: true, methods: true })
+  const [counts, setCounts] = useState({ categories: null, classFees: null, studentFees: null, specialAssignments: null, arrears: null, payments: null, methods: null })
+  const [loadingCounts, setLoadingCounts] = useState({ categories: true, classFees: true, studentFees: true, specialAssignments: true, arrears: true, payments: true, methods: true })
   const onCount = (key, value) => setCounts(prev=>({ ...prev, [key]: value }))
   const onLoading = (key, value) => setLoadingCounts(prev=>({ ...prev, [key]: value }))
   const content = (
       <div className="min-h-screen bg-gray-50">
         {/* Header Section */}
+        
         <div className="bg-white shadow-sm border-b">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="py-6">
@@ -39,6 +40,7 @@ export default function AdminFees({ embed=false, initialTab='categories' }){
               {[
                 { id: 'categories', name: 'Fee Categories', icon: '📋' },
                 { id: 'classFees', name: 'Assign Class Fees', icon: '💰' },
+                { id: 'studentFees', name: 'Per-Student Fees', icon: '👤' },
                 { id: 'arrears', name: 'Balances & Arrears', icon: '📊' },
                 { id: 'payments', name: 'Payment History', icon: '💳' },
                 { id: 'methods', name: 'Payment Methods', icon: '⚙️' },
@@ -84,6 +86,7 @@ export default function AdminFees({ embed=false, initialTab='categories' }){
           <div className="transition-all duration-300 ease-in-out">
             {tab==='categories' && <FeeCategories showSuccess={showSuccess} showError={showError} onCount={(n)=>onCount('categories', n)} onLoading={(v)=>onLoading('categories', v)} />}
             {tab==='classFees' && <ClassFees showSuccess={showSuccess} showError={showError} onCount={(n)=>onCount('classFees', n)} onLoading={(v)=>onLoading('classFees', v)} />}
+            {tab==='studentFees' && <StudentFees showSuccess={showSuccess} showError={showError} onCount={(n)=>onCount('studentFees', n)} onLoading={(v)=>onLoading('studentFees', v)} />}
             {tab==='arrears' && <Arrears showSuccess={showSuccess} showError={showError} onCount={(n)=>onCount('arrears', n)} onLoading={(v)=>onLoading('arrears', v)} />}
             {tab==='payments' && <PaymentHistory showSuccess={showSuccess} showError={showError} onCount={(n)=>onCount('payments', n)} onLoading={(v)=>onLoading('payments', v)} />}
             {tab==='methods' && <PaymentMethods showSuccess={showSuccess} showError={showError} onCount={(n)=>onCount('methods', n)} onLoading={(v)=>onLoading('methods', v)} />}
@@ -95,6 +98,564 @@ export default function AdminFees({ embed=false, initialTab='categories' }){
     <AdminLayout>
       {content}
     </AdminLayout>
+  )
+}
+
+function StudentFees({ showSuccess, showError, onCount, onLoading }){
+  const [items, setItems] = useState([])
+  const [students, setStudents] = useState([])
+  const [categories, setCategories] = useState([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+  const [form, setForm] = useState({ student:'', fee_category:'', amount:'', due_date:'' })
+  const [currentTerm, setCurrentTerm] = useState(null)
+  const [currentYear, setCurrentYear] = useState(null)
+  const [query, setQuery] = useState('')
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(20)
+  const [count, setCount] = useState(0)
+  const [nextUrl, setNextUrl] = useState(null)
+  const [prevUrl, setPrevUrl] = useState(null)
+  const [editItem, setEditItem] = useState(null)
+  const [editForm, setEditForm] = useState({ fee_category:'', amount:'', due_date:'' })
+  const [savingEdit, setSavingEdit] = useState(false)
+  const [studentSearch, setStudentSearch] = useState('')
+  const [studentOpen, setStudentOpen] = useState(false)
+
+  const filteredItems = useMemo(()=>{
+    const q = query.trim().toLowerCase()
+    if (!q) return items
+    return (Array.isArray(items)?items:[]).filter(it =>
+      String(it.student_name||'').toLowerCase().includes(q) ||
+      String(it.fee_category_name||'').toLowerCase().includes(q) ||
+      String(it.amount||'').includes(q)
+    )
+  }, [items, query])
+
+  // Lookup maps for display names
+  const studentsById = useMemo(()=>{
+    const map = new Map()
+    ;(Array.isArray(students)?students:[]).forEach(s=>map.set(String(s.id), s))
+    return map
+  }, [students])
+  const categoriesById = useMemo(()=>{
+    const map = new Map()
+    ;(Array.isArray(categories)?categories:[]).forEach(c=>map.set(String(c.id), c))
+    return map
+  }, [categories])
+  const displayItems = useMemo(()=>{
+    return (Array.isArray(filteredItems)?filteredItems:[]).map(it=>{
+      const s = studentsById.get(String(it.student)) || null
+      const c = categoriesById.get(String(it.fee_category)) || null
+      return {
+        ...it,
+        _student_name: it.student_name || (s ? (s.name || `${s.first_name||''} ${s.last_name||''}`) : it.student),
+        _class_name: s ? (s.class || s.klass || '') : '',
+        _category_name: it.fee_category_name || (c ? c.name : it.fee_category),
+      }
+    })
+  }, [filteredItems, studentsById, categoriesById])
+
+  const load = async (opts={}) => {
+    setLoading(true)
+    onLoading?.(true)
+    try {
+      const params = new URLSearchParams()
+      const p = Number(opts.page || page)
+      const ps = Number(opts.pageSize || pageSize)
+      if (p && ps) { params.set('page', String(p)); params.set('page_size', String(ps)) }
+      const [sf, st, cats, termRes, yearRes] = await Promise.allSettled([
+        api.get('/finance/student-fees/' + (params.toString()?`?${params.toString()}`:'')),
+        api.get('/academics/students/'),
+        api.get('/finance/fee-categories/'),
+        api.get('/academics/terms/current/'),
+        api.get('/academics/academic_years/current/'),
+      ])
+
+      const toArr = (res) => Array.isArray(res?.value?.data) ? res.value.data : (Array.isArray(res?.value?.data?.results) ? res.value.data.results : [])
+
+      const sfData = sf.status==='fulfilled' ? sf.value.data : []
+      const sfArr = Array.isArray(sfData) ? sfData : (Array.isArray(sfData?.results) ? sfData.results : [])
+      const sfCount = Array.isArray(sfData) ? sfArr.length : Number(sfData?.count||sfArr.length)
+      setCount(sfCount||0)
+      setNextUrl(sfData?.next||null)
+      setPrevUrl(sfData?.previous||null)
+
+      const stArr = st.status==='fulfilled' ? toArr(st) : []
+      const catsArrAll = cats.status==='fulfilled' ? toArr(cats) : []
+      const catsArr = catsArrAll.filter(c => !!c.is_special)
+
+      setCurrentTerm(termRes.status==='fulfilled' ? (termRes.value?.data || null) : null)
+      setCurrentYear(yearRes.status==='fulfilled' ? (yearRes.value?.data || null) : null)
+
+      setItems(sfArr)
+      setStudents(stArr)
+      setCategories(catsArr)
+      onCount?.(sfCount || sfArr.length)
+
+      if (sf.status==='rejected' && sf.reason?.response?.status===404) {
+        showError?.('Per-Student Fees Unavailable', 'Endpoint /finance/student-fees/ not found. Please enable it on the backend.')
+      }
+
+      if (st.status==='rejected' && st.reason?.response?.status===404) {
+        showError?.('Students Endpoint Unavailable', 'Endpoint /academics/students/ not found.')
+      }
+      if (cats.status==='rejected' && cats.reason?.response?.status===404) {
+        showError?.('Fee Categories Unavailable', 'Endpoint /finance/fee-categories/ not found.')
+      }
+      if (termRes.status==='rejected' && termRes.reason?.response?.status===404) {
+        // optional: terms current endpoint missing
+      }
+      if (yearRes.status==='rejected' && yearRes.reason?.response?.status===404) {
+        // optional: academic years current endpoint missing
+      }
+    } catch (err) {
+      showError?.('Failed to Load Per-Student Fees', err?.message || 'Failed')
+    } finally {
+      setLoading(false)
+      onLoading?.(false)
+    }
+  }
+  useEffect(()=>{ load() },[])
+
+  const selectedStudent = useMemo(()=> (Array.isArray(students)?students:[]).find(s=>String(s.id)===String(form.student)), [students, form.student])
+  const filteredStudentOptions = useMemo(()=>{
+    const src = Array.isArray(students)?students:[]
+    const q = (studentSearch||'').trim().toLowerCase()
+    if (!q) return src.slice(0,50)
+    return src.filter(s => {
+      const name = String(s.name || `${s.first_name||''} ${s.last_name||''}`).toLowerCase()
+      const adm = String(s.admission_no||'').toLowerCase()
+      const klass = String(s.class||s.klass||'').toLowerCase()
+      return name.includes(q) || adm.includes(q) || klass.includes(q)
+    }).slice(0,50)
+  }, [students, studentSearch])
+
+  const create = async (e) => {
+    e.preventDefault()
+    setError('')
+    try {
+      const payload = {
+        student: form.student,
+        fee_category: form.fee_category,
+        amount: parseFloat(form.amount),
+        due_date: form.due_date || null,
+        // Backend expects these fields
+        year: Number(currentYear?.label || currentYear?.year || new Date().getFullYear()),
+        term: Number(currentTerm?.number || currentTerm?.term || 1),
+      }
+      await api.post('/finance/student-fees/', payload)
+      showSuccess?.('Per-Student Fee Assigned', 'The fee has been assigned to the student.')
+      setForm({ student:'', fee_category:'', amount:'', due_date:'' })
+      load()
+    } catch (err) {
+      if (err?.response?.status===404) {
+        showError?.('Per-Student Fees Unavailable', 'Cannot create per-student fee because the endpoint was not found.')
+      } else if (err?.response?.status===400) {
+        const data = err?.response?.data
+        const dupMsg = data?.non_field_errors?.[0]
+        if (dupMsg && dupMsg.toLowerCase().includes('unique')) {
+          const s = studentsById.get(String(form.student))
+          const c = categoriesById.get(String(form.fee_category))
+          const sName = s ? (s.name || `${s.first_name||''} ${s.last_name||''}`) : 'Student'
+          const cName = c ? c.name : 'Category'
+          const t = Number(currentTerm?.number || 1)
+          const y = Number(currentYear?.year || currentYear?.label || new Date().getFullYear())
+          const msg = `${sName} already has ${cName} for Term ${t}, ${y}.`
+          setError(msg)
+          showError?.('Duplicate Assignment', msg)
+        } else {
+          setError(data ? JSON.stringify(data) : (err?.message || 'Failed'))
+          showError?.('Failed to Assign', 'There was an error assigning the fee.')
+        }
+      } else {
+        setError(err?.response?.data ? JSON.stringify(err.response.data) : (err?.message || 'Failed'))
+        showError?.('Failed to Assign', 'There was an error assigning the fee.')
+      }
+    }
+  }
+
+  const startEdit = (it) => {
+    setEditItem(it)
+    setEditForm({
+      fee_category: it.fee_category || '',
+      amount: it.amount || '',
+      due_date: it.due_date || ''
+    })
+  }
+
+  const saveEdit = async (e) => {
+    e?.preventDefault?.()
+    if (!editItem) return
+    setSavingEdit(true)
+    try {
+      const payload = {
+        fee_category: editForm.fee_category || editItem.fee_category,
+        amount: parseFloat(editForm.amount),
+        due_date: editForm.due_date || null,
+        student: editItem.student, // keep same student
+      }
+      await api.put(`/finance/student-fees/${editItem.id}/`, payload)
+      showSuccess?.('Updated', 'Per-student fee updated.')
+      setEditItem(null)
+      setSavingEdit(false)
+      load({ page })
+    } catch (err) {
+      setSavingEdit(false)
+      if (err?.response?.status===404) {
+        showError?.('Update Failed', 'Endpoint not found.')
+      } else {
+        showError?.('Update Failed', err?.response?.data ? JSON.stringify(err.response.data) : (err?.message||'Failed'))
+      }
+    }
+  }
+
+  const deleteItem = async (it) => {
+    if (!window.confirm('Delete this per-student fee assignment?')) return
+    try {
+      await api.delete(`/finance/student-fees/${it.id}/`)
+      showSuccess?.('Deleted', 'Per-student fee removed.')
+      load({ page })
+    } catch (err) {
+      if (err?.response?.status===404) showError?.('Delete Failed', 'Endpoint not found.')
+      else showError?.('Delete Failed', err?.response?.data ? JSON.stringify(err.response.data) : (err?.message||'Failed'))
+    }
+  }
+
+  const exportCSV = async () => {
+    // Try server export first
+    try {
+      const { data } = await api.get('/finance/student-fees/export', { responseType: 'blob' })
+      const blob = new Blob([data], { type: 'text/csv;charset=utf-8;' })
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = 'student_fees.csv'
+      document.body.appendChild(a); a.click(); a.remove(); window.URL.revokeObjectURL(url)
+      return
+    } catch (err) {
+      if (err?.response?.status !== 404) {
+        showError?.('Export Failed', err?.message || 'Failed')
+      }
+      // Fallback to client-side export of current page
+      const rows = [
+        ['id','student','category','amount','due_date']
+      ]
+      ;(Array.isArray(items)?items:[]).forEach(it=>{
+        rows.push([
+          it.id,
+          (it.student_name||it.student||'').toString().replaceAll(',', ' '),
+          (it.fee_category_name||it.fee_category||'').toString().replaceAll(',', ' '),
+          it.amount,
+          it.due_date||''
+        ])
+      })
+      const csv = rows.map(r=>r.join(',')).join('\n')
+      const blob = new Blob([csv], { type:'text/csv;charset=utf-8;' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `student_fees_p${page}.csv`
+      document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url)
+      showSuccess?.('Exported', 'Downloaded CSV for current list.')
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-white rounded-lg shadow-sm border p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold text-gray-800">Assign Per-Student Fee</h3>
+          <div className="text-sm text-gray-500">{loading? 'Loading…' : `${items.length} assignments`}</div>
+        </div>
+        {error && (
+          <div className="mb-4 p-3 text-sm bg-red-50 border border-red-200 rounded text-red-700">{error}</div>
+        )}
+        <form onSubmit={create} className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Student <span className="text-red-500">*</span></label>
+            <div className="relative">
+              <input
+                className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                placeholder="Search name/admission/class"
+                value={studentSearch || (selectedStudent ? (selectedStudent.name || `${selectedStudent.first_name||''} ${selectedStudent.last_name||''}`) : '')}
+                onChange={e=>{ setStudentSearch(e.target.value); if (form.student) setForm({...form, student:''}) }}
+                onFocus={()=>setStudentOpen(true)}
+                onBlur={()=>setTimeout(()=>setStudentOpen(false), 150)}
+                required={!form.student}
+              />
+              {studentOpen && (
+                <div className="absolute z-10 mt-1 w-full max-h-60 overflow-auto bg-white border border-gray-200 rounded-md shadow-lg">
+                  {filteredStudentOptions.length===0 ? (
+                    <div className="px-3 py-2 text-sm text-gray-500">No matches</div>
+                  ) : (
+                    <ul className="divide-y divide-gray-100">
+                      {filteredStudentOptions.map(s => (
+                        <li key={s.id} className="px-3 py-2 text-sm hover:bg-gray-50 cursor-pointer" onMouseDown={()=>{ setForm({...form, student:String(s.id)}); setStudentSearch(''); setStudentOpen(false) }}>
+                          <div className="font-medium text-gray-900 flex items-center gap-2">
+                            <span>{s.name || `${s.first_name||''} ${s.last_name||''}`}</span>
+                            <span className="text-xs text-blue-700 bg-blue-50 border border-blue-100 rounded px-1.5 py-0.5">{s.class || s.klass || 'Class ?'}</span>
+                          </div>
+                          <div className="text-xs text-gray-500">{s.admission_no ? `ADM ${s.admission_no}`: ''}</div>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
+            </div>
+            {selectedStudent && (
+              <div className="mt-1 text-xs text-gray-600">Selected: <span className="font-medium">{selectedStudent.name || `${selectedStudent.first_name||''} ${selectedStudent.last_name||''}`}</span> — <span className="text-gray-700">{selectedStudent.class || selectedStudent.klass || 'Class ?'}</span>{selectedStudent.admission_no ? ` • ADM ${selectedStudent.admission_no}` : ''}</div>
+            )}
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Category <span className="text-red-500">*</span></label>
+            <select className="w-full px-3 py-2 border border-gray-300 rounded-md" value={form.fee_category} onChange={e=>setForm({...form, fee_category:e.target.value})} required>
+              <option value="">Select special category</option>
+              {categories.map(c => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Amount (KES) <span className="text-red-500">*</span></label>
+            <input className="w-full px-3 py-2 border border-gray-300 rounded-md" type="number" step="0.01" value={form.amount} onChange={e=>setForm({...form, amount:e.target.value})} required />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Due Date</label>
+            <input className="w-full px-3 py-2 border border-gray-300 rounded-md" type="date" value={form.due_date} onChange={e=>setForm({...form, due_date:e.target.value})} />
+          </div>
+          <div className="md:col-span-4 flex justify-end">
+            <button className="px-5 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700">Assign</button>
+          </div>
+        </form>
+      </div>
+
+      <div className="bg-white rounded-lg shadow-sm border">
+        <div className="p-4 sm:p-6 border-b border-gray-200 flex items-center justify-between gap-3">
+          <h4 className="font-semibold text-gray-800">Existing Assignments</h4>
+          <div className="flex items-center gap-2">
+            <input placeholder="Search student/category/amount" className="px-3 py-2 border border-gray-300 rounded-md text-sm" value={query} onChange={e=>setQuery(e.target.value)} />
+            <button onClick={exportCSV} className="px-3 py-2 text-sm font-medium bg-white border border-gray-300 rounded-md hover:bg-gray-50">Export CSV</button>
+          </div>
+        </div>
+        <div className="overflow-x-auto">
+          {loading ? (
+            <div className="p-6 text-sm text-gray-500">Loading…</div>
+          ) : displayItems.length === 0 ? (
+            <div className="p-10 text-center text-sm text-gray-500">No per-student fees found.</div>
+          ) : (
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Student</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Category</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Due</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {displayItems.slice(0,200).map(it => (
+                  <tr key={it.id} className="hover:bg-gray-50">
+                    <td className="px-6 py-3 text-sm text-gray-900">{it._student_name}{it._class_name ? ` – ${it._class_name}` : ''}</td>
+                    <td className="px-6 py-3 text-sm text-gray-900">{it._category_name}</td>
+                    <td className="px-6 py-3 text-sm text-gray-900">KES {Number(it.amount||0).toLocaleString()}</td>
+                    <td className="px-6 py-3 text-sm text-gray-500">{it.due_date || '-'}</td>
+                    <td className="px-6 py-3 text-sm">
+                      <div className="flex items-center gap-3">
+                        <button onClick={()=>startEdit(it)} className="text-blue-600 hover:underline font-medium">Edit</button>
+                        <button onClick={()=>deleteItem(it)} className="text-red-600 hover:underline font-medium">Delete</button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+        {/* Pagination */}
+        <div className="flex items-center justify-between p-4 border-t border-gray-200 text-sm text-gray-600">
+          <div>Showing page {page} • {count} total</div>
+          <div className="flex items-center gap-2">
+            <button disabled={!prevUrl && page<=1} onClick={()=>{ setPage(p=>Math.max(1,p-1)); load({ page: Math.max(1,page-1) }) }} className={`px-3 py-1.5 border rounded-md ${(!prevUrl && page<=1)?'text-gray-400 bg-gray-100':'bg-white hover:bg-gray-50'}`}>Prev</button>
+            <button disabled={!nextUrl && (count<=page*pageSize)} onClick={()=>{ setPage(p=>p+1); load({ page: page+1 }) }} className={`px-3 py-1.5 border rounded-md ${(!nextUrl && (count<=page*pageSize))?'text-gray-400 bg-gray-100':'bg-white hover:bg-gray-50'}`}>Next</button>
+            <select className="ml-2 px-2 py-1 border rounded-md" value={pageSize} onChange={e=>{ const val=Number(e.target.value); setPageSize(val); setPage(1); load({ page:1, pageSize:val }) }}>
+              {[10,20,50,100].map(n=>(<option key={n} value={n}>{n}/page</option>))}
+            </select>
+          </div>
+        </div>
+      </div>
+
+      {/* Edit Modal */}
+      {editItem && (
+        <Modal open={!!editItem} onClose={()=>setEditItem(null)} title="Edit Per-Student Fee">
+          <form onSubmit={saveEdit} className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Category</label>
+                <select className="w-full px-3 py-2 border border-gray-300 rounded-md" value={editForm.fee_category} onChange={e=>setEditForm({...editForm, fee_category:e.target.value})}>
+                  {categories.map(c => (<option key={c.id} value={c.id}>{c.name}</option>))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Amount (KES)</label>
+                <input className="w-full px-3 py-2 border border-gray-300 rounded-md" type="number" step="0.01" value={editForm.amount} onChange={e=>setEditForm({...editForm, amount:e.target.value})} required />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Due Date</label>
+                <input className="w-full px-3 py-2 border border-gray-300 rounded-md" type="date" value={editForm.due_date||''} onChange={e=>setEditForm({...editForm, due_date:e.target.value})} />
+              </div>
+            </div>
+            <div className="flex justify-end gap-3">
+              <button type="button" onClick={()=>setEditItem(null)} className="px-4 py-2 text-sm font-medium bg-white border border-gray-300 rounded-md hover:bg-gray-50">Cancel</button>
+              <button disabled={savingEdit} className={`px-4 py-2 text-sm font-medium rounded-md ${savingEdit ? 'bg-gray-300 text-gray-600' : 'bg-blue-600 text-white hover:bg-blue-700'}`}>{savingEdit ? 'Saving…' : 'Save Changes'}</button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+    </div>
+  )
+}
+
+function SpecialAssignments({ showSuccess, showError, onCount, onLoading }){
+  const [students, setStudents] = useState([])
+  const [classes, setClasses] = useState([])
+  const [categories, setCategories] = useState([])
+  const [loading, setLoading] = useState(false)
+  const [query, setQuery] = useState('')
+  const [klass, setKlass] = useState('')
+  const [form, setForm] = useState({ fee_category:'', amount:'', due_date:'' })
+  const [selected, setSelected] = useState([])
+
+  const filteredCategories = useMemo(()=> (Array.isArray(categories)?categories:[]).filter(c=>!!c.is_special), [categories])
+  const filteredStudents = useMemo(()=>{
+    const base = Array.isArray(students)?students:[]
+    const byClass = klass ? base.filter(s => String(s.class_id||s.klass||'')===String(klass)) : base
+    const q = query.trim().toLowerCase()
+    if (!q) return byClass
+    return byClass.filter(s => String(s.name || `${s.first_name||''} ${s.last_name||''}`).toLowerCase().includes(q) || String(s.admission_no||'').toLowerCase().includes(q))
+  }, [students, klass, query])
+
+  const load = async () => {
+    setLoading(true)
+    onLoading?.(true)
+    try {
+      const [st, cl, cats] = await Promise.allSettled([
+        api.get('/academics/students/'),
+        api.get('/academics/classes/'),
+        api.get('/finance/fee-categories/'),
+      ])
+      const toArr = (res) => Array.isArray(res?.value?.data) ? res.value.data : (Array.isArray(res?.value?.data?.results) ? res.value.data.results : [])
+      setStudents(st.status==='fulfilled' ? toArr(st) : [])
+      setClasses(cl.status==='fulfilled' ? toArr(cl) : [])
+      setCategories(cats.status==='fulfilled' ? toArr(cats) : [])
+      onCount?.(0)
+      if (st.status==='rejected' && st.reason?.response?.status===404) showError?.('Students Endpoint Unavailable', 'Endpoint /academics/students/ not found.')
+      if (cl.status==='rejected' && cl.reason?.response?.status===404) showError?.('Classes Endpoint Unavailable', 'Endpoint /academics/classes/ not found.')
+      if (cats.status==='rejected' && cats.reason?.response?.status===404) showError?.('Fee Categories Unavailable', 'Endpoint /finance/fee-categories/ not found.')
+    } catch (err) {
+      showError?.('Failed to Load Data', err?.message || 'Failed')
+    } finally {
+      setLoading(false)
+      onLoading?.(false)
+    }
+  }
+  useEffect(()=>{ load() },[])
+
+  const toggle = (id) => {
+    setSelected(prev => prev.includes(id) ? prev.filter(x=>x!==id) : [...prev, id])
+  }
+
+  const assignBulk = async () => {
+    if (!form.fee_category || !form.amount || selected.length===0) return
+    setLoading(true)
+    try {
+      const payloads = selected.map(sid => ({ student: sid, fee_category: form.fee_category, amount: parseFloat(form.amount), due_date: form.due_date || null }))
+      const results = await Promise.allSettled(payloads.map(p => api.post('/finance/student-fees/', p)))
+      const ok = results.filter(r=>r.status==='fulfilled').length
+      const fail = results.length - ok
+      showSuccess?.('Special Assignments', `Created ${ok} assignments${fail? `, ${fail} failed`:''}.`)
+      setSelected([])
+    } catch (err) {
+      if (err?.response?.status===404) {
+        showError?.('Special Assignments Unavailable', 'Endpoint /finance/student-fees/ not found for creating assignments.')
+      } else {
+        showError?.('Failed to Assign', err?.message || 'Failed')
+      }
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-white rounded-lg shadow-sm border p-6">
+        <h3 className="text-lg font-semibold text-gray-800 mb-4">Bulk Special Assignments</h3>
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Class</label>
+            <select className="w-full px-3 py-2 border border-gray-300 rounded-md" value={klass} onChange={e=>setKlass(e.target.value)}>
+              <option value="">All classes</option>
+              {classes.map(c => (<option key={c.id} value={c.id}>{c.name} - {c.grade_level}</option>))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Search</label>
+            <input className="w-full px-3 py-2 border border-gray-300 rounded-md" placeholder="Search students" value={query} onChange={e=>setQuery(e.target.value)} />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Category <span className="text-red-500">*</span></label>
+            <select className="w-full px-3 py-2 border border-gray-300 rounded-md" value={form.fee_category} onChange={e=>setForm({...form, fee_category:e.target.value})} required>
+              <option value="">Select special category</option>
+              {filteredCategories.map(c => (<option key={c.id} value={c.id}>{c.name}</option>))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Amount (KES) <span className="text-red-500">*</span></label>
+            <input className="w-full px-3 py-2 border border-gray-300 rounded-md" type="number" step="0.01" value={form.amount} onChange={e=>setForm({...form, amount:e.target.value})} required />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Due Date</label>
+            <input className="w-full px-3 py-2 border border-gray-300 rounded-md" type="date" value={form.due_date} onChange={e=>setForm({...form, due_date:e.target.value})} />
+          </div>
+        </div>
+        <div className="mt-4 flex items-center justify-between">
+          <div className="text-sm text-gray-600"><span className="font-medium">{selected.length}</span> selected</div>
+          <button disabled={!form.fee_category || !form.amount || selected.length===0 || loading} onClick={assignBulk} className={`px-5 py-2 rounded-md text-sm font-medium ${(!form.fee_category || !form.amount || selected.length===0 || loading) ? 'bg-gray-300 text-gray-600' : 'bg-blue-600 text-white hover:bg-blue-700'}`}>Assign to Selected</button>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-lg shadow-sm border">
+        <div className="p-4 sm:p-6 border-b border-gray-200 flex items-center justify-between">
+          <h4 className="font-semibold text-gray-800">Select Students</h4>
+          <div className="text-sm text-gray-500">{loading? 'Loading…' : `${filteredStudents.length} shown`}</div>
+        </div>
+        <div className="overflow-y-auto max-h-[480px]">
+          {loading ? (
+            <div className="p-6 text-sm text-gray-500">Loading…</div>
+          ) : filteredStudents.length === 0 ? (
+            <div className="p-10 text-center text-sm text-gray-500">No students match your filters.</div>
+          ) : (
+            <ul className="divide-y divide-gray-200">
+              {filteredStudents.map(s => (
+                <li key={s.id} className="flex items-center justify-between px-4 py-2 hover:bg-gray-50">
+                  <div className="min-w-0">
+                    <div className="font-medium text-sm text-gray-900 truncate">{s.name || `${s.first_name||''} ${s.last_name||''}`}</div>
+                    <div className="text-xs text-gray-500 truncate">{s.class || s.klass || ''} {s.admission_no ? `• ADM ${s.admission_no}`:''}</div>
+                  </div>
+                  <label className="inline-flex items-center gap-2 text-sm">
+                    <input type="checkbox" checked={selected.includes(s.id)} onChange={()=>toggle(s.id)} />
+                    <span className="text-gray-700">Select</span>
+                  </label>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+    </div>
   )
 }
 
@@ -547,19 +1108,22 @@ function PaymentHistory({ showError, onCount, onLoading }){
               <button onClick={printReceipt} className="px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-md hover:bg-blue-700">Print</button>
             </div>
           </div>
-        )}
+        )
+      }
       </Modal>
-    </div>
+
+      </div>
+
   )
 }
 
 function FeeCategories({ showSuccess, showError, onCount, onLoading }){
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(false)
-  const [form, setForm] = useState({ name:'', description:'' })
+  const [form, setForm] = useState({ name:'', description:'', is_special:false })
   const [error, setError] = useState('')
   const [editItem, setEditItem] = useState(null)
-  const [editForm, setEditForm] = useState({ name:'', description:'' })
+  const [editForm, setEditForm] = useState({ name:'', description:'', is_special:false })
   const [savingEdit, setSavingEdit] = useState(false)
   const load = async () => {
     setLoading(true)
@@ -580,7 +1144,7 @@ function FeeCategories({ showSuccess, showError, onCount, onLoading }){
     setError('')
     try {
       await api.post('/finance/fee-categories/', form)
-      setForm({ name:'', description:'' })
+      setForm({ name:'', description:'', is_special:false })
       load()
       showSuccess('Fee Category Created', `Fee category "${form.name}" has been successfully created.`)
     } catch (err) {
@@ -590,7 +1154,7 @@ function FeeCategories({ showSuccess, showError, onCount, onLoading }){
   }
   const startEdit = (item) => {
     setEditItem(item)
-    setEditForm({ name: item.name || '', description: item.description || '' })
+    setEditForm({ name: item.name || '', description: item.description || '', is_special: !!item.is_special })
   }
   const saveEdit = async (e) => {
     e?.preventDefault?.()
@@ -600,7 +1164,7 @@ function FeeCategories({ showSuccess, showError, onCount, onLoading }){
       await api.put(`/finance/fee-categories/${editItem.id}/`, editForm)
       showSuccess('Fee Category Updated', `"${editForm.name}" has been saved.`)
       setEditItem(null)
-      setEditForm({ name:'', description:'' })
+      setEditForm({ name:'', description:'', is_special:false })
       load()
     } catch (err) {
       showError('Failed to Update Fee Category', err?.response?.data ? JSON.stringify(err.response.data) : (err?.message || 'Failed'))
@@ -667,6 +1231,13 @@ function FeeCategories({ showSuccess, showError, onCount, onLoading }){
               value={form.description}
               onChange={e=>setForm({...form, description:e.target.value})}
             />
+          </div>
+          <div className="md:col-span-3">
+            <label className="inline-flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={!!form.is_special} onChange={e=>setForm({...form, is_special:e.target.checked})} />
+              <span className="text-gray-800">Is special (per-head)</span>
+            </label>
+            <div className="text-xs text-gray-500 mt-1">When checked, this category can be assigned per student via the Per-Student Fees tab and cannot be assigned to classes.</div>
           </div>
           <div className="md:col-span-3 flex justify-end">
             <button
@@ -775,6 +1346,9 @@ function FeeCategories({ showSuccess, showError, onCount, onLoading }){
                               {String(item.name||'').trim().toLowerCase()==='boarding fees' && (
                                 <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 border border-gray-200">System</span>
                               )}
+                              {!!item.is_special && (
+                                <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 border border-purple-200">Special</span>
+                              )}
                             </div>
                           </div>
                         </td>
@@ -832,6 +1406,12 @@ function FeeCategories({ showSuccess, showError, onCount, onLoading }){
                 value={editForm.description}
                 onChange={e=>setEditForm({...editForm, description:e.target.value})}
               />
+            </div>
+            <div>
+              <label className="inline-flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={!!editForm.is_special} onChange={e=>setEditForm({...editForm, is_special:e.target.checked})} />
+                <span className="text-gray-800">Is special (per-head)</span>
+              </label>
             </div>
             <div className="flex justify-end gap-3">
               <button type="button" onClick={() => setEditItem(null)} className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50">Cancel</button>
@@ -1479,7 +2059,7 @@ function ClassFees({ showSuccess, showError, onCount, onLoading }){
               </div>
               <div className="flex justify-end gap-3">
                 <button type="button" onClick={()=>setEditCF(null)} className="px-4 py-2 text-sm font-medium bg-white border border-gray-300 rounded-md hover:bg-gray-50">Cancel</button>
-                <button disabled={savingEdit} className={`px-4 py-2 text-sm font-medium rounded-md ${savingEdit ? 'bg-gray-300 text-gray-600' : 'bg-blue-600 text-white hover:bg-blue-700'}`}>{savingEdit ? 'Saving…' : 'Save Changes'}</button>
+                <button disabled={savingEdit} className={`px-4 py-2 text-sm font-medium rounded-md ${savingEdit ? 'bg-gray-300 text-gray-600' : 'bg-blue-600 text-white hover:bg-blue-700'}`}>{savingEdit ? 'Saving...' : 'Save Changes'}</button>
               </div>
             </form>
           </Modal>

@@ -10,6 +10,7 @@ const navItems = [
   { to: '/admin', label: 'Dashboard', icon: '📊' },
   { to: '/admin/students', label: 'Students', icon: '🎓' },
   { to: '/admin/teachers', label: 'Teachers', icon: '👩‍🏫' },
+  { to: '/admin/staff', label: 'Support Staff', icon: '🧑‍🔧' },
   { to: '/admin/classes', label: 'Classes', icon: '🏫' },
   { to: '/admin/subjects', label: 'Subjects', icon: '📚' },
   { to: '/admin/fees', label: 'Fees', icon: '💳' },
@@ -59,6 +60,13 @@ export default function AdminLayout({ children }){
     })()
     return () => { mounted = false }
   }, [])
+
+  // Keep browser tab title in sync with active school
+  useEffect(() => {
+    if (typeof document !== 'undefined') {
+      document.title = schoolName ? schoolName : 'EDU-TRACK'
+    }
+  }, [schoolName])
 
   // Ensure we have an up-to-date active status for the current user (and avatar)
   useEffect(() => {

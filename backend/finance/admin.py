@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Invoice, Payment, FeeCategory, ClassFee, MpesaConfig, IncomingPayment
+from .models import Invoice, Payment, FeeCategory, ClassFee, MpesaConfig, IncomingPayment, StaffPayroll, StaffPayslip
 
 @admin.register(Invoice)
 class InvoiceAdmin(admin.ModelAdmin):
@@ -36,3 +36,17 @@ class IncomingPaymentAdmin(admin.ModelAdmin):
     list_display = ("id", "source", "external_id", "amount", "currency", "reference", "status", "matched_student", "created_at")
     list_filter = ("source", "status", "currency")
     search_fields = ("external_id", "reference", "narration", "account_ref", "matched_student__admission_no", "matched_student__name")
+
+
+@admin.register(StaffPayroll)
+class StaffPayrollAdmin(admin.ModelAdmin):
+    list_display = ("id", "staff", "school", "base_salary", "is_active", "updated_at")
+    list_filter = ("school", "is_active")
+    search_fields = ("staff__user__username", "staff__user__first_name", "staff__user__last_name")
+
+
+@admin.register(StaffPayslip)
+class StaffPayslipAdmin(admin.ModelAdmin):
+    list_display = ("id", "staff", "school", "year", "month", "gross_pay", "net_pay", "created_at")
+    list_filter = ("school", "year", "month")
+    search_fields = ("staff__user__username", "staff__user__first_name", "staff__user__last_name")
