@@ -1,3 +1,5 @@
+import { playSound } from './sounds'
+
 let container = null;
 function ensureContainer(){
   if (container) return container;
@@ -15,6 +17,7 @@ function ensureContainer(){
 }
 export function toast(message, type='info', duration=3000){
   try{
+    try { playSound('notify') } catch {}
     const el = document.createElement('div');
     el.textContent = message;
     el.style.padding = '10px 14px';
