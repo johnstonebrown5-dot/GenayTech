@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useCallback } from 'react'
+import { playSound } from '../utils/sounds'
 
 export const NotificationContext = createContext()
 
@@ -25,6 +26,9 @@ export const NotificationProvider = ({ children }) => {
       timestamp: new Date(),
       ...notification
     }
+
+    // Play a notification sound (will succeed only after user interaction due to browser policies)
+    try { playSound('notify') } catch {}
 
     setNotifications(prev => [...prev, newNotification])
 

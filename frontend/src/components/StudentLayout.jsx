@@ -132,7 +132,9 @@ export default function StudentLayout({ children }){
         <div className="px-3 md:px-6 h-14 flex items-center gap-3">
           {/* Brand */}
           <Link to="/student" className="flex items-center gap-2 shrink-0">
-            <img src="/logo.jpg" alt="EDU-TRACK Logo" className="w-7 h-7 rounded object-contain" />
+            {schoolLogo ? (
+              <img src={schoolLogo} alt="School Logo" className="w-7 h-7 rounded object-contain" />
+            ) : null}
             <div className="hidden sm:block">
               <div className="text-sm font-semibold leading-tight">EDU-TRACK</div>
               <div className="text-[10px] text-gray-500 leading-tight truncate max-w-[160px]">{schoolName || ''}</div>

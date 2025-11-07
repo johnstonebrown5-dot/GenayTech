@@ -2,6 +2,7 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useR
 import { useLocation, useNavigate } from 'react-router-dom'
 import api from '../api'
 import { useAuth } from '../auth'
+import { playSound } from '../utils/sounds'
 
 const LockContext = createContext({ locked: false, lock: () => {}, unlock: async () => {} })
 
@@ -41,6 +42,7 @@ export default function LockProvider({ children, timeoutMs = TEN_MINUTES }) {
     timerRef.current = setTimeout(() => {
       setLocked(true)
       setLockedStorage(true)
+      try { playSound('lock') } catch {}
     }, remaining)
   }, [timeoutMs])
 
@@ -114,7 +116,7 @@ export default function LockProvider({ children, timeoutMs = TEN_MINUTES }) {
     }
   }, [user, loading, schedule])
 
-  const lock = useCallback(() => { setLocked(true); setLockedStorage(true); clearTimer() }, [])
+  const lock = useCallback(() => { setLocked(true); setLockedStorage(true); clearTimer(); try { playSound('lock') } catch {} }, [])
 
   const unlock = useCallback(async (password) => {
     if (!user) return { ok: false, error: 'Not authenticated' }

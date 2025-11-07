@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, useRef } from 'react'
 import api from './api'
+import { playSound } from './utils/sounds'
 
 const AuthContext = createContext(null)
 
@@ -31,6 +32,7 @@ export function AuthProvider({ children }) {
       // Broadcast login to other tabs
       localStorage.setItem('auth_event', `login:${Date.now()}`)
     } catch {}
+    try { playSound('login') } catch {}
     return me.data
   }
 
@@ -42,6 +44,7 @@ export function AuthProvider({ children }) {
       }
     } catch {}
     try { localStorage.setItem('auth_event', `logout:${Date.now()}`) } catch {}
+    try { playSound('logout') } catch {}
     localStorage.removeItem('access'); localStorage.removeItem('refresh'); setUser(null)
   }
 
