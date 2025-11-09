@@ -2,13 +2,7 @@ import React, { useEffect, useState } from 'react'
 import AppLogo from '../components/AppLogo'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth'
-// Carousel images
-import img1 from '../../images/pexels-akelaphotography-448877.jpg'
-import img2 from '../../images/pexels-gabby-k-6289065.jpg'
-import img3 from '../../images/pexels-kwakugriffn-14554003.jpg'
-import img4 from '../../images/pexels-pixabay-159213.jpg'
-import img5 from '../../images/pexels-pixabay-301926.jpg'
-import img6 from '../../images/pexels-roman-odintsov-11025021.jpg'
+ 
 
 export default function LoginPage() {
   const { login } = useAuth()
@@ -26,17 +20,7 @@ export default function LoginPage() {
   const [mounted, setMounted] = useState(false)
   const [installReady, setInstallReady] = useState(false)
 
-  // Carousel state
-  const slides = [img1, img2, img3, img4, img5, img6]
-  const [current, setCurrent] = useState(0)
-
-  useEffect(() => {
-    if (slides.length <= 1) return
-    const id = setInterval(() => {
-      setCurrent((i) => (i + 1) % slides.length)
-    }, 5000) // 5s per slide
-    return () => clearInterval(id)
-  }, [slides.length])
+  
 
   useEffect(() => {
     // trigger entrance animation once mounted
@@ -154,40 +138,7 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="relative min-h-screen w-full overflow-hidden">
-      {/* Background carousel */}
-      <div className="absolute inset-0">
-        {slides.map((src, idx) => (
-          <img
-            key={src}
-            src={src}
-            alt="background slide"
-            className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-700 ${
-              current === idx ? 'opacity-100' : 'opacity-0'
-            }`}
-          />
-        ))}
-        {/* Optional: gradient at bottom for contrast */}
-        <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-transparent to-black/30 pointer-events-none" />
-      </div>
-      {/* Dark vignette overlay (non-interactive) */}
-      <div className="absolute inset-0 bg-black/40 pointer-events-none" />
-      {/* Ambient gradient blobs */}
-      <div className="pointer-events-none absolute -top-10 -left-10 h-72 w-72 bg-gradient-to-br from-indigo-500/40 to-purple-500/40 blur-3xl rounded-full" />
-      <div className="pointer-events-none absolute bottom-10 -right-10 h-72 w-72 bg-gradient-to-br from-fuchsia-500/30 to-indigo-500/30 blur-3xl rounded-full" />
-
-      <div className="absolute inset-x-0 bottom-6 z-10 flex justify-center gap-2">
-        {slides.map((_, idx) => (
-          <button
-            key={idx}
-            type="button"
-            onClick={() => setCurrent(idx)}
-            aria-label={`Go to slide ${idx + 1}`}
-            className={`h-1.5 w-1.5 sm:h-2 sm:w-2 rounded-full transition ${current===idx ? 'bg-white' : 'bg-white/50 hover:bg-white/70'}`}
-          />
-        ))}
-      </div>
-
+    <div className="relative min-h-screen w-full overflow-hidden bg-gradient-to-br from-sky-100 via-white to-white">
       {/* Header */}
       <header className="hidden sm:flex relative z-10 items-center justify-between px-6 md:px-10 py-5 text-white/95">
         <div className="flex items-center gap-3">
@@ -220,138 +171,135 @@ export default function LoginPage() {
       {/* Desktop/Tablet Content */}
       <main className="hidden sm:flex relative z-10 min-h-[calc(100vh-96px)] items-center justify-center">
         <div className="mx-auto w-full px-6 py-10">
-          <div className="flex items-center justify-center">
-            {/* Left: Brand pitch */}
-            <div className="hidden lg:flex flex-col justify-center text-white">
-              <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-semibold w-max">
-                Role-based access • Secure • Fast
+          <div className="grid grid-cols-12 gap-0 mx-auto w-[70vw] max-w-[1400px] min-h-[70vh] overflow-hidden rounded-3xl shadow-xl ring-1 ring-black/5 bg-white">
+            {/* Left gradient panel */}
+            <div className="relative col-span-5 bg-gradient-to-br from-sky-500 to-indigo-600 text-white px-12 py-20 flex flex-col justify-center">
+              <div className={`transition-all duration-500 ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'}`}>
+                <div className="flex items-center gap-3">
+                  <AppLogo size={36} className="h-9 w-9 rounded-lg bg-white/10 p-1" />
+                  <div className="text-sm uppercase tracking-[0.3em]">Welcome to</div>
+                </div>
+                <h1 className="mt-4 text-3xl font-extrabold tracking-tight">EduTrack</h1>
+                <p className="mt-2 text-white/90 text-sm max-w-xs">Secure role-based access to academics, finance and messaging in one place.</p>
+                <ul className="mt-6 space-y-2 text-white/90 text-sm">
+                  <li className="flex gap-2"><span className="text-white">✓</span> Smart dashboards for Admin, Teachers, Students and Finance</li>
+                  <li className="flex gap-2"><span className="text-white">✓</span> Reliable and fast</li>
+                  <li className="flex gap-2"><span className="text-white">✓</span> Real-time notifications</li>
+                </ul>
               </div>
-              <h1 className="mt-4 text-4xl font-extrabold leading-tight">Welcome back to EduTrack</h1>
-              <p className="mt-3 text-white/80 max-w-md">Sign in to manage academics, finance, messages, and analytics—all in one place.</p>
-              <ul className="mt-6 space-y-2 text-white/80 text-sm">
-                <li className="flex gap-2"><span className="text-indigo-300">✓</span> Smart dashboards for Admin, Teachers, Students and Finance</li>
-                <li className="flex gap-2"><span className="text-indigo-300">✓</span> Secure, reliable and fast</li>
-                <li className="flex gap-2"><span className="text-indigo-300">✓</span> Real-time notifications and messaging</li>
-              </ul>
             </div>
 
-            {/* Right: Auth card */}
-            <div className="relative max-w-xl w-full mx-auto z-20 pointer-events-auto">
-              {/* Gradient border wrapper */}
-              <div className="absolute -inset-0.5 rounded-2xl bg-gradient-to-r from-indigo-500/40 via-purple-500/40 to-pink-500/40 blur opacity-75 pointer-events-none" />
-              <div className={`relative z-20 bg-white/85 backdrop-blur-md rounded-2xl shadow-[0_20px_60px_rgba(0,0,0,0.35)] ring-1 ring-white/60 p-6 md:p-8 transition-all duration-500 border-hairline ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'}`}>
-                <div className="flex items-center justify-between">
-                  <div className="inline-flex items-center gap-2">
-                    <AppLogo size={28} className="h-7 w-7 rounded-md" />
-                    <span className="sr-only">EduTrack</span>
-                  </div>
-                  <h2 className="text-xl md:text-2xl font-bold text-gray-900">{formStep === 'role' ? 'Select your role' : 'Log in'}</h2>
-                  {formStep === 'credentials' && (
-                    <button onClick={handleBackToRole} className="text-sm text-indigo-700 hover:underline">Change role</button>
-                  )}
+            {/* Right: form area */}
+            <div className="col-span-7 relative bg-gradient-to-br from-white to-sky-50/40 pl-12 pr-10 md:pl-16 md:pr-14 py-16 md:py-20 flex flex-col justify-center">
+              {/* simple divider */}
+              <div className="pointer-events-none absolute left-0 top-0 h-full w-px bg-sky-100" />
+
+              <div className="relative z-20 max-w-xl w-full mx-auto">
+                <div className="flex items-center justify-center">
+                  <h2 className="text-2xl font-bold text-gray-900 text-center">{formStep === 'role' ? 'Select your role' : 'Log in'}</h2>
                 </div>
-
-                {formStep === 'role' && (
-                  <div className="mt-6">
-                    <div className="grid grid-cols-2 gap-4" role="radiogroup" aria-label="Select role">
-                      {roles.map((r) => {
-                        const selected = role === r.key
-                        return (
-                          <button
-                            key={r.key}
-                            type="button"
-                            onClick={() => handleRoleSelect(r.key)}
-                            role="radio"
-                            aria-checked={selected}
-                            aria-label={r.label}
-                            className={`group relative rounded-xl border p-4 flex flex-col items-center justify-center gap-2 text-sm font-semibold transition-all duration-200 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300 ${selected ? 'bg-gradient-to-br from-indigo-50 via-white to-purple-50 border-indigo-200 text-indigo-700 shadow-[0_10px_30px_rgba(79,70,229,0.22)]' : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50 hover:border-indigo-100 hover:shadow-md'}`}
-                          >
-                            <span className={`text-2xl ${selected ? 'scale-105' : ''}`}>{r.icon}</span>
-                            <span>{r.label}</span>
-                            {/* corner check */}
-                            <span className={`pointer-events-none absolute top-2 right-2 inline-flex h-5 w-5 items-center justify-center rounded-full border ${selected ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-transparent border-gray-300'} transition`}>
-                              ✓
-                            </span>
-                          </button>
-                        )
-                      })}
-                    </div>
-                    <div className="mt-6 flex items-center gap-3">
-                      <button
-                        onClick={() => { if(!role) return; setFormStep('credentials') }}
-                        disabled={!role}
-                        className="flex-1 py-3 rounded-lg bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-semibold disabled:opacity-60 transition-transform hover:translate-y-[-1px]"
-                      >Proceed</button>
-                      <span className="text-xs text-gray-500">{role ? `Selected: ${role}` : 'Choose a role'}</span>
-                    </div>
-                    <div className="mt-3 text-xs text-gray-600">Not sure of your role? Contact your school admin.</div>
-                  </div>
-                )}
-
                 {formStep === 'credentials' && (
-                  <div className="mt-5">
-                    {error && (
-                      <div className="mb-4 text-sm text-red-700 bg-red-100 border border-red-200 rounded-md px-3 py-2 animate-shake" role="alert">{error}</div>
-                    )}
-                    <form onSubmit={submit} className="space-y-5">
-                      {/* Email-as-username floating */}
-                      <div className="relative group">
-                        <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
-                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5"><path d="M12 12c2.761 0 5-2.239 5-5s-2.239-5-5-5-5 2.239-5 5 2.239 5 5 5zm0 2c-3.866 0-7 3.134-7 7h14c0-3.866-3.134-7-7-7z"/></svg>
-                        </span>
-                        {/* Subtle decorative glow (non-interactive) */}
-                        <div className="absolute -inset-0.5 rounded-xl bg-gradient-to-r from-indigo-500/15 via-purple-500/15 to-pink-500/15 opacity-0 group-focus-within:opacity-80 blur-sm transition pointer-events-none" />
-                        <input
-                          id="login-username"
-                          type="text"
-                          value={username}
-                          onChange={(e)=>setUsername(e.target.value)}
-                          placeholder=""
-                          autoComplete="username"
-                          inputMode="email"
-                          autoCapitalize="none"
-                          autoCorrect="off"
-                          aria-label="Email (username)"
-                          className="peer w-full rounded-xl border border-gray-300 bg-white px-10 py-3.5 text-[15px] shadow-inner focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-500 transition"
-                          required
-                        />
-                        <label htmlFor="login-username" className={`pointer-events-none absolute left-10 top-1/2 -translate-y-1/2 text-gray-500 transition-all duration-200 ${username ? '-translate-y-4 text-xs' : ''} peer-focus:-translate-y-4 peer-focus:text-xs`}>Email (username)</label>
-                        <div className="mt-1 text-[11px] text-gray-500">Admins: use the email you signed up with.</div>
-                      </div>
-                      {/* Password floating */}
-                      <div className="relative group">
-                        <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
-                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5"><path d="M17 8V7a5 5 0 10-10 0v1H5v12h14V8h-2zm-8 0V7a3 3 0 016 0v1H9z"/></svg>
-                        </span>
-                        <div className="absolute -inset-0.5 rounded-xl bg-gradient-to-r from-indigo-500/30 via-purple-500/30 to-pink-500/30 opacity-0 group-focus-within:opacity-100 blur transition pointer-events-none" />
-                        <input
-                          id="login-password"
-                          type={showPassword ? 'text' : 'password'}
-                          value={password}
-                          onChange={(e)=>setPassword(e.target.value)}
-                          onKeyUp={(e)=> setCapsLockOn(e.getModifierState && e.getModifierState('CapsLock'))}
-                          placeholder=""
-                          autoComplete="current-password"
-                          aria-label="Password"
-                          className="peer w-full rounded-xl border border-gray-200 bg-white/95 px-10 py-3.5 pr-16 text-[15px] shadow-inner focus-soft focus:border-indigo-400 transition border-hairline"
-                          required
-                        />
-                        <label htmlFor="login-password" className={`pointer-events-none absolute left-10 top-1/2 -translate-y-1/2 text-gray-500 transition-all duration-200 ${password ? '-translate-y-4 text-xs' : ''} peer-focus:-translate-y-4 peer-focus:text-xs`}>Password</label>
-                        <button type="button" aria-pressed={showPassword} aria-label={showPassword ? 'Hide password' : 'Show password'} onClick={()=>setShowPassword(v=>!v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-600 hover:text-gray-800">{showPassword?'Hide':'Show'}</button>
-                        {capsLockOn && <div className="mt-1 text-[11px] text-amber-700">Caps Lock is ON</div>}
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <label className="inline-flex items-center gap-2 text-xs text-gray-700 select-none">
-                          <input type="checkbox" className="accent-indigo-600" checked={remember} onChange={(e)=>setRemember(e.target.checked)} />
-                          Remember me
-                        </label>
-                        <a href="mailto:EduTrack46@gmail.com?subject=Password%20help" className="text-xs text-indigo-700 hover:underline">Forgot password?</a>
-                      </div>
-                      <button type="submit" disabled={isLoading} className="w-full rounded-lg bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-semibold py-3 disabled:opacity-60 shadow-md transition-transform active:scale-[.99]">{isLoading?'Signing In…':'Sign In'}</button>
-                    </form>
+                  <div className="mt-1 text-center">
+                    <button onClick={handleBackToRole} className="text-sm text-sky-700 hover:underline">Change role</button>
                   </div>
                 )}
-              </div>
+
+              {formStep === 'role' && (
+                <div className="mt-8">
+                  <div className="grid grid-cols-2 gap-6" role="radiogroup" aria-label="Select role">
+                    {roles.map((r) => {
+                      const selected = role === r.key
+                      return (
+                        <button
+                          key={r.key}
+                          type="button"
+                          onClick={() => handleRoleSelect(r.key)}
+                          role="radio"
+                          aria-checked={selected}
+                          aria-label={r.label}
+                          className={`group relative rounded-xl border px-5 h-20 flex flex-col items-center justify-center gap-2 text-sm font-semibold transition-all duration-200 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-300 ${selected ? 'bg-sky-50 border-sky-200 text-sky-700 shadow-[0_10px_30px_rgba(2,132,199,0.20)]' : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50 hover:border-sky-100 hover:shadow-md'}`}
+                        >
+                          <span className={`text-2xl ${selected ? 'scale-105' : ''}`}>{r.icon}</span>
+                          <span>{r.label}</span>
+                          <span className={`pointer-events-none absolute top-2 right-2 inline-flex h-5 w-5 items-center justify-center rounded-full border ${selected ? 'bg-sky-600 text-white border-sky-600' : 'bg-white text-transparent border-gray-300'} transition`}>
+                            ✓
+                          </span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                  <div className="mt-8">
+                    <button
+                      onClick={() => { if(!role) return; setFormStep('credentials') }}
+                      disabled={!role}
+                      className="w-full py-3 rounded-full bg-sky-600 hover:bg-sky-700 text-white font-semibold disabled:opacity-60 transition-transform hover:translate-y-[-1px]"
+                    >Proceed</button>
+                    <div className="mt-2 flex items-center justify-between text-xs text-gray-500">
+                      <span>{role ? `Selected: ${role}` : ''}</span>
+                      <span>Choose a role</span>
+                    </div>
+                  </div>
+                  <div className="mt-4 text-xs text-gray-600 text-center">Not sure of your role? Contact your school admin.</div>
+                </div>
+              )}
+
+              {formStep === 'credentials' && (
+                <div className="mt-8">
+                  {error && (
+                    <div className="mb-4 text-sm text-red-700 bg-red-100 border border-red-200 rounded-md px-3 py-2" role="alert">{error}</div>
+                  )}
+                  <form onSubmit={submit} className="space-y-5">
+                    <div className="relative">
+                      <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5"><path d="M12 12c2.761 0 5-2.239 5-5s-2.239-5-5-5-5 2.239-5 5 2.239 5 5 5zm0 2c-3.866 0-7 3.134-7 7h14c0-3.866-3.134-7-7-7z"/></svg>
+                      </span>
+                      <input
+                        id="login-username"
+                        type="text"
+                        value={username}
+                        onChange={(e)=>setUsername(e.target.value)}
+                        autoComplete="username"
+                        inputMode="email"
+                        autoCapitalize="none"
+                        autoCorrect="off"
+                        aria-label="Email (username)"
+                        placeholder="Email (username)"
+                        className="w-full rounded-xl border border-gray-300 bg-white px-10 py-3.5 text-[15px] shadow-inner focus:outline-none focus:ring-2 focus:ring-sky-300 focus:border-sky-500 transition"
+                        required
+                      />
+                      <div className="mt-1 text-[11px] text-gray-500">Admins: use the email you signed up with.</div>
+                    </div>
+                    <div className="relative">
+                      <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5"><path d="M17 8V7a5 5 0 10-10 0v1H5v12h14V8h-2zm-8 0V7a3 3 0 016 0v1H9z"/></svg>
+                      </span>
+                      <input
+                        id="login-password"
+                        type={showPassword ? 'text' : 'password'}
+                        value={password}
+                        onChange={(e)=>setPassword(e.target.value)}
+                        onKeyUp={(e)=> setCapsLockOn(e.getModifierState && e.getModifierState('CapsLock'))}
+                        autoComplete="current-password"
+                        aria-label="Password"
+                        placeholder="Password"
+                        className="w-full rounded-xl border border-gray-200 bg-white px-10 py-3.5 pr-16 text-[15px] shadow-inner focus:outline-none focus:ring-2 focus:ring-sky-300 focus:border-sky-500 transition"
+                        required
+                      />
+                      <button type="button" aria-pressed={showPassword} aria-label={showPassword ? 'Hide password' : 'Show password'} onClick={()=>setShowPassword(v=>!v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-sky-700 hover:text-sky-900">{showPassword?'Hide':'Show'}</button>
+                      {capsLockOn && <div className="mt-1 text-[11px] text-amber-700">Caps Lock is ON</div>}
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <label className="inline-flex items-center gap-2 text-xs text-gray-700 select-none">
+                        <input type="checkbox" className="accent-sky-600" checked={remember} onChange={(e)=>setRemember(e.target.checked)} />
+                        Remember me
+                      </label>
+                      <a href="mailto:EduTrack46@gmail.com?subject=Password%20help" className="text-xs text-sky-700 hover:underline">Forgot password?</a>
+                    </div>
+                    <button type="submit" disabled={isLoading} className="w-full rounded-lg bg-sky-600 hover:bg-sky-700 text-white font-semibold py-3 disabled:opacity-60 shadow-md transition-transform active:scale-[.99]">{isLoading?'Signing In…':'Sign In'}</button>
+                  </form>
+                </div>
+              )}
+            </div>
             </div>
           </div>
         </div>
@@ -359,25 +307,25 @@ export default function LoginPage() {
         {/* Verifying overlay */}
         {formStep === 'verifying' && (
           <div className="absolute inset-0 z-20 flex items-center justify-center">
-            <div className="absolute inset-0 bg-black/40 backdrop-blur-sm transition-opacity" />
-            <div className="relative bg-white/85 backdrop-blur-md rounded-2xl px-8 py-7 shadow-[0_20px_60px_rgba(0,0,0,0.35)] ring-1 ring-white/50 border-hairline flex flex-col items-center gap-4" role="status" aria-busy="true" aria-live="polite">
+            <div className="absolute inset-0 bg-black/30 backdrop-blur-sm transition-opacity" />
+            <div className="relative bg-white/95 backdrop-blur-md rounded-2xl px-8 py-7 shadow-[0_20px_60px_rgba(0,0,0,0.25)] ring-1 ring-black/5 border border-white/60 flex flex-col items-center gap-4" role="status" aria-busy="true" aria-live="polite">
               <div className="relative w-24 h-24">
                 <div className="absolute inset-0 rounded-full border-2 border-black/10" />
-                <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-indigo-600 animate-spin" />
-                <div className="absolute inset-2 rounded-full border-2 border-transparent border-t-indigo-400 animate-spin" style={{ animationDuration: '800ms', animationDirection: 'reverse' }} />
-                <div className="absolute inset-[22px] rounded-full bg-indigo-600/20 animate-pulse" />
+                <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-sky-600 animate-spin" />
+                <div className="absolute inset-2 rounded-full border-2 border-transparent border-t-sky-400 animate-spin" style={{ animationDuration: '800ms', animationDirection: 'reverse' }} />
+                <div className="absolute inset-[22px] rounded-full bg-sky-600/20 animate-pulse" />
               </div>
               <div className="text-center">
-                <h3 className="text-indigo-700 font-extrabold tracking-wide">VERIFYING</h3>
+                <h3 className="text-sky-700 font-extrabold tracking-wide">VERIFYING</h3>
                 <p className="text-black/70 text-sm">Please wait while we check your credentials</p>
               </div>
               <div className="flex gap-1.5 items-end h-3" aria-hidden>
-                <span className="w-1.5 h-1.5 rounded-full bg-indigo-600/80 animate-bounce" style={{ animationDelay: '0ms' }} />
-                <span className="w-1.5 h-1.5 rounded-full bg-indigo-600/70 animate-bounce" style={{ animationDelay: '120ms' }} />
-                <span className="w-1.5 h-1.5 rounded-full bg-indigo-600/60 animate-bounce" style={{ animationDelay: '240ms' }} />
+                <span className="w-1.5 h-1.5 rounded-full bg-sky-600/80 animate-bounce" style={{ animationDelay: '0ms' }} />
+                <span className="w-1.5 h-1.5 rounded-full bg-sky-600/70 animate-bounce" style={{ animationDelay: '120ms' }} />
+                <span className="w-1.5 h-1.5 rounded-full bg-sky-600/60 animate-bounce" style={{ animationDelay: '240ms' }} />
               </div>
               <div className="w-60 h-1.5 bg-black/10 rounded-full overflow-hidden">
-                <div className="h-full bg-gradient-to-r from-indigo-500 via-indigo-400 to-indigo-600 animate-pulse rounded-full" style={{ width: '72%' }} />
+                <div className="h-full bg-gradient-to-r from-sky-500 via-sky-400 to-sky-600 animate-pulse rounded-full" style={{ width: '72%' }} />
               </div>
             </div>
           </div>
