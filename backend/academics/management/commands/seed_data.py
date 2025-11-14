@@ -81,8 +81,10 @@ class Command(BaseCommand):
         Class.objects.all().delete()
         Stream.objects.all().delete()
         Subject.objects.all().delete()
-        School.objects.all().delete()
+        # Do NOT delete School because other apps reference it with PROTECT FKs
+        # School.objects.all().delete()
         Competency.objects.all().delete()
+        self.stdout.write(self.style.WARNING('Note: Schools kept intact to avoid ProtectedError; data will be re-seeded for existing schools.'))
         self.stdout.write(self.style.SUCCESS('✓ Data cleared.'))
 
         self.stdout.write(
