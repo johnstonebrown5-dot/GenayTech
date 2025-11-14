@@ -4,8 +4,9 @@ from django.utils import timezone
 from faker import Faker
 import random
 from datetime import date, timedelta
-from academics.models import Subject, Stream, Class, TeacherProfile, Student, Competency, ClassSubjectTeacher
+from academics.models import Subject, Stream, Class, TeacherProfile, Student, Competency, ClassSubjectTeacher, Exam, ExamResult
 from accounts.models import School
+from finance.models import FeeCategory, Invoice, Payment
 
 User = get_user_model()
 
@@ -40,6 +41,24 @@ class Command(BaseCommand):
             default=2,
             help='Number of streams per school (default: 2)'
         )
+        parser.add_argument(
+            '--fee-categories',
+            type=int,
+            default=3,
+            help='Number of fee categories to create per school (default: 3)'
+        )
+        parser.add_argument(
+            '--payments-per-student',
+            type=int,
+            default=2,
+            help='At least this many payments per student (default: 2)'
+        )
+        parser.add_argument(
+            '--common-exams',
+            type=int,
+            default=2,
+            help='Number of common exams per class to generate with results (default: 2)'
+        )
 
     def handle(self, *args, **options):
         fake = Faker()
@@ -50,6 +69,9 @@ class Command(BaseCommand):
         teachers_per_school = options['teachers_per_school']
         students_per_school = options['students_per_school']
         streams_per_school = options['streams_per_school']
+        fee_categories_count = options.get('fee_categories', 3)
+        payments_per_student = options.get('payments_per_student', 2)
+        common_exams = options.get('common_exams', 2)
 
         self.stdout.write(self.style.WARNING('Clearing existing data...'))
         # Clear data in a specific order to avoid foreign key constraints
@@ -412,6 +434,111 @@ class Command(BaseCommand):
                     'level_scale': ['Emerging', 'Developing', 'Proficient', 'Mastered']
                 }
             )
+
+        # ===== Finance seeding: Fee Categories, Invoices, and Payments =====
+        try:
+            self.stdout.write(self.style.WARNING('Seeding finance data (fee categories, invoices, payments)...'))
+            base_categories = ['Tuition', 'Transport', 'Lunch', 'Library', 'Activity']
+            categories_by_school = {}
+            for school in schools:
+                cats = []
+                for name in base_categories[:max(0, int(fee_categories_count))]:
+                    cat, _ = FeeCategory.objects.get_or_create(
+                        school=school,
+                        name=name,
+                        defaults={'description': f'{name} fee', 'is_special': False}
+                    )
+                    cats.append(cat)
+                categories_by_school[school.id] = cats
+
+            # Create one invoice per category per student, and ensure at least N payments per student
+            from decimal import Decimal
+            total_invoices = 0
+            total_payments = 0
+            current_year = timezone.now().year
+            default_term = 1
+            for school in schools:
+                cats = categories_by_school.get(school.id, [])
+                if not cats:
+                    continue
+                for stu in Student.objects.filter(klass__school=school):
+                    student_invoices = []
+                    for cat in cats:
+                        amount = Decimal(random.randint(5000, 15000))
+                        inv = Invoice.objects.create(
+                            student=stu,
+                            amount=amount,
+                            status='unpaid',
+                            category=cat,
+                            year=current_year,
+                            term=default_term,
+                            due_date=timezone.now().date() + timedelta(days=30)
+                        )
+                        student_invoices.append(inv)
+                        total_invoices += 1
+
+                    # Ensure at least payments_per_student payments exist for this student
+                    pay_needed = max(0, int(payments_per_student))
+                    for k in range(pay_needed):
+                        target_inv = student_invoices[0] if student_invoices else None
+                        if not target_inv:
+                            break
+                        # Random partial payment between 20% and 60% of invoice
+                        pay_amount = (target_inv.amount * Decimal(random.randint(20, 60)))/Decimal(100)
+                        Payment.objects.create(
+                            invoice=target_inv,
+                            amount=pay_amount,
+                            method='cash',
+                            reference=f'RCPT-{stu.admission_no}-{k+1}',
+                            recorded_by=None
+                        )
+                        total_payments += 1
+            self.stdout.write(self.style.SUCCESS(f"✓ Finance: created ~{total_invoices} invoices and {total_payments} payments"))
+        except Exception as e:
+            self.stdout.write(self.style.WARNING(f"Finance seeding skipped due to error: {e}"))
+
+        # ===== Exams and Results seeding =====
+        try:
+            self.stdout.write(self.style.WARNING('Seeding exams and results for each class...'))
+            exams_created = 0
+            results_created = 0
+            year = timezone.now().year
+            term = 1
+            for school in schools:
+                school_classes = list(Class.objects.filter(school=school))
+                for klass in school_classes:
+                    class_subjects = list(klass.subjects.all())
+                    if not class_subjects:
+                        continue
+                    for i in range(max(0, int(common_exams))):
+                        exam = Exam.objects.create(
+                            name=f"Common Exam {i+1}",
+                            year=year,
+                            term=term,
+                            klass=klass,
+                            date=timezone.now().date(),
+                            total_marks=100,
+                            published=True,
+                            published_at=timezone.now(),
+                        )
+                        exams_created += 1
+                        # Results for all students in class for all subjects
+                        students = list(Student.objects.filter(klass=klass))
+                        for stu in students:
+                            for subj in class_subjects:
+                                try:
+                                    ExamResult.objects.create(
+                                        exam=exam,
+                                        student=stu,
+                                        subject=subj,
+                                        marks=float(random.randint(30, 99))
+                                    )
+                                    results_created += 1
+                                except Exception:
+                                    continue
+            self.stdout.write(self.style.SUCCESS(f"✓ Exams: created {exams_created} exams and ~{results_created} results"))
+        except Exception as e:
+            self.stdout.write(self.style.WARNING(f"Exam seeding skipped due to error: {e}"))
 
         self.stdout.write(
             self.style.SUCCESS('Database seeding completed successfully!')

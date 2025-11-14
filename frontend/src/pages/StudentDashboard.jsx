@@ -219,442 +219,295 @@ export default function StudentDashboard(){
       setPaySubmitting(false)
     }
   }
+
   return (
-    <div className="p-6 space-y-6">
-      {/* Header banner (no buttons; navigation is in sidebar) */}
-      <div className="rounded-xl p-4 sm:p-5 bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow">
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <div className="text-xs opacity-90">Welcome</div>
-            <div className="text-lg sm:text-xl font-semibold tracking-tight">{student?.name ? student.name.toUpperCase() : ''}</div>
-            <div className="text-xs opacity-90 mt-1">{student ? (classLabel || '') : ''}</div>
+    <div className="p-4 sm:p-6 md:p-8 space-y-7">
+      <header className="relative overflow-hidden rounded-2xl p-6 sm:p-7 bg-gradient-to-br from-emerald-600 via-teal-600 to-cyan-500 text-white shadow-lg">
+        <div className="absolute inset-0 opacity-20 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.65),transparent_55%)]" aria-hidden></div>
+        <div className="relative flex flex-col sm:flex-row sm:items-start sm:justify-between gap-6">
+          <div className="space-y-3 text-center sm:text-left">
+            <p className="text-[11px] uppercase tracking-[0.3em] text-white/70">Welcome back</p>
+            <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight drop-shadow-sm">{student?.name ? student.name.toUpperCase() : ''}</h1>
+            <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
+              {classLabel && (
+                <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-white/15 text-xs font-medium backdrop-blur-sm">
+                  <span className="text-sm" aria-hidden>🏫</span>
+                  {classLabel}
+                </span>
+              )}
+              {student?.admission_no && (
+                <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-white/15 text-xs font-medium backdrop-blur-sm">
+                  <span className="text-sm" aria-hidden>🆔</span>
+                  Adm {student.admission_no}
+                </span>
+              )}
+              {student?.dob && (
+                <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-white/15 text-xs font-medium backdrop-blur-sm">
+                  <span className="text-sm" aria-hidden>🎂</span>
+                  {student.dob}
+                </span>
+              )}
+            </div>
           </div>
-          <div className="hidden sm:block w-12 h-12 rounded-xl bg-white/15 backdrop-blur flex items-center justify-center text-2xl">
-            <span>🎓</span>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:gap-5 gap-4">
+            <div className="sm:hidden flex gap-2 overflow-x-auto pb-1 mx-auto" role="list">
+              {[
+                { label: 'Billed', value: money(summary.total_billed || 0) },
+                { label: 'Paid', value: money(summary.total_paid || 0) },
+                { label: 'Balance', value: money(summary.balance || 0) },
+              ].map(chip => (
+                <span key={chip.label} className="inline-flex flex-shrink-0 items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/15 text-xs font-medium backdrop-blur">
+                  <span className="text-[10px] uppercase tracking-[0.15em]">{chip.label}</span>
+                  <span className="font-semibold">{chip.value}</span>
+                </span>
+              ))}
+            </div>
+            <div className="hidden sm:grid gap-2 text-sm text-white/85">
+              <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/12 backdrop-blur-md">
+                <span className="text-[10px] uppercase tracking-[0.15em]">Balance</span>
+                <span className="font-semibold">{money(summary.balance || 0)}</span>
+              </span>
+              <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/12 backdrop-blur-md">
+                <span className="text-[10px] uppercase tracking-[0.15em]">Paid</span>
+                <span className="font-semibold">{money(summary.total_paid || 0)}</span>
+              </span>
+              <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/12 backdrop-blur-md">
+                <span className="text-[10px] uppercase tracking-[0.15em]">Billed</span>
+                <span className="font-semibold">{money(summary.total_billed || 0)}</span>
+              </span>
+            </div>
+            <div className="flex items-center justify-center w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 mx-auto sm:mx-0 rounded-2xl bg-white/18 backdrop-blur-md shadow-inner">
+              <span className="text-2xl sm:text-3xl" aria-hidden>🎓</span>
+          )}
+          {student?.admission_no && (
+            <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-white/15 text-xs font-medium backdrop-blur-sm">
+              <span className="text-sm" aria-hidden>🆔</span>
+              Adm {student.admission_no}
+            </span>
+          )}
+          {student?.dob && (
+            <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-white/15 text-xs font-medium backdrop-blur-sm">
+              <span className="text-sm" aria-hidden>🎂</span>
+              {student.dob}
+            </span>
+          )}
+        </div>
+      </div>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:gap-5 gap-4">
+        <div className="sm:hidden flex gap-2 overflow-x-auto pb-1 mx-auto" role="list">
+          {[
+            { label: 'Billed', value: money(summary.total_billed || 0) },
+            { label: 'Paid', value: money(summary.total_paid || 0) },
+            { label: 'Balance', value: money(summary.balance || 0) },
+          ].map(chip => (
+            <span key={chip.label} className="inline-flex flex-shrink-0 items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/15 text-xs font-medium backdrop-blur">
+              <span className="text-[10px] uppercase tracking-[0.15em]">{chip.label}</span>
+              <span className="font-semibold">{chip.value}</span>
+            </span>
+          ))}
+        </div>
+        <div className="hidden sm:grid gap-2 text-sm text-white/85">
+          <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/12 backdrop-blur-md">
+            <span className="text-[10px] uppercase tracking-[0.15em]">Balance</span>
+            <span className="font-semibold">{money(summary.balance || 0)}</span>
+          </span>
+          <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/12 backdrop-blur-md">
+            <span className="text-[10px] uppercase tracking-[0.15em]">Paid</span>
+            <span className="font-semibold">{money(summary.total_paid || 0)}</span>
+          </span>
+          <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/12 backdrop-blur-md">
+            <span className="text-[10px] uppercase tracking-[0.15em]">Billed</span>
+            <span className="font-semibold">{money(summary.total_billed || 0)}</span>
+          </span>
+        </div>
+        <div className="flex items-center justify-center w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 mx-auto sm:mx-0 rounded-2xl bg-white/18 backdrop-blur-md shadow-inner">
+          <span className="text-2xl sm:text-3xl" aria-hidden>🎓</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  {loading && <div className="bg-white rounded shadow p-4">Loading...</div>}
+  {error && <div className="bg-red-50 text-red-700 p-3 rounded">{error}</div>}
+
+  {currentTab === 'dashboard' && (
+    <div className="bg-white rounded shadow p-4">
+      <h2 className="font-medium mb-2">Dashboard</h2>
+      <div className="grid gap-4 sm:grid-cols-2 md:gap-5 md:grid-cols-3">
+        <StatCard title="Total Billed" value={Number(summary.total_billed || 0)} accent="from-amber-500 to-orange-600" icon="🧾" animate format={v => money(v)} />
+        <StatCard title="Total Paid" value={Number(summary.total_paid || 0)} accent="from-emerald-500 to-emerald-600" icon="💳" animate format={v => money(v)} trend={summary.total_paid && summary.total_billed ? ((summary.total_paid / Math.max(1, summary.total_billed)) * 100) : 0} />
+        <StatCard title="Balance" value={Number(summary.balance || 0)} accent="from-sky-500 to-blue-600" icon="📉" animate format={v => money(v)} />
+      </div>
+
+      {student && (
+        <div className="bg-white/80 backdrop-blur border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+          <div className="px-4 sm:px-5 py-3 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-slate-50/70">
+            <div>
+              <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Profile</div>
+              <h2 className="text-base sm:text-lg font-semibold text-slate-900">Student Information</h2>
+            </div>
+            <button
+              className="self-start sm:self-auto text-sm px-3 py-1.5 rounded-full bg-slate-900 text-white hover:bg-slate-700 transition"
+              onClick={() => {
+                setEditError('');
+                setEditForm({ email: student.email || '', phone: student.guardian_id || '', address: student.address || '' });
+                setShowEdit(true);
+              }}
+            >Edit</button>
           </div>
+          <div className="grid md:grid-cols-[260px_1fr]">
+            <div className="relative p-5 md:p-6 bg-[radial-gradient(circle_at_top,rgba(148,163,184,0.18),transparent_55%)] border-b md:border-b-0 md:border-r border-slate-200 flex flex-col items-center text-center gap-4">
+              <div className="relative w-32 h-32 sm:w-36 sm:h-36 md:w-40 md:h-40 rounded-2xl overflow-hidden border border-slate-200 shadow-inner bg-white/60 flex items-center justify-center">
+                {student.photo_url ? (
+                  <img src={student.photo_url} alt="Student" className="w-full h-full object-cover" />
+                ) : (
+                  <div className="text-slate-300 text-6xl">👤</div>
+                )}
+              </div>
+              <div className="space-y-2">
+                {student.admission_no && (
+                  <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/80 text-slate-700 text-xs sm:text-sm font-medium shadow-sm">
+                    <span className="text-base" aria-hidden>🆔</span>
+                    {student.admission_no}
+                  </span>
+                )}
+                {classLabel && (
+                  <div className="text-sm text-slate-600 font-medium">{classLabel}</div>
+                )}
+              </div>
+            </div>
+            <div className="px-4 sm:px-5 py-5 sm:py-6 space-y-6">
+              <section className="space-y-4">
+                <h3 className="text-sm font-semibold text-slate-800 tracking-wide">Personal Details</h3>
+                <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 sm:gap-x-8 gap-y-4 text-sm">
+                  <div>
+                    <dt className="text-slate-500">Full Name</dt>
+                    <dd className="font-semibold text-slate-900 uppercase">{student.name}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-slate-500">Gender</dt>
+                    <dd className="font-medium text-slate-900">{student.gender || '-'}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-slate-500">Date of Birth</dt>
+                    <dd className="font-medium text-slate-900">{student.dob || '-'}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-slate-500">Passport No</dt>
+                    <dd className="font-medium text-slate-900">{student.passport_no || '-'}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-slate-500">Class</dt>
+                    <dd className="font-medium text-slate-900">{classLabel || '-'}</dd>
+                  </div>
+                </dl>
+              </section>
+              <section className="space-y-4">
+                <h3 className="text-sm font-semibold text-slate-800 tracking-wide">Contact & Guardian</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                  <div className="p-3 sm:p-4 rounded-xl border border-slate-200 bg-slate-50/80">
+                    <div className="text-slate-500">Email</div>
+                    <div className="font-medium text-slate-900 break-words">{student.email || '-'}</div>
+                  </div>
+                  <div className="p-3 sm:p-4 rounded-xl border border-slate-200 bg-slate-50/80">
+                    <div className="text-slate-500">Parent/Guardian Phone</div>
+                    <div className="font-medium text-slate-900">{student.guardian_id || '-'}</div>
+                  </div>
+                  <div className="sm:col-span-2 p-3 sm:p-4 rounded-xl border border-slate-200 bg-slate-50/80">
+                    <div className="text-slate-500">Postal Address</div>
+                    <div className="font-medium text-slate-900">{student.address || '-'}</div>
+                  </div>
+                </div>
+              </section>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )}
+
+  {currentTab === 'academics' && (
+    <div className="bg-white rounded shadow p-4">
+      <h2 className="font-medium mb-2">Academics</h2>
+      <div className="grid md:grid-cols-2 gap-6">
+        <div className="bg-white rounded shadow p-4">
+          <div className="flex items-center justify-between mb-1">
+            <h2 className="font-medium">Report Card</h2>
+            <button
+              className="text-sm px-3 py-1.5 rounded bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-60"
+              onClick={() => latestExamLabel ? navigate('/student/report-card') : null}
+              disabled={!latestExamLabel}
+            >{latestExamLabel ? 'View' : 'No Exam Yet'}</button>
+          </div>
+          <p className="text-sm text-gray-600">{latestExamLabel ? `Latest exam: ${latestExamLabel}` : 'Your report card will appear here after the first exam is published.'}</p>
+        </div>
+        <div className="bg-white rounded shadow p-4 border border-dashed border-indigo-200 text-sm text-indigo-700 flex items-center justify-center">
+          <button className="px-3 py-1.5 rounded-full border border-indigo-300 bg-indigo-50 hover:bg-indigo-100" onClick={() => setShowReport(true)} disabled={!latestExamLabel}>
+            View quick report
+          </button>
         </div>
       </div>
 
-      {loading && (
-        <div className="bg-white rounded shadow p-4">Loading...</div>
-      )}
-      {error && (
-        <div className="bg-red-50 text-red-700 p-3 rounded">{error}</div>
-      )}
-
-      {/* Sidebar now handles navigation; in-page tab buttons removed */}
-
-      {currentTab === 'dashboard' && (
-        <>
-          {/* Summary cards */}
-          <div className="grid gap-4 md:grid-cols-3">
-            <StatCard
-              title="Total Billed"
-              value={Number(summary.total_billed||0)}
-              accent="from-amber-500 to-orange-600"
-              icon="🧾"
-              animate
-              format={(v)=>money(v)}
-            />
-            <StatCard
-              title="Total Paid"
-              value={Number(summary.total_paid||0)}
-              accent="from-emerald-500 to-emerald-600"
-              icon="💳"
-              animate
-              format={(v)=>money(v)}
-              trend={summary.total_paid && summary.total_billed ? ((summary.total_paid/Math.max(1, summary.total_billed))*100) : 0}
-            />
-            <StatCard
-              title="Balance"
-              value={Number(summary.balance||0)}
-              accent="from-sky-500 to-blue-600"
-              icon="📉"
-              animate
-              format={(v)=>money(v)}
-            />
-          </div>
-
-          {/* User Profile */}
-          {student && (
-            <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-              <div className="border-b px-4 py-2 font-medium flex items-center justify-between">
-                <span>User Profile</span>
-                <button
-                  className="text-sm px-3 py-1.5 rounded bg-blue-600 text-white hover:bg-blue-700"
-                  onClick={()=>{ setEditError(''); setEditForm({ email: student.email || '', phone: student.guardian_id || '', address: student.address || '' }); setShowEdit(true) }}
-                >Edit</button>
-              </div>
-              <div className="grid md:grid-cols-3 gap-0">
-                <div className="p-4 border-r">
-                  <div className="w-40 h-40 bg-gray-100 rounded-xl overflow-hidden flex items-center justify-center border border-gray-200">
-                    {student.photo_url ? (
-                      <img src={student.photo_url} alt="Student" className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="text-gray-400 text-6xl">👤</div>
-                    )}
-                  </div>
-                  <div className="mt-3 text-sm text-gray-600">{student.admission_no}</div>
-                </div>
-                <div className="md:col-span-2 p-4">
-                  <div className="text-gray-700 font-medium mb-3">Personal Information</div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-y-3 gap-x-6 text-sm">
-                    <div>
-                      <div className="text-gray-500">Admission No</div>
-                      <div className="font-medium">{student.admission_no}</div>
-                    </div>
-                    <div>
-                      <div className="text-gray-500">Full Name</div>
-                      <div className="font-medium uppercase">{student.name}</div>
-                    </div>
-                    <div>
-                      <div className="text-gray-500">Passport No</div>
-                      <div className="font-medium">{student.passport_no || '-'}</div>
-                    </div>
-                    <div>
-                      <div className="text-gray-500">Parent/Guardian Phone</div>
-                      <div className="font-medium">{student.guardian_id || '-'}</div>
-                    </div>
-                    <div>
-                      <div className="text-gray-500">Gender</div>
-                      <div className="font-medium">{student.gender || '-'}</div>
-                    </div>
-                    <div>
-                      <div className="text-gray-500">Date of Birth</div>
-                      <div className="font-medium">{student.dob}</div>
-                    </div>
-                    <div>
-                      <div className="text-gray-500">Class</div>
-                      <div className="font-medium">{classLabel}</div>
-                    </div>
-                    {/* Guardian shown above as Phone Number */}
-                    <div>
-                      <div className="text-gray-500">Email</div>
-                      <div className="font-medium">{student.email || '-'}</div>
-                    </div>
-                    <div className="md:col-span-2">
-                      <div className="text-gray-500">Postal Address</div>
-                      <div className="font-medium">{student.address || '-'}</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-        </>
-      )}
-
-      {currentTab === 'academics' && (
-        <>
-          {/* Report Card quick access */}
-          <div className="grid md:grid-cols-2 gap-6">
-            <div className="bg-white rounded shadow p-4">
-              <div className="flex items-center justify-between mb-1">
-                <h2 className="font-medium">Report Card</h2>
-                <button
-                  className="text-sm px-3 py-1.5 rounded bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-60"
-                  onClick={()=> latestExamLabel ? navigate('/student/report-card') : null}
-                  disabled={!latestExamLabel}
-                >{latestExamLabel ? 'View' : 'No Exam Yet'}</button>
-              </div>
-              <div className="text-sm text-gray-600">{latestExamLabel ? `Latest exam: ${latestExamLabel}` : 'Your report card will appear here after the first exam is published.'}</div>
-            </div>
-            <div></div>
-          </div>
-
-          {/* Assessments and Attendance */}
-          <div className="grid md:grid-cols-2 gap-6">
-            <div className="bg-white rounded-xl border border-gray-200 p-4">
-              <h2 className="font-medium mb-2">Assessments</h2>
-              {!Array.isArray(assessments) || assessments.length === 0 ? (
-                <div className="text-sm text-gray-500">No assessments yet.</div>
-              ) : (
-                <table className="w-full text-left text-sm">
-                  <thead className="bg-gray-50 text-gray-600">
-                    <tr>
-                      <th className="py-2 px-2">Competency</th>
-                      <th className="py-2 px-2">Level</th>
-                      <th className="py-2 px-2">Date</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {assessments.map(a => (
-                      <tr key={a.id} className="border-t hover:bg-gray-50">
-                        <td className="py-2 px-2">{a.competency}</td>
-                        <td className="py-2 px-2">{a.level}</td>
-                        <td className="py-2 px-2">{a.date}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </div>
-
-            <div className="bg-white rounded-xl border border-gray-200 p-4">
-              <h2 className="font-medium mb-2">Attendance</h2>
-              {!Array.isArray(attendance) || attendance.length === 0 ? (
-                <div className="text-sm text-gray-500">No attendance records yet.</div>
-              ) : (
-                <table className="w-full text-left text-sm">
-                  <thead className="bg-gray-50 text-gray-600">
-                    <tr>
-                      <th className="py-2 px-2">Date</th>
-                      <th className="py-2 px-2">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {attendance.map(at => (
-                      <tr key={at.id} className="border-t hover:bg-gray-50">
-                        <td className="py-2 px-2">{at.date}</td>
-                        <td className="py-2 px-2 capitalize">{at.status}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </div>
-          </div>
-
-          {/* Performance Over Time */}
-          <div className="bg-white rounded-xl border border-gray-200 p-4">
-            <h2 className="font-medium mb-3">Performance Over Time</h2>
-            {Array.isArray(performance) && performance.length > 0 ? (
-              <ResponsiveLine data={performance} />
-            ) : (
-              <div className="text-sm text-gray-500">No exam performance data yet.</div>
-            )}
-          </div>
-
-          {/* Exam Results */}
-          <div className="bg-white rounded-xl border border-gray-200 p-4">
-            <h2 className="font-medium mb-2">Exam Results</h2>
-            {!Array.isArray(examResults) || examResults.length === 0 ? (
-              <div className="text-sm text-gray-500">No exam results yet.</div>
-            ) : (
-              <table className="w-full text-left text-sm">
-                <thead className="bg-gray-50 text-gray-600">
-                  <tr>
-                    <th className="py-2 px-2">Subject</th>
-                    <th className="py-2 px-2">Marks</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {groupedExamResults.map(([examName, rows]) => (
-                    <React.Fragment key={examName}>
-                      <tr className="border-t bg-gray-50/70">
-                        <td className="py-2 px-2 font-medium" colSpan={2}>{examName}</td>
-                      </tr>
-                      {rows.map(r => (
-                        <tr key={r.id} className="border-t hover:bg-gray-50">
-                          <td className="py-2 px-2">
-                            {r.subject_detail
-                              ? (
-                                  (r.subject_detail.code ? `${r.subject_detail.code} — ` : '') +
-                                  (r.subject_detail.name || '')
-                                )
-                              : r.subject
-                            }
-                          </td>
-                          <td className="py-2 px-2">{r.marks}</td>
-                        </tr>
-                      ))}
-                    </React.Fragment>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
-        </>
-      )}
-
-      {currentTab === 'finance' && (
-      <div className="bg-white rounded-xl border border-gray-200 p-4">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
-          <h2 className="font-medium">My Fees</h2>
-          <div className="flex flex-wrap items-center gap-2 text-sm">
-            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full border bg-amber-50 text-amber-700 border-amber-200">Billed <strong className="ml-1">{Number(summary.total_billed||0).toLocaleString()}</strong></span>
-            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full border bg-emerald-50 text-emerald-700 border-emerald-200">Paid <strong className="ml-1">{Number(summary.total_paid||0).toLocaleString()}</strong></span>
-            <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full border ${Number(summary.balance)>0? 'bg-rose-50 text-rose-700 border-rose-200':'bg-sky-50 text-sky-700 border-sky-200'}`}>Balance <strong className="ml-1">{Number(summary.balance||0).toLocaleString()}</strong></span>
-            {invoices.some(inv => inv.status==='unpaid' || inv.status==='partial') && (
-              <button
-                onClick={()=>{
-                  const unpaid = invoices.filter(inv => inv.status==='unpaid' || inv.status==='partial')
-                  setSelectedInvoice(unpaid[0] || null)
-                  setPayForm({ amount: '', method: 'mpesa', reference: '' })
-                  setPayError('')
-                  setShowPay(true)
-                }}
-                className="ml-auto px-3 py-1.5 rounded text-white bg-green-600 hover:bg-green-700"
-              >
-                Make Payment
-              </button>
-            )}
-          </div>
-        </div>
-
-        {invoices.length === 0 ? (
-          <div className="rounded-lg border border-dashed p-6 text-sm text-gray-600 bg-gray-50">You have no invoices yet.</div>
-        ) : (
-          <div className="overflow-auto rounded-lg border">
-            <table className="w-full text-left text-sm min-w-[720px]">
+      <div className="grid md:grid-cols-2 gap-6">
+        <div className="bg-white rounded-xl border border-gray-200 p-4">
+          <h2 className="font-medium mb-2">Assessments</h2>
+          {!Array.isArray(assessments) || assessments.length === 0 ? (
+            <div className="text-sm text-gray-500">No assessments yet.</div>
+          ) : (
+            <table className="w-full text-left text-sm">
               <thead className="bg-gray-50 text-gray-600">
                 <tr>
+                  <th className="py-2 px-2">Competency</th>
+                  <th className="py-2 px-2">Level</th>
                   <th className="py-2 px-2">Date</th>
-                  <th className="py-2 px-2">Category</th>
-                  <th className="py-2 px-2">Year/Term</th>
-                  <th className="py-2 px-2">Amount</th>
-                  <th className="py-2 px-2">Status</th>
-                  <th className="py-2 px-2">Due</th>
-                  <th className="py-2 px-2 text-right"></th>
                 </tr>
               </thead>
               <tbody>
-                {invoices.map(inv => (
-                  <tr key={inv.id} className="border-t hover:bg-gray-50/60">
-                    <td className="py-2 px-2">{new Date(inv.created_at).toLocaleDateString()}</td>
-                    <td className="py-2 px-2">{inv.category_detail?.name || '-'}</td>
-                    <td className="py-2 px-2">{inv.year ? `${inv.year} / T${inv.term}` : '-'}</td>
-                    <td className="py-2 px-2">{Number(inv.amount).toLocaleString()}</td>
-                    <td className="py-2 px-2">
-                      <span className={`text-[11px] px-2 py-0.5 rounded-full border ${inv.status==='paid' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : inv.status==='partial' ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-rose-50 text-rose-700 border-rose-200'}`}>{inv.status}</span>
-                    </td>
-                    <td className="py-2 px-2">{inv.due_date || '-'}</td>
-                    <td className="py-2 px-2 text-right">
-                      {(inv.status === 'unpaid' || inv.status === 'partial') && (
-                        <button onClick={()=>openPay(inv)} className="px-3 py-1.5 rounded text-white bg-green-600 hover:bg-green-700">Pay</button>
-                      )}
-                    </td>
+                {assessments.map(a => (
+                  <tr key={a.id} className="border-t hover:bg-gray-50">
+                    <td className="py-2 px-2">{a.competency}</td>
+                    <td className="py-2 px-2">{a.level}</td>
+                    <td className="py-2 px-2">{a.date}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          </div>
-        )}
-      </div>
-      )}
+          )}
+        </div>
 
-      {/* Pay Modal */}
-      <Modal open={showPay} onClose={()=>setShowPay(false)} title={selectedInvoice ? `Pay Invoice #${selectedInvoice.id}` : 'Pay Invoice'} size="sm">
-        {selectedInvoice && (
-          <form onSubmit={submitPay} className="grid gap-3">
-            {/* Allow selecting which invoice to pay when multiple invoices are due */}
-            {invoices.filter(inv => inv.status==='unpaid' || inv.status==='partial').length > 1 && (
-              <select
-                className="border p-2 rounded"
-                value={selectedInvoice?.id || ''}
-                onChange={e => {
-                  const inv = invoices.find(x => String(x.id) === e.target.value)
-                  setSelectedInvoice(inv || selectedInvoice)
-                }}
-              >
-                {invoices.filter(inv => inv.status==='unpaid' || inv.status==='partial').map(inv => (
-                  <option key={inv.id} value={inv.id}>
-                    {(inv.category_detail?.name || 'General')} — {inv.year? `${inv.year}/T${inv.term}`:'-'} — {Number(inv.amount).toLocaleString()} ({inv.status})
-                  </option>
-                ))}
-              </select>
-            )}
-            <div className="text-sm text-gray-700">Category: <strong>{selectedInvoice.category_detail?.name || '-'}</strong></div>
-            <div className="text-sm text-gray-700">Amount Due: <strong>{Number(selectedInvoice.amount).toLocaleString()}</strong></div>
-            {payError && <div className="bg-red-50 text-red-700 text-sm p-2 rounded">{payError}</div>}
-            <input className="border p-2 rounded" type="number" step="0.01" placeholder="Amount" value={payForm.amount} onChange={e=>setPayForm({...payForm, amount:e.target.value})} required />
-            {/* Mode selection removed: always use M-Pesa STK via Co-op */}
-            <input className="border p-2 rounded" placeholder="Phone 07XXXXXXXX" value={payForm.phone} onChange={e=>setPayForm({...payForm, phone:e.target.value})} />
-            {/* Always real STK; toggle removed */}
-            {stkStatus==='failed' && (<div className="text-xs text-red-600">STK failed or timed out.</div>)}
-            <input className="border p-2 rounded" placeholder="Reference (optional)" value={payForm.reference} onChange={e=>setPayForm({...payForm, reference:e.target.value})} />
-            <div className="flex justify-end gap-2">
-              <button type="button" className="px-4 py-2 rounded border" onClick={()=>setShowPay(false)}>Cancel</button>
-              <button className="px-4 py-2 rounded text-white bg-green-600 disabled:opacity-60" disabled={paySubmitting}>{paySubmitting ? (stkStatus==='polling'?'Waiting...':'Initiating...') : 'Initiate STK'}</button>
-            </div>
-          </form>
-        )}
-      </Modal>
-
-      {/* Edit Contact Modal */}
-      <Modal open={showEdit} onClose={()=>setShowEdit(false)} title="Edit Contact Details" size="sm">
-        <form
-          onSubmit={async (e)=>{
-            e.preventDefault()
-            setEditSubmitting(true)
-            setEditError('')
-            try{
-              const payload = {
-                email: editForm.email?.trim() || '',
-                phone: editForm.phone?.trim() || '',
-                address: editForm.address?.trim() || '',
-              }
-              // Basic client validation
-              if (payload.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(payload.email)){
-                setEditError('Enter a valid email address')
-                setEditSubmitting(false)
-                return
-              }
-              await api.patch('/academics/students/my/update/', payload)
-              // Refresh student data
-              const stRes = await api.get('/academics/students/my/')
-              setStudent(stRes.data)
-              setShowEdit(false)
-            }catch(err){
-              setEditError(err?.response?.data?.detail || err?.message || 'Update failed')
-            }finally{
-              setEditSubmitting(false)
-            }
-          }}
-          className="grid gap-3"
-        >
-          {editError && <div className="bg-red-50 text-red-700 text-sm p-2 rounded">{editError}</div>}
-          <label className="grid gap-1 text-sm">
-            <span className="text-gray-600">Email</span>
-            <input className="border p-2 rounded" type="email" value={editForm.email} onChange={e=>setEditForm({...editForm, email:e.target.value})} placeholder="e.g. student@email.com" />
-          </label>
-          <label className="grid gap-1 text-sm">
-            <span className="text-gray-600">Parent/Guardian Phone</span>
-            <input className="border p-2 rounded" value={editForm.phone} onChange={e=>setEditForm({...editForm, phone:e.target.value})} placeholder="Enter parent/guardian phone e.g. 0712345678" />
-          </label>
-          <label className="grid gap-1 text-sm">
-            <span className="text-gray-600">Postal Address</span>
-            <textarea className="border p-2 rounded min-h-[80px]" value={editForm.address} onChange={e=>setEditForm({...editForm, address:e.target.value})} placeholder="e.g. P.O. Box 12345, Nairobi" />
-          </label>
-          <div className="flex justify-end gap-2">
-            <button type="button" className="px-4 py-2 rounded border" onClick={()=>setShowEdit(false)}>Cancel</button>
-            <button className="px-4 py-2 rounded text-white bg-blue-600 disabled:opacity-60" disabled={editSubmitting}>{editSubmitting? 'Saving…':'Save'}</button>
-          </div>
-        </form>
-      </Modal>
-
-      {/* Report Card Modal */}
-      <Modal open={showReport} onClose={()=>setShowReport(false)} title={latestExamLabel ? `Report Card — ${latestExamLabel}` : 'Report Card'} size="md">
-        {reportRows.length === 0 ? (
-          <div className="text-sm text-gray-600">No results available yet.</div>
-        ) : (
-          <div className="grid gap-3">
+        <div className="bg-white rounded-xl border border-gray-200 p-4">
+          <h2 className="font-medium mb-2">Attendance</h2>
+          {!Array.isArray(attendance) || attendance.length === 0 ? (
+            <div className="text-sm text-gray-500">No attendance records yet.</div>
+          ) : (
             <table className="w-full text-left text-sm">
-              <thead>
-                <tr><th>Subject</th><th>Marks</th></tr>
+              <thead className="bg-gray-50 text-gray-600">
+                <tr>
+                  <th className="py-2 px-2">Date</th>
+                  <th className="py-2 px-2">Status</th>
+                </tr>
               </thead>
               <tbody>
-                {reportRows.map((row, i) => (
-                  <tr key={i} className="border-t"><td>{row.subjectLabel}</td><td>{row.marks}</td></tr>
+                {attendance.map(at => (
+                  <tr key={at.id} className="border-t hover:bg-gray-50">
+                    <td className="py-2 px-2">{at.date}</td>
+                    <td className="py-2 px-2 capitalize">{at.status}</td>
+                  </tr>
                 ))}
               </tbody>
-              <tfoot>
-                <tr className="border-t font-medium"><td>Total</td><td>{reportTotals.total.toFixed(2)}</td></tr>
-                <tr className="font-medium"><td>Average</td><td>{reportTotals.average.toFixed(2)}</td></tr>
-              </tfoot>
             </table>
-            <div className="flex justify-end gap-2">
-              <button className="px-4 py-2 rounded border" onClick={()=>setShowReport(false)}>Close</button>
-              <button
-                className="px-4 py-2 rounded bg-indigo-600 text-white hover:bg-indigo-700"
-                onClick={()=>{
-                  try{ window.print() }catch(_){}
-                }}
-              >Print</button>
-            </div>
-          </div>
+          )}
+        </div>
+      </div>
+
+      <div className="bg-white rounded-xl border border-gray-200 p-4">
+        <h2 className="font-medium mb-3">Performance Over Time</h2>
+        {Array.isArray(performance) && performance.length > 0 ? (
+          <ResponsiveLine data={performance} />
+        ) : (
+          <div className="text-sm text-gray-500">No exam performance data yet.</div>
         )}
-      </Modal>
+      </div>
     </div>
   )
 }

@@ -128,26 +128,46 @@ export default function StudentLayout({ children }){
         </div>
       )}
       {/* Top App Bar */}
-      <header className="sticky top-0 z-40 bg-white/95 backdrop-blur border-b">
-        <div className="px-3 md:px-6 h-14 flex items-center gap-3">
+      <header className="sticky top-0 z-40 bg-white/90 backdrop-blur supports-[backdrop-filter]:bg-white/70 border-b border-slate-200 shadow-[0_6px_20px_-10px_rgba(0,0,0,0.15)]">
+        <div className="px-3 md:px-6 h-14 md:h-16 flex items-center gap-2 relative">
           {/* Brand */}
           <Link to="/student" className="flex items-center gap-2 shrink-0">
             {schoolLogo ? (
               <img src={schoolLogo} alt="School Logo" className="w-7 h-7 rounded object-contain" />
             ) : null}
             <div className="hidden sm:block">
-              <div className="text-sm font-semibold leading-tight truncate max-w-[200px]">{schoolName || 'EDU-TRACK'}</div>
-              {schoolName ? null : (
-                <div className="text-[10px] text-gray-500 leading-tight truncate max-w-[160px]">{schoolName || ''}</div>
-              )}
+              <div className="text-sm font-semibold leading-tight">{schoolName || 'EDU-TRACK'}</div>
             </div>
           </Link>
+
+          {/* Inline nav (desktop, centered) */}
+          <nav className="hidden md:flex items-center gap-2 md:absolute md:left-1/2 md:-translate-x-1/2">
+            {baseNavItems.map(i => {
+              const active = pathname === i.to
+              const isMessages = i.label === 'Messages'
+              return (
+                <Link
+                  key={i.to}
+                  to={i.to}
+                  className={`${active ? 'bg-slate-900 text-white shadow-sm' : 'bg-white/80 text-slate-800 hover:bg-white border-slate-200'} px-3.5 py-2 rounded-full text-sm font-medium inline-flex items-center gap-2 border`}
+                  title={i.label}
+                >
+                  <span className="hidden lg:inline" aria-hidden>{i.icon}</span>
+                  <span>{i.label}</span>
+                  {isMessages && unreadCount>0 && (
+                    <span className="ml-auto inline-flex items-center justify-center min-w-[20px] h-[20px] px-1 rounded-full text-[11px] bg-red-600 text-white">{unreadCount>99 ? '99+' : unreadCount}</span>
+                  )}
+                </Link>
+              )
+            })}
+          </nav>
+
           {/* Spacer */}
           <div className="flex-1" />
 
-          {/* Hamburger */}
+          {/* Hamburger (mobile only) */}
           <button
-            className="inline-flex items-center justify-center w-10 h-10 rounded-lg border bg-white hover:bg-gray-50"
+            className="md:hidden inline-flex items-center justify-center w-10 h-10 rounded-lg border bg-white hover:bg-gray-50"
             aria-label="Open navigation menu"
             onClick={()=> setIsMenuOpen(v=>!v)}
           >
@@ -157,10 +177,33 @@ export default function StudentLayout({ children }){
           </button>
 
           {/* User + Actions */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 sm:gap-2.5">
+            {/* Back/Forward (md+) */}
+            <div className="hidden md:flex items-center gap-2">
+              <button
+                onClick={() => navigate(-1)}
+                className="p-2.5 rounded-xl border border-gray-200 text-gray-600 hover:text-slate-900 hover:border-slate-300 hover:bg-gray-50 transition"
+                aria-label="Go back"
+                title="Back"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
+                  <path fillRule="evenodd" d="M9.53 4.47a.75.75 0 010 1.06L5.56 9.5h13.69a.75.75 0 010 1.5H5.56l3.97 3.97a.75.75 0 11-1.06 1.06l-5.25-5.25a.75.75 0 010-1.06l5.25-5.25a.75.75 0 011.06 0z" clipRule="evenodd" />
+                </svg>
+              </button>
+              <button
+                onClick={() => navigate(1)}
+                className="p-2.5 rounded-xl border border-gray-200 text-gray-600 hover:text-slate-900 hover:border-slate-300 hover:bg-gray-50 transition"
+                aria-label="Go forward"
+                title="Forward"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
+                  <path fillRule="evenodd" d="M14.47 4.47a.75.75 0 011.06 0l5.25 5.25a.75.75 0 010 1.06l-5.25 5.25a.75.75 0 11-1.06-1.06L18.44 11H4.75a.75.75 0 010-1.5h13.69l-3.97-3.97a.75.75 0 010-1.06z" clipRule="evenodd" />
+                </svg>
+              </button>
+            </div>
             <Link
               to="/student/messages?tab=system"
-              className="relative inline-flex items-center justify-center w-10 h-10 rounded-lg border border-slate-200 hover:bg-slate-50"
+              className="relative inline-flex items-center justify-center w-10 h-10 rounded-xl border border-slate-200 hover:bg-slate-50 transition"
               aria-label="Notifications"
               title="System messages"
             >
@@ -174,12 +217,12 @@ export default function StudentLayout({ children }){
               )}
             </Link>
             {user && (
-              <div className="hidden md:block text-sm text-slate-700 max-w-[140px] truncate" title={user.first_name || user.username}>
+              <div className="hidden md:block text-sm text-slate-700 max-w-[160px] truncate" title={user.first_name || user.username}>
                 {user.first_name || user.username}
               </div>
             )}
-            <button onClick={lock} className="px-3 py-1.5 rounded bg-slate-700 text-white text-sm hover:bg-slate-800">Lock</button>
-            <button onClick={logout} className="px-3 py-1.5 rounded bg-slate-800 text-white text-sm hover:bg-slate-700">Logout</button>
+            <button onClick={lock} className="hidden md:inline-flex items-center px-3 py-2 rounded-xl border border-slate-200 text-sm text-slate-700 hover:bg-slate-50">Lock</button>
+            <button onClick={logout} className="hidden md:inline-flex items-center px-3 py-2 rounded-xl border border-slate-800 text-sm bg-slate-800 text-white hover:bg-slate-700">Logout</button>
           </div>
         </div>
       </header>

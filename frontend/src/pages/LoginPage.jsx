@@ -196,8 +196,11 @@ export default function LoginPage() {
 
               <div className="relative z-20 max-w-xl w-full mx-auto">
                 <div className="flex items-center justify-center">
-                  <h2 className="text-2xl font-bold text-gray-900 text-center">{formStep === 'role' ? 'Select your role' : 'Log in'}</h2>
+                  <h2 className="text-2xl font-bold text-slate-900 text-center">{formStep === 'role' ? 'Select your role' : 'Log in'}</h2>
                 </div>
+                {formStep === 'role' && (
+                  <p className="mt-1 text-center text-sm text-slate-500">Choose where you need to go today.</p>
+                )}
                 {formStep === 'credentials' && (
                   <div className="mt-1 text-center">
                     <button onClick={handleBackToRole} className="text-sm text-sky-700 hover:underline">Change role</button>
@@ -217,13 +220,13 @@ export default function LoginPage() {
                           role="radio"
                           aria-checked={selected}
                           aria-label={r.label}
-                          className={`group relative rounded-xl border px-5 h-20 flex flex-col items-center justify-center gap-2 text-sm font-semibold transition-all duration-200 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-300 ${selected ? 'bg-sky-50 border-sky-200 text-sky-700 shadow-[0_10px_30px_rgba(2,132,199,0.20)]' : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50 hover:border-sky-100 hover:shadow-md'}`}
+                          className={`group relative rounded-2xl ring-1 px-0 py-0 h-28 w-full overflow-hidden transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 ${selected ? 'bg-gradient-to-br from-sky-50 to-indigo-50 ring-sky-300 shadow-[0_10px_30px_rgba(2,132,199,0.18)]' : 'bg-white ring-slate-200 hover:bg-slate-50 hover:ring-sky-200 hover:shadow-md'}`}
                         >
-                          <span className={`text-2xl ${selected ? 'scale-105' : ''}`}>{r.icon}</span>
-                          <span>{r.label}</span>
-                          <span className={`pointer-events-none absolute top-2 right-2 inline-flex h-5 w-5 items-center justify-center rounded-full border ${selected ? 'bg-sky-600 text-white border-sky-600' : 'bg-white text-transparent border-gray-300'} transition`}>
-                            ✓
-                          </span>
+                          <div className="flex h-full w-full items-center justify-center flex-col gap-2 px-5">
+                            <span className={`inline-flex items-center justify-center h-9 w-9 rounded-full shadow-inner ${selected ? 'bg-sky-600 text-white' : 'bg-sky-100 text-sky-600'}`}>{r.icon}</span>
+                            <span className={`${selected ? 'text-sky-800' : 'text-slate-700'} text-sm font-semibold`}>{r.label}</span>
+                          </div>
+                          <span className={`pointer-events-none absolute top-2 right-2 inline-flex h-5 w-5 items-center justify-center rounded-full border ${selected ? 'bg-sky-600 text-white border-sky-600' : 'bg-white text-transparent border-slate-300'} transition`}>✓</span>
                         </button>
                       )
                     })}
@@ -234,12 +237,12 @@ export default function LoginPage() {
                       disabled={!role}
                       className="w-full py-3 rounded-full bg-sky-600 hover:bg-sky-700 text-white font-semibold disabled:opacity-60 transition-transform hover:translate-y-[-1px]"
                     >Proceed</button>
-                    <div className="mt-2 flex items-center justify-between text-xs text-gray-500">
+                    <div className="mt-2 flex items-center justify-between text-xs text-slate-500">
                       <span>{role ? `Selected: ${role}` : ''}</span>
                       <span>Choose a role</span>
                     </div>
                   </div>
-                  <div className="mt-4 text-xs text-gray-600 text-center">Not sure of your role? Contact your school admin.</div>
+                  <div className="mt-4 text-xs text-slate-600 text-center">Not sure of your role? Contact your school admin.</div>
                 </div>
               )}
 
@@ -267,7 +270,7 @@ export default function LoginPage() {
                         className="w-full rounded-xl border border-gray-300 bg-white px-10 py-3.5 text-[15px] shadow-inner focus:outline-none focus:ring-2 focus:ring-sky-300 focus:border-sky-500 transition"
                         required
                       />
-                      <div className="mt-1 text-[11px] text-gray-500">Admins: use the email you signed up with.</div>
+                      <div className="mt-1 text-[11px] text-slate-500">Admins: use the email you signed up with.</div>
                     </div>
                     <div className="relative">
                       <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
@@ -289,7 +292,7 @@ export default function LoginPage() {
                       {capsLockOn && <div className="mt-1 text-[11px] text-amber-700">Caps Lock is ON</div>}
                     </div>
                     <div className="flex items-center justify-between">
-                      <label className="inline-flex items-center gap-2 text-xs text-gray-700 select-none">
+                      <label className="inline-flex items-center gap-2 text-xs text-slate-700 select-none">
                         <input type="checkbox" className="accent-sky-600" checked={remember} onChange={(e)=>setRemember(e.target.checked)} />
                         Remember me
                       </label>
