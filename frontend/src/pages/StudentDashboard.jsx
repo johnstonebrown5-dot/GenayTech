@@ -223,45 +223,61 @@ export default function StudentDashboard(){
   return (
     <div className="p-4 sm:p-6 md:p-8 space-y-7">
       <header className="relative overflow-hidden rounded-2xl p-6 sm:p-7 bg-gradient-to-br from-emerald-600 via-teal-600 to-cyan-500 text-white shadow-lg">
-        <div className="absolute inset-0 opacity-20 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.65),transparent_55%)]" aria-hidden></div>
+        <div
+          className="absolute inset-0 opacity-20 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.65),transparent_55%)]"
+          aria-hidden
+        ></div>
         <div className="relative flex flex-col sm:flex-row sm:items-start sm:justify-between gap-6">
           <div className="space-y-3 text-center sm:text-left">
             <p className="text-[11px] uppercase tracking-[0.3em] text-white/70">Welcome back</p>
-            <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight drop-shadow-sm">{student?.name ? student.name.toUpperCase() : ''}</h1>
+            <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight drop-shadow-sm">
+              {student?.name ? student.name.toUpperCase() : ''}
+            </h1>
             <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
               {classLabel && (
                 <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-white/15 text-xs font-medium backdrop-blur-sm">
-                  <span className="text-sm" aria-hidden>🏫</span>
+                  <span className="text-sm" aria-hidden>
+                    🏫
+                  </span>
                   {classLabel}
                 </span>
               )}
               {student?.admission_no && (
                 <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-white/15 text-xs font-medium backdrop-blur-sm">
-                  <span className="text-sm" aria-hidden>🆔</span>
+                  <span className="text-sm" aria-hidden>
+                    🆔
+                  </span>
                   Adm {student.admission_no}
                 </span>
               )}
               {student?.dob && (
                 <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-white/15 text-xs font-medium backdrop-blur-sm">
-                  <span className="text-sm" aria-hidden>🎂</span>
+                  <span className="text-sm" aria-hidden>
+                    🎂
+                  </span>
                   {student.dob}
                 </span>
               )}
             </div>
           </div>
           <div className="flex flex-col sm:flex-row sm:items-center sm:gap-5 gap-4">
+            {/* Mobile chips */}
             <div className="sm:hidden flex gap-2 overflow-x-auto pb-1 mx-auto" role="list">
               {[
                 { label: 'Billed', value: money(summary.total_billed || 0) },
                 { label: 'Paid', value: money(summary.total_paid || 0) },
                 { label: 'Balance', value: money(summary.balance || 0) },
               ].map(chip => (
-                <span key={chip.label} className="inline-flex flex-shrink-0 items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/15 text-xs font-medium backdrop-blur">
+                <span
+                  key={chip.label}
+                  className="inline-flex flex-shrink-0 items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/15 text-xs font-medium backdrop-blur"
+                >
                   <span className="text-[10px] uppercase tracking-[0.15em]">{chip.label}</span>
                   <span className="font-semibold">{chip.value}</span>
                 </span>
               ))}
             </div>
+            {/* Desktop chips */}
             <div className="hidden sm:grid gap-2 text-sm text-white/85">
               <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/12 backdrop-blur-md">
                 <span className="text-[10px] uppercase tracking-[0.15em]">Balance</span>
@@ -276,59 +292,18 @@ export default function StudentDashboard(){
                 <span className="font-semibold">{money(summary.total_billed || 0)}</span>
               </span>
             </div>
+            {/* Icon */}
             <div className="flex items-center justify-center w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 mx-auto sm:mx-0 rounded-2xl bg-white/18 backdrop-blur-md shadow-inner">
-              <span className="text-2xl sm:text-3xl" aria-hidden>🎓</span>
-          )}
-          {student?.admission_no && (
-            <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-white/15 text-xs font-medium backdrop-blur-sm">
-              <span className="text-sm" aria-hidden>🆔</span>
-              Adm {student.admission_no}
-            </span>
-          )}
-          {student?.dob && (
-            <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-white/15 text-xs font-medium backdrop-blur-sm">
-              <span className="text-sm" aria-hidden>🎂</span>
-              {student.dob}
-            </span>
-          )}
+              <span className="text-2xl sm:text-3xl" aria-hidden>
+                🎓
+              </span>
+            </div>
+          </div>
         </div>
-      </div>
-      <div className="flex flex-col sm:flex-row sm:items-center sm:gap-5 gap-4">
-        <div className="sm:hidden flex gap-2 overflow-x-auto pb-1 mx-auto" role="list">
-          {[
-            { label: 'Billed', value: money(summary.total_billed || 0) },
-            { label: 'Paid', value: money(summary.total_paid || 0) },
-            { label: 'Balance', value: money(summary.balance || 0) },
-          ].map(chip => (
-            <span key={chip.label} className="inline-flex flex-shrink-0 items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/15 text-xs font-medium backdrop-blur">
-              <span className="text-[10px] uppercase tracking-[0.15em]">{chip.label}</span>
-              <span className="font-semibold">{chip.value}</span>
-            </span>
-          ))}
-        </div>
-        <div className="hidden sm:grid gap-2 text-sm text-white/85">
-          <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/12 backdrop-blur-md">
-            <span className="text-[10px] uppercase tracking-[0.15em]">Balance</span>
-            <span className="font-semibold">{money(summary.balance || 0)}</span>
-          </span>
-          <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/12 backdrop-blur-md">
-            <span className="text-[10px] uppercase tracking-[0.15em]">Paid</span>
-            <span className="font-semibold">{money(summary.total_paid || 0)}</span>
-          </span>
-          <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/12 backdrop-blur-md">
-            <span className="text-[10px] uppercase tracking-[0.15em]">Billed</span>
-            <span className="font-semibold">{money(summary.total_billed || 0)}</span>
-          </span>
-        </div>
-        <div className="flex items-center justify-center w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 mx-auto sm:mx-0 rounded-2xl bg-white/18 backdrop-blur-md shadow-inner">
-          <span className="text-2xl sm:text-3xl" aria-hidden>🎓</span>
-        </div>
-      </div>
-    </div>
-  </header>
+      </header>
 
-  {loading && <div className="bg-white rounded shadow p-4">Loading...</div>}
-  {error && <div className="bg-red-50 text-red-700 p-3 rounded">{error}</div>}
+      {loading && <div className="bg-white rounded shadow p-4">Loading...</div>}
+      {error && <div className="bg-red-50 text-red-700 p-3 rounded">{error}</div>}
 
   {currentTab === 'dashboard' && (
     <div className="bg-white rounded shadow p-4">
@@ -509,6 +484,9 @@ export default function StudentDashboard(){
         )}
       </div>
     </div>
+  )}
+
+  </div>
   )
 }
 
