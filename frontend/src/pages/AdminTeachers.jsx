@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import api from '../api'
-import AdminLayout from '../components/AdminLayout'
 import Modal from '../components/Modal'
 import { useNotification } from '../components/NotificationContext'
 import { Link } from 'react-router-dom'
@@ -278,7 +277,7 @@ export default function AdminTeachers(){
   }
 
   return (
-    <AdminLayout>
+    <React.Fragment>
       <div className="space-y-6">
         {/* Header */}
         <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
@@ -766,6 +765,6 @@ export default function AdminTeachers(){
           </div>
         )}
       </div>
-    </AdminLayout>
+    </React.Fragment>
   )
 }

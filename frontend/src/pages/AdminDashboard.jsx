@@ -254,6 +254,7 @@ export default function AdminDashboard(){
       animate: true,
       format: (v) => v.toLocaleString(),
       trend: 0,
+      to: '/admin/students',
     },
     {
       title: 'Teachers',
@@ -263,6 +264,7 @@ export default function AdminDashboard(){
       animate: true,
       format: (v) => v.toLocaleString(),
       trend: stats?.trends?.teachers ?? 0,
+      to: '/admin/teachers',
     },
     {
       title: 'Classes',
@@ -272,6 +274,7 @@ export default function AdminDashboard(){
       animate: true,
       format: (v) => v.toLocaleString(),
       trend: stats?.trends?.classes ?? 0,
+      to: '/admin/classes',
     },
     {
       title: 'Attendance Rate',
@@ -281,6 +284,7 @@ export default function AdminDashboard(){
       animate: true,
       format: (v) => `${v}%`,
       trend: stats?.trends?.attendance ?? 0,
+      to: '/admin/reports',
     },
   ]
 
@@ -308,9 +312,15 @@ export default function AdminDashboard(){
             <div className="sm:hidden">
               <div ref={sliderRef} className="flex gap-4 overflow-x-auto snap-x snap-mandatory scroll-smooth pb-1">
                 {statCards.map(cfg => (
-                  <div key={cfg.title} className="snap-center shrink-0 w-full">
+                  <button
+                    key={cfg.title}
+                    type="button"
+                    onClick={() => navigate(cfg.to)}
+                    className="snap-center shrink-0 w-full text-left focus:outline-none"
+                    aria-label={`Open ${cfg.title}`}
+                  >
                     <StatCard {...cfg} />
-                  </div>
+                  </button>
                 ))}
               </div>
             </div>
@@ -318,7 +328,15 @@ export default function AdminDashboard(){
             {/* Tablet/Desktop: grid from sm and up */}
             <div className="hidden sm:grid sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
               {statCards.map(cfg => (
-                <StatCard key={cfg.title} {...cfg} />
+                <button
+                  key={cfg.title}
+                  type="button"
+                  onClick={() => navigate(cfg.to)}
+                  className="text-left focus:outline-none"
+                  aria-label={`Open ${cfg.title}`}
+                >
+                  <StatCard {...cfg} />
+                </button>
               ))}
             </div>
 

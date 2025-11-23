@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { useParams, useNavigate, Link, useSearchParams } from 'react-router-dom'
-import AdminLayout from '../components/AdminLayout'
 import Modal from '../components/Modal'
 import api from '../api'
 
@@ -531,7 +530,7 @@ export default function AdminClassProfile(){
   }, [filteredTeachers, assignSearch])
 
   return (
-    <AdminLayout>
+    <React.Fragment>
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <div>
@@ -1048,6 +1047,6 @@ export default function AdminClassProfile(){
           </div>
         </div>
       </Modal>
-    </AdminLayout>
+    </React.Fragment>
   )
 }

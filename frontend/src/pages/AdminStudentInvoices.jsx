@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import AdminLayout from '../components/AdminLayout'
 import api from '../api'
 
 export default function AdminStudentInvoices(){
@@ -60,7 +59,7 @@ export default function AdminStudentInvoices(){
   }
 
   return (
-    <AdminLayout>
+    <React.Fragment>
       <div className="space-y-4">
         <div className="text-sm text-gray-500"><Link to="/admin" className="hover:underline">Admin</Link> / <Link to="/admin/students" className="hover:underline">Students</Link> / <Link to={`/admin/students/${id}`} className="hover:underline">Dashboard</Link> / <span className="text-gray-700">Invoices</span></div>
         <div className="flex items-center justify-between">
@@ -100,6 +99,6 @@ export default function AdminStudentInvoices(){
           </table>
         </div>
       </div>
-    </AdminLayout>
+    </React.Fragment>
   )
 }
