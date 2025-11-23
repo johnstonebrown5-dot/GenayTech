@@ -4,6 +4,7 @@ import api from '../api'
 import AdminLayout from '../components/AdminLayout'
 import Modal from '../components/Modal'
 import { useNotification } from '../components/NotificationContext'
+import StatCard from '../components/StatCard'
 
 export default function AdminStudents(){
   const [students, setStudents] = useState([])
@@ -28,6 +29,8 @@ export default function AdminStudents(){
 
   // Tab: active vs graduated vs inactive
   const [tab, setTab] = useState('active') // 'active' | 'graduated' | 'inactive'
+  const [isCompact, setIsCompact] = useState(false)
+  const [showFilters, setShowFilters] = useState(false)
 
   const { showSuccess, showError } = useNotification()
 
@@ -74,6 +77,15 @@ export default function AdminStudents(){
     load()
     loadSchoolName()
   },[tab])
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return
+    const mql = window.matchMedia('(max-width: 640px)')
+    const onChange = (e) => setIsCompact(!!(e && e.matches))
+    setIsCompact(mql.matches)
+    try { mql.addEventListener('change', onChange) } catch { try { mql.addListener(onChange) } catch {} }
+    return () => { try { mql.removeEventListener('change', onChange) } catch { try { mql.removeListener(onChange) } catch {} } }
+  }, [])
 
   const create = async (e) => {
     e.preventDefault()
@@ -255,10 +267,19 @@ export default function AdminStudents(){
         {/* Header Section */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Students</h1>
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Students</h1>
             <p className="text-gray-600 mt-1">Manage and organize your student records</p>
           </div>
-          <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex items-center gap-2 overflow-x-auto sm:overflow-visible flex-nowrap sm:flex-wrap">
+            <button
+              onClick={() => setShowAddStudent(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors shrink-0"
+            >
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              Enroll Student
+            </button>
             <button
               onClick={handlePrint}
               className="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors"
@@ -281,97 +302,164 @@ export default function AdminStudents(){
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="bg-white rounded-xl shadow-md border border-gray-200 p-5 hover:shadow-lg transition-all duration-200 hover:scale-105">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600 mb-1">Total Students</p>
-                {isLoading ? (
-                  <div className="h-7 w-16 bg-gray-200 rounded animate-pulse" />
-                ) : (
-                  <p className="text-2xl font-bold text-gray-900">{students.length}</p>
-                )}
-                <p className="text-xs text-gray-500 mt-1">Active enrollments</p>
-              </div>
-              <div className="text-3xl p-2 rounded-lg bg-blue-100 text-blue-600">👥</div>
+        {(() => {
+          const newThisMonth = students.filter(s => {
+            const studentDate = new Date(s.created_at || s.id)
+            const now = new Date()
+            return studentDate.getMonth() === now.getMonth() && studentDate.getFullYear() === now.getFullYear()
+          }).length
+          return (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+              <StatCard
+                title="Students"
+                value={isLoading ? 0 : students.length}
+                icon="👥"
+                accent="from-brand-500 to-brand-600"
+                animate
+                format={(v)=>v.toLocaleString()}
+                trend={0}
+              />
+              <StatCard
+                title="Active Classes"
+                value={isLoading ? 0 : classes.length}
+                icon="🏫"
+                accent="from-emerald-500 to-emerald-600"
+                animate
+                format={(v)=>v.toLocaleString()}
+                trend={0}
+              />
+              <StatCard
+                title="New This Month"
+                value={isLoading ? 0 : newThisMonth}
+                icon="📈"
+                accent="from-fuchsia-500 to-fuchsia-600"
+                animate
+                format={(v)=>v.toLocaleString()}
+                trend={0}
+              />
             </div>
-          </div>
-          <div className="bg-white rounded-xl shadow-md border border-gray-200 p-5 hover:shadow-lg transition-all duration-200 hover:scale-105">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600 mb-1">Active Classes</p>
-                {isLoading ? (
-                  <div className="h-7 w-12 bg-gray-200 rounded animate-pulse" />
-                ) : (
-                  <p className="text-2xl font-bold text-gray-900">{classes.length}</p>
-                )}
-                <p className="text-xs text-gray-500 mt-1">Available sections</p>
-              </div>
-              <div className="text-3xl p-2 rounded-lg bg-green-100 text-green-600">🏫</div>
+          )
+        })()}
+
+        {/* Quick Actions banner */}
+        <div className="relative overflow-hidden rounded-2xl shadow-elevated p-5 text-white bg-gradient-to-r from-brand-600 via-indigo-600 to-fuchsia-600">
+          <div className="pointer-events-none absolute -top-8 right-0 w-40 h-40 rounded-full bg-white/20 blur-2 opacity-20" />
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <div className="text-sm font-medium text-white/90">Quick Actions</div>
+              <div className="text-lg font-semibold">Enroll Student</div>
+              <div className="text-xs text-white/80">Add new enrollment</div>
             </div>
-          </div>
-          <div className="bg-white rounded-xl shadow-md border border-gray-200 p-5 hover:shadow-lg transition-all duration-200 hover:scale-105">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600 mb-1">New This Month</p>
-                {isLoading ? (
-                  <div className="h-7 w-10 bg-gray-200 rounded animate-pulse" />
-                ) : (
-                  <p className="text-2xl font-bold text-gray-900">
-                    {students.filter(s => {
-                      const studentDate = new Date(s.created_at || s.id)
-                      const now = new Date()
-                      return studentDate.getMonth() === now.getMonth() && studentDate.getFullYear() === now.getFullYear()
-                    }).length}
-                  </p>
-                )}
-                <p className="text-xs text-gray-500 mt-1">Recent additions</p>
-              </div>
-              <div className="text-3xl p-2 rounded-lg bg-purple-100 text-purple-600">📈</div>
-            </div>
-          </div>
-          <div className="bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl shadow-lg p-5 text-white relative overflow-hidden hover:shadow-xl transition-all duration-200 hover:scale-105">
-            <div className="relative z-10">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-blue-100 mb-1">Quick Actions</p>
-                  <p className="text-lg font-bold text-white">Enroll Student</p>
-                  <p className="text-xs text-blue-100 mt-1">Add new enrollment</p>
-                </div>
-                <div className="text-3xl">➕</div>
-              </div>
-              <button
-                onClick={() => setShowAddStudent(true)}
-                className="mt-3 bg-white/20 hover:bg-white/30 backdrop-blur-sm rounded-lg px-4 py-2 text-sm font-medium transition-all duration-200 w-full"
-              >
-                Add New Student
-              </button>
-            </div>
-            {/* Enhanced decorative background elements */}
-            <div className="absolute top-0 right-0 w-20 h-20 bg-white/10 rounded-full -translate-y-6 translate-x-6"></div>
-            <div className="absolute bottom-0 right-4 w-16 h-16 bg-white/5 rounded-full translate-y-4 translate-x-4"></div>
-            <div className="absolute top-1/2 left-0 w-2 h-12 bg-white/10 rounded-r-full"></div>
+            <button
+              onClick={() => setShowAddStudent(true)}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold bg-white/15 hover:bg-white/25 border border-white/25 backdrop-blur-md transition-colors"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+              </svg>
+              Add New Student
+            </button>
           </div>
         </div>
 
+        <button
+          onClick={()=> setShowAddStudent(true)}
+          aria-label="Enroll student"
+          title="Enroll student"
+          className="md:hidden fixed right-4 bottom-24 z-40 px-3.5 py-2 rounded-full text-sm font-semibold bg-blue-600 text-white shadow-soft"
+        >
+          + Enroll
+        </button>
+
         {/* Tabs */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 overflow-x-auto">
           <button
-            className={`px-3 py-1.5 rounded border text-sm ${tab==='active'?'bg-blue-600 text-white border-blue-600':'bg-white text-gray-700'}`}
+            className={`px-3 py-1.5 rounded-full border text-sm shrink-0 ${tab==='active'?'bg-blue-600 text-white border-blue-600':'bg-white text-gray-700'}`}
             onClick={()=>{ setTab('active'); setSearchTerm(''); setSearchDraft(''); }}
           >Active Students</button>
           <button
-            className={`px-3 py-1.5 rounded border text-sm ${tab==='graduated'?'bg-blue-600 text-white border-blue-600':'bg-white text-gray-700'}`}
+            className={`px-3 py-1.5 rounded-full border text-sm shrink-0 ${tab==='graduated'?'bg-blue-600 text-white border-blue-600':'bg-white text-gray-700'}`}
             onClick={()=>{ setTab('graduated'); setSearchTerm(''); setSearchDraft(''); }}
           >Graduated Students</button>
           <button
-            className={`px-3 py-1.5 rounded border text-sm ${tab==='inactive'?'bg-blue-600 text-white border-blue-600':'bg-white text-gray-700'}`}
+            className={`px-3 py-1.5 rounded-full border text-sm shrink-0 ${tab==='inactive'?'bg-blue-600 text-white border-blue-600':'bg-white text-gray-700'}`}
             onClick={()=>{ setTab('inactive'); setSearchTerm(''); setSearchDraft(''); }}
           >Inactive Students</button>
         </div>
 
-        {/* Filters & Search Toolbar (moved below cards) */}
-        <div className="flex items-center gap-3 flex-wrap">
+        {/* Mobile toolbar */}
+        <div className="sm:hidden space-y-2">
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <input
+                type="text"
+                placeholder="Search students..."
+                value={searchDraft}
+                onChange={(e) => setSearchDraft(e.target.value)}
+                className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent w-full"
+              />
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              </div>
+            </div>
+            <button
+              onClick={()=> setSearchTerm(searchDraft)}
+              className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm"
+            >Search</button>
+            <button
+              onClick={()=> setShowFilters(v=>!v)}
+              className="px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm"
+            >Filters</button>
+          </div>
+          {showFilters && (
+            <div className="p-3 rounded-xl border border-gray-200 bg-white/90 backdrop-blur-xl supports-[backdrop-filter]:bg-white/70 space-y-2">
+              {tab==='active' && (
+                <div className="flex items-center gap-2">
+                  <select
+                    value={filterGrade}
+                    onChange={(e)=>{ setFilterGrade(e.target.value); setFilterClass('') }}
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="">All Grades</option>
+                    {gradeOptions.map(g => (
+                      <option key={g} value={g}>Grade {g}</option>
+                    ))}
+                  </select>
+                  <select
+                    value={filterClass}
+                    onChange={(e)=>setFilterClass(e.target.value)}
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="">All Classes</option>
+                    {classOptions.map(c => (
+                      <option key={c.id} value={c.id}>{c.name} {c.grade_level ? `- ${c.grade_level}` : ''}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              <div className="flex items-center gap-2">
+                <select
+                  value={filterGender}
+                  onChange={(e)=>setFilterGender(e.target.value)}
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="">All Genders</option>
+                  <option value="Male">Male</option>
+                  <option value="Female">Female</option>
+                </select>
+                <button
+                  onClick={()=>{ setFilterGrade(''); setFilterClass(''); setFilterGender(''); setSearchTerm(''); setSearchDraft('') }}
+                  className="px-3 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+                >Clear</button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Filters & Search Toolbar (desktop) */}
+        <div className="hidden sm:flex items-center gap-3 flex-wrap">
           {/* Filters */}
           {tab==='active' && (
           <select
@@ -434,8 +522,44 @@ export default function AdminStudents(){
           </button>
         </div>
 
-        {/* Students Table */}
-        <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden backdrop-blur-sm">
+        {/* Mobile Card List */}
+        <div className="sm:hidden space-y-3">
+          {isLoading ? (
+            <div className="bg-white/90 backdrop-blur-xl border border-gray-200 rounded-2xl p-4 shadow-card">Loading students...</div>
+          ) : filteredStudents.length === 0 ? (
+            <div className="bg-white/90 backdrop-blur-xl border border-gray-200 rounded-2xl p-6 text-center text-gray-600">No students found</div>
+          ) : (
+            filteredStudents.map((s) => (
+              <div key={s.id} className="relative overflow-hidden rounded-2xl border border-gray-200 bg-white/90 backdrop-blur-xl supports-[backdrop-filter]:bg-white/70 shadow-card p-4">
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-semibold text-sm shadow-soft">
+                    {s.name.split(' ').map(n => n[0]).join('').toUpperCase()}
+                  </div>
+                  <div className="min-w-0">
+                    <Link to={`/admin/students/${s.id}`} className="font-semibold text-gray-900 hover:underline truncate block">{s.name}</Link>
+                    <div className="text-xs text-gray-500 font-mono truncate">{s.admission_no}</div>
+                  </div>
+                </div>
+                <div className="mt-3 flex items-center justify-between gap-2">
+                  <div className="text-xs text-gray-600">
+                    <div className="font-medium text-gray-800">{tab==='active' ? (s.klass_detail?.name || s.klass || 'Not Assigned') : (tab==='inactive' ? 'Inactive' : `Graduated${s.graduation_year ? ` • ${s.graduation_year}` : ''}`)}</div>
+                    <div className="text-[11px] text-gray-500">Guardian: {s.guardian_id || 'N/A'}</div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <Link to={`/admin/students/${s.id}`} className="px-2.5 py-1.5 text-xs rounded-lg bg-indigo-100 text-indigo-700 hover:bg-indigo-200">View</Link>
+                    <button
+                      onClick={()=>{ setConfirmStudent(s); setConfirmTargetActive(!s.is_active); setConfirmAgree(false); setConfirmOpen(true); }}
+                      className={`px-2.5 py-1.5 text-xs rounded-lg ${s.is_active ? 'bg-red-100 text-red-700 hover:bg-red-200' : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'}`}
+                    >{s.is_active ? 'Deactivate' : 'Activate'}</button>
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* Students Table (desktop) */}
+        <div className="hidden sm:block bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden backdrop-blur-sm">
           <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50">
             <div className="flex items-center justify-between">
               <div>
