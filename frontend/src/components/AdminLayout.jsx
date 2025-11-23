@@ -352,6 +352,8 @@ export default function AdminLayout({ children }){
         const root = typeof document !== 'undefined' ? document.getElementById('floating-actions-root') : null
         const isSmall = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(max-width: 767px)').matches
         if (!isSmall) return null
+        const showFab = false
+        if (!showFab) return null
         const size = 44
         const iconSize = 18
         const btn = (
@@ -467,6 +469,10 @@ export default function AdminLayout({ children }){
               )
             })}
           </nav>
+          <div className="p-2 mt-2 border-t border-blue-500/30 flex items-center gap-2">
+            <button onClick={lock} className="flex-1 px-3 py-2 rounded-lg text-sm font-medium bg-white/10 text-white border border-white/20 hover:bg-white/20 transition-colors">Lock</button>
+            <button onClick={()=>setShowLogoutConfirm(true)} className="flex-1 px-3 py-2 rounded-lg text-sm font-semibold bg-red-500 text-white hover:bg-red-600 transition-colors">Logout</button>
+          </div>
           <div className="mt-auto p-3 text-xs text-blue-200/80">
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
@@ -476,10 +482,82 @@ export default function AdminLayout({ children }){
         </aside>
 
         {/* Content area */}
-        <main className={`transition-all duration-200 px-4 md:px-6 py-4 md:py-6 ${isOpen? 'md:ml-64':'md:ml-16'}`}>
+        <main className={`transition-all duration-200 px-4 md:px-6 pt-4 pb-24 md:py-6 ${isOpen? 'md:ml-64':'md:ml-16'}`}>
           {children}
         </main>
       </div>
+
+      {/* Mobile Bottom Tab Bar */}
+      <nav className="fixed bottom-0 inset-x-0 z-30 md:hidden">
+        <div className="max-w-screen-2xl mx-auto px-3 pb-[env(safe-area-inset-bottom)]">
+          <div className="h-14 rounded-2xl bg-white/90 backdrop-blur-xl supports-[backdrop-filter]:bg-white/70 border border-gray-200 shadow-[0_10px_30px_-12px_rgba(0,0,0,0.25)] flex items-stretch justify-between px-1.5">
+            {/* Home */}
+            <Link
+              to="/admin"
+              className={`relative flex-1 flex flex-col items-center justify-center gap-0.5 rounded-xl ${pathname === '/admin' ? 'text-gray-900' : 'text-gray-600 hover:bg-gray-50'}`}
+              title="Home"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 10.5L12 3l9 7.5M5.25 9.75V20.25a.75.75 0 00.75.75H9.75a.75.75 0 00.75-.75v-4.5a.75.75 0 01.75-.75h2.25a.75.75 0 01.75.75v4.5a.75.75 0 00.75.75h3.75a.75.75 0 00.75-.75V9.75" />
+              </svg>
+              <span className="text-[11px] leading-none">Home</span>
+            </Link>
+
+            {/* Students */}
+            <Link
+              to="/admin/students"
+              className={`relative flex-1 flex flex-col items-center justify-center gap-0.5 rounded-xl ${pathname.startsWith('/admin/students') ? 'text-gray-900' : 'text-gray-600 hover:bg-gray-50'}`}
+              title="Students"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 14.25c2.899 0 5.25-2.351 5.25-5.25S14.899 3.75 12 3.75 6.75 6.101 6.75 9s2.351 5.25 5.25 5.25zM4.5 20.25a7.5 7.5 0 0115 0" />
+              </svg>
+              <span className="text-[11px] leading-none">Students</span>
+            </Link>
+
+            {/* Teachers */}
+            <Link
+              to="/admin/teachers"
+              className={`relative flex-1 flex flex-col items-center justify-center gap-0.5 rounded-xl ${pathname.startsWith('/admin/teachers') ? 'text-gray-900' : 'text-gray-600 hover:bg-gray-50'}`}
+              title="Teachers"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 9.75h7.5M8.25 13.5h7.5M4.5 6h15a.75.75 0 01.75.75v10.5a.75.75 0 01-.75.75H4.5a.75.75 0 01-.75-.75V6.75A.75.75 0 014.5 6z" />
+              </svg>
+              <span className="text-[11px] leading-none">Teachers</span>
+            </Link>
+
+            {/* Messages */}
+            <Link
+              to="/admin/messages"
+              className={`relative flex-1 flex flex-col items-center justify-center gap-0.5 rounded-xl ${pathname.startsWith('/admin/messages') ? 'text-gray-900' : 'text-gray-600 hover:bg-gray-50'}`}
+              title="Messages"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 8.25h9M7.5 12h6.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span className="text-[11px] leading-none">Messages</span>
+              {unreadCount > 0 && (
+                <span className="absolute -top-1.5 right-3 inline-flex items-center justify-center min-w-[16px] h-[16px] px-1 rounded-full text-[10px] bg-red-600 text-white">
+                  {unreadCount > 99 ? '99+' : unreadCount}
+                </span>
+              )}
+            </Link>
+
+            {/* More (opens drawer) */}
+            <button
+              onClick={() => setIsMobileOpen(true)}
+              className="relative flex-1 flex flex-col items-center justify-center gap-0.5 rounded-xl text-gray-600 hover:bg-gray-50"
+              title="More"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+              </svg>
+              <span className="text-[11px] leading-none">More</span>
+            </button>
+          </div>
+        </div>
+      </nav>
 
       {/* Logout confirmation modal */}
       {showLogoutConfirm && createPortal(

@@ -23,6 +23,9 @@ export default function AdminDashboard(){
   const [events, setEvents] = useState([])
   const [loading, setLoading] = useState(true)
   const navigate = useNavigate()
+  const [isCompact, setIsCompact] = useState(false)
+  const [showTrends, setShowTrends] = useState(true)
+  const [calendarMode, setCalendarMode] = useState('calendar')
 
   useEffect(()=>{ (async()=>{
     try {
@@ -57,6 +60,30 @@ export default function AdminDashboard(){
       setLoading(false)
     }
   })() },[])
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return
+    const mql = window.matchMedia('(max-width: 640px)')
+    const onChange = (e) => { setIsCompact(!!(e && e.matches)) }
+    setIsCompact(mql.matches)
+    try {
+      mql.addEventListener('change', onChange)
+    } catch {
+      try { mql.addListener(onChange) } catch {}
+    }
+    return () => {
+      try {
+        mql.removeEventListener('change', onChange)
+      } catch {
+        try { mql.removeListener(onChange) } catch {}
+      }
+    }
+  }, [])
+
+  useEffect(() => {
+    setShowTrends(!isCompact)
+    setCalendarMode(isCompact ? 'list' : 'calendar')
+  }, [isCompact])
 
   const handleQuickAction = (action) => {
     switch(action) {
@@ -319,15 +346,20 @@ export default function AdminDashboard(){
               <div className="bg-white rounded-2xl shadow-card border border-gray-200 p-6">
                 <div className="flex items-center justify-between mb-4">
                   <h2 className="text-lg font-semibold text-gray-900">Finance Overview</h2>
-                  <span className={`text-[11px] px-2 py-0.5 rounded-full border ${
-                    (stats?.trends?.feesCollected ?? 0) > 0
-                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                      : (stats?.trends?.feesCollected ?? 0) < 0
-                      ? 'bg-rose-50 text-rose-700 border-rose-200'
-                      : 'bg-gray-50 text-gray-600 border-gray-200'
-                  }`}>
-                    {(stats?.trends?.feesCollected ?? 0) > 0 ? '▲' : (stats?.trends?.feesCollected ?? 0) < 0 ? '▼' : '▲'} {Math.abs(Math.round(stats?.trends?.feesCollected ?? 0))}% vs last month
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-[11px] px-2 py-0.5 rounded-full border ${
+                      (stats?.trends?.feesCollected ?? 0) > 0
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                        : (stats?.trends?.feesCollected ?? 0) < 0
+                        ? 'bg-rose-50 text-rose-700 border-rose-200'
+                        : 'bg-gray-50 text-gray-600 border-gray-200'
+                    }`}>
+                      {(stats?.trends?.feesCollected ?? 0) > 0 ? '▲' : (stats?.trends?.feesCollected ?? 0) < 0 ? '▼' : '▲'} {Math.abs(Math.round(stats?.trends?.feesCollected ?? 0))}% vs last month
+                    </span>
+                    <button onClick={()=>setShowTrends(v=>!v)} className="sm:hidden px-2 py-1 rounded-full border border-gray-200 bg-white text-gray-700">
+                      {showTrends ? 'Hide chart' : 'Show chart'}
+                    </button>
+                  </div>
                 </div>
 
                 {/* KPI Row */}
@@ -373,8 +405,8 @@ export default function AdminDashboard(){
                 {/* Mini sparkline removed per request */}
 
                 {/* Monthly Bar Chart */}
-                {Array.isArray(stats.feesTrend) && stats.feesTrend.length>0 && (
-                  <div className="h-72 sm:h-80 lg:h-[420px]">
+                {showTrends && Array.isArray(stats.feesTrend) && stats.feesTrend.length>0 && (
+                  <div className="h-56 sm:h-80 lg:h-[420px]">
                     <Bar height={360}
                       data={{
                         labels: stats.feesTrend.map(i=>i.month),
@@ -412,7 +444,11 @@ export default function AdminDashboard(){
                     <button onClick={()=>setViewMonth(prev=>{ const d=new Date(prev); d.setMonth(d.getMonth()-1); return d })} className="p-2 sm:p-2.5 rounded-full border border-gray-200 hover:bg-gray-50" aria-label="Previous month">‹</button>
                     <button onClick={()=>setViewMonth(prev=>{ const d=new Date(prev); d.setMonth(d.getMonth()+1); return d })} className="p-2 sm:p-2.5 rounded-full border border-gray-200 hover:bg-gray-50" aria-label="Next month">›</button>
                     <button onClick={()=>setViewMonth(new Date())} className="px-2 py-1 text-[10px] sm:text-xs rounded-full border border-gray-200 hover:bg-gray-50">Today</button>
-                    <button onClick={() => navigate('/admin/events')} className="hidden xs:inline text-blue-600 hover:text-blue-700 text-sm font-medium">View All →</button>
+                    <div className="sm:hidden inline-flex items-center gap-1 border border-gray-200 rounded-full p-0.5">
+                      <button onClick={()=>setCalendarMode('calendar')} className={`${calendarMode==='calendar' ? 'bg-gray-900 text-white' : 'bg-white text-gray-700'} px-2 py-0.5 rounded-full text-[10px]`}>Cal</button>
+                      <button onClick={()=>setCalendarMode('list')} className={`${calendarMode==='list' ? 'bg-gray-900 text-white' : 'bg-white text-gray-700'} px-2 py-0.5 rounded-full text-[10px]`}>List</button>
+                    </div>
+                    <button onClick={() => navigate('/admin/events')} className="hidden sm:inline text-blue-600 hover:text-blue-700 text-sm font-medium">View All →</button>
                   </div>
                 </div>
 
@@ -449,78 +485,104 @@ export default function AdminDashboard(){
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-7 text-[10px] sm:text-[11px] font-semibold text-gray-500 mb-2">
-                    {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d=> <div key={d} className="px-0.5 sm:px-1 py-0.5 sm:py-1 text-center tracking-wide">{d}</div>)}
-                  </div>
-                  <div className="grid grid-cols-7 gap-1">
-                    {monthDays.map((d,i)=>{
-                      const key = localKey(d)
-                      const inMonth = d.getMonth()===currentMonth.getMonth()
-                      const isToday = key === localKey(new Date())
-                      const dayEvents = eventsByDay[key] || []
-                      const color = dayEvents.length>0 ? colorForEvent(dayEvents[0]) : null
-                      const holidayName = kenyaHolidaysMap.get(key)
-                      const weekend = isWeekend(d)
-                      // Base background priority: Holiday (yellow) > Event color > Weekend (indigo) > default white/gray
-                      let tileBg = inMonth ? 'bg-white' : 'bg-gray-50'
-                      if (weekend && inMonth) tileBg = 'bg-indigo-50'
-                      if (color && dayEvents.length>0) tileBg = color.chip.split(' ').find(c=>c.startsWith('bg-')) || tileBg
-                      if (holidayName) tileBg = 'bg-yellow-50'
-                      return (
-                        <button type="button" onClick={()=>{ setDayModalKey(key); setDayModalEvents(dayEvents); setDayModalOpen(true) }} key={i} className={`text-left relative rounded-xl min-h-[56px] sm:min-h-[68px] p-1.5 sm:p-2 text-[10px] sm:text-xs border ${holidayName? 'border-yellow-300' : (inMonth? 'border-gray-200':'border-gray-200/70')} ${tileBg} hover:border-brand-300 transition-all`}> 
-                          <div className="flex items-center justify-between">
-                            <div className={`${inMonth? 'text-gray-800':'text-gray-400'} text-[10px] sm:text-[11px] font-semibold`}>{d.getDate()}</div>
-                            <div className="flex items-center gap-1">
-                              {holidayName && <span className="hidden sm:inline text-[10px] px-1.5 py-0.5 rounded-full bg-yellow-100 text-yellow-800 border border-yellow-200" title={holidayName}>Holiday</span>}
-                              {isToday && <span className="text-[9px] sm:text-[10px] px-1.5 py-0.5 rounded-full bg-brand-50 text-brand-700 border border-brand-200">Today</span>}
+                  {calendarMode === 'calendar' ? (
+                    <>
+                      <div className="grid grid-cols-7 text-[10px] sm:text-[11px] font-semibold text-gray-500 mb-2">
+                        {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d=> <div key={d} className="px-0.5 sm:px-1 py-0.5 sm:py-1 text-center tracking-wide">{d}</div>)}
+                      </div>
+                      <div className="grid grid-cols-7 gap-1">
+                        {monthDays.map((d,i)=>{
+                          const key = localKey(d)
+                          const inMonth = d.getMonth()===currentMonth.getMonth()
+                          const isToday = key === localKey(new Date())
+                          const dayEvents = eventsByDay[key] || []
+                          const color = dayEvents.length>0 ? colorForEvent(dayEvents[0]) : null
+                          const holidayName = kenyaHolidaysMap.get(key)
+                          const weekend = isWeekend(d)
+                          let tileBg = inMonth ? 'bg-white' : 'bg-gray-50'
+                          if (weekend && inMonth) tileBg = 'bg-indigo-50'
+                          if (color && dayEvents.length>0) tileBg = color.chip.split(' ').find(c=>c.startsWith('bg-')) || tileBg
+                          if (holidayName) tileBg = 'bg-yellow-50'
+                          return (
+                            <button type="button" onClick={()=>{ setDayModalKey(key); setDayModalEvents(dayEvents); setDayModalOpen(true) }} key={i} className={`text-left relative rounded-xl min-h-[56px] sm:min-h-[68px] p-1.5 sm:p-2 text-[10px] sm:text-xs border ${holidayName? 'border-yellow-300' : (inMonth? 'border-gray-200':'border-gray-200/70')} ${tileBg} hover:border-brand-300 transition-all`}>
+                              <div className="flex items-center justify-between">
+                                <div className={`${inMonth? 'text-gray-800':'text-gray-400'} text-[10px] sm:text-[11px] font-semibold`}>{d.getDate()}</div>
+                                <div className="flex items-center gap-1">
+                                  {holidayName && <span className="hidden sm:inline text-[10px] px-1.5 py-0.5 rounded-full bg-yellow-100 text-yellow-800 border border-yellow-200" title={holidayName}>Holiday</span>}
+                                  {isToday && <span className="text-[9px] sm:text-[10px] px-1.5 py-0.5 rounded-full bg-brand-50 text-brand-700 border border-brand-200">Today</span>}
+                                </div>
+                              </div>
+                              <div className="mt-1 flex flex-wrap gap-1">
+                                {dayEvents.slice(0,2).map(ev => {
+                                  const c = colorForEvent(ev)
+                                  return (
+                                  <span key={ev.id} className={`px-1.5 py-0.5 rounded-full text-[9px] sm:text-[10px] border truncate max-w-full ${c.chip}`} title={ev.title}>
+                                    {ev.title}
+                                  </span>)
+                                })}
+                                {dayEvents.length>2 && <span className="text-[9px] sm:text-[10px] text-gray-500">+{dayEvents.length-2} more</span>}
+                              </div>
+                              {dayEvents.length>0 && (
+                                <div className="absolute bottom-1 right-2 inline-flex items-center gap-1 text-[9px] sm:text-[10px] text-gray-500">
+                                  <span className={`w-1.5 h-1.5 rounded-full ${color?.dot || 'bg-blue-500'}`} />
+                                  {dayEvents.length}
+                                </div>
+                              )}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </>
+                  ) : (
+                    <div className="space-y-2">
+                      {events
+                        .filter(ev => new Date(ev.start) >= new Date())
+                        .sort((a,b) => new Date(a.start) - new Date(b.start))
+                        .slice(0,5)
+                        .map(ev => (
+                          <div key={ev.id} className="flex items-center justify-between p-2 bg-gray-50 rounded text-sm">
+                            <div className="flex-1 min-w-0">
+                              <div className="font-medium truncate">{ev.title}</div>
+                              <div className="text-xs text-gray-600">
+                                {new Date(ev.start).toLocaleDateString()} {ev.location && `• ${ev.location}`}
+                              </div>
                             </div>
+                            <span className="text-xs px-2 py-0.5 rounded bg-blue-100 text-blue-700">{ev.audience}</span>
                           </div>
-                          <div className="mt-1 flex flex-wrap gap-1">
-                            {dayEvents.slice(0,2).map(ev => {
-                              const c = colorForEvent(ev)
-                              return (
-                              <span key={ev.id} className={`px-1.5 py-0.5 rounded-full text-[9px] sm:text-[10px] border truncate max-w-full ${c.chip}`} title={ev.title}>
-                                {ev.title}
-                              </span>)
-                            })}
-                            {dayEvents.length>2 && <span className="text-[9px] sm:text-[10px] text-gray-500">+{dayEvents.length-2} more</span>}
-                          </div>
-                          {dayEvents.length>0 && (
-                            <div className="absolute bottom-1 right-2 inline-flex items-center gap-1 text-[9px] sm:text-[10px] text-gray-500">
-                              <span className={`w-1.5 h-1.5 rounded-full ${color?.dot || 'bg-blue-500'}`} />
-                              {dayEvents.length}
-                            </div>
-                          )}
-                        </button>
-                      )
-                    })}
-                  </div>
+                        ))}
+                      {events.filter(ev => new Date(ev.start) >= new Date()).length === 0 && (
+                        <div className="text-sm text-gray-500 text-center py-4">No upcoming events</div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {/* Upcoming Events List */}
-                <div className="mt-6">
-                  <h3 className="text-sm font-medium text-gray-900 mb-3">Upcoming Events</h3>
-                  <div className="space-y-2">
-                    {events
-                      .filter(ev => new Date(ev.start) >= new Date())
-                      .sort((a,b) => new Date(a.start) - new Date(b.start))
-                      .slice(0,1)
-                      .map(ev => (
-                        <div key={ev.id} className="flex items-center justify-between p-2 bg-gray-50 rounded text-sm">
-                          <div className="flex-1 min-w-0">
-                            <div className="font-medium truncate">{ev.title}</div>
-                            <div className="text-xs text-gray-600">
-                              {new Date(ev.start).toLocaleDateString()} {ev.location && `• ${ev.location}`}
+                {!(isCompact && calendarMode === 'list') && (
+                  <div className="mt-6">
+                    <h3 className="text-sm font-medium text-gray-900 mb-3">Upcoming Events</h3>
+                    <div className="space-y-2">
+                      {events
+                        .filter(ev => new Date(ev.start) >= new Date())
+                        .sort((a,b) => new Date(a.start) - new Date(b.start))
+                        .slice(0,1)
+                        .map(ev => (
+                          <div key={ev.id} className="flex items-center justify-between p-2 bg-gray-50 rounded text-sm">
+                            <div className="flex-1 min-w-0">
+                              <div className="font-medium truncate">{ev.title}</div>
+                              <div className="text-xs text-gray-600">
+                                {new Date(ev.start).toLocaleDateString()} {ev.location && `• ${ev.location}`}
+                              </div>
                             </div>
+                            <span className="text-xs px-2 py-0.5 rounded bg-blue-100 text-blue-700">{ev.audience}</span>
                           </div>
-                          <span className="text-xs px-2 py-0.5 rounded bg-blue-100 text-blue-700">{ev.audience}</span>
-                        </div>
-                      ))}
-                    {events.filter(ev => new Date(ev.start) >= new Date()).length === 0 && (
-                      <div className="text-sm text-gray-500 text-center py-4">No upcoming events</div>
-                    )}
+                        ))}
+                      {events.filter(ev => new Date(ev.start) >= new Date()).length === 0 && (
+                        <div className="text-sm text-gray-500 text-center py-4">No upcoming events</div>
+                      )}
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
             </div>
           </React.Fragment>

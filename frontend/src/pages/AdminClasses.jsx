@@ -195,6 +195,39 @@ export default function AdminClasses(){
     return palette[idx]
   }
 
+  const isGrade9 = (c) => {
+    const g = String(c?.grade_level || '').toLowerCase()
+    return g.includes('grade 9') || g.trim() === '9'
+  }
+
+  const getPromoteLabel = (c) => (isGrade9(c) ? 'Mark as Graduated' : 'Promote')
+
+  const handlePromote = async (c) => {
+    const label = getPromoteLabel(c)
+    const confirmText = isGrade9(c)
+      ? `Mark all students in ${c.name} as graduated?`
+      : `Promote all students in ${c.name} to the next class?`
+
+    if (!window.confirm(confirmText)) return
+
+    try {
+      setBusy(true)
+      setBusyMessage(isGrade9(c) ? 'Marking students as graduated…' : 'Promoting students…')
+
+      const res = await api.post(`/academics/classes/${c.id}/promote/`)
+      const detail = res?.data?.detail || 'Operation completed.'
+      showSuccess(label, detail)
+
+      await load()
+    } catch (err) {
+      const apiDetail = err?.response?.data?.detail
+      const fallback = 'There was an error performing this action. If this is a promotion (not graduation), ensure the next class is empty before trying again.'
+      showError(label + ' Failed', apiDetail || fallback)
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const renderCard = (c) => {
     const pal = gradeColor(c.grade_level)
     const streamName = (() => {
@@ -243,6 +276,12 @@ export default function AdminClasses(){
             <Link to={`/admin/classes/${c.id}?tab=subjects`} className="text-amber-700 hover:underline">Assign Subjects</Link>
           </div>
           <div className="flex items-center gap-3">
+            <button
+              onClick={() => handlePromote(c)}
+              className="text-emerald-700 hover:underline"
+            >
+              {getPromoteLabel(c)}
+            </button>
             <button onClick={()=>edit(c)} className="text-blue-600 hover:underline">Edit</button>
             <button onClick={()=>del(c.id)} className="text-red-600 hover:underline">Delete</button>
           </div>

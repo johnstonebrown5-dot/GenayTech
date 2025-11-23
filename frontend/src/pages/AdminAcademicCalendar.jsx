@@ -89,13 +89,8 @@ export default function AdminAcademicCalendar(){
 
   const setCurrentYearAction = async (id) => {
     try {
-      // Ask admin whether to promote students while setting current year
-      const promote = window.confirm('Set this year as current and promote students to next grade?\n\nNote: Grade 9 students will be marked as Graduated and removed from classes.')
-      const payload = promote ? { promote: true } : { promote: false }
-      const res = await api.post(`/academics/academic_years/${id}/set-current/`, payload)
-      if (res?.data?.promoted) {
-        alert('Academic year set and promotion completed.')
-      }
+      if (!window.confirm('Set this year as current?')) return
+      await api.post(`/academics/academic_years/${id}/set-current/`, {})
       await load()
     } catch (e) {
       alert(e?.response?.data ? JSON.stringify(e.response.data) : e.message)
@@ -265,7 +260,6 @@ export default function AdminAcademicCalendar(){
                       {y.is_current ? (
                         <>
                           <span className="text-xs px-2 py-0.5 rounded bg-green-100 text-green-700">Current</span>
-                          <button onClick={()=>promoteYear(y.id)} className="text-xs px-2 py-1 rounded border ml-2">Promote</button>
                         </>
                       ) : (
                         <button onClick={()=>setCurrentYearAction(y.id)} className="text-xs px-2 py-1 rounded border">Set current</button>

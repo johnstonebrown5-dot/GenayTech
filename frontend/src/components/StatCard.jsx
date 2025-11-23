@@ -54,7 +54,7 @@ export default function StatCard({ title, value, icon, accent, animate = false, 
   }, [value, animate, isNumber])
 
   return (
-    <div className="relative overflow-hidden bg-white rounded-2xl border border-gray-200/80 shadow-card hover:shadow-elevated transition-all duration-200 hover:-translate-y-0.5">
+    <div className="relative overflow-hidden rounded-2xl border border-gray-200/80 bg-white/90 backdrop-blur-xl supports-[backdrop-filter]:bg-white/70 shadow-card hover:shadow-elevated transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.995]">
       {/* Decorative gradient blob */}
       <div className={`pointer-events-none absolute -right-6 -bottom-8 w-28 h-28 rounded-full blur-2 opacity-10 bg-gradient-to-br ${accentClasses}`} />
 
@@ -82,12 +82,12 @@ export default function StatCard({ title, value, icon, accent, animate = false, 
 
       <div className="p-5">
         <div className="flex items-center gap-4">
-          <div className={`shrink-0 w-11 h-11 rounded-xl bg-gradient-to-br ${accentClasses} text-white flex items-center justify-center text-2xl shadow-soft`}>
+          <div className={`shrink-0 w-12 h-12 rounded-xl bg-gradient-to-br ${accentClasses} text-white flex items-center justify-center text-2xl shadow-soft ring-1 ring-white/30`}>
             <span className="leading-none">{displayIcon}</span>
           </div>
           <div className="min-w-0 flex-1">
             <div className="text-sm font-medium text-gray-500">{title}</div>
-            <div className="mt-0.5 text-2xl sm:text-2xl md:text-[1.6rem] font-extrabold tracking-tight text-gray-900 truncate whitespace-nowrap">{formatter(displayValue)}</div>
+            <div className="mt-0.5 text-[1.55rem] sm:text-2xl md:text-[1.6rem] font-extrabold tracking-tight text-gray-900 truncate whitespace-nowrap">{formatter(displayValue)}</div>
           </div>
         </div>
       </div>

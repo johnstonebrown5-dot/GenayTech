@@ -304,6 +304,200 @@ class ClassViewSet(viewsets.ModelViewSet):
         }
         return Response({'class': {'id': klass.id, 'name': klass.name, 'grade_level': klass.grade_level}, 'events': events, 'summary': summary})
 
+    @action(detail=True, methods=['post'], permission_classes=[IsAdmin], url_path='promote')
+    def promote(self, request, pk=None):
+        """Promote or graduate all students in this class.
+        Rules:
+        - Grade 9: mark as graduated (with fee balance clearance check).
+        - Other grades: promote to next grade in SAME stream.
+          If the next class exists but is NOT empty, block with 400.
+        """
+        from django.db import transaction
+        from .models import AcademicYear as AcademicYearModel, Class as ClassModel, StudentClassHistory as HistoryModel
+        import re
+
+        klass = self.get_object()
+        school = getattr(klass, 'school', None)
+        if not school:
+            return Response({'detail': 'Class has no associated school'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Resolve current academic year to tag history years
+        ay = AcademicYearModel.objects.filter(school=school, is_current=True).first()
+        grad_year = None
+        if ay and getattr(ay, 'end_date', None):
+            try:
+                grad_year = int(ay.end_date.year)
+            except Exception:
+                grad_year = None
+
+        # Parse grade number
+        current_grade = ClassModel.format_grade_level(klass.grade_level)
+        m_named = re.search(r'\bgrade\s*(\d{1,2})\b', current_grade, flags=re.IGNORECASE)
+        match = m_named if m_named else re.search(r'\b(\d{1,2})\b', current_grade)
+        if not match:
+            return Response({'detail': f'Could not determine numeric grade from "{current_grade}"'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            current_grade_num = int(match.group(1) if match.lastindex else match.group())
+        except Exception:
+            return Response({'detail': f'Failed to parse grade from "{current_grade}"'}, status=status.HTTP_400_BAD_REQUEST)
+
+        summary = {
+            'class_id': klass.id,
+            'from': getattr(klass, 'name', ''),
+            'mode': None,
+            'students_moved': 0,
+            'students_graduated': 0,
+        }
+
+        with transaction.atomic():
+            if current_grade_num == 9:
+                # Graduation path with fee clearance check
+                moved_count = 0
+                not_cleared = []
+                try:
+                    from finance.models import Invoice, Payment
+                    from django.db.models import Sum
+                except Exception:
+                    Invoice = Payment = None
+                    Sum = None
+                for stu in klass.student_set.select_for_update().all():
+                    # Fee balance
+                    balance = 0
+                    try:
+                        if Invoice and Payment and Sum:
+                            total_billed = Invoice.objects.filter(student=stu).aggregate(s=Sum('amount'))['s'] or 0
+                            total_paid = Payment.objects.filter(invoice__student=stu).aggregate(s=Sum('amount'))['s'] or 0
+                            balance = float(total_billed or 0) - float(total_paid or 0)
+                    except Exception:
+                        balance = 0
+                    if balance > 0:
+                        not_cleared.append({'student_id': stu.id, 'name': stu.name, 'balance': balance})
+                        continue
+                    try:
+                        HistoryModel.objects.create(
+                            student=stu,
+                            from_class=klass,
+                            to_class=None,
+                            action='graduated',
+                            year=grad_year,
+                            term=None,
+                            note='Class-level graduation',
+                        )
+                    except Exception:
+                        pass
+                    stu.klass = None
+                    stu.is_graduated = True
+                    stu.is_active = False
+                    stu.graduation_year = grad_year
+                    stu.school = school
+                    stu.save(update_fields=['klass', 'is_graduated', 'is_active', 'graduation_year', 'school'])
+                    moved_count += 1
+                summary['mode'] = 'graduated'
+                summary['students_graduated'] = moved_count
+                if not_cleared:
+                    summary['not_cleared'] = not_cleared
+            else:
+                # Promotion path to next grade in same stream
+                new_grade_num = current_grade_num + 1
+                target_grade = ClassModel.format_grade_level(str(new_grade_num))
+                target = ClassModel.objects.filter(
+                    school=school,
+                    stream=klass.stream,
+                    grade_level=target_grade,
+                ).first()
+
+                # Enforce: if target exists and has students, block promotion
+                if target and target.student_set.exists():
+                    return Response(
+                        {
+                            'detail': 'Promotion blocked: next class already has students. Clear or use a different class.',
+                            'next_class_id': target.id,
+                            'next_class_name': getattr(target, 'name', ''),
+                        },
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+
+                if target:
+                    # Move students into existing (empty) target class
+                    moved_count = 0
+                    for stu in klass.student_set.select_for_update().all():
+                        try:
+                            HistoryModel.objects.create(
+                                student=stu,
+                                from_class=klass,
+                                to_class=target,
+                                action='promoted',
+                                year=grad_year,
+                                term=None,
+                                note='Class-level promotion to next grade',
+                            )
+                        except Exception:
+                            pass
+                        stu.klass = target
+                        stu.is_graduated = False
+                        stu.school = school
+                        stu.save(update_fields=['klass', 'is_graduated', 'school'])
+                        moved_count += 1
+                    summary['mode'] = 'moved_to_existing_class'
+                    summary['to_id'] = target.id
+                    summary['to'] = getattr(target, 'name', '')
+                    summary['students_moved'] = moved_count
+                else:
+                    # In-place rename to new grade (no target exists)
+                    from django.db import IntegrityError
+                    try:
+                        original_name = klass.name
+                        klass.grade_level = str(new_grade_num)
+                        klass.save(update_fields=['grade_level', 'name'])
+                        summary['mode'] = 'renamed_class'
+                        summary['from'] = original_name
+                        summary['to'] = klass.name
+                        summary['students_moved'] = klass.student_set.count()
+                    except IntegrityError:
+                        # Fallback: target created concurrently; move into it (must be empty due to previous check)
+                        target = ClassModel.objects.filter(
+                            school=school,
+                            stream=klass.stream,
+                            grade_level=target_grade,
+                        ).first()
+                        if not target:
+                            raise
+                        # Enforce emptiness on fallback as well
+                        if target.student_set.exists():
+                            return Response(
+                                {
+                                    'detail': 'Promotion blocked: next class already has students. Clear or use a different class.',
+                                    'next_class_id': target.id,
+                                    'next_class_name': getattr(target, 'name', ''),
+                                },
+                                status=status.HTTP_400_BAD_REQUEST,
+                            )
+                        moved_count = 0
+                        for stu in klass.student_set.select_for_update().all():
+                            try:
+                                HistoryModel.objects.create(
+                                    student=stu,
+                                    from_class=klass,
+                                    to_class=target,
+                                    action='promoted',
+                                    year=grad_year,
+                                    term=None,
+                                    note='Class-level promotion (fallback move)',
+                                )
+                            except Exception:
+                                pass
+                            stu.klass = target
+                            stu.is_graduated = False
+                            stu.school = school
+                            stu.save(update_fields=['klass', 'is_graduated', 'school'])
+                            moved_count += 1
+                        summary['mode'] = 'moved_to_existing_class_fallback'
+                        summary['to_id'] = target.id
+                        summary['to'] = getattr(target, 'name', '')
+                        summary['students_moved'] = moved_count
+
+        return Response({'detail': 'Class promotion completed', 'summary': summary})
+
     @action(detail=True, methods=['post'], permission_classes=[IsAdmin], url_path='add-students')
     def add_students(self, request, pk=None):
         """Admin: Add students without a class to this class.
@@ -3522,26 +3716,10 @@ class AcademicYearViewSet(viewsets.ModelViewSet):
         ay = self.get_object()
         ay.is_current = True
         ay.save()
-        # Optional promotion when setting as current
-        promote = str(request.data.get('promote', 'false')).lower() in ('1','true','yes')
-        if promote:
-            try:
-                summary = ay.promote_classes()
-            except Exception as e:
-                return Response({'detail': 'Academic year set, but promotion failed', 'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        return Response({'detail': 'Current academic year updated', 'promoted': promote, **({'summary': summary} if promote else {})})
+        # Promotion is no longer triggered from here
+        return Response({'detail': 'Current academic year updated', 'promoted': False})
 
-    @action(detail=True, methods=['post'], permission_classes=[IsAdmin], url_path='promote')
-    def promote(self, request, pk=None):
-        """Explicitly trigger promotion of classes/students for this academic year.
-        Safe to call once per year; it creates next-grade classes and moves students accordingly.
-        """
-        ay = self.get_object()
-        try:
-            summary = ay.promote_classes()
-            return Response({'detail': 'Promotion completed', 'summary': summary})
-        except Exception as e:
-            return Response({'detail': 'Promotion failed', 'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
 
 
 class TermViewSet(viewsets.ModelViewSet):
