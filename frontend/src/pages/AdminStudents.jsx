@@ -30,6 +30,7 @@ export default function AdminStudents(){
   const [tab, setTab] = useState('active') // 'active' | 'graduated' | 'inactive'
   const [isCompact, setIsCompact] = useState(false)
   const [showFilters, setShowFilters] = useState(false)
+  const [statIndex, setStatIndex] = useState(0)
 
   const { showSuccess, showError } = useNotification()
 
@@ -85,6 +86,12 @@ export default function AdminStudents(){
     try { mql.addEventListener('change', onChange) } catch { try { mql.addListener(onChange) } catch {} }
     return () => { try { mql.removeEventListener('change', onChange) } catch { try { mql.removeListener(onChange) } catch {} } }
   }, [])
+
+  useEffect(() => {
+    if (!isCompact) return
+    const id = setInterval(() => setStatIndex(i => (i + 1) % 3), 3000)
+    return () => clearInterval(id)
+  }, [isCompact])
 
   const create = async (e) => {
     e.preventDefault()
@@ -262,17 +269,17 @@ export default function AdminStudents(){
 
   return (
     <React.Fragment>
-      <div className="space-y-8">
+      <div className="space-y-6">
         {/* Header Section */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Students</h1>
             <p className="text-gray-600 mt-1">Manage and organize your student records</p>
           </div>
-          <div className="flex items-center gap-2 overflow-x-auto sm:overflow-visible flex-nowrap sm:flex-wrap">
+          <div className="flex items-center gap-1.5 overflow-x-auto sm:overflow-visible flex-nowrap sm:flex-wrap">
             <button
               onClick={() => setShowAddStudent(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors shrink-0"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded-md transition-colors shrink-0"
             >
               <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -281,7 +288,7 @@ export default function AdminStudents(){
             </button>
             <button
               onClick={handlePrint}
-              className="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs rounded-md transition-colors"
             >
               <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
@@ -290,7 +297,7 @@ export default function AdminStudents(){
             </button>
             <button
               onClick={handleDownload}
-              className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-xs rounded-md transition-colors"
             >
               <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -307,8 +314,9 @@ export default function AdminStudents(){
             const now = new Date()
             return studentDate.getMonth() === now.getMonth() && studentDate.getFullYear() === now.getFullYear()
           }).length
-          return (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+
+          const cards = [
+            (
               <StatCard
                 title="Students"
                 value={isLoading ? 0 : students.length}
@@ -317,7 +325,10 @@ export default function AdminStudents(){
                 animate
                 format={(v)=>v.toLocaleString()}
                 trend={0}
+                size="sm"
               />
+            ),
+            (
               <StatCard
                 title="Active Classes"
                 value={isLoading ? 0 : classes.length}
@@ -326,7 +337,10 @@ export default function AdminStudents(){
                 animate
                 format={(v)=>v.toLocaleString()}
                 trend={0}
+                size="sm"
               />
+            ),
+            (
               <StatCard
                 title="New This Month"
                 value={isLoading ? 0 : newThisMonth}
@@ -335,23 +349,46 @@ export default function AdminStudents(){
                 animate
                 format={(v)=>v.toLocaleString()}
                 trend={0}
+                size="sm"
               />
+            )
+          ]
+
+          if (isCompact) {
+            return (
+              <div className="relative overflow-hidden">
+                <div
+                  className="flex"
+                  style={{ transform: `translateX(-${statIndex * 100}%)`, transition: 'transform 500ms ease' }}
+                >
+                  {cards.map((c, idx) => (
+                    <div key={idx} className="min-w-full shrink-0 pr-0">
+                      {c}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )
+          }
+          return (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+              {cards}
             </div>
           )
         })()}
 
         {/* Quick Actions banner */}
-        <div className="relative overflow-hidden rounded-2xl shadow-elevated p-5 text-white bg-gradient-to-r from-brand-600 via-indigo-600 to-fuchsia-600">
+        <div className="relative overflow-hidden rounded-2xl shadow-elevated p-4 text-white bg-gradient-to-r from-brand-600 via-indigo-600 to-fuchsia-600">
           <div className="pointer-events-none absolute -top-8 right-0 w-40 h-40 rounded-full bg-white/20 blur-2 opacity-20" />
           <div className="flex items-center justify-between gap-3">
             <div>
-              <div className="text-sm font-medium text-white/90">Quick Actions</div>
-              <div className="text-lg font-semibold">Enroll Student</div>
+              <div className="text-xs font-medium text-white/90">Quick Actions</div>
+              <div className="text-base font-semibold">Enroll Student</div>
               <div className="text-xs text-white/80">Add new enrollment</div>
             </div>
             <button
               onClick={() => setShowAddStudent(true)}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold bg-white/15 hover:bg-white/25 border border-white/25 backdrop-blur-md transition-colors"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold bg-white/15 hover:bg-white/25 border border-white/25 backdrop-blur-md transition-colors"
             >
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
@@ -365,37 +402,37 @@ export default function AdminStudents(){
           onClick={()=> setShowAddStudent(true)}
           aria-label="Enroll student"
           title="Enroll student"
-          className="md:hidden fixed right-4 bottom-24 z-40 px-3.5 py-2 rounded-full text-sm font-semibold bg-blue-600 text-white shadow-soft"
+          className="md:hidden fixed right-4 bottom-24 z-40 px-3 py-1.5 rounded-full text-xs font-semibold bg-blue-600 text-white shadow-soft"
         >
           + Enroll
         </button>
 
         {/* Tabs */}
-        <div className="flex items-center gap-2 overflow-x-auto">
+        <div className="flex items-center gap-1.5 overflow-x-auto">
           <button
-            className={`px-3 py-1.5 rounded-full border text-sm shrink-0 ${tab==='active'?'bg-blue-600 text-white border-blue-600':'bg-white text-gray-700'}`}
+            className={`px-2.5 py-1 rounded-full border text-xs shrink-0 ${tab==='active'?'bg-blue-600 text-white border-blue-600':'bg-white text-gray-700'}`}
             onClick={()=>{ setTab('active'); setSearchTerm(''); setSearchDraft(''); }}
           >Active Students</button>
           <button
-            className={`px-3 py-1.5 rounded-full border text-sm shrink-0 ${tab==='graduated'?'bg-blue-600 text-white border-blue-600':'bg-white text-gray-700'}`}
+            className={`px-2.5 py-1 rounded-full border text-xs shrink-0 ${tab==='graduated'?'bg-blue-600 text-white border-blue-600':'bg-white text-gray-700'}`}
             onClick={()=>{ setTab('graduated'); setSearchTerm(''); setSearchDraft(''); }}
           >Graduated Students</button>
           <button
-            className={`px-3 py-1.5 rounded-full border text-sm shrink-0 ${tab==='inactive'?'bg-blue-600 text-white border-blue-600':'bg-white text-gray-700'}`}
+            className={`px-2.5 py-1 rounded-full border text-xs shrink-0 ${tab==='inactive'?'bg-blue-600 text-white border-blue-600':'bg-white text-gray-700'}`}
             onClick={()=>{ setTab('inactive'); setSearchTerm(''); setSearchDraft(''); }}
           >Inactive Students</button>
         </div>
 
         {/* Mobile toolbar */}
         <div className="sm:hidden space-y-2">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             <div className="relative flex-1">
               <input
                 type="text"
                 placeholder="Search students..."
                 value={searchDraft}
                 onChange={(e) => setSearchDraft(e.target.value)}
-                className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent w-full"
+                className="pl-10 pr-4 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent w-full"
               />
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                 <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -405,12 +442,18 @@ export default function AdminStudents(){
             </div>
             <button
               onClick={()=> setSearchTerm(searchDraft)}
-              className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm"
-            >Search</button>
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-xs"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-4.35-4.35m1.35-4.65a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+              Search
+            </button>
             <button
               onClick={()=> setShowFilters(v=>!v)}
-              className="px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm"
-            >Filters</button>
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-md text-xs"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 4h18M6 12h12m-9 8h6"/></svg>
+              Filters
+            </button>
           </div>
           {showFilters && (
             <div className="p-3 rounded-xl border border-gray-200 bg-white/90 backdrop-blur-xl supports-[backdrop-filter]:bg-white/70 space-y-2">
@@ -419,7 +462,7 @@ export default function AdminStudents(){
                   <select
                     value={filterGrade}
                     onChange={(e)=>{ setFilterGrade(e.target.value); setFilterClass('') }}
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="flex-1 px-2.5 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   >
                     <option value="">All Grades</option>
                     {gradeOptions.map(g => (
@@ -429,7 +472,7 @@ export default function AdminStudents(){
                   <select
                     value={filterClass}
                     onChange={(e)=>setFilterClass(e.target.value)}
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="flex-1 px-2.5 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   >
                     <option value="">All Classes</option>
                     {classOptions.map(c => (
@@ -442,7 +485,7 @@ export default function AdminStudents(){
                 <select
                   value={filterGender}
                   onChange={(e)=>setFilterGender(e.target.value)}
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="flex-1 px-2.5 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 >
                   <option value="">All Genders</option>
                   <option value="Male">Male</option>
@@ -450,7 +493,7 @@ export default function AdminStudents(){
                 </select>
                 <button
                   onClick={()=>{ setFilterGrade(''); setFilterClass(''); setFilterGender(''); setSearchTerm(''); setSearchDraft('') }}
-                  className="px-3 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+                  className="px-2.5 py-1.5 text-sm border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
                 >Clear</button>
               </div>
             </div>
@@ -458,13 +501,13 @@ export default function AdminStudents(){
         </div>
 
         {/* Filters & Search Toolbar (desktop) */}
-        <div className="hidden sm:flex items-center gap-3 flex-wrap">
+        <div className="hidden sm:flex items-center gap-2.5 flex-wrap">
           {/* Filters */}
           {tab==='active' && (
           <select
             value={filterGrade}
             onChange={(e)=>{ setFilterGrade(e.target.value); setFilterClass('') }}
-            className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="px-2.5 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           >
             <option value="">All Grades</option>
             {gradeOptions.map(g => (
@@ -476,7 +519,7 @@ export default function AdminStudents(){
           <select
             value={filterClass}
             onChange={(e)=>setFilterClass(e.target.value)}
-            className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="px-2.5 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           >
             <option value="">All Classes</option>
             {classOptions.map(c => (
@@ -487,7 +530,7 @@ export default function AdminStudents(){
           <select
             value={filterGender}
             onChange={(e)=>setFilterGender(e.target.value)}
-            className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="px-2.5 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           >
             <option value="">All Genders</option>
             <option value="Male">Male</option>
@@ -495,7 +538,7 @@ export default function AdminStudents(){
           </select>
           <button
             onClick={()=>{ setFilterGrade(''); setFilterClass(''); setFilterGender(''); setSearchTerm(''); setSearchDraft('') }}
-            className="px-3 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+            className="px-2.5 py-1.5 text-sm border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
           >
             Clear
           </button>
@@ -505,7 +548,7 @@ export default function AdminStudents(){
               placeholder="Search students..."
               value={searchDraft}
               onChange={(e) => setSearchDraft(e.target.value)}
-              className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent w-64"
+              className="pl-10 pr-4 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent w-64"
             />
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
               <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -515,8 +558,9 @@ export default function AdminStudents(){
           </div>
           <button
             onClick={()=> setSearchTerm(searchDraft)}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+            className="inline-flex items-center gap-1 px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors"
           >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-4.35-4.35m1.35-4.65a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
             Search
           </button>
         </div>
@@ -524,31 +568,25 @@ export default function AdminStudents(){
         {/* Mobile Card List */}
         <div className="sm:hidden space-y-3">
           {isLoading ? (
-            <div className="bg-white/90 backdrop-blur-xl border border-gray-200 rounded-2xl p-4 shadow-card">Loading students...</div>
+            <div className="bg-white/90 backdrop-blur-xl border border-gray-200 rounded-2xl p-3 shadow-card">Loading students...</div>
           ) : filteredStudents.length === 0 ? (
             <div className="bg-white/90 backdrop-blur-xl border border-gray-200 rounded-2xl p-6 text-center text-gray-600">No students found</div>
           ) : (
             filteredStudents.map((s) => (
-              <div key={s.id} className="relative overflow-hidden rounded-2xl border border-gray-200 bg-white/90 backdrop-blur-xl supports-[backdrop-filter]:bg-white/70 shadow-card p-4">
+              <div key={s.id} className="relative overflow-hidden rounded-2xl border border-gray-200 bg-white/90 backdrop-blur-xl supports-[backdrop-filter]:bg-white/70 shadow-card p-3">
                 <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-semibold text-sm shadow-soft">
+                  <div className="h-9 w-9 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-semibold text-xs shadow-soft">
                     {s.name.split(' ').map(n => n[0]).join('').toUpperCase()}
                   </div>
                   <div className="min-w-0">
                     <Link to={`/admin/students/${s.id}`} className="font-semibold text-gray-900 hover:underline truncate block">{s.name}</Link>
                     <div className="text-xs text-gray-500 font-mono truncate">{s.admission_no}</div>
                   </div>
-                </div>
-                <div className="mt-3 flex items-center justify-between gap-2">
-                  <div className="text-xs text-gray-600">
-                    <div className="font-medium text-gray-800">{tab==='active' ? (s.klass_detail?.name || s.klass || 'Not Assigned') : (tab==='inactive' ? 'Inactive' : `Graduated${s.graduation_year ? ` • ${s.graduation_year}` : ''}`)}</div>
-                    <div className="text-[11px] text-gray-500">Guardian: {s.guardian_id || 'N/A'}</div>
-                  </div>
                   <div className="flex items-center gap-2 shrink-0">
-                    <Link to={`/admin/students/${s.id}`} className="px-2.5 py-1.5 text-xs rounded-lg bg-indigo-100 text-indigo-700 hover:bg-indigo-200">View</Link>
+                    <Link to={`/admin/students/${s.id}`} className="px-2 py-1.5 text-xs rounded-lg bg-indigo-100 text-indigo-700 hover:bg-indigo-200">View</Link>
                     <button
                       onClick={()=>{ setConfirmStudent(s); setConfirmTargetActive(!s.is_active); setConfirmAgree(false); setConfirmOpen(true); }}
-                      className={`px-2.5 py-1.5 text-xs rounded-lg ${s.is_active ? 'bg-red-100 text-red-700 hover:bg-red-200' : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'}`}
+                      className={`${s.is_active ? 'bg-red-100 text-red-700 hover:bg-red-200' : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'} px-2 py-1.5 text-xs rounded-lg`}
                     >{s.is_active ? 'Deactivate' : 'Activate'}</button>
                   </div>
                 </div>
@@ -581,16 +619,16 @@ export default function AdminStudents(){
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50/80">
                 <tr>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                  <th className="px-5 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                     Student Details
                   </th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                  <th className="px-5 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                     Class Info
                   </th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                  <th className="px-5 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                     Contact
                   </th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                  <th className="px-5 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                     Actions
                   </th>
                 </tr>
@@ -598,7 +636,7 @@ export default function AdminStudents(){
               <tbody className="bg-white divide-y divide-gray-200">
                 {isLoading ? (
                   <tr>
-                    <td colSpan="4" className="px-6 py-12 text-center">
+                    <td colSpan="4" className="px-5 py-12 text-center">
                       <div className="flex items-center justify-center gap-3 text-gray-600">
                         <svg className="animate-spin h-6 w-6 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
@@ -610,7 +648,7 @@ export default function AdminStudents(){
                   </tr>
                 ) : filteredStudents.length === 0 ? (
                   <tr>
-                    <td colSpan="4" className="px-6 py-16 text-center">
+                    <td colSpan="4" className="px-5 py-16 text-center">
                       <div className="text-gray-500">
                         <svg className="mx-auto h-12 w-12 text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
@@ -625,7 +663,7 @@ export default function AdminStudents(){
                 ) : (
                   filteredStudents.map((s, index) => (
                     <tr key={s.id} className="hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50 transition-all duration-200 group">
-                      <td className="px-6 py-4 whitespace-nowrap">
+                      <td className="px-5 py-3 whitespace-nowrap">
                         <div className="flex items-center">
                           <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-semibold text-sm mr-4 shadow-md">
                             {s.name.split(' ').map(n => n[0]).join('').toUpperCase()}
@@ -641,7 +679,7 @@ export default function AdminStudents(){
                           </div>
                         </div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
+                      <td className="px-5 py-3 whitespace-nowrap">
                         {tab==='active' ? (
                           <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-emerald-100 text-emerald-800 border border-emerald-200">
                             <div className="w-2 h-2 rounded-full bg-emerald-500 mr-2"></div>
@@ -659,11 +697,11 @@ export default function AdminStudents(){
                           </span>
                         )}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
+                      <td className="px-5 py-3 whitespace-nowrap">
                         <div className="text-sm text-gray-900 font-medium">{s.guardian_id || 'N/A'}</div>
                         <div className="text-xs text-gray-500">Guardian Phone</div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                      <td className="px-5 py-3 whitespace-nowrap text-sm font-medium">
                         <div className="flex items-center gap-2">
                           <Link
                             to={`/admin/students/${s.id}`}

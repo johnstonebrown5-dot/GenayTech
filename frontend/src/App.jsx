@@ -144,75 +144,78 @@ export default function App() {
             <Route path="/admin" element={<ProtectedRoute roles={["admin"]}><AdminLayout><Outlet/></AdminLayout></ProtectedRoute>}>
               <Route index element={<AdminDashboard/>} />
               <Route path="students" element={<AdminStudents/>} />
+              <Route path="students/:id" element={<AdminStudentDashboard/>} />
+              <Route path="students/:id/invoices" element={<AdminStudentInvoices/>} />
+              <Route path="students/:id/payments" element={<AdminStudentPayments/>} />
+              <Route path="students/:id/report-card" element={<StudentReportCardViewer/>} />
+              <Route path="teachers" element={<AdminTeachers/>} />
+              <Route path="teachers/:id" element={<AdminTeacherProfile/>} />
+              <Route path="staff" element={<AdminStaff/>} />
+              <Route path="staff-payroll" element={<AdminStaffPayroll/>} />
+              <Route path="classes" element={<AdminClasses/>} />
+              <Route path="classes/:id" element={<AdminClassProfile/>} />
+              <Route path="classes/:id/print-report-cards" element={<AdminClassPrintReportCards/>} />
+              <Route path="fees" element={<AdminFees/>} />
+              <Route path="curriculum" element={<AdminCurriculum/>} />
+              <Route path="subjects" element={<AdminSubjects/>} />
+              <Route path="subjects/:id" element={<AdminSubjectProfile/>} />
+              <Route path="exams" element={<AdminExams/>} />
+              <Route path="exams/:id/enter" element={<AdminEnterResults/>} />
+              <Route path="results" element={<AdminResults/>} />
+              <Route path="reports" element={<AdminReports/>} />
+              <Route path="duties" element={<AdminDuties/>} />
+              <Route path="school" element={<AdminSchool/>} />
+              <Route path="users" element={<AdminUsers/>} />
+              <Route path="events" element={<AdminEvents/>} />
+              <Route path="calendar" element={<AdminAcademicCalendar/>} />
+              <Route path="messages" element={<Messages/>} />
+              <Route path="report-issue" element={<ReportIssue/>} />
+              <Route path="website" element={<AdminWebsite/>} />
+              <Route path="profile" element={<AdminProfile/>} />
+              <Route path="timetable" element={<AdminTimetable/>} />
+              <Route path="timetable/class" element={<ClassTimetable/>} />
+              <Route path="timetable/teacher" element={<TeacherTimetableView/>} />
             </Route>
-            <Route path="/admin/students/:id" element={<ProtectedRoute roles={["admin"]}><AdminStudentDashboard/></ProtectedRoute>} />
-            <Route path="/admin/students/:id/invoices" element={<ProtectedRoute roles={["admin"]}><AdminStudentInvoices/></ProtectedRoute>} />
-            <Route path="/admin/students/:id/payments" element={<ProtectedRoute roles={["admin"]}><AdminStudentPayments/></ProtectedRoute>} />
-            <Route path="/admin/students/:id/report-card" element={<ProtectedRoute roles={["admin"]}><AdminLayout><StudentReportCardViewer/></AdminLayout></ProtectedRoute>} />
-            <Route path="/admin/teachers" element={<ProtectedRoute roles={["admin"]}><AdminTeachers/></ProtectedRoute>} />
-            <Route path="/admin/staff" element={<ProtectedRoute roles={["admin"]}><AdminStaff/></ProtectedRoute>} />
-            <Route path="/admin/staff-payroll" element={<ProtectedRoute roles={["admin"]}><AdminStaffPayroll/></ProtectedRoute>} />
-            <Route path="/admin/teachers/:id" element={<ProtectedRoute roles={["admin"]}><AdminTeacherProfile/></ProtectedRoute>} />
-            <Route path="/admin/classes" element={<ProtectedRoute roles={["admin"]}><AdminClasses/></ProtectedRoute>} />
-            <Route path="/admin/classes/:id" element={<ProtectedRoute roles={["admin"]}><AdminClassProfile/></ProtectedRoute>} />
-            <Route path="/admin/classes/:id/print-report-cards" element={<ProtectedRoute roles={["admin"]}><AdminClassPrintReportCards/></ProtectedRoute>} />
-            <Route path="/admin/fees" element={<ProtectedRoute roles={["admin"]}><AdminFees/></ProtectedRoute>} />
-            <Route path="/admin/curriculum" element={<ProtectedRoute roles={["admin"]}><AdminCurriculum/></ProtectedRoute>} />
-            <Route path="/admin/subjects" element={<ProtectedRoute roles={["admin"]}><AdminSubjects/></ProtectedRoute>} />
-            <Route path="/admin/subjects/:id" element={<ProtectedRoute roles={["admin"]}><AdminSubjectProfile/></ProtectedRoute>} />
-            <Route path="/admin/exams" element={<ProtectedRoute roles={["admin"]}><AdminExams/></ProtectedRoute>} />
-            <Route path="/admin/exams/:id/enter" element={<ProtectedRoute roles={["admin"]}><AdminEnterResults/></ProtectedRoute>} />
-            <Route path="/admin/results" element={<ProtectedRoute roles={["admin"]}><AdminResults/></ProtectedRoute>} />
-            <Route path="/admin/reports" element={<ProtectedRoute roles={["admin"]}><AdminReports/></ProtectedRoute>} />
-            <Route path="/admin/duties" element={<ProtectedRoute roles={["admin"]}><AdminDuties/></ProtectedRoute>} />
-            <Route path="/admin/school" element={<ProtectedRoute roles={["admin"]}><AdminSchool/></ProtectedRoute>} />
-            <Route path="/admin/users" element={<ProtectedRoute roles={["admin"]}><AdminUsers/></ProtectedRoute>} />
-            <Route path="/admin/events" element={<ProtectedRoute roles={["admin"]}><AdminEvents/></ProtectedRoute>} />
-            <Route path="/admin/calendar" element={<ProtectedRoute roles={["admin"]}><AdminAcademicCalendar/></ProtectedRoute>} />
-            <Route path="/admin/messages" element={<ProtectedRoute roles={["admin"]}><AdminLayout><Messages/></AdminLayout></ProtectedRoute>} />
-            <Route path="/admin/report-issue" element={<ProtectedRoute roles={["admin"]}><AdminLayout><ReportIssue/></AdminLayout></ProtectedRoute>} />
-            {/* Public report issue page */}
-            <Route path="/report-issue" element={<ReportIssue/>} />
-            <Route path="/admin/website" element={<ProtectedRoute roles={["admin"]}><AdminWebsite/></ProtectedRoute>} />
-            <Route path="/admin/profile" element={<ProtectedRoute roles={["admin"]}><AdminProfile/></ProtectedRoute>} />
-            <Route path="/admin/timetable" element={<ProtectedRoute roles={["admin"]}><AdminTimetable/></ProtectedRoute>} />
-            <Route path="/admin/timetable/class" element={<ProtectedRoute roles={["admin","teacher"]}><ClassTimetable/></ProtectedRoute>} />
-            <Route path="/admin/timetable/teacher" element={<ProtectedRoute roles={["admin"]}><TeacherTimetableView/></ProtectedRoute>} />
             <Route path="/featured/:slug" element={<FeaturedPost/>} />
-            <Route path="/teacher" element={<ProtectedRoute roles={["teacher","admin"]}><TeacherLayout><TeacherDashboard/></TeacherLayout></ProtectedRoute>} />
-            <Route path="/teacher/messages" element={<ProtectedRoute roles={["teacher","admin"]}><TeacherLayout><Messages/></TeacherLayout></ProtectedRoute>} />
-            <Route path="/teacher/classes" element={<ProtectedRoute roles={["teacher","admin"]}><TeacherLayout><TeacherClasses/></TeacherLayout></ProtectedRoute>} />
-            <Route path="/teacher/attendance" element={<ProtectedRoute roles={["teacher","admin"]}><TeacherLayout><TeacherAttendance/></TeacherLayout></ProtectedRoute>} />
-            <Route path="/teacher/lessons" element={<ProtectedRoute roles={["teacher","admin"]}><TeacherLayout><TeacherLessons/></TeacherLayout></ProtectedRoute>} />
-            <Route path="/teacher/grades" element={<ProtectedRoute roles={["teacher","admin"]}><TeacherLayout><TeacherGrades/></TeacherLayout></ProtectedRoute>} />
-            <Route path="/teacher/results" element={<ProtectedRoute roles={["teacher","admin"]}><TeacherLayout><TeacherResults/></TeacherLayout></ProtectedRoute>} />
-            <Route path="/teacher/analytics" element={<ProtectedRoute roles={["teacher","admin"]}><TeacherLayout><TeacherAnalytics/></TeacherLayout></ProtectedRoute>} />
-            <Route path="/teacher/profile" element={<ProtectedRoute roles={["teacher","admin"]}><TeacherLayout><TeacherProfile/></TeacherLayout></ProtectedRoute>} />
-            <Route path="/teacher/timetable" element={<ProtectedRoute roles={["teacher","admin"]}><TeacherLayout><TeacherTimetable/></TeacherLayout></ProtectedRoute>} />
-            <Route path="/teacher/block-timetable" element={<ProtectedRoute roles={["teacher","admin"]}><TeacherLayout><TeacherBlockTimetable/></TeacherLayout></ProtectedRoute>} />
-            <Route path="/teacher/events" element={<ProtectedRoute roles={["teacher","admin"]}><TeacherLayout><TeacherEvents/></TeacherLayout></ProtectedRoute>} />
-            <Route path="/teacher/students/:id/report-card" element={<ProtectedRoute roles={["teacher","admin"]}><TeacherLayout><StudentReportCardViewer/></TeacherLayout></ProtectedRoute>} />
-            <Route path="/student" element={<ProtectedRoute roles={["student","admin"]}><StudentLayout><StudentDashboard/></StudentLayout></ProtectedRoute>} />
-            <Route path="/student/messages" element={<ProtectedRoute roles={["student","admin"]}><StudentLayout><Messages/></StudentLayout></ProtectedRoute>} />
-            <Route path="/student/academics" element={<ProtectedRoute roles={["student","admin"]}><StudentLayout><StudentDashboard/></StudentLayout></ProtectedRoute>} />
-            <Route path="/student/report-card" element={<ProtectedRoute roles={["student","admin"]}><StudentLayout><StudentReportCard/></StudentLayout></ProtectedRoute>} />
-            <Route path="/student/finance" element={<ProtectedRoute roles={["student","admin"]}><StudentLayout><StudentDashboard/></StudentLayout></ProtectedRoute>} />
-            <Route path="/finance" element={<ProtectedRoute roles={["finance"]}><FinanceLayout><FinanceDashboard/></FinanceLayout></ProtectedRoute>} />
-            <Route path="/finance/messages" element={<ProtectedRoute roles={["finance"]}><FinanceLayout><Messages/></FinanceLayout></ProtectedRoute>} />
-            <Route path="/finance/expenses" element={<ProtectedRoute roles={["finance"]}><FinanceLayout><FinanceExpenses/></FinanceLayout></ProtectedRoute>} />
-            <Route path="/finance/incoming" element={<ProtectedRoute roles={["finance"]}><FinanceLayout><FinanceIncomingPayments/></FinanceLayout></ProtectedRoute>} />
-            {/* Invoices route removed */}
-            <Route path="/finance/payments" element={<ProtectedRoute roles={["finance"]}><FinanceLayout><FinancePayments/></FinanceLayout></ProtectedRoute>} />
-            <Route path="/finance/reports" element={<ProtectedRoute roles={["finance"]}><FinanceLayout><FinanceReports/></FinanceLayout></ProtectedRoute>} />
-            <Route path="/finance/cashbook" element={<ProtectedRoute roles={["finance"]}><FinanceLayout><FinanceCashbook/></FinanceLayout></ProtectedRoute>} />
-            <Route path="/finance/fee-register" element={<ProtectedRoute roles={["finance"]}><FinanceLayout><FinanceFeeRegister/></FinanceLayout></ProtectedRoute>} />
-            <Route path="/finance/settings" element={<ProtectedRoute roles={["finance"]}><FinanceLayout><FinanceSettings/></FinanceLayout></ProtectedRoute>} />
-            <Route path="/finance/pocket-money" element={<ProtectedRoute roles={["finance"]}><FinanceLayout><FinancePocketMoney/></FinanceLayout></ProtectedRoute>} />
-            <Route path="/finance/pocket-money/wallet/:studentId" element={<ProtectedRoute roles={["finance"]}><FinanceLayout><FinanceStudentWallet/></FinanceLayout></ProtectedRoute>} />
-            <Route path="/finance/fee-categories" element={<ProtectedRoute roles={["finance"]}><FinanceLayout><FinanceFeeCategories/></FinanceLayout></ProtectedRoute>} />
-            <Route path="/finance/class-fees" element={<ProtectedRoute roles={["finance"]}><FinanceLayout><FinanceClassFees/></FinanceLayout></ProtectedRoute>} />
-            <Route path="/finance/fees" element={<ProtectedRoute roles={["finance"]}><FinanceFees/></ProtectedRoute>} />
-            <Route path="/finance/staff-payroll" element={<ProtectedRoute roles={["finance"]}><FinanceStaffPayroll/></ProtectedRoute>} />
+            <Route path="/teacher" element={<ProtectedRoute roles={["teacher","admin"]}><TeacherLayout><Outlet/></TeacherLayout></ProtectedRoute>}>
+              <Route index element={<TeacherDashboard/>} />
+              <Route path="messages" element={<Messages/>} />
+              <Route path="classes" element={<TeacherClasses/>} />
+              <Route path="attendance" element={<TeacherAttendance/>} />
+              <Route path="lessons" element={<TeacherLessons/>} />
+              <Route path="grades" element={<TeacherGrades/>} />
+              <Route path="results" element={<TeacherResults/>} />
+              <Route path="analytics" element={<TeacherAnalytics/>} />
+              <Route path="profile" element={<TeacherProfile/>} />
+              <Route path="timetable" element={<TeacherTimetable/>} />
+              <Route path="block-timetable" element={<TeacherBlockTimetable/>} />
+              <Route path="events" element={<TeacherEvents/>} />
+              <Route path="students/:id/report-card" element={<StudentReportCardViewer/>} />
+            </Route>
+            <Route path="/student" element={<ProtectedRoute roles={["student","admin"]}><StudentLayout><Outlet/></StudentLayout></ProtectedRoute>}>
+              <Route index element={<StudentDashboard/>} />
+              <Route path="messages" element={<Messages/>} />
+              <Route path="academics" element={<StudentDashboard/>} />
+              <Route path="report-card" element={<StudentReportCard/>} />
+              <Route path="finance" element={<StudentDashboard/>} />
+            </Route>
+            <Route path="/finance" element={<ProtectedRoute roles={["finance"]}><FinanceLayout><Outlet/></FinanceLayout></ProtectedRoute>}>
+              <Route index element={<FinanceDashboard/>} />
+              <Route path="messages" element={<Messages/>} />
+              <Route path="expenses" element={<FinanceExpenses/>} />
+              <Route path="incoming" element={<FinanceIncomingPayments/>} />
+              <Route path="payments" element={<FinancePayments/>} />
+              <Route path="reports" element={<FinanceReports/>} />
+              <Route path="cashbook" element={<FinanceCashbook/>} />
+              <Route path="fee-register" element={<FinanceFeeRegister/>} />
+              <Route path="settings" element={<FinanceSettings/>} />
+              <Route path="pocket-money" element={<FinancePocketMoney/>} />
+              <Route path="pocket-money/wallet/:studentId" element={<FinanceStudentWallet/>} />
+              <Route path="fee-categories" element={<FinanceFeeCategories/>} />
+              <Route path="class-fees" element={<FinanceClassFees/>} />
+              <Route path="fees" element={<FinanceFees/>} />
+              <Route path="staff-payroll" element={<FinanceStaffPayroll/>} />
+            </Route>
             <Route path="/unauthorized" element={<Unauthorized/>} />
             {/* Catch-all 404 */}
             <Route path="*" element={<NotFound/>} />

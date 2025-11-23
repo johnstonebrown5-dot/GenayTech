@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import StudentReportCardViewer from './StudentReportCardViewer'
-import AdminLayout from '../components/AdminLayout'
 import Modal from '../components/Modal'
 import api from '../api'
 import { uploadToCloudinary } from '../utils/cloudinary'
@@ -279,7 +278,7 @@ export default function AdminStudentDashboard() {
   }
 
   return (
-    <AdminLayout>
+    <React.Fragment>
       <div className="space-y-6">
         {/* Breadcrumbs */}
         <div className="text-sm text-gray-500"><Link to="/admin" className="hover:underline">Admin</Link> / <Link to="/admin/students" className="hover:underline">Students</Link> / <span className="text-gray-700">Dashboard</span></div>
@@ -749,6 +748,6 @@ export default function AdminStudentDashboard() {
           </div>
         </form>
       </Modal>
-    </AdminLayout>
+    </React.Fragment>
   )
 }

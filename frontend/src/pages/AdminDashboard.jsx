@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import api from '../api'
 import StatCard from '../components/StatCard'
@@ -25,6 +25,8 @@ export default function AdminDashboard(){
   const [isCompact, setIsCompact] = useState(false)
   const [showTrends, setShowTrends] = useState(true)
   const [calendarMode, setCalendarMode] = useState('calendar')
+  const sliderRef = useRef(null)
+  const [activeSlide, setActiveSlide] = useState(0)
 
   useEffect(()=>{ (async()=>{
     try {
@@ -83,6 +85,28 @@ export default function AdminDashboard(){
     setShowTrends(!isCompact)
     setCalendarMode(isCompact ? 'list' : 'calendar')
   }, [isCompact])
+
+  // Auto-advance stat cards on mobile (every 3s)
+  useEffect(() => {
+    if (!isCompact) return
+    const el = sliderRef.current
+    if (!el) return
+    setActiveSlide(0)
+    try { el.scrollTo({ left: 0, behavior: 'auto' }) } catch {}
+    const id = setInterval(() => {
+      const count = el.children ? el.children.length : 0
+      if (count <= 1) return
+      setActiveSlide(prev => {
+        const next = (prev + 1) % count
+        const child = el.children[next]
+        if (child && typeof child.offsetLeft === 'number') {
+          try { el.scrollTo({ left: child.offsetLeft, behavior: 'smooth' }) } catch {}
+        }
+        return next
+      })
+    }, 3000)
+    return () => clearInterval(id)
+  }, [isCompact, stats])
 
   const handleQuickAction = (action) => {
     switch(action) {
@@ -221,6 +245,45 @@ export default function AdminDashboard(){
   const [dayModalKey, setDayModalKey] = useState('')
   const [dayModalEvents, setDayModalEvents] = useState([])
 
+  const statCards = !stats ? [] : [
+    {
+      title: 'Students',
+      value: stats.students,
+      icon: '👥',
+      accent: 'from-brand-500 to-brand-600',
+      animate: true,
+      format: (v) => v.toLocaleString(),
+      trend: 0,
+    },
+    {
+      title: 'Teachers',
+      value: stats.teachers,
+      icon: '👨‍🏫',
+      accent: 'from-purple-500 to-purple-600',
+      animate: true,
+      format: (v) => v.toLocaleString(),
+      trend: stats?.trends?.teachers ?? 0,
+    },
+    {
+      title: 'Classes',
+      value: stats.classes,
+      icon: '🏫',
+      accent: 'from-emerald-500 to-emerald-600',
+      animate: true,
+      format: (v) => v.toLocaleString(),
+      trend: stats?.trends?.classes ?? 0,
+    },
+    {
+      title: 'Attendance Rate',
+      value: Number(stats.attendanceRate) || 0,
+      icon: '📊',
+      accent: 'from-amber-500 to-orange-600',
+      animate: true,
+      format: (v) => `${v}%`,
+      trend: stats?.trends?.attendance ?? 0,
+    },
+  ]
+
   return (
     <React.Fragment>
       <div className="space-y-6">
@@ -241,43 +304,22 @@ export default function AdminDashboard(){
           </div>
         ) : (
           <React.Fragment>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-              <StatCard
-                title="Students"
-                value={stats.students}
-                icon="👥"
-                accent="from-brand-500 to-brand-600"
-                animate
-                format={(v)=>v.toLocaleString()}
-                trend={0}
-              />
-              <StatCard
-                title="Teachers"
-                value={stats.teachers}
-                icon="👨‍🏫"
-                accent="from-purple-500 to-purple-600"
-                animate
-                format={(v)=>v.toLocaleString()}
-                trend={stats?.trends?.teachers ?? 0}
-              />
-              <StatCard
-                title="Classes"
-                value={stats.classes}
-                icon="🏫"
-                accent="from-emerald-500 to-emerald-600"
-                animate
-                format={(v)=>v.toLocaleString()}
-                trend={stats?.trends?.classes ?? 0}
-              />
-              <StatCard
-                title="Attendance Rate"
-                value={Number(stats.attendanceRate) || 0}
-                icon="📊"
-                accent="from-amber-500 to-orange-600"
-                animate
-                format={(v)=>`${v}%`}
-                trend={stats?.trends?.attendance ?? 0}
-              />
+            {/* Mobile: horizontal auto-advancing carousel */}
+            <div className="sm:hidden">
+              <div ref={sliderRef} className="flex gap-4 overflow-x-auto snap-x snap-mandatory scroll-smooth pb-1">
+                {statCards.map(cfg => (
+                  <div key={cfg.title} className="snap-center shrink-0 w-full">
+                    <StatCard {...cfg} />
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Tablet/Desktop: grid from sm and up */}
+            <div className="hidden sm:grid sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+              {statCards.map(cfg => (
+                <StatCard key={cfg.title} {...cfg} />
+              ))}
             </div>
 
             {/* Quick Actions */}

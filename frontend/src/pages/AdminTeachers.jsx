@@ -4,6 +4,7 @@ import AdminLayout from '../components/AdminLayout'
 import Modal from '../components/Modal'
 import { useNotification } from '../components/NotificationContext'
 import { Link } from 'react-router-dom'
+import StatCard from '../components/StatCard'
 
 export default function AdminTeachers(){
   const [teachers, setTeachers] = useState([])
@@ -27,6 +28,7 @@ export default function AdminTeachers(){
   const [filterSubject, setFilterSubject] = useState('')
   const [filterClass, setFilterClass] = useState('')
   const [filterAssigned, setFilterAssigned] = useState('all')
+  const [statIndex, setStatIndex] = useState(0)
 
   const { showSuccess, showError } = useNotification()
 
@@ -173,6 +175,36 @@ export default function AdminTeachers(){
     })
   }, [pastTeachers, search, filterSubject, filterClass, subjects])
 
+  const activeTeachersCount = Array.isArray(teachers) ? teachers.length : 0
+  const assignedTeachersCount = useMemo(() => (
+    Array.isArray(teachers) ? teachers.filter(t => t.klass_detail?.id).length : 0
+  ), [teachers])
+  const coveredSubjectsCount = useMemo(() => {
+    const set = new Set()
+    ;(Array.isArray(teachers) ? teachers : []).forEach(t => {
+      ;(t.subjects || '')
+        .split(',')
+        .map(s => s.trim())
+        .filter(Boolean)
+        .forEach(s => set.add(s.toLowerCase()))
+    })
+    return set.size
+  }, [teachers])
+
+  const statItems = useMemo(() => ([
+    { title: 'Active Teachers', value: loading ? 0 : activeTeachersCount, icon: '👩‍🏫', accent: 'from-brand-500 to-brand-600' },
+    { title: 'Assigned Teachers', value: loading ? 0 : assignedTeachersCount, icon: '🏫', accent: 'from-emerald-500 to-emerald-600' },
+    { title: 'Subjects Covered', value: loading ? 0 : coveredSubjectsCount, icon: '📚', accent: 'from-fuchsia-500 to-fuchsia-600' },
+  ]), [loading, activeTeachersCount, assignedTeachersCount, coveredSubjectsCount])
+
+  useEffect(() => {
+    if (!isCompact) return
+    const id = setInterval(() => {
+      setStatIndex((i) => (i + 1) % (statItems.length || 1))
+    }, 3000)
+    return () => clearInterval(id)
+  }, [isCompact, statItems.length])
+
   // Quick assign subjects modal
   const [showQuickAssign, setShowQuickAssign] = useState(false)
   const [qaTeacher, setQaTeacher] = useState({ teacherId:'', userId:'', name:'' })
@@ -255,13 +287,48 @@ export default function AdminTeachers(){
             <p className="text-sm text-gray-600">Create teacher accounts, assign subjects and class, and manage the directory.</p>
           </div>
           <div className="flex items-center gap-2 overflow-x-auto md:overflow-visible py-1 -mx-1 px-1">
-            <span className="shrink-0 px-2.5 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700">{users.length} Teachers</span>
-            <span className="shrink-0 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">{classes.length} Classes</span>
             <Link to="/admin/subjects" className="shrink-0 px-3 py-1.5 rounded border hover:bg-gray-50">Subjects</Link>
-            <button onClick={()=>setShowCreateUser(true)} className="shrink-0 px-3 py-1.5 rounded bg-green-600 hover:bg-green-700 text-white">Create Teacher User</button>
             <button onClick={()=>setShowAssign(true)} className="shrink-0 px-3 py-1.5 rounded bg-indigo-600 hover:bg-indigo-700 text-white">Assign Subjects & Class</button>
           </div>
         </div>
+        {isCompact ? (
+          <div className="space-y-2">
+            {statItems.map((item, i) => (
+              <div key={item.title} className={i === statIndex ? 'block' : 'hidden'}>
+                <StatCard
+                  title={item.title}
+                  value={item.value}
+                  icon={item.icon}
+                  accent={item.accent}
+                  animate
+                  format={(v)=>v.toLocaleString()}
+                  trend={0}
+                  size="sm"
+                />
+              </div>
+            ))}
+            <div className="flex justify-center gap-1.5 pt-1">
+              {statItems.map((_, i) => (
+                <span key={i} className={`inline-block w-1.5 h-1.5 rounded-full ${i===statIndex? 'bg-indigo-600':'bg-gray-300'}`} />
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+            {statItems.map(item => (
+              <StatCard
+                key={item.title}
+                title={item.title}
+                value={item.value}
+                icon={item.icon}
+                accent={item.accent}
+                animate
+                format={(v)=>v.toLocaleString()}
+                trend={0}
+              />
+            ))}
+          </div>
+        )}
         <div className="relative overflow-hidden rounded-2xl shadow-elevated p-5 text-white bg-gradient-to-r from-brand-600 via-indigo-600 to-fuchsia-600">
           <div className="flex items-center justify-between gap-3">
             <div>
@@ -339,6 +406,14 @@ export default function AdminTeachers(){
             </div>
           )}
         </div>
+        <button
+          onClick={()=> setShowCreateUser(true)}
+          aria-label="Create teacher"
+          title="Create teacher"
+          className="md:hidden fixed right-4 bottom-24 z-40 px-3.5 py-2 rounded-full text-sm font-semibold bg-indigo-600 text-white shadow-soft"
+        >
+          + Create
+        </button>
 
         {/* Action Modals */}
         <Modal open={showCreateUser} onClose={()=>setShowCreateUser(false)} title="Create Teacher User" size="lg">
@@ -475,12 +550,12 @@ export default function AdminTeachers(){
                       {t.klass_detail?.name ? (
                         <span className="px-2 py-0.5 rounded-full text-xs bg-emerald-100 text-emerald-700">{t.klass_detail.name}</span>
                       ) : <span className="text-xs text-gray-500">-</span>}
-                      <button type="button" onClick={(e)=>{ e.preventDefault(); openQuickAssign(t) }} className="px-2.5 py-1.5 text-xs rounded-lg border border-gray-200 bg-white/80 hover:bg-gray-50">Assign Subjects</button>
+                      <button type="button" onClick={(e)=>{ e.preventDefault(); openQuickAssign(t) }} className="px-3.5 py-3 text-sm rounded-lg border border-gray-200 bg-white/80 hover:bg-gray-50">Assign Subjects</button>
                       {t.id && (
                         <button
                           type="button"
                           onClick={(e)=>{ e.preventDefault(); openRelease(t) }}
-                          className="px-2.5 py-1.5 text-xs rounded-lg border border-red-200 bg-white/80 text-red-600 hover:bg-red-50"
+                          className="px-3.5 py-3 text-sm rounded-lg border border-red-200 bg-white/80 text-red-600 hover:bg-red-50"
                         >
                           Release
                         </button>

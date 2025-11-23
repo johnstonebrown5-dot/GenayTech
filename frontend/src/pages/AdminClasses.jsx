@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import api from '../api'
-import AdminLayout from '../components/AdminLayout'
 import Modal from '../components/Modal'
 import { useNotification } from '../components/NotificationContext'
 import LoadingOverlay from '../components/LoadingOverlay'
@@ -341,7 +340,7 @@ export default function AdminClasses(){
   }, [classes, streams])
 
   return (
-    <AdminLayout>
+    <React.Fragment>
       <div>
         {busy && <LoadingOverlay message={busyMessage} transparent />}
         <div className="space-y-6">
@@ -559,6 +558,6 @@ export default function AdminClasses(){
         </div>
       </Modal>
       </div>
-    </AdminLayout>
+    </React.Fragment>
   )
 }

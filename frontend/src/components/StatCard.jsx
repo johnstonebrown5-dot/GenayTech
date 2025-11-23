@@ -20,7 +20,7 @@ const accentMap = {
   'Outstanding': 'from-rose-500 to-rose-600',
 }
 
-export default function StatCard({ title, value, icon, accent, animate = false, format, trend }) {
+export default function StatCard({ title, value, icon, accent, animate = false, format, trend, size = 'md' }) {
   const displayIcon = icon || iconMap[title] || '📈'
   const accentClasses = accent || accentMap[title] || 'from-brand-500 to-brand-600'
   const isNumber = typeof value === 'number' && Number.isFinite(value)
@@ -53,6 +53,14 @@ export default function StatCard({ title, value, icon, accent, animate = false, 
     return () => cancelAnimationFrame(id)
   }, [value, animate, isNumber])
 
+  const isSmall = size === 'sm'
+  const paddingClass = isSmall ? 'p-4' : 'p-5'
+  const iconBoxSize = isSmall ? 'w-10 h-10 text-xl' : 'w-12 h-12 text-2xl'
+  const titleTextClass = isSmall ? 'text-xs font-medium text-gray-500' : 'text-sm font-medium text-gray-500'
+  const valueTextClass = isSmall
+    ? 'mt-0.5 text-xl sm:text-[1.25rem] md:text-[1.35rem] font-extrabold tracking-tight text-gray-900 truncate whitespace-nowrap'
+    : 'mt-0.5 text-[1.55rem] sm:text-2xl md:text-[1.6rem] font-extrabold tracking-tight text-gray-900 truncate whitespace-nowrap'
+
   return (
     <div className="relative overflow-hidden rounded-2xl border border-gray-200/80 bg-white/90 backdrop-blur-xl supports-[backdrop-filter]:bg-white/70 shadow-card hover:shadow-elevated transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.995]">
       {/* Decorative gradient blob */}
@@ -80,14 +88,14 @@ export default function StatCard({ title, value, icon, accent, animate = false, 
         })()}
       </div>
 
-      <div className="p-5">
+      <div className={paddingClass}>
         <div className="flex items-center gap-4">
-          <div className={`shrink-0 w-12 h-12 rounded-xl bg-gradient-to-br ${accentClasses} text-white flex items-center justify-center text-2xl shadow-soft ring-1 ring-white/30`}>
+          <div className={`shrink-0 ${iconBoxSize} rounded-xl bg-gradient-to-br ${accentClasses} text-white flex items-center justify-center shadow-soft ring-1 ring-white/30`}>
             <span className="leading-none">{displayIcon}</span>
           </div>
           <div className="min-w-0 flex-1">
-            <div className="text-sm font-medium text-gray-500">{title}</div>
-            <div className="mt-0.5 text-[1.55rem] sm:text-2xl md:text-[1.6rem] font-extrabold tracking-tight text-gray-900 truncate whitespace-nowrap">{formatter(displayValue)}</div>
+            <div className={titleTextClass}>{title}</div>
+            <div className={valueTextClass}>{formatter(displayValue)}</div>
           </div>
         </div>
       </div>
