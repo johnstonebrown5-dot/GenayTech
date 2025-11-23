@@ -328,7 +328,7 @@ export default function AdminTeachers(){
             ))}
           </div>
         )}
-        <div className="relative overflow-hidden rounded-2xl shadow-elevated p-5 text-white bg-gradient-to-r from-brand-600 via-indigo-600 to-fuchsia-600">
+        <div className="hidden md:block relative overflow-hidden rounded-2xl shadow-elevated p-5 text-white bg-gradient-to-r from-brand-600 via-indigo-600 to-fuchsia-600">
           <div className="flex items-center justify-between gap-3">
             <div>
               <div className="text-sm font-medium text-white/90">Quick Actions</div>

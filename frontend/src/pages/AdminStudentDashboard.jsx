@@ -302,14 +302,14 @@ export default function AdminStudentDashboard() {
             className="inline-flex items-center gap-2 px-3 py-2 rounded bg-green-600 text-white hover:bg-green-700"
           >
             <span>➕</span>
-            <span>Make Payment</span>
+            <span>Pay Fees</span>
           </Link>
           <Link
             to={`/admin/students/${id}/report-card`}
             className="inline-flex items-center gap-2 px-3 py-2 rounded bg-slate-700 text-white hover:bg-slate-800"
           >
             <span>🧾</span>
-            <span>View Report Card</span>
+            <span>Report Card</span>
           </Link>
           <button
             onClick={openEdit}

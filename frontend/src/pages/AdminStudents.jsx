@@ -378,7 +378,7 @@ export default function AdminStudents(){
         })()}
 
         {/* Quick Actions banner */}
-        <div className="relative overflow-hidden rounded-2xl shadow-elevated p-4 text-white bg-gradient-to-r from-brand-600 via-indigo-600 to-fuchsia-600">
+        <div className="hidden md:block relative overflow-hidden rounded-2xl shadow-elevated p-4 text-white bg-gradient-to-r from-brand-600 via-indigo-600 to-fuchsia-600">
           <div className="pointer-events-none absolute -top-8 right-0 w-40 h-40 rounded-full bg-white/20 blur-2 opacity-20" />
           <div className="flex items-center justify-between gap-3">
             <div>

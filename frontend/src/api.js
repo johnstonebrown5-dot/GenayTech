@@ -10,6 +10,7 @@ const api = axios.create({
 api.interceptors.request.use(config => {
   const token = localStorage.getItem('access')
   if (token) config.headers.Authorization = `Bearer ${token}`
+  try { if (!config._skipGlobalLoading && typeof window !== 'undefined') window.dispatchEvent(new Event('api:request:start')) } catch {}
   return config
 })
 
@@ -42,7 +43,7 @@ export function imageCandidates(url){
 function onRefreshed(newToken){ while(subscribers.length) { const cb = subscribers.shift(); try{ cb(newToken) }catch{} } }
 
 api.interceptors.response.use(
-  res => res,
+  res => { try { if (typeof window !== 'undefined') window.dispatchEvent(new Event('api:request:end')) } catch {}; return res },
   async err => {
     const original = err?.config
     const status = err?.response?.status
@@ -53,6 +54,7 @@ api.interceptors.response.use(
       if (!refresh) {
         try { localStorage.removeItem('access'); localStorage.removeItem('refresh') } catch {}
         if (typeof window !== 'undefined') window.location.href = '/login'
+        try { if (typeof window !== 'undefined') window.dispatchEvent(new Event('api:request:error')) } catch {}
         return Promise.reject(err)
       }
       try {
@@ -71,13 +73,16 @@ api.interceptors.response.use(
           subscribeTokenRefresh((token)=>{
             original.headers = original.headers || {}
             if (token) original.headers.Authorization = `Bearer ${token}`
+            original._skipGlobalLoading = true
             resolve(api(original))
           })
         })
       } catch (e) {
+        try { if (typeof window !== 'undefined') window.dispatchEvent(new Event('api:request:error')) } catch {}
         return Promise.reject(e)
       }
     }
+    try { if (typeof window !== 'undefined') window.dispatchEvent(new Event('api:request:error')) } catch {}
     return Promise.reject(err)
   }
 )
