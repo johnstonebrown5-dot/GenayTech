@@ -123,6 +123,13 @@ function RoleRedirect() {
 export default function App() {
   const { pathname } = useLocation()
   const hideAssistant = pathname === '/login' || pathname === '/' || pathname === '/report-issue'
+  const prevPathRef = React.useRef(pathname)
+  React.useEffect(() => {
+    if (prevPathRef.current !== pathname) {
+      try { window.dispatchEvent(new Event('route:transition:start')) } catch {}
+      prevPathRef.current = pathname
+    }
+  }, [pathname])
   return (
     <NotificationProvider>
       <AssistantProvider>
