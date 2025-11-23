@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import api from '../api'
-import AdminLayout from '../components/AdminLayout'
 import { useNotification } from '../components/NotificationContext'
 import { Link } from 'react-router-dom'
 
@@ -113,7 +112,7 @@ export default function AdminSubjects(){
   const toggleId = (arr, id) => (arr.includes(id) ? arr.filter(i=>i!==id) : [...arr, id])
 
   return (
-    <AdminLayout>
+    <React.Fragment>
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
@@ -213,6 +212,6 @@ export default function AdminSubjects(){
           </div>
         </div>
       </div>
-    </AdminLayout>
+    </React.Fragment>
   )
 }

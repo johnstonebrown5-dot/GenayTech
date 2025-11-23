@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import AdminLayout from '../components/AdminLayout'
 import Modal from '../components/Modal'
 import api, { backendBase } from '../api'
 
@@ -176,7 +175,7 @@ export default function AdminStudentPayments(){
   }
 
   return (
-    <AdminLayout>
+    <React.Fragment>
       <div className="space-y-4">
         <div className="text-sm text-gray-500"><Link to="/admin" className="hover:underline">Admin</Link> / <Link to="/admin/students" className="hover:underline">Students</Link> / <Link to={`/admin/students/${id}`} className="hover:underline">Dashboard</Link> / <span className="text-gray-700">Payments</span></div>
         <div className="flex items-center justify-between">
@@ -320,6 +319,6 @@ export default function AdminStudentPayments(){
           </div>
         )}
       </Modal>
-    </AdminLayout>
+    </React.Fragment>
   )
 }

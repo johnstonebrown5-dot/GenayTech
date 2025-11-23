@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react'
 import api from '../api'
-import AdminLayout from '../components/AdminLayout'
 import Modal from '../components/Modal'
 
 export default function AdminCurriculum(){
@@ -23,7 +22,7 @@ export default function AdminCurriculum(){
   }
 
   return (
-    <AdminLayout>
+    <React.Fragment>
       <div className="space-y-6">
         <h1 className="text-xl font-semibold">Manage Curriculum (CBC Competencies)</h1>
         <div className="bg-white rounded shadow p-4 flex items-center justify-between">
@@ -59,6 +58,6 @@ export default function AdminCurriculum(){
           </div>
         </form>
       </Modal>
-    </AdminLayout>
+    </React.Fragment>
   )
 }

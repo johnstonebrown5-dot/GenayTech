@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import api from '../api'
-import AdminLayout from '../components/AdminLayout'
 import { useNotification } from '../components/NotificationContext'
 
 export default function AdminEnterResults(){
@@ -125,7 +124,7 @@ export default function AdminEnterResults(){
   }
 
   return (
-    <AdminLayout>
+    <React.Fragment>
       <div className="space-y-4">
         {/* Header + Toolbar */}
         <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -223,6 +222,6 @@ export default function AdminEnterResults(){
           </div>
         )}
       </div>
-    </AdminLayout>
+    </React.Fragment>
   )
 }

@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import AdminLayout from '../components/AdminLayout'
 import api, { toAbsoluteUrl } from '../api'
 import { uploadToCloudinary } from '../utils/cloudinary'
 import { toast } from '../utils/toast'
@@ -140,7 +139,7 @@ export default function AdminWebsite(){
   }, [pickerOpen])
 
   return (
-    <AdminLayout>
+    <React.Fragment>
       <div className="max-w-7xl mx-auto">
         <div className="px-4 sm:px-6 py-3 sm:py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
           <div className="hidden md:block">
@@ -722,6 +721,6 @@ export default function AdminWebsite(){
           </div>
         )}
       </div>
-    </AdminLayout>
+    </React.Fragment>
   )
 }

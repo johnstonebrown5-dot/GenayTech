@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react'
 import api from '../api'
-import AdminLayout from '../components/AdminLayout'
 import Modal from '../components/Modal'
 import { useNotification } from '../components/NotificationContext'
 import { useAuth } from '../auth'
@@ -145,7 +144,7 @@ export default function AdminUsers(){
   }
 
   return (
-    <AdminLayout>
+    <React.Fragment>
       <div className="space-y-6">
         <div>
           <div className="flex items-start justify-between gap-2">
@@ -450,6 +449,6 @@ export default function AdminUsers(){
           </div>
         </form>
       </Modal>
-    </AdminLayout>
+    </React.Fragment>
   )
 }

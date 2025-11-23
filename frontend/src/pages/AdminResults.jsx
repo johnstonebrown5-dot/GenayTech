@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useState, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import AdminLayout from '../components/AdminLayout'
 import api from '../api'
 
 export default function AdminResults(){
@@ -341,7 +340,7 @@ export default function AdminResults(){
   }, [summary?.subjects])
 
   return (
-    <AdminLayout>
+    <React.Fragment>
       <div className="space-y-6">
         <h1 className="text-xl font-semibold">Results</h1>
         <div className="bg-white rounded shadow p-4 grid gap-3 md:grid-cols-4">
@@ -576,6 +575,6 @@ export default function AdminResults(){
         </div>
         )}
       </div>
-    </AdminLayout>
+    </React.Fragment>
   )
 }

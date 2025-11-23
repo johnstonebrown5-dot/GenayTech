@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import AdminLayout from '../components/AdminLayout'
 import api from '../api'
 
 export default function ClassTimetable(){
@@ -142,7 +141,7 @@ export default function ClassTimetable(){
   }
 
   return (
-    <AdminLayout>
+    <React.Fragment>
       <div className="px-4 sm:px-6 lg:px-8 py-6">
         {/* Print styles for A4 landscape */}
         <style>{`
@@ -233,6 +232,6 @@ export default function ClassTimetable(){
         )}
         </div>
       </div>
-    </AdminLayout>
+    </React.Fragment>
   )
 }

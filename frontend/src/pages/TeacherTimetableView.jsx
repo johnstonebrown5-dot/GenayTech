@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import AdminLayout from '../components/AdminLayout'
 import api from '../api'
 
 export default function TeacherTimetableView(){
@@ -129,7 +128,7 @@ export default function TeacherTimetableView(){
   }
 
   return (
-    <AdminLayout>
+    <React.Fragment>
       <div className="px-4 sm:px-6 lg:px-8 py-6">
         {/* Print styles */}
         <style>{`
@@ -226,6 +225,6 @@ export default function TeacherTimetableView(){
           )}
         </div>
       </div>
-    </AdminLayout>
+    </React.Fragment>
   )
 }

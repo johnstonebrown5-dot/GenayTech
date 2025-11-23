@@ -1,5 +1,4 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import AdminLayout from '../components/AdminLayout'
 import api from '../api'
 
 export default function AdminAcademicCalendar(){
@@ -205,7 +204,7 @@ export default function AdminAcademicCalendar(){
   }
 
   return (
-    <AdminLayout>
+    <React.Fragment>
       <div className="space-y-6">
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <h1 className="text-xl font-semibold">Academic Calendar</h1>
@@ -435,6 +434,6 @@ export default function AdminAcademicCalendar(){
           </div>
         </div>
       )}
-    </AdminLayout>
+    </React.Fragment>
   )
 }

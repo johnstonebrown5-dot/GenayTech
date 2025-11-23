@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import api from '../api'
-import AdminLayout from '../components/AdminLayout'
 import { useNotification } from '../components/NotificationContext'
 
 export default function AdminTeacherProfile(){
@@ -121,7 +120,7 @@ export default function AdminTeacherProfile(){
   }
 
   return (
-    <AdminLayout>
+    <React.Fragment>
       <div className="space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
@@ -255,6 +254,6 @@ export default function AdminTeacherProfile(){
           </div>
         </form>
       </div>
-    </AdminLayout>
+    </React.Fragment>
   )
 }

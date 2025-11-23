@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react'
 import api, { toAbsoluteUrl } from '../api'
-import AdminLayout from '../components/AdminLayout'
 import { uploadToCloudinary } from '../utils/cloudinary'
 import { toast } from '../utils/toast'
 
@@ -82,7 +81,7 @@ export default function AdminSchool(){
   }
 
   return (
-    <AdminLayout>
+    <React.Fragment>
       <div className="max-w-3xl mx-auto space-y-4">
         <h1 className="text-xl font-semibold">School Settings</h1>
         <div className="sticky top-16 z-10 bg-white/85 backdrop-blur rounded-lg border border-gray-200">
@@ -335,6 +334,6 @@ export default function AdminSchool(){
           </form>
         )}
       </div>
-    </AdminLayout>
+    </React.Fragment>
   )
 }

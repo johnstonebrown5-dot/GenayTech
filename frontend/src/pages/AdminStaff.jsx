@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../auth'
 import api from '../api'
-import AdminLayout from '../components/AdminLayout'
 import Modal from '../components/Modal'
 import { useNotification } from '../components/NotificationContext'
 
@@ -103,7 +102,7 @@ export default function AdminStaff(){
   }
 
   return (
-    <AdminLayout>
+    <React.Fragment>
       <div className="space-y-6">
         <div className="flex items-center justify-between gap-3">
           <div>
@@ -209,6 +208,6 @@ export default function AdminStaff(){
           </form>
         </Modal>
       </div>
-    </AdminLayout>
+    </React.Fragment>
   )
 }

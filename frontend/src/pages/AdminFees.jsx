@@ -1,5 +1,4 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import AdminLayout from '../components/AdminLayout'
 import api, { toAbsoluteUrl, backendBase } from '../api'
 import Modal from '../components/Modal'
 import { useNotification } from '../components/NotificationContext'
@@ -185,10 +184,9 @@ export default function AdminFees({ embed=false, initialTab='categories' }){
         </div>
       </div>
   )
-  return embed ? content : (
-    <AdminLayout>
+  return (
+    <React.Fragment>
       {content}
-      {/* Report Builder Modal */}
       {showReport && (
         <Modal open={showReport} onClose={()=>setShowReport(false)} title="Generate Fee Reports" size="md">
           <form className="space-y-4" onSubmit={e=>{ e.preventDefault(); onGenerateReport() }}>
@@ -243,7 +241,7 @@ export default function AdminFees({ embed=false, initialTab='categories' }){
           </form>
         </Modal>
       )}
-    </AdminLayout>
+    </React.Fragment>
   )
 }
 

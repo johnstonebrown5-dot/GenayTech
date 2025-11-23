@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from 'react'
-import AdminLayout from '../components/AdminLayout'
 import api from '../api'
 // Use a simple <img> for reliability in preview
 import { uploadToCloudinary } from '../utils/cloudinary'
@@ -77,7 +76,7 @@ export default function AdminProfile(){
   }
 
   return (
-    <AdminLayout>
+    <React.Fragment>
       <div className="max-w-3xl mx-auto space-y-5">
         <h1 className="text-xl font-semibold">My Profile</h1>
         {loading && <div className="bg-white p-4 rounded border">Loading...</div>}
@@ -130,6 +129,6 @@ export default function AdminProfile(){
           </div>
         )}
       </div>
-    </AdminLayout>
+    </React.Fragment>
   )
 }

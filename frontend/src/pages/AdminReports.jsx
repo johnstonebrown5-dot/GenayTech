@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react'
 import api from '../api'
-import AdminLayout from '../components/AdminLayout'
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -75,7 +74,7 @@ export default function AdminReports(){
 
   if (!data) {
     return (
-      <AdminLayout>
+      <React.Fragment>
         <div className="space-y-6 animate-pulse">
           <div className="flex items-center justify-between">
             <div className="h-8 bg-gray-200 rounded w-64"></div>
@@ -95,12 +94,12 @@ export default function AdminReports(){
             ))}
           </div>
         </div>
-      </AdminLayout>
+      </React.Fragment>
     )
   }
 
   return (
-    <AdminLayout>
+    <React.Fragment>
       <div className="space-y-6">
         {/* Header */}
         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -864,6 +863,6 @@ export default function AdminReports(){
           </div>
         )}
       </div>
-    </AdminLayout>
+    </React.Fragment>
   )
 }

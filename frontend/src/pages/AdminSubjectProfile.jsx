@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
-import AdminLayout from '../components/AdminLayout'
 import api from '../api'
 import { useNotification } from '../components/NotificationContext'
 
@@ -221,7 +220,7 @@ export default function AdminSubjectProfile(){
   }, [subject?.category])
 
   return (
-    <AdminLayout>
+    <React.Fragment>
       <div className="space-y-4">
         <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
           <div className="space-y-1">
@@ -561,6 +560,6 @@ export default function AdminSubjectProfile(){
           </div>
         )}
       </div>
-    </AdminLayout>
+    </React.Fragment>
   )
 }

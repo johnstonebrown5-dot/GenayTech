@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from 'react'
-import AdminLayout from '../components/AdminLayout'
 import api from '../api'
 import Modal from '../components/Modal'
 import { useNavigate } from 'react-router-dom'
@@ -349,7 +348,7 @@ export default function AdminExams(){
   }
 
   return (
-    <AdminLayout>
+    <React.Fragment>
       <div className="space-y-6">
         <h1 className="text-2xl sm:text-3xl font-bold">Exams</h1>
 
@@ -763,6 +762,6 @@ export default function AdminExams(){
           )}
         </div>
       </Modal>
-    </AdminLayout>
+    </React.Fragment>
   )
 }

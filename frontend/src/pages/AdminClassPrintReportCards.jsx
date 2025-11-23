@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { useParams, Link, useSearchParams } from 'react-router-dom'
 import api from '../api'
-import AdminLayout from '../components/AdminLayout'
 
 export default function AdminClassPrintReportCards(){
   const { id } = useParams()
@@ -204,7 +203,7 @@ export default function AdminClassPrintReportCards(){
   const gradeForAverage = (avg) => letterFromBands(avg, globalBands)
 
   return (
-    <AdminLayout>
+    <React.Fragment>
     <div className="p-4">
       <style>{`
         @page { size: A4 portrait; margin: 10mm; }
@@ -428,6 +427,6 @@ export default function AdminClassPrintReportCards(){
         )}
       </div>
     </div>
-    </AdminLayout>
+    </React.Fragment>
   )
 }

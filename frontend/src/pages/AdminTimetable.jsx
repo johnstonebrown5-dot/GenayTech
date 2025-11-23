@@ -1,5 +1,4 @@
 import React, { useEffect, useMemo, useState, useRef } from 'react'
-import AdminLayout from '../components/AdminLayout'
 import api from '../api'
 
 export default function AdminTimetable() {
@@ -952,7 +951,7 @@ export default function AdminTimetable() {
     setSaving(false)
   }
   return (
-    <AdminLayout>
+    <React.Fragment>
       <div className="space-y-6">
         {!currentPlan?.id && (
           <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-800">
@@ -1532,6 +1531,6 @@ export default function AdminTimetable() {
           </div>
         )}
       </div>
-    </AdminLayout>
+    </React.Fragment>
   )
 }

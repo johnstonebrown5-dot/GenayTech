@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import AdminLayout from '../components/AdminLayout'
 import Modal from '../components/Modal'
 import api from '../api'
 import { useNotification } from '../components/NotificationContext'
@@ -296,7 +295,7 @@ export default function AdminEvents(){
   }, [filteredEvents])
 
   return (
-    <AdminLayout>
+    <React.Fragment>
       <div className="space-y-6">
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-3">
@@ -480,6 +479,6 @@ export default function AdminEvents(){
           </div>
         </form>
       </Modal>
-    </AdminLayout>
+    </React.Fragment>
   )
 }

@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import api from '../api'
-import FinanceLayout from '../components/FinanceLayout'
 import Modal from '../components/Modal'
 import { useNotification } from '../components/NotificationContext'
 
@@ -230,8 +229,8 @@ export function FinanceStaffPayrollContent(){
 
 export default function FinanceStaffPayroll(){
   return (
-    <FinanceLayout>
+    <React.Fragment>
       <FinanceStaffPayrollContent />
-    </FinanceLayout>
+    </React.Fragment>
   )
 }
