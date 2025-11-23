@@ -443,10 +443,10 @@ export default function AdminLayout({ children }){
 
         {/* Mobile Drawer Sidebar */}
         <aside
-          className={`fixed z-40 left-0 bottom-0 bg-gradient-to-b from-blue-600 via-blue-700 to-blue-900 border-r border-blue-500/30 w-64 p-2 md:hidden transition-transform duration-200 shadow-2xl ${isMobileOpen? 'translate-x-0':'-translate-x-full'}`}
+          className={`fixed z-40 left-0 bottom-0 bg-gradient-to-b from-blue-600 via-blue-700 to-blue-900 border-r border-blue-500/30 w-64 p-2 md:hidden transition-transform duration-200 shadow-2xl ${isMobileOpen? 'translate-x-0':'-translate-x-full'} flex flex-col`}
           style={{ top: broadcastBanner ? 'calc(4rem + env(safe-area-inset-top) + 40px)' : 'calc(4rem + env(safe-area-inset-top))' }}
         >
-          <nav className="space-y-1 overflow-y-auto">
+          <nav className="flex-1 space-y-1 overflow-y-auto overscroll-contain pr-1 pb-[env(safe-area-inset-bottom)]">
             {navItems.map(i => {
               const active = pathname === i.to
               return (

@@ -117,5 +117,5 @@ export default function GlobalLoading(){
   const message = hint || autoMsg
   const computed = totalRef.current > 0 ? Math.min(99, Math.round((doneRef.current / totalRef.current) * 100)) : null
   const percent = typeof percentOverride === 'number' ? percentOverride : computed
-  return <LoadingOverlay message={message} transparent percent={percent} />
+  return <LoadingOverlay message={message} transparent percent={percent} cardTransparent />
 }
