@@ -22,6 +22,11 @@ export default function AdminTeachers(){
   const [showRelease, setShowRelease] = useState(false)
   const [releaseTarget, setReleaseTarget] = useState(null)
   const [releasing, setReleasing] = useState(false)
+  const [isCompact, setIsCompact] = useState(false)
+  const [showFilters, setShowFilters] = useState(false)
+  const [filterSubject, setFilterSubject] = useState('')
+  const [filterClass, setFilterClass] = useState('')
+  const [filterAssigned, setFilterAssigned] = useState('all')
 
   const { showSuccess, showError } = useNotification()
 
@@ -53,6 +58,15 @@ export default function AdminTeachers(){
     }
   }
   useEffect(()=>{ load() },[])
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return
+    const mql = window.matchMedia('(max-width: 640px)')
+    const onChange = (e) => setIsCompact(!!(e && e.matches))
+    setIsCompact(mql.matches)
+    try { mql.addEventListener('change', onChange) } catch { try { mql.addListener(onChange) } catch {} }
+    return () => { try { mql.removeEventListener('change', onChange) } catch { try { mql.removeListener(onChange) } catch {} } }
+  }, [])
 
   const create = async (e) => {
     e.preventDefault()
@@ -98,28 +112,66 @@ export default function AdminTeachers(){
   const filteredTeachers = useMemo(() => {
     const q = search.trim().toLowerCase()
     const base = directory
-    if (!q) return base
     return base.filter(t => {
       const u = t.user || {}
       const name = `${u.username || ''} ${u.first_name || ''} ${u.last_name || ''}`.toLowerCase()
-      const subjects = (t.subjects || '').toLowerCase()
-      const klass = `${t.klass_detail?.name || ''}`.toLowerCase()
-      return name.includes(q) || subjects.includes(q) || klass.includes(q)
+      const subjStr = (t.subjects || '').toLowerCase()
+      const klassName = `${t.klass_detail?.name || ''}`.toLowerCase()
+      const matchesSearch = !q || name.includes(q) || subjStr.includes(q) || klassName.includes(q)
+
+      if (!matchesSearch) return false
+
+      // Subject filter
+      if (filterSubject) {
+        const sObj = (subjects||[]).find(s => String(s.id) === String(filterSubject))
+        const sName = (sObj?.name || '').toLowerCase()
+        const sCode = (sObj?.code || '').toLowerCase()
+        const subMatch = (sName && subjStr.includes(sName)) || (sCode && subjStr.includes(sCode))
+        if (!subMatch) return false
+      }
+
+      // Class filter
+      if (filterClass) {
+        const klassId = String(t.klass_detail?.id || '')
+        if (klassId !== String(filterClass)) return false
+      }
+
+      // Assigned filter
+      if (filterAssigned === 'assigned' && !t.klass_detail?.id) return false
+      if (filterAssigned === 'unassigned' && !!t.klass_detail?.id) return false
+
+      return true
     })
-  }, [directory, search])
+  }, [directory, search, filterSubject, filterClass, filterAssigned, subjects])
 
   const filteredPastTeachers = useMemo(() => {
     const q = search.trim().toLowerCase()
     const base = Array.isArray(pastTeachers) ? pastTeachers : []
-    if (!q) return base
     return base.filter(t => {
       const u = t.user || {}
       const name = `${u.username || ''} ${u.first_name || ''} ${u.last_name || ''}`.toLowerCase()
-      const subjects = (t.subjects || '').toLowerCase()
-      const klass = `${t.klass_detail?.name || ''}`.toLowerCase()
-      return name.includes(q) || subjects.includes(q) || klass.includes(q)
+      const subjStr = (t.subjects || '').toLowerCase()
+      const klassName = `${t.klass_detail?.name || ''}`.toLowerCase()
+      const matchesSearch = !q || name.includes(q) || subjStr.includes(q) || klassName.includes(q)
+
+      if (!matchesSearch) return false
+
+      if (filterSubject) {
+        const sObj = (subjects||[]).find(s => String(s.id) === String(filterSubject))
+        const sName = (sObj?.name || '').toLowerCase()
+        const sCode = (sObj?.code || '').toLowerCase()
+        const subMatch = (sName && subjStr.includes(sName)) || (sCode && subjStr.includes(sCode))
+        if (!subMatch) return false
+      }
+
+      if (filterClass) {
+        const klassId = String(t.klass_detail?.id || '')
+        if (klassId !== String(filterClass)) return false
+      }
+
+      return true
     })
-  }, [pastTeachers, search])
+  }, [pastTeachers, search, filterSubject, filterClass, subjects])
 
   // Quick assign subjects modal
   const [showQuickAssign, setShowQuickAssign] = useState(false)
@@ -210,6 +262,83 @@ export default function AdminTeachers(){
             <button onClick={()=>setShowAssign(true)} className="shrink-0 px-3 py-1.5 rounded bg-indigo-600 hover:bg-indigo-700 text-white">Assign Subjects & Class</button>
           </div>
         </div>
+        <div className="relative overflow-hidden rounded-2xl shadow-elevated p-5 text-white bg-gradient-to-r from-brand-600 via-indigo-600 to-fuchsia-600">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <div className="text-sm font-medium text-white/90">Quick Actions</div>
+              <div className="text-lg font-semibold">Create or Assign Teacher</div>
+              <div className="text-xs text-white/80">Add a teacher user, then assign subjects and class</div>
+            </div>
+            <div className="flex items-center gap-2">
+              <button onClick={()=>setShowCreateUser(true)} className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-semibold bg-white/15 hover:bg-white/25 border border-white/25 backdrop-blur-md">Create User</button>
+              <button onClick={()=>setShowAssign(true)} className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-semibold bg-white/15 hover:bg-white/25 border border-white/25 backdrop-blur-md">Assign</button>
+            </div>
+          </div>
+        </div>
+        {/* Mobile toolbar */}
+        <div className="md:hidden space-y-2">
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <input
+                type="text"
+                placeholder="Search teachers..."
+                value={search}
+                onChange={(e)=>setSearch(e.target.value)}
+                className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent w-full"
+              />
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              </div>
+            </div>
+            <button
+              onClick={()=> setShowFilters(v=>!v)}
+              className="px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm"
+            >Filters</button>
+          </div>
+          {showFilters && (
+            <div className="p-3 rounded-xl border border-gray-200 bg-white/90 backdrop-blur-xl supports-[backdrop-filter]:bg-white/70 space-y-2">
+              <select
+                value={filterSubject}
+                onChange={(e)=>setFilterSubject(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+              >
+                <option value="">All Subjects</option>
+                {(subjects||[]).map(s => (
+                  <option key={s.id} value={s.id}>{s.code ? `${s.code} — ${s.name}` : s.name}</option>
+                ))}
+              </select>
+              <div className="flex items-center gap-2">
+                <select
+                  value={filterClass}
+                  onChange={(e)=>setFilterClass(e.target.value)}
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                >
+                  <option value="">All Classes</option>
+                  {classes.map(c => (
+                    <option key={c.id} value={c.id}>{c.name} {c.grade_level ? `- ${c.grade_level}` : ''}</option>
+                  ))}
+                </select>
+                <select
+                  value={filterAssigned}
+                  onChange={(e)=>setFilterAssigned(e.target.value)}
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                >
+                  <option value="all">All</option>
+                  <option value="assigned">Assigned</option>
+                  <option value="unassigned">Unassigned</option>
+                </select>
+              </div>
+              <div className="flex justify-end">
+                <button
+                  onClick={()=>{ setFilterSubject(''); setFilterClass(''); setFilterAssigned('all'); setSearch('') }}
+                  className="px-3 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+                >Clear</button>
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* Action Modals */}
         <Modal open={showCreateUser} onClose={()=>setShowCreateUser(false)} title="Create Teacher User" size="lg">
@@ -268,12 +397,47 @@ export default function AdminTeachers(){
         </Modal>
 
         {/* Directory */}
-        <div className="bg-white rounded-2xl shadow-card border border-gray-200 p-4 md:p-5">
+        <div className="rounded-2xl border border-gray-200 p-4 md:p-5 bg-white/90 backdrop-blur-xl supports-[backdrop-filter]:bg-white/70 shadow-card">
           <div className="flex items-center justify-between gap-3 mb-3">
             <h2 className="text-base font-semibold">Teachers Directory</h2>
-            <div className="flex-1 md:flex-none md:w-auto">
-              <input className="w-full md:w-64 border p-2 rounded-lg" placeholder="Search name, subject or class" value={search} onChange={e=>setSearch(e.target.value)} />
+            <div className="hidden md:block">
+              <input className="w-64 border p-2 rounded-lg" placeholder="Search name, subject or class" value={search} onChange={e=>setSearch(e.target.value)} />
             </div>
+          </div>
+          <div className="hidden md:flex items-center gap-2 mb-2">
+            <select
+              value={filterSubject}
+              onChange={(e)=>setFilterSubject(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+            >
+              <option value="">All Subjects</option>
+              {(subjects||[]).map(s => (
+                <option key={s.id} value={s.id}>{s.code ? `${s.code} — ${s.name}` : s.name}</option>
+              ))}
+            </select>
+            <select
+              value={filterClass}
+              onChange={(e)=>setFilterClass(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+            >
+              <option value="">All Classes</option>
+              {classes.map(c => (
+                <option key={c.id} value={c.id}>{c.name} {c.grade_level ? `- ${c.grade_level}` : ''}</option>
+              ))}
+            </select>
+            <select
+              value={filterAssigned}
+              onChange={(e)=>setFilterAssigned(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+            >
+              <option value="all">All</option>
+              <option value="assigned">Assigned</option>
+              <option value="unassigned">Unassigned</option>
+            </select>
+            <button
+              onClick={()=>{ setFilterSubject(''); setFilterClass(''); setFilterAssigned('all'); setSearch('') }}
+              className="px-3 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+            >Clear</button>
           </div>
           {/* Mobile cards */}
           <div className="grid gap-2 md:hidden">
@@ -290,9 +454,9 @@ export default function AdminTeachers(){
                 const Container = t.id ? Link : 'div'
                 const containerProps = t.id ? { to: `/admin/teachers/${t.id}` } : {}
                 return (
-                  <Container key={t.id || `u-${t.user?.id}`} {...containerProps} className="flex items-center justify-between gap-3 p-3 rounded-xl border border-gray-200 hover:border-brand-200 hover:bg-brand-50/40 transition">
+                  <Container key={t.id || `u-${t.user?.id}`} {...containerProps} className="relative overflow-hidden rounded-2xl border border-gray-200 bg-white/90 backdrop-blur-xl supports-[backdrop-filter]:bg-white/70 shadow-card p-3 flex items-center justify-between gap-3">
                     <div className="flex items-center gap-3 min-w-0">
-                      <div className="h-10 w-10 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center font-semibold">
+                      <div className="h-10 w-10 rounded-full bg-gradient-to-br from-brand-500 to-indigo-600 text-white flex items-center justify-center font-semibold ring-1 ring-white/30">
                         {(t.user?.first_name?.[0] || t.user?.username?.[0] || '?').toUpperCase()}
                       </div>
                       <div className="min-w-0">
@@ -311,12 +475,12 @@ export default function AdminTeachers(){
                       {t.klass_detail?.name ? (
                         <span className="px-2 py-0.5 rounded-full text-xs bg-emerald-100 text-emerald-700">{t.klass_detail.name}</span>
                       ) : <span className="text-xs text-gray-500">-</span>}
-                      <button type="button" onClick={(e)=>{ e.preventDefault(); openQuickAssign(t) }} className="px-2 py-1 rounded border text-xs hover:bg-gray-50">Assign Subjects</button>
+                      <button type="button" onClick={(e)=>{ e.preventDefault(); openQuickAssign(t) }} className="px-2.5 py-1.5 text-xs rounded-lg border border-gray-200 bg-white/80 hover:bg-gray-50">Assign Subjects</button>
                       {t.id && (
                         <button
                           type="button"
                           onClick={(e)=>{ e.preventDefault(); openRelease(t) }}
-                          className="px-2 py-1 rounded border border-red-200 text-xs text-red-600 hover:bg-red-50"
+                          className="px-2.5 py-1.5 text-xs rounded-lg border border-red-200 bg-white/80 text-red-600 hover:bg-red-50"
                         >
                           Release
                         </button>
@@ -434,7 +598,7 @@ export default function AdminTeachers(){
         </div>
 
         {pastTeachers.length > 0 && (
-          <div className="bg-white rounded-2xl shadow-card border border-gray-200 p-4 md:p-5">
+          <div className="rounded-2xl border border-gray-200 p-4 md:p-5 bg-white/90 backdrop-blur-xl supports-[backdrop-filter]:bg-white/70 shadow-card">
             <div className="flex items-center justify-between gap-3 mb-3">
               <div className="flex items-center gap-2">
                 <h2 className="text-base font-semibold">Past Participants</h2>

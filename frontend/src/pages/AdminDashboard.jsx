@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import api from '../api'
 import StatCard from '../components/StatCard'
-import AdminLayout from '../components/AdminLayout'
 import Modal from '../components/Modal'
 import { Line, Bar } from 'react-chartjs-2'
 import {
@@ -223,7 +222,7 @@ export default function AdminDashboard(){
   const [dayModalEvents, setDayModalEvents] = useState([])
 
   return (
-    <AdminLayout>
+    <React.Fragment>
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
@@ -608,6 +607,6 @@ export default function AdminDashboard(){
           )}
         </div>
       </Modal>
-    </AdminLayout>
+    </React.Fragment>
   )
 }
