@@ -528,37 +528,43 @@ export default function AdminTeachers(){
                 const Container = t.id ? Link : 'div'
                 const containerProps = t.id ? { to: `/admin/teachers/${t.id}` } : {}
                 return (
-                  <Container key={t.id || `u-${t.user?.id}`} {...containerProps} className="relative overflow-hidden rounded-2xl border border-gray-200 bg-white/90 backdrop-blur-xl supports-[backdrop-filter]:bg-white/70 shadow-card p-3 flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="h-10 w-10 rounded-full bg-gradient-to-br from-brand-500 to-indigo-600 text-white flex items-center justify-center font-semibold ring-1 ring-white/30">
-                        {(t.user?.first_name?.[0] || t.user?.username?.[0] || '?').toUpperCase()}
-                      </div>
-                      <div className="min-w-0">
-                        <div className="font-medium truncate">{t.user?.first_name} {t.user?.last_name}</div>
-                        <div className="text-xs text-gray-500 truncate">@{t.user?.username}</div>
-                        <div className="mt-1 flex flex-wrap gap-1.5">
-                          {subj.slice(0,3).map((s, idx) => (
-                            <span key={idx} className="px-2 py-0.5 rounded-full text-[11px] bg-purple-100 text-purple-700">{s}</span>
-                          ))}
-                          {subj.length>3 && <span className="text-[11px] text-gray-500">+{subj.length-3} more</span>}
-                          {!subj.length && <span className="text-[11px] text-gray-500">No subjects</span>}
+                  <Container key={t.id || `u-${t.user?.id}`} {...containerProps} className="relative overflow-hidden rounded-2xl border border-gray-200 bg-white/90 backdrop-blur-xl supports-[backdrop-filter]:bg-white/70 shadow-card p-3 space-y-2">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="h-10 w-10 rounded-full bg-gradient-to-br from-brand-500 to-indigo-600 text-white flex items-center justify-center font-semibold ring-1 ring-white/30">
+                          {(t.user?.first_name?.[0] || t.user?.username?.[0] || '?').toUpperCase()}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="font-medium truncate">{t.user?.first_name} {t.user?.last_name}</div>
+                          <div className="text-xs text-gray-500 truncate">@{t.user?.username}</div>
                         </div>
                       </div>
+                      <div className="shrink-0">
+                        {t.klass_detail?.name ? (
+                          <span className="px-2 py-0.5 rounded-full text-xs bg-emerald-100 text-emerald-700">{t.klass_detail.name}</span>
+                        ) : <span className="text-xs text-gray-500">-</span>}
+                      </div>
                     </div>
-                    <div className="shrink-0 flex items-center gap-2">
-                      {t.klass_detail?.name ? (
-                        <span className="px-2 py-0.5 rounded-full text-xs bg-emerald-100 text-emerald-700">{t.klass_detail.name}</span>
-                      ) : <span className="text-xs text-gray-500">-</span>}
-                      <button type="button" onClick={(e)=>{ e.preventDefault(); openQuickAssign(t) }} className="px-3.5 py-3 text-sm rounded-lg border border-gray-200 bg-white/80 hover:bg-gray-50">Assign Subjects</button>
-                      {t.id && (
-                        <button
-                          type="button"
-                          onClick={(e)=>{ e.preventDefault(); openRelease(t) }}
-                          className="px-3.5 py-3 text-sm rounded-lg border border-red-200 bg-white/80 text-red-600 hover:bg-red-50"
-                        >
-                          Release
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="min-w-0 flex flex-wrap gap-1.5">
+                        {subj.slice(0,3).map((s, idx) => (
+                          <span key={idx} className="px-2 py-0.5 rounded-full text-[11px] bg-purple-100 text-purple-700">{s}</span>
+                        ))}
+                        {subj.length>3 && <span className="text-[11px] text-gray-500">+{subj.length-3} more</span>}
+                        {!subj.length && <span className="text-[11px] text-gray-500">No subjects</span>}
+                      </div>
+                      <div className="shrink-0 flex items-center gap-1.5">
+                        <button type="button" onClick={(e)=>{ e.preventDefault(); openQuickAssign(t) }} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded-md border border-gray-200 bg-white/80 hover:bg-gray-50">
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"/></svg>
+                          Assign
                         </button>
-                      )}
+                        {t.id && (
+                          <button type="button" onClick={(e)=>{ e.preventDefault(); openRelease(t) }} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded-md border border-red-200 bg-white/80 text-red-600 hover:bg-red-50">
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m8 4V7a2 2 0 00-2-2H7a2 2 0 00-2 2v9a2 2 0 002 2h3l2 2 2-2h3a2 2 0 002-2z"/></svg>
+                            Release
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </Container>
                 )

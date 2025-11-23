@@ -221,7 +221,7 @@ export default function App() {
             {/* Catch-all 404 */}
             <Route path="*" element={<NotFound/>} />
             </Routes>
-            <GlobalLoading />
+            {pathname !== '/' && <GlobalLoading />}
             <NotificationContainer />
             <BrowserNotificationPrompt />
             <ReportIssuePrompt />
