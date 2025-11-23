@@ -4,6 +4,7 @@ import api from '../api'
 import Modal from '../components/Modal'
 import { useNotification } from '../components/NotificationContext'
 import StatCard from '../components/StatCard'
+import { showLoadingHint, setLoadingProgress, clearLoadingHint } from '../utils/loading'
 
 export default function AdminStudents(){
   const [students, setStudents] = useState([])
@@ -37,6 +38,7 @@ export default function AdminStudents(){
   const load = async () => {
     try {
       setIsLoading(true)
+      try { showLoadingHint('Loading students…', 8) } catch {}
       // Build students query
       let studentsUrl = `/academics/students/?page_size=2000`
       if (tab === 'graduated') {
@@ -48,10 +50,12 @@ export default function AdminStudents(){
         // active
         studentsUrl += `&is_graduated=false&is_active=true`
       }
+      try { setLoadingProgress(25) } catch {}
       const [st, cl] = await Promise.all([
         api.get(studentsUrl),
         api.get('/academics/classes/?page_size=2000')
       ])
+      try { setLoadingProgress(80) } catch {}
       const stData = Array.isArray(st.data) ? st.data : (Array.isArray(st.data?.results) ? st.data.results : [])
       const clData = Array.isArray(cl.data) ? cl.data : (Array.isArray(cl.data?.results) ? cl.data.results : [])
       setStudents(stData)
@@ -60,6 +64,7 @@ export default function AdminStudents(){
       showError('Load Failed', 'Could not load students or classes.')
     } finally {
       setIsLoading(false)
+      try { setLoadingProgress(100); clearLoadingHint() } catch {}
     }
   }
 

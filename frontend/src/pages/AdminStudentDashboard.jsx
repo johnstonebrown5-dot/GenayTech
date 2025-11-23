@@ -5,6 +5,7 @@ import Modal from '../components/Modal'
 import api from '../api'
 import { uploadToCloudinary } from '../utils/cloudinary'
 import { toast } from '../utils/toast'
+import { showLoadingHint, setLoadingProgress, clearLoadingHint } from '../utils/loading'
 
 function Selectors({ examResults, uiSelectedExamId, setUiSelectedExamId }){
   const allExams = React.useMemo(()=>{
@@ -94,11 +95,13 @@ export default function AdminStudentDashboard() {
       try {
         setLoading(true)
         setError('')
+        try { showLoadingHint('Loading student dashboard…', 10) } catch {}
         const params = {}
         if (histYear) params.year = histYear
         if (histTerm) params.term = histTerm
         if (histAcademicYear) params.academic_year = histAcademicYear
         if (histIncludeSubjects) params.include_subjects = 'true'
+        try { setLoadingProgress(25) } catch {}
         const [st, asRes, atRes, exRes, fin, cl, hist] = await Promise.all([
           api.get(`/academics/students/${id}/`),
           api.get(`/academics/assessments/?student=${id}`),
@@ -108,6 +111,7 @@ export default function AdminStudentDashboard() {
           api.get('/academics/classes/'),
           api.get(`/academics/students/${id}/history/`, { params })
         ])
+        try { setLoadingProgress(80) } catch {}
         if (!isMounted) return
         setStudent(st.data)
         const assessArr = Array.isArray(asRes.data) ? asRes.data : (Array.isArray(asRes.data?.results) ? asRes.data.results : [])
@@ -127,6 +131,7 @@ export default function AdminStudentDashboard() {
         setHistoryError(e?.response?.data?.detail || e?.message || 'Failed to load history')
       } finally {
         if (isMounted) setLoading(false)
+        try { setLoadingProgress(100); clearLoadingHint() } catch {}
       }
     }
     load()

@@ -21,7 +21,7 @@ export default function LoadingOverlay({ message = 'Loading…', transparent = f
           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
         </svg>
-        <p className={`${textSize} text-gray-700`}>{message}</p>
+        <p className={`${textSize} text-gray-700`}>{typeof percent === 'number' && !Number.isNaN(percent) ? `${message} ${Math.max(0, Math.min(100, percent))}%` : message}</p>
         {typeof percent === 'number' && !Number.isNaN(percent) && (
           <div className="w-40 h-2 bg-gray-200 rounded-full overflow-hidden">
             <div className="h-full bg-blue-600 transition-all" style={{ width: `${Math.max(0, Math.min(100, percent))}%` }} />
