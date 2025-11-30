@@ -135,8 +135,11 @@ export default function StudentLayout({ children }){
             {schoolLogo ? (
               <img src={schoolLogo} alt="School Logo" className="w-7 h-7 rounded object-contain" />
             ) : null}
-            <div className="hidden sm:block">
-              <div className="text-sm font-semibold leading-tight">{schoolName || 'EDU-TRACK'}</div>
+            <div className="flex flex-col">
+              <div className="hidden sm:block text-sm font-semibold leading-tight">{schoolName || 'EDU-TRACK'}</div>
+              <div className="text-xs sm:text-[13px] font-medium text-slate-800 truncate max-w-[120px]">
+                {user?.first_name || user?.username || ''}
+              </div>
             </div>
           </Link>
 
