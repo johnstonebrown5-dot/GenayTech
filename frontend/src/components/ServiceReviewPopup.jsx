@@ -12,22 +12,75 @@ export default function ServiceReviewPopup(){
   const [done, setDone] = useState(false)
   const [error, setError] = useState('')
 
-  useEffect(() => {
-    const key = 'service_review_status'
-    const status = JSON.parse(localStorage.getItem(key) || 'null')
-    const now = Date.now()
-    // Don't show if already submitted or dismissed in last 7 days
-    if (status && status.until && now < status.until) return
+  const STORAGE_KEY = 'service_review_status'
+  const FIRST_DELAY_MS = 5 * 60 * 1000
+  const REPEAT_DELAY_MS = 60 * 60 * 1000
 
-    const id = setTimeout(() => setOpen(true), 30_000)
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    let stored = null
+    try {
+      stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null')
+    } catch (err) {
+      stored = null
+    }
+
+    const now = Date.now()
+
+    if (stored?.status === 'submitted' && stored?.nextAt == null) {
+      return
+    }
+
+    let nextAt = stored?.nextAt ?? null
+
+    if (!nextAt && stored?.until && now < stored.until) {
+      nextAt = stored.until
+    }
+
+    if (!nextAt) {
+      nextAt = now + FIRST_DELAY_MS
+      const updated = { ...(stored || {}), status: stored?.status || 'pending', nextAt }
+      delete updated.until
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(updated))
+    }
+
+    const delay = Math.max(nextAt - now, 0)
+    if (delay === 0) {
+      setOpen(true)
+      return
+    }
+
+    const id = setTimeout(() => setOpen(true), delay)
     return () => clearTimeout(id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  useEffect(() => {
+    if (!open || typeof window === 'undefined') return
+    let stored = null
+    try {
+      stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null')
+    } catch (err) {
+      stored = null
+    }
+    if (stored?.status === 'submitted') return
+    const nextAt = Date.now() + REPEAT_DELAY_MS
+    const updated = { ...(stored || {}), status: stored?.status || 'prompted', nextAt }
+    delete updated.until
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated))
+  }, [open])
 
   const stars = useMemo(() => [1,2,3,4,5], [])
 
   function remember(status){
-    const days = status === 'submitted' ? 365 : 7
-    localStorage.setItem('service_review_status', JSON.stringify({ status, until: Date.now() + days*24*60*60*1000 }))
+    if (typeof window === 'undefined') return
+    const now = Date.now()
+    if (status === 'submitted') {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ status, nextAt: null, until: now + 365*24*60*60*1000 }))
+      return
+    }
+    const nextAt = now + REPEAT_DELAY_MS
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ status, nextAt }))
   }
 
   async function onSubmit(e){

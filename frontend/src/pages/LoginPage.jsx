@@ -19,6 +19,7 @@ export default function LoginPage() {
   const [remember, setRemember] = useState(true)
   const [mounted, setMounted] = useState(false)
   const [installReady, setInstallReady] = useState(false)
+  const [tilt, setTilt] = useState({ x: 0, y: 0 })
 
   
 
@@ -137,6 +138,25 @@ export default function LoginPage() {
     setError('')
   }
 
+  const handleCardMove = (e) => {
+    const point = e.touches && e.touches[0] ? e.touches[0] : e
+    if (!point) return
+    const rect = e.currentTarget.getBoundingClientRect()
+    const x = point.clientX - rect.left
+    const y = point.clientY - rect.top
+    const midX = rect.width / 2
+    const midY = rect.height / 2
+    const rotateY = ((x - midX) / midX) * 10
+    const rotateX = ((midY - y) / midY) * 10
+    setTilt({ x: rotateX, y: rotateY })
+  }
+
+  const resetTilt = () => {
+    setTilt({ x: 0, y: 0 })
+  }
+
+  const mobileTiltTransform = `rotateX(${tilt.x}deg) rotateY(${tilt.y}deg) translateZ(0) translateY(${mounted ? 0 : 14}px) scale(${mounted ? 1 : 0.96})`
+
   return (
     <div className="relative min-h-screen w-full overflow-hidden bg-gradient-to-br from-sky-100 via-white to-white">
       {/* Header */}
@@ -155,18 +175,6 @@ export default function LoginPage() {
           <a href="mailto:EduTrack46@gmail.com" className="text-sm hover:underline">Contact Us</a>
         </div>
       </header>
-
-      {/* Mobile header */}
-      <div className="sm:hidden relative z-10 flex items-center justify-between px-4 py-4 text-white">
-        <div className="flex items-center gap-2">
-          <AppLogo size={32} className="w-8 h-8 rounded-md bg-white/10 p-1" />
-          <div className="text-xs font-semibold tracking-wider">EDU-TRACK</div>
-        </div>
-        <div className="flex items-center gap-3 text-xs font-medium">
-          <a href="/" className="underline hover:text-white/80 transition">Home</a>
-          <a href="mailto:EduTrack46@gmail.com" className="underline hover:text-white/80 transition">Contact</a>
-        </div>
-      </div>
 
       {/* Desktop/Tablet Content */}
       <main className="hidden sm:flex relative z-10 min-h-[calc(100vh-96px)] items-center justify-center">
@@ -336,123 +344,174 @@ export default function LoginPage() {
       </main>
 
       {/* Mobile-only content */}
-      <div className="sm:hidden relative z-10 flex min-h-screen flex-col items-center px-4 py-8">
-        <div className="w-full max-w-sm flex-1 mx-auto flex flex-col justify-center gap-8">
-          {/* Brand */}
-          <div className="text-center text-white space-y-1">
-            <div className="font-extrabold tracking-[0.3em] text-xs">WELCOME</div>
-            <div className="text-sm font-semibold">Sign in to continue</div>
-            <p className="text-[11px] text-white/80">Tailored dashboards for every school role.</p>
-          </div>
-
-          {/* Card with gradient border */}
-          <div className="relative">
-            <div className="absolute -inset-[6px] rounded-[28px] bg-gradient-to-br from-indigo-500/60 via-purple-500/45 to-fuchsia-500/55 blur opacity-90" />
-            <div className="relative rounded-[28px] bg-white/90 backdrop-blur-xl shadow-[0_20px_60px_rgba(15,23,42,0.35)] ring-1 ring-white/70 border border-white/60 p-6">
-              {formStep === 'role' && (
-                <div className="space-y-5">
-                  <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-indigo-100 text-indigo-600 text-xl shadow-inner shadow-white/40">🎯</div>
-                  <div className="text-center space-y-1">
-                    <h2 className="text-xl font-bold text-indigo-700">Select Your Role</h2>
-                    <p className="text-xs text-gray-500">Choose where you need to go today.</p>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3" role="radiogroup" aria-label="Select role">
-                    {roles.map(r => {
-                      const selected = role === r.key;
-                      return (
-                        <button
-                          key={r.key}
-                          onClick={()=>handleRoleSelect(r.key)}
-                          role="radio"
-                          aria-checked={selected}
-                          aria-label={r.label}
-                          className={`group relative px-3 py-3 rounded-2xl text-sm font-semibold border transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300 flex flex-col items-center justify-center gap-1 active:scale-[0.99] ${selected ? 'bg-gradient-to-br from-indigo-50 via-white to-purple-50 border-indigo-200 text-indigo-700 shadow-[0_10px_26px_rgba(79,70,229,0.25)]' : 'bg-white/95 border-neutral-200 text-gray-700 hover:bg-white hover:border-indigo-200 hover:text-indigo-700 hover:shadow-md'}`}
-                        >
-                          <span className={`absolute top-2 right-2 inline-flex h-5 w-5 items-center justify-center rounded-full border transition-all ${selected ? 'bg-indigo-600 text-white border-indigo-600 shadow-[0_6px_14px_rgba(79,70,229,0.45)] scale-100' : 'bg-white/80 text-transparent border-gray-300 scale-90'}`}>✓</span>
-                          <span className={`text-lg transition-transform ${selected ? 'scale-105' : 'group-hover:scale-105'}`}>{r.icon}</span>
-                          <span>{r.label}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
+      <div className="sm:hidden relative z-10 flex min-h-screen flex-col items-stretch bg-rose-50">
+        <div className="pointer-events-none absolute inset-0 -z-10">
+          <div className="absolute inset-x-0 top-0 h-40 bg-gradient-to-r from-rose-500 via-rose-400 to-rose-500 opacity-90" />
+        </div>
+        <div className="w-full flex-1 flex flex-col justify-end">
+          {/* Phone-like card with 3D tilt */}
+          <div
+            className="relative [perspective:1200px] w-full"
+            onMouseMove={handleCardMove}
+            onMouseLeave={resetTilt}
+            onTouchMove={handleCardMove}
+            onTouchEnd={resetTilt}
+          >
+            <div
+              className="relative w-full overflow-hidden rounded-[32px] bg-white shadow-[0_20px_40px_rgba(15,23,42,0.25)] border border-rose-100 transition-all duration-500 ease-out will-change-transform"
+              style={{ transform: mobileTiltTransform, opacity: mounted ? 1 : 0 }}
+            >
+              <div className="h-16 bg-gradient-to-r from-rose-500 to-rose-400 flex items-center justify-between px-5 text-white">
+                <span className="text-sm font-semibold">Login</span>
+                <div className="flex items-center gap-3">
+                  <span className="text-[11px] opacity-80">{role ? role.charAt(0).toUpperCase() + role.slice(1) : 'Select role'}</span>
                   <button
-                    onClick={()=>{ if(!role) return; setFormStep('credentials') }}
-                    disabled={!role}
-                    className="w-full rounded-full bg-gradient-to-r from-indigo-600 via-indigo-500 to-purple-600 py-3 text-white text-sm font-semibold tracking-wide shadow-lg shadow-indigo-500/30 disabled:opacity-60 disabled:shadow-none transition-all hover:-translate-y-0.5 active:translate-y-0"
+                    type="button"
+                    onClick={() => nav('/')}
+                    aria-label="Close login and go to homepage"
+                    className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-white/15 hover:bg-white/25 text-white text-xs border border-white/30"
                   >
-                    <span className="inline-flex items-center justify-center gap-2">
-                      <span className="inline-block h-2 w-2 rounded-full bg-white/80 shadow-[0_0_12px_rgba(255,255,255,0.8)]" />
-                      Proceed
-                    </span>
+                    ×
                   </button>
-                  {installReady && (
-                    <button onClick={onInstallClick} className="w-full rounded-full border border-white/70 bg-white/70 text-indigo-700 font-semibold py-3 shadow hover:bg-white">
-                      Install App
-                    </button>
-                  )}
-                  <div className="text-center text-[12px] text-gray-600">Need help choosing? Contact the school admin.</div>
                 </div>
-              )}
+              </div>
 
-              {formStep === 'credentials' && (
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <h2 className="text-lg font-bold text-indigo-700">Log In</h2>
-                    <button onClick={handleBackToRole} className="text-xs text-indigo-700 underline">Change role</button>
+              <div className="px-5 pt-4 pb-6 space-y-4">
+                {formStep === 'role' && (
+                  <div className="space-y-4">
+                    <div className="text-xs text-rose-500 font-semibold tracking-wide text-left">Choose your role</div>
+                    <div className="grid grid-cols-2 gap-3" role="radiogroup" aria-label="Select role">
+                      {roles.map(r => {
+                        const selected = role === r.key;
+                        return (
+                          <button
+                            key={r.key}
+                            onClick={() => handleRoleSelect(r.key)}
+                            role="radio"
+                            aria-checked={selected}
+                            aria-label={r.label}
+                            className={`flex flex-col items-center justify-center gap-1 rounded-xl border text-xs font-semibold py-2.5 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-300 ${
+                              selected
+                                ? 'bg-rose-50 border-rose-300 text-rose-600 shadow-sm'
+                                : 'bg-white border-rose-100 text-gray-700 hover:bg-rose-50/60 hover:border-rose-200'
+                            }`}
+                          >
+                            <span className="text-lg">{r.icon}</span>
+                            <span>{r.label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <button
+                      onClick={() => {
+                        if (!role) return;
+                        setFormStep('credentials');
+                      }}
+                      disabled={!role}
+                      className="w-full rounded-full bg-gradient-to-r from-rose-500 to-rose-400 py-3 text-white text-sm font-semibold tracking-wide shadow-md disabled:opacity-60 disabled:shadow-none transition-all"
+                    >
+                      Continue
+                    </button>
+                    {installReady && (
+                      <button
+                        onClick={onInstallClick}
+                        className="w-full rounded-full border border-rose-100 bg-rose-50 text-rose-600 text-xs font-medium py-2.5 mt-1"
+                      >
+                        Install App
+                      </button>
+                    )}
+                    <div className="text-[11px] text-gray-500 text-center">Need help choosing? Contact the school admin.</div>
                   </div>
-                  {role && (
-                    <div className="mb-3 text-xs">
-                      Signing in as: <span className="px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">{role}</span>
-                    </div>
-                  )}
-                  {error && <div className="mb-3 text-xs text-red-700 bg-red-100 border border-red-200 rounded px-2 py-1.5">{error}</div>}
-                  <form onSubmit={submit} className="space-y-3">
-                    <div>
-                      <label htmlFor="m-login-username" className="block text-[12px] text-gray-700 mb-1">Email (username)</label>
-                      <input
-                        id="m-login-username"
-                        type="text"
-                        value={username}
-                        onChange={e=>setUsername(e.target.value)}
-                        autoComplete="username"
-                        inputMode="email"
-                        autoCapitalize="none"
-                        autoCorrect="off"
-                        aria-label="Email (username)"
-                        className="w-full rounded-lg border border-black/10 bg-white/85 px-3 py-2 text-sm shadow-inner"
-                        required
-                      />
-                      <div className="mt-1 text-[11px] text-gray-500">Admins: use the email you signed up with.</div>
-                    </div>
-                    <div>
-                      <label htmlFor="m-login-password" className="block text-[12px] text-gray-700 mb-1">Password</label>
-                      <div className="relative">
+                )}
+
+                {formStep === 'credentials' && (
+                  <div className="space-y-4">
+                    {role && (
+                      <div className="text-[11px] text-gray-500">
+                        Signing in as{' '}
+                        <span className="px-2 py-0.5 rounded-full bg-rose-50 text-rose-600 border border-rose-200">{role}</span>
+                      </div>
+                    )}
+                    {error && (
+                      <div className="text-[11px] text-red-700 bg-red-50 border border-red-200 rounded-md px-2 py-1.5">{error}</div>
+                    )}
+                    <form onSubmit={submit} className="space-y-3">
+                      <div className="space-y-1">
+                        <label htmlFor="m-login-username" className="block text-[12px] text-gray-700">
+                          Email (username)
+                        </label>
                         <input
-                          id="m-login-password"
-                          type={showPassword ? 'text' : 'password'}
-                          value={password}
-                          onChange={e=>setPassword(e.target.value)}
-                          onKeyUp={(e)=> setCapsLockOn(e.getModifierState && e.getModifierState('CapsLock'))}
-                          autoComplete="current-password"
-                          aria-label="Password"
-                          className="w-full rounded-lg border border-black/10 bg-white/85 px-3 py-2 text-sm pr-16 shadow-inner"
+                          id="m-login-username"
+                          type="text"
+                          value={username}
+                          onChange={e => setUsername(e.target.value)}
+                          autoComplete="username"
+                          inputMode="email"
+                          autoCapitalize="none"
+                          autoCorrect="off"
+                          aria-label="Email (username)"
+                          className="w-full rounded-lg border border-rose-100 bg-white px-3 py-2 text-sm shadow-inner focus:outline-none focus:ring-2 focus:ring-rose-200"
                           required
                         />
-                        <button type="button" aria-pressed={showPassword} aria-label={showPassword ? 'Hide password' : 'Show password'} onClick={()=>setShowPassword(v=>!v)} className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-indigo-600 font-semibold">{showPassword?'Hide':'Show'}</button>
                       </div>
-                      {capsLockOn && <div className="mt-1 text-[11px] text-amber-700">Caps Lock is ON</div>}
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <label className="inline-flex items-center gap-2 text-[12px] text-gray-700 select-none">
-                        <input type="checkbox" className="accent-indigo-600" checked={remember} onChange={(e)=>setRemember(e.target.checked)} />
-                        Remember me
-                      </label>
-                      <a href="mailto:EduTrack46@gmail.com?subject=Password%20help" className="text-[12px] text-indigo-700 underline">Forgot password?</a>
-                    </div>
-                    <button type="submit" disabled={isLoading} className="w-full rounded-full bg-gradient-to-r from-indigo-600 via-indigo-500 to-purple-600 text-white font-semibold py-2.5 disabled:opacity-60 disabled:shadow-none shadow-lg shadow-indigo-500/30">{isLoading?'Signing In…':'Proceed'}</button>
-                  </form>
-                </div>
-              )}
+                      <div className="space-y-1">
+                        <label htmlFor="m-login-password" className="block text-[12px] text-gray-700">
+                          Password
+                        </label>
+                        <div className="relative">
+                          <input
+                            id="m-login-password"
+                            type={showPassword ? 'text' : 'password'}
+                            value={password}
+                            onChange={e => setPassword(e.target.value)}
+                            onKeyUp={e => setCapsLockOn(e.getModifierState && e.getModifierState('CapsLock'))}
+                            autoComplete="current-password"
+                            aria-label="Password"
+                            className="w-full rounded-lg border border-rose-100 bg-white px-3 py-2 text-sm pr-16 shadow-inner focus:outline-none focus:ring-2 focus:ring-rose-200"
+                            required
+                          />
+                          <button
+                            type="button"
+                            aria-pressed={showPassword}
+                            aria-label={showPassword ? 'Hide password' : 'Show password'}
+                            onClick={() => setShowPassword(v => !v)}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-rose-600 font-semibold"
+                          >
+                            {showPassword ? 'Hide' : 'Show'}
+                          </button>
+                        </div>
+                        {capsLockOn && <div className="mt-1 text-[11px] text-amber-700">Caps Lock is ON</div>}
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <label className="inline-flex items-center gap-2 text-[11px] text-gray-700 select-none">
+                          <input type="checkbox" className="accent-rose-500" checked={remember} onChange={e => setRemember(e.target.checked)} />
+                          Remember me
+                        </label>
+                        <a
+                          href="mailto:EduTrack46@gmail.com?subject=Password%20help"
+                          className="text-[11px] text-rose-600 underline"
+                        >
+                          Forgot password?
+                        </a>
+                      </div>
+                      <button
+                        type="submit"
+                        disabled={isLoading}
+                        className="w-full rounded-full bg-gradient-to-r from-rose-500 to-rose-400 text-white font-semibold py-2.5 disabled:opacity-60 disabled:shadow-none shadow-md mt-1"
+                      >
+                        {isLoading ? 'Signing In…' : 'Login'}
+                      </button>
+                    </form>
+                    <button
+                      type="button"
+                      onClick={handleBackToRole}
+                      className="w-full text-[11px] text-gray-500 underline mt-1"
+                    >
+                      Change role
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
