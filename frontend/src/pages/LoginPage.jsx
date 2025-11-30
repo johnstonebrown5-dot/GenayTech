@@ -22,6 +22,7 @@ export default function LoginPage() {
   const [mounted, setMounted] = useState(false)
   const [installReady, setInstallReady] = useState(false)
   const [tilt, setTilt] = useState({ x: 0, y: 0 })
+  const [showAppIntro, setShowAppIntro] = useState(false)
 
   const notifyError = (message, title = 'Login error') => {
     setError(message)
@@ -35,6 +36,16 @@ export default function LoginPage() {
     // trigger entrance animation once mounted
     const t = setTimeout(() => setMounted(true), 50)
     return () => clearTimeout(t)
+  }, [])
+
+  useEffect(() => {
+    try {
+      const isStandalone = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || (window.navigator && window.navigator.standalone)
+      const dismissed = typeof window !== 'undefined' && window.localStorage && window.localStorage.getItem('eduTrackAppIntroDismissed') === '1'
+      if (isStandalone && !dismissed) {
+        setShowAppIntro(true)
+      }
+    } catch {}
   }, [])
 
   // Listen for global PWA readiness and installed events
@@ -352,37 +363,58 @@ export default function LoginPage() {
       </main>
 
       {/* Mobile-only content */}
-      <div className="sm:hidden relative z-10 flex min-h-screen flex-col items-stretch bg-rose-50">
+      <div className="sm:hidden relative z-10 flex min-h-screen flex-col items-stretch bg-sky-50">
         <div className="pointer-events-none absolute inset-0 -z-10">
-          <div className="absolute inset-x-0 top-0 h-40 bg-gradient-to-r from-rose-500 via-rose-400 to-rose-500 opacity-90" />
+          <div className="absolute inset-x-0 top-0 h-40 bg-gradient-to-r from-sky-600 via-sky-500 to-sky-600 opacity-90" />
         </div>
         {/* Global floating balloons background */}
         <div className="pointer-events-none absolute inset-x-6 top-16 bottom-8 z-0">
-          <div className="absolute bottom-[-40px] left-2 h-9 w-9 rounded-full bg-gradient-to-b from-rose-300 to-rose-500 opacity-70 animate-float-up-slow" />
+          <div className="absolute bottom-[-40px] left-2 h-9 w-9 rounded-full bg-gradient-to-b from-sky-300 to-sky-500 opacity-70 animate-float-up-slow" />
           <div className="absolute bottom-[-48px] right-4 h-11 w-11 rounded-full bg-gradient-to-b from-sky-300 to-sky-500 opacity-70 animate-float-up-medium" style={{ animationDelay: '2.2s' }} />
           <div className="absolute bottom-[-56px] left-1/2 -translate-x-1/2 h-8 w-8 rounded-full bg-gradient-to-b from-amber-300 to-amber-500 opacity-75 animate-float-up-fast" style={{ animationDelay: '4s' }} />
           <div className="absolute bottom-[-52px] left-1/4 h-7 w-7 rounded-full bg-gradient-to-b from-emerald-300 to-emerald-500 opacity-60 animate-float-up-medium" style={{ animationDelay: '6s' }} />
         </div>
         {/* Top brand area */}
-        <div className="pt-6 pb-2 flex flex-col items-center justify-start text-white">
+        <div className="pt-6 pb-2 flex flex-col items-center justify-start text-white relative z-10">
           <div className="text-[11px] font-semibold tracking-[0.28em] uppercase">EDU-TRACK</div>
           <p className="mt-2 text-[11px] text-white/90">Login to access your school dashboards.</p>
         </div>
 
-        <div className="w-full flex-1 flex flex-col justify-end">
-          {/* Phone-like card with 3D tilt */}
-          <div
-            className="relative z-10 [perspective:1200px] w-full"
-            onMouseMove={handleCardMove}
-            onMouseLeave={resetTilt}
-            onTouchMove={handleCardMove}
-            onTouchEnd={resetTilt}
-          >
-            <div
-              className="relative w-full overflow-hidden rounded-[32px] bg-white shadow-[0_20px_40px_rgba(15,23,42,0.25)] border border-rose-100 transition-all duration-500 ease-out will-change-transform"
-              style={{ transform: mobileTiltTransform, opacity: mounted ? 1 : 0 }}
+        {showAppIntro ? (
+          <div className="relative z-10 flex-1 flex flex-col items-center justify-center px-8 pb-12 text-center text-slate-800">
+            <h2 className="text-base font-semibold tracking-wide text-sky-700 uppercase mb-2">Welcome to EduTrack</h2>
+            <p className="text-sm text-slate-600 max-w-xs mb-4">Keep your school attendance, results, finance and messaging in one lightweight app.</p>
+            <ul className="text-[11px] text-slate-500 space-y-1 mb-6 max-w-xs text-left">
+              <li>• Fast access to your dashboards from this device.</li>
+              <li>• Works offline for recent data in supported areas.</li>
+              <li>• Get instant alerts for important updates.</li>
+            </ul>
+            <button
+              type="button"
+              onClick={() => {
+                try { window.localStorage && window.localStorage.setItem('eduTrackAppIntroDismissed', '1') } catch {}
+                setShowAppIntro(false)
+              }}
+              className="mt-2 inline-flex items-center justify-center rounded-full bg-gradient-to-r from-sky-600 to-sky-500 px-6 py-2.5 text-white text-sm font-semibold shadow-md"
             >
-              <div className="h-16 bg-gradient-to-r from-rose-500 to-rose-400 flex items-center justify-between px-5 text-white">
+              Get started
+            </button>
+          </div>
+        ) : (
+          <div className="w-full flex-1 flex flex-col justify-end">
+            {/* Phone-like card with 3D tilt */}
+            <div
+              className="relative z-10 [perspective:1200px] w-full"
+              onMouseMove={handleCardMove}
+              onMouseLeave={resetTilt}
+              onTouchMove={handleCardMove}
+              onTouchEnd={resetTilt}
+            >
+              <div
+                className="relative w-full overflow-hidden rounded-[32px] bg-white shadow-[0_20px_40px_rgba(15,23,42,0.25)] border border-sky-100 transition-all duration-500 ease-out will-change-transform"
+                style={{ transform: mobileTiltTransform, opacity: mounted ? 1 : 0 }}
+              >
+              <div className="h-16 bg-gradient-to-r from-sky-600 to-sky-500 flex items-center justify-between px-5 text-white">
                 <span className="text-sm font-semibold">Login</span>
                 <div className="flex items-center gap-3">
                   <span className="text-[11px] opacity-80">{role ? role.charAt(0).toUpperCase() + role.slice(1) : 'Select role'}</span>
@@ -400,7 +432,7 @@ export default function LoginPage() {
               <div className="px-5 pt-4 pb-6 space-y-4">
                 {formStep === 'role' && (
                   <div className="space-y-4">
-                    <div className="text-xs text-rose-500 font-semibold tracking-wide text-left">Choose your role</div>
+                    <div className="text-xs text-sky-600 font-semibold tracking-wide text-left">Choose your role</div>
                     <div className="grid grid-cols-2 gap-3" role="radiogroup" aria-label="Select role">
                       {roles.map(r => {
                         const selected = role === r.key;
@@ -411,10 +443,10 @@ export default function LoginPage() {
                             role="radio"
                             aria-checked={selected}
                             aria-label={r.label}
-                            className={`flex flex-col items-center justify-center gap-1 rounded-xl border text-xs font-semibold py-2.5 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-300 ${
+                            className={`flex flex-col items-center justify-center gap-1 rounded-xl border text-xs font-semibold py-2.5 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-300 ${
                               selected
-                                ? 'bg-rose-50 border-rose-300 text-rose-600 shadow-sm'
-                                : 'bg-white border-rose-100 text-gray-700 hover:bg-rose-50/60 hover:border-rose-200'
+                                ? 'bg-sky-50 border-sky-300 text-sky-700 shadow-sm'
+                                : 'bg-white border-sky-100 text-gray-700 hover:bg-sky-50/60 hover:border-sky-200'
                             }`}
                           >
                             <span className="text-lg">{r.icon}</span>
@@ -429,14 +461,14 @@ export default function LoginPage() {
                         setFormStep('credentials');
                       }}
                       disabled={!role}
-                      className="w-full rounded-full bg-gradient-to-r from-rose-500 to-rose-400 py-3 text-white text-sm font-semibold tracking-wide shadow-md disabled:opacity-60 disabled:shadow-none transition-all"
+                      className="w-full rounded-full bg-gradient-to-r from-sky-600 to-sky-500 py-3 text-white text-sm font-semibold tracking-wide shadow-md disabled:opacity-60 disabled:shadow-none transition-all"
                     >
                       Continue
                     </button>
                     {installReady && (
                       <button
                         onClick={onInstallClick}
-                        className="w-full rounded-full border border-rose-100 bg-rose-50 text-rose-600 text-xs font-medium py-2.5 mt-1"
+                        className="w-full rounded-full border border-sky-100 bg-sky-50 text-sky-700 text-xs font-medium py-2.5 mt-1"
                       >
                         Install App
                       </button>
@@ -450,7 +482,7 @@ export default function LoginPage() {
                     {role && (
                       <div className="text-[11px] text-gray-500">
                         Signing in as{' '}
-                        <span className="px-2 py-0.5 rounded-full bg-rose-50 text-rose-600 border border-rose-200">{role}</span>
+                        <span className="px-2 py-0.5 rounded-full bg-sky-50 text-sky-700 border border-sky-200">{role}</span>
                       </div>
                     )}
                     {error && (
@@ -471,7 +503,7 @@ export default function LoginPage() {
                           autoCapitalize="none"
                           autoCorrect="off"
                           aria-label="Email (username)"
-                          className="w-full rounded-lg border border-rose-100 bg-white px-3 py-2 text-sm shadow-inner focus:outline-none focus:ring-2 focus:ring-rose-200"
+                          className="w-full rounded-lg border border-sky-100 bg-white px-3 py-2 text-sm shadow-inner focus:outline-none focus:ring-2 focus:ring-sky-200"
                           required
                         />
                       </div>
@@ -488,7 +520,7 @@ export default function LoginPage() {
                             onKeyUp={e => setCapsLockOn(e.getModifierState && e.getModifierState('CapsLock'))}
                             autoComplete="current-password"
                             aria-label="Password"
-                            className="w-full rounded-lg border border-rose-100 bg-white px-3 py-2 text-sm pr-16 shadow-inner focus:outline-none focus:ring-2 focus:ring-rose-200"
+                            className="w-full rounded-lg border border-sky-100 bg-white px-3 py-2 text-sm pr-16 shadow-inner focus:outline-none focus:ring-2 focus:ring-sky-200"
                             required
                           />
                           <button
@@ -496,7 +528,7 @@ export default function LoginPage() {
                             aria-pressed={showPassword}
                             aria-label={showPassword ? 'Hide password' : 'Show password'}
                             onClick={() => setShowPassword(v => !v)}
-                            className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-rose-600 font-semibold"
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-sky-700 font-semibold"
                           >
                             {showPassword ? 'Hide' : 'Show'}
                           </button>
@@ -505,12 +537,12 @@ export default function LoginPage() {
                       </div>
                       <div className="flex items-center justify-between">
                         <label className="inline-flex items-center gap-2 text-[11px] text-gray-700 select-none">
-                          <input type="checkbox" className="accent-rose-500" checked={remember} onChange={e => setRemember(e.target.checked)} />
+                          <input type="checkbox" className="accent-sky-600" checked={remember} onChange={e => setRemember(e.target.checked)} />
                           Remember me
                         </label>
                         <a
                           href="mailto:EduTrack46@gmail.com?subject=Password%20help"
-                          className="text-[11px] text-rose-600 underline"
+                          className="text-[11px] text-sky-700 underline"
                         >
                           Forgot password?
                         </a>
@@ -518,7 +550,7 @@ export default function LoginPage() {
                       <button
                         type="submit"
                         disabled={isLoading}
-                        className="w-full rounded-full bg-gradient-to-r from-rose-500 to-rose-400 text-white font-semibold py-2.5 disabled:opacity-60 disabled:shadow-none shadow-md mt-1"
+                        className="w-full rounded-full bg-gradient-to-r from-sky-600 to-sky-500 text-white font-semibold py-2.5 disabled:opacity-60 disabled:shadow-none shadow-md mt-1"
                       >
                         {isLoading ? 'Signing In…' : 'Login'}
                       </button>
@@ -566,6 +598,7 @@ export default function LoginPage() {
           {/* Footer */}
           <div className="mt-4 text-center text-[11px] text-white/80">© {new Date().getFullYear()} EDU-TRACK</div>
         </div>
+        )}
       </div>
     </div>
   )
