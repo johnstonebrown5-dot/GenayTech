@@ -122,6 +122,7 @@ function RoleRedirect() {
 
 export default function App() {
   const { pathname } = useLocation()
+  const nav = useNavigate()
   const hideAssistant = pathname === '/login' || pathname === '/' || pathname === '/report-issue'
   const prevPathRef = React.useRef(pathname)
   React.useEffect(() => {
@@ -130,6 +131,17 @@ export default function App() {
       prevPathRef.current = pathname
     }
   }, [pathname])
+  React.useEffect(() => {
+    try {
+      const isStandalone = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || (window.navigator && window.navigator.standalone)
+      if (!isStandalone) return
+      if (pathname === '/' || pathname.startsWith('/teachers') || pathname.startsWith('/admissions') || pathname.startsWith('/featured') || pathname.startsWith('/news')) {
+        if (pathname !== '/login') {
+          nav('/login', { replace: true })
+        }
+      }
+    } catch {}
+  }, [pathname, nav])
   return (
     <NotificationProvider>
       <AssistantProvider>
