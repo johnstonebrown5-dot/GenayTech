@@ -21,8 +21,8 @@ export const NotificationProvider = ({ children }) => {
       type: notification.type || 'info',
       title: notification.title,
       message: notification.message,
-      // Force a consistent 5s auto-dismiss
-      duration: 5000,
+      // Force a consistent 4s auto-dismiss (can be overridden per notification)
+      duration: 4000,
       timestamp: new Date(),
       ...notification
     }

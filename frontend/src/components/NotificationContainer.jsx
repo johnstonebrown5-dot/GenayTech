@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom'
 
 const NotificationItem = ({ notification, onClose, onActivate }) => {
   const getNotificationStyles = (type) => {
-    const baseStyles = "flex items-start gap-3 p-4 rounded-lg shadow-lg border-l-4 min-w-[320px] max-w-[400px]"
+    const baseStyles = "flex items-start gap-3 p-4 rounded-lg shadow-lg border-l-4 min-w-[320px] max-w-[400px] bg-white/90 backdrop-blur-sm"
 
     switch (type) {
       case 'success':
@@ -57,25 +57,36 @@ const NotificationItem = ({ notification, onClose, onActivate }) => {
     }
   }
 
+  const durationMs = notification.duration || 4000
+
   return (
     <div className={getNotificationStyles(notification.type)}>
       {getIcon(notification.type)}
-      <div
-        className={`flex-1 min-w-0 ${notification.route || notification.onClick ? 'cursor-pointer':''}`}
-        onClick={()=>{ if(onActivate){ onActivate(notification) } }}
-        role={notification.route || notification.onClick ? 'button' : undefined}
-        tabIndex={notification.route || notification.onClick ? 0 : undefined}
-      >
-        {notification.title && (
-          <div className="font-semibold text-sm mb-1">
-            {notification.title}
-          </div>
-        )}
-        {notification.message && (
-          <div className="text-sm leading-relaxed">
-            {notification.message}
-          </div>
-        )}
+      <div className="flex-1 min-w-0 flex flex-col gap-2">
+        <div
+          className={`flex-1 min-w-0 ${notification.route || notification.onClick ? 'cursor-pointer':''}`}
+          onClick={()=>{ if(onActivate){ onActivate(notification) } }}
+          role={notification.route || notification.onClick ? 'button' : undefined}
+          tabIndex={notification.route || notification.onClick ? 0 : undefined}
+        >
+          {notification.title && (
+            <div className="font-semibold text-sm mb-1">
+              {notification.title}
+            </div>
+          )}
+          {notification.message && (
+            <div className="text-sm leading-relaxed">
+              {notification.message}
+            </div>
+          )}
+        </div>
+        {/* Progress bar */}
+        <div className="mt-1 h-1.5 w-full rounded-full bg-black/10 overflow-hidden">
+          <div
+            className="h-full rounded-full bg-current notification-progress-bar"
+            style={{ animationDuration: `${durationMs}ms` }}
+          />
+        </div>
       </div>
       <button
         onClick={() => onClose(notification.id)}
@@ -154,6 +165,21 @@ export default function NotificationContainer() {
           .animate-slideIn {
             animation-name: slideInFromRight;
           }
+        }
+
+        @keyframes notificationProgress {
+          from {
+            transform: translateX(0);
+          }
+          to {
+            transform: translateX(-100%);
+          }
+        }
+        .notification-progress-bar {
+          width: 100%;
+          animation-name: notificationProgress;
+          animation-timing-function: linear;
+          animation-fill-mode: forwards;
         }
       `}</style>
     </div>

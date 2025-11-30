@@ -2,11 +2,13 @@ import React, { useEffect, useState } from 'react'
 import AppLogo from '../components/AppLogo'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth'
+import { useNotification } from '../components/NotificationContext'
  
 
 export default function LoginPage() {
   const { login } = useAuth()
   const nav = useNavigate()
+  const { showError } = useNotification()
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -21,6 +23,12 @@ export default function LoginPage() {
   const [installReady, setInstallReady] = useState(false)
   const [tilt, setTilt] = useState({ x: 0, y: 0 })
 
+  const notifyError = (message, title = 'Login error') => {
+    setError(message)
+    try {
+      showError(title, message)
+    } catch {}
+  }
   
 
   useEffect(() => {
@@ -67,7 +75,7 @@ export default function LoginPage() {
     setError('')
 
     if (!role) {
-      setError('Please select a role to continue')
+      notifyError('Please select a role to continue', 'Login')
       return
     }
 
@@ -86,7 +94,7 @@ export default function LoginPage() {
       if (normalizedRole === 'staff') {
         const isStaff = isAdminUser || isTeacher || isFinance
         if (!isStaff) {
-          setError('Your account is not Staff. Please choose Student or contact your school admin.')
+          notifyError('Your account is not Staff. Please choose Student or contact your school admin.', 'Login')
           setFormStep('credentials')
           setIsLoading(false)
           return
@@ -102,7 +110,7 @@ export default function LoginPage() {
 
       if (normalizedRole === 'student') {
         if (actualRole !== 'student') {
-          setError(`Your account role is '${me.role}'. Please choose Staff to continue.`)
+          notifyError(`Your account role is '${me.role}'. Please choose Staff to continue.`, 'Login')
           setFormStep('credentials')
           setIsLoading(false)
           return
@@ -114,13 +122,13 @@ export default function LoginPage() {
       if (e.response) {
         // The request was made and the server responded with a status code
         // that falls out of the range of 2xx
-        setError('Invalid credentials');
+        notifyError('Invalid credentials', 'Login failed');
       } else if (e.request) {
         // The request was made but no response was received
-        setError('Network error. Please check your connection or try again later.');
+        notifyError('Network error. Please check your connection or try again later.', 'Network issue');
       } else {
         // Something happened in setting up the request that triggered an Error
-        setError('An unexpected error occurred.');
+        notifyError('An unexpected error occurred.', 'Login error');
       }
       setFormStep('credentials')
       setIsLoading(false)
@@ -348,10 +356,40 @@ export default function LoginPage() {
         <div className="pointer-events-none absolute inset-0 -z-10">
           <div className="absolute inset-x-0 top-0 h-40 bg-gradient-to-r from-rose-500 via-rose-400 to-rose-500 opacity-90" />
         </div>
+        {/* Global floating balloons background */}
+        <div className="pointer-events-none absolute inset-x-6 top-16 bottom-8 z-0">
+          <div className="absolute bottom-[-40px] left-2 h-9 w-9 rounded-full bg-gradient-to-b from-rose-300 to-rose-500 opacity-70 animate-float-up-slow" />
+          <div className="absolute bottom-[-48px] right-4 h-11 w-11 rounded-full bg-gradient-to-b from-sky-300 to-sky-500 opacity-70 animate-float-up-medium" style={{ animationDelay: '2.2s' }} />
+          <div className="absolute bottom-[-56px] left-1/2 -translate-x-1/2 h-8 w-8 rounded-full bg-gradient-to-b from-amber-300 to-amber-500 opacity-75 animate-float-up-fast" style={{ animationDelay: '4s' }} />
+          <div className="absolute bottom-[-52px] left-1/4 h-7 w-7 rounded-full bg-gradient-to-b from-emerald-300 to-emerald-500 opacity-60 animate-float-up-medium" style={{ animationDelay: '6s' }} />
+        </div>
+        {/* Top brand area */}
+        <div className="pt-6 pb-2 flex flex-col items-center justify-start text-white">
+          <div className="text-[11px] font-semibold tracking-[0.28em] uppercase">EDU-TRACK</div>
+          <p className="mt-2 text-[11px] text-white/90">Login to access your school dashboards.</p>
+        </div>
+
+        {/* Animated hero area */}
+        <div className="px-6 pb-4 relative z-10">
+          <div className="relative mx-auto h-32 w-full max-w-sm overflow-hidden rounded-3xl bg-white/5 backdrop-blur-xl border border-white/25 shadow-[0_18px_40px_rgba(244,63,94,0.35)]">
+            {/* Floating bubbles */}
+            <div className="pointer-events-none absolute -left-6 bottom-0 h-16 w-16 rounded-full bg-gradient-to-tr from-rose-400/80 to-amber-300/80 blur-sm opacity-90 animate-bounce" style={{ animationDuration: '3.6s' }} />
+            <div className="pointer-events-none absolute -right-4 -top-4 h-20 w-20 rounded-full bg-gradient-to-tr from-fuchsia-400/80 to-rose-300/80 blur-sm opacity-90 animate-bounce" style={{ animationDuration: '4.4s', animationDelay: '0.4s' }} />
+            <div className="pointer-events-none absolute left-10 -top-6 h-14 w-14 rounded-full bg-gradient-to-tr from-sky-400/80 to-emerald-300/80 blur-sm opacity-80 animate-bounce" style={{ animationDuration: '5s', animationDelay: '0.8s' }} />
+
+            {/* Robot welcome content */}
+            <div className="relative z-10 flex h-full flex-col items-center justify-center text-center text-rose-900">
+              <div className="text-3xl mb-1 drop-shadow-sm">🤖</div>
+              <div className="text-xs font-semibold tracking-wide">Smart assistant ready</div>
+              <p className="mt-1 text-[11px] text-rose-900/70">Choose your role below and let Edu-Track handle the rest.</p>
+            </div>
+          </div>
+        </div>
+
         <div className="w-full flex-1 flex flex-col justify-end">
           {/* Phone-like card with 3D tilt */}
           <div
-            className="relative [perspective:1200px] w-full"
+            className="relative z-10 [perspective:1200px] w-full"
             onMouseMove={handleCardMove}
             onMouseLeave={resetTilt}
             onTouchMove={handleCardMove}
