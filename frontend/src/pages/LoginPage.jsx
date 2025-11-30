@@ -369,23 +369,6 @@ export default function LoginPage() {
           <p className="mt-2 text-[11px] text-white/90">Login to access your school dashboards.</p>
         </div>
 
-        {/* Animated hero area */}
-        <div className="px-6 pb-4 relative z-10">
-          <div className="relative mx-auto h-32 w-full max-w-sm overflow-hidden rounded-3xl bg-white/5 backdrop-blur-xl border border-white/25 shadow-[0_18px_40px_rgba(244,63,94,0.35)]">
-            {/* Floating bubbles */}
-            <div className="pointer-events-none absolute -left-6 bottom-0 h-16 w-16 rounded-full bg-gradient-to-tr from-rose-400/80 to-amber-300/80 blur-sm opacity-90 animate-bounce" style={{ animationDuration: '3.6s' }} />
-            <div className="pointer-events-none absolute -right-4 -top-4 h-20 w-20 rounded-full bg-gradient-to-tr from-fuchsia-400/80 to-rose-300/80 blur-sm opacity-90 animate-bounce" style={{ animationDuration: '4.4s', animationDelay: '0.4s' }} />
-            <div className="pointer-events-none absolute left-10 -top-6 h-14 w-14 rounded-full bg-gradient-to-tr from-sky-400/80 to-emerald-300/80 blur-sm opacity-80 animate-bounce" style={{ animationDuration: '5s', animationDelay: '0.8s' }} />
-
-            {/* Robot welcome content */}
-            <div className="relative z-10 flex h-full flex-col items-center justify-center text-center text-rose-900">
-              <div className="text-3xl mb-1 drop-shadow-sm">🤖</div>
-              <div className="text-xs font-semibold tracking-wide">Smart assistant ready</div>
-              <p className="mt-1 text-[11px] text-rose-900/70">Choose your role below and let Edu-Track handle the rest.</p>
-            </div>
-          </div>
-        </div>
-
         <div className="w-full flex-1 flex flex-col justify-end">
           {/* Phone-like card with 3D tilt */}
           <div

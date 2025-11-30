@@ -19,8 +19,10 @@ body { @apply text-gray-800; }
   /* Upward floating balloons for mobile login */
   @keyframes float-up-slow {
     0% { transform: translateY(30%); opacity: 0; }
-    10% { opacity: 0.8; }
-    100% { transform: translateY(-140%); opacity: 0; }
+    15% { opacity: 0.8; }
+    /* Most slow balloons fade out around the middle area */
+    70% { opacity: 0.7; }
+    100% { transform: translateY(-70%); opacity: 0; }
   }
   .animate-float-up-slow {
     animation: float-up-slow 16s linear infinite;
@@ -28,8 +30,10 @@ body { @apply text-gray-800; }
 
   @keyframes float-up-medium {
     0% { transform: translateY(40%); opacity: 0; }
-    15% { opacity: 0.9; }
-    100% { transform: translateY(-130%); opacity: 0; }
+    20% { opacity: 0.9; }
+    /* Medium balloons usually fade out below the header area */
+    75% { opacity: 0.75; }
+    100% { transform: translateY(-85%); opacity: 0; }
   }
   .animate-float-up-medium {
     animation: float-up-medium 12s linear infinite;
@@ -37,8 +41,9 @@ body { @apply text-gray-800; }
 
   @keyframes float-up-fast {
     0% { transform: translateY(50%); opacity: 0; }
-    20% { opacity: 1; }
-    100% { transform: translateY(-120%); opacity: 0; }
+    25% { opacity: 1; }
+    /* Fast balloons can travel higher so some reach near the header */
+    100% { transform: translateY(-140%); opacity: 0; }
   }
   .animate-float-up-fast {
     animation: float-up-fast 9s linear infinite;

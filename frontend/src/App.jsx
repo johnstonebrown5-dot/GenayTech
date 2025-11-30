@@ -123,6 +123,7 @@ function RoleRedirect() {
 export default function App() {
   const { pathname } = useLocation()
   const nav = useNavigate()
+  const [blockLandscape, setBlockLandscape] = React.useState(false)
   const hideAssistant = pathname === '/login' || pathname === '/' || pathname === '/report-issue'
   const prevPathRef = React.useRef(pathname)
   React.useEffect(() => {
@@ -131,6 +132,33 @@ export default function App() {
       prevPathRef.current = pathname
     }
   }, [pathname])
+  React.useEffect(() => {
+    const evaluateOrientation = () => {
+      try {
+        const allowLandscape = typeof window !== 'undefined' && window.localStorage.getItem('eduTrackAllowLandscape') === '1'
+        if (allowLandscape) {
+          setBlockLandscape(false)
+          return
+        }
+        if (typeof window === 'undefined') return
+        const isSmallScreen = window.matchMedia && window.matchMedia('(max-width: 900px)').matches
+        const isLandscape = window.innerWidth > window.innerHeight
+        setBlockLandscape(isSmallScreen && isLandscape)
+      } catch {}
+    }
+
+    evaluateOrientation()
+    if (typeof window !== 'undefined') {
+      window.addEventListener('resize', evaluateOrientation)
+      window.addEventListener('orientationchange', evaluateOrientation)
+    }
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('resize', evaluateOrientation)
+        window.removeEventListener('orientationchange', evaluateOrientation)
+      }
+    }
+  }, [])
   React.useEffect(() => {
     try {
       const isStandalone = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || (window.navigator && window.navigator.standalone)
@@ -148,6 +176,22 @@ export default function App() {
         <AuthProvider>
           <LockProvider>
             <MessageNotifier />
+            {blockLandscape && (
+              <div className="fixed inset-0 z-[60] flex flex-col items-center justify-center bg-slate-900/95 text-white px-8 text-center">
+                <h2 className="text-lg font-semibold tracking-wide mb-2">Rotate device to portrait</h2>
+                <p className="text-sm text-slate-200 max-w-xs mb-6">EduTrack is best used in portrait mode on phones. Turn your device upright to continue, or allow landscape once below.</p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    try { window.localStorage.setItem('eduTrackAllowLandscape', '1') } catch {}
+                    setBlockLandscape(false)
+                  }}
+                  className="mt-2 inline-flex items-center justify-center px-4 py-2 rounded-full bg-white text-slate-900 text-sm font-semibold shadow-md"
+                >
+                  Allow landscape on this device
+                </button>
+              </div>
+            )}
             <Routes>
             {/* Public landing page */}
             <Route path="/" element={<SchoolHome />} />

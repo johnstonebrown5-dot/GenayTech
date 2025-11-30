@@ -85,6 +85,7 @@ const NotificationItem = ({ notification, onClose, onActivate }) => {
           <div
             className="h-full rounded-full bg-current notification-progress-bar"
             style={{ animationDuration: `${durationMs}ms` }}
+            onAnimationEnd={() => onClose(notification.id)}
           />
         </div>
       </div>
