@@ -262,9 +262,28 @@ export default function StudentLayout({ children }){
       </div>
 
       {/* Content */}
-      <main className="px-3 md:px-6 py-4 md:py-6">
+      <main className="px-3 md:px-6 py-4 pb-16 md:py-6 md:pb-6">
         {children}
       </main>
+
+      {/* Bottom Nav (mobile, M-Pesa style) */}
+      <nav className="sm:hidden fixed bottom-0 inset-x-0 z-30 border-t border-slate-200 bg-white/95 backdrop-blur-xl">
+        <div className="max-w-xl mx-auto flex items-stretch justify-around py-1.5">
+          {baseNavItems.map(item => {
+            const active = pathname === item.to
+            return (
+              <Link
+                key={item.to}
+                to={item.to}
+                className={`flex flex-col items-center justify-center flex-1 gap-0.5 text-[11px] ${active ? 'text-emerald-600' : 'text-slate-500'}`}
+              >
+                <span className={`text-lg ${active ? 'scale-110' : ''}`} aria-hidden>{item.icon}</span>
+                <span className="leading-tight">{item.label}</span>
+              </Link>
+            )
+          })}
+        </div>
+      </nav>
     </div>
   )
 }

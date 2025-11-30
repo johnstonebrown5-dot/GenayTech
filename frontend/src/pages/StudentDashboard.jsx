@@ -222,65 +222,52 @@ export default function StudentDashboard(){
 
   return (
     <div className="space-y-5 sm:space-y-7">
-      <header className="relative overflow-hidden -mx-3 sm:mx-0 rounded-none sm:rounded-2xl px-4 py-5 sm:p-7 bg-gradient-to-br from-emerald-600 via-teal-600 to-cyan-500 text-white shadow-lg">
-        <div
-          className="absolute inset-0 opacity-20 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.65),transparent_55%)]"
-          aria-hidden
-        ></div>
-        <div className="relative flex flex-col sm:flex-row sm:items-start sm:justify-between gap-6">
-          <div className="space-y-3 text-center sm:text-left">
-            <p className="text-[11px] uppercase tracking-[0.3em] text-white/70">Welcome back</p>
-            <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight drop-shadow-sm">
-              {student?.name ? student.name.toUpperCase() : ''}
-            </h1>
-            <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
-              {classLabel && (
-                <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-white/15 text-xs font-medium backdrop-blur-sm">
-                  <span className="text-sm" aria-hidden>
-                    🏫
-                  </span>
-                  {classLabel}
-                </span>
-              )}
-              {student?.admission_no && (
-                <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-white/15 text-xs font-medium backdrop-blur-sm">
-                  <span className="text-sm" aria-hidden>
-                    🆔
-                  </span>
-                  Adm {student.admission_no}
-                </span>
-              )}
-              {student?.dob && (
-                <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-white/15 text-xs font-medium backdrop-blur-sm">
-                  <span className="text-sm" aria-hidden>
-                    🎂
-                  </span>
-                  {student.dob}
-                </span>
-              )}
-            </div>
-          </div>
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-end gap-4">
-            {/* Icon */}
-            <div className="flex items-center justify-center w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 mx-auto sm:mx-0 rounded-2xl bg-white/18 backdrop-blur-md shadow-inner">
-              <span className="text-2xl sm:text-3xl" aria-hidden>
-                🎓
-              </span>
-            </div>
-          </div>
-        </div>
-      </header>
 
       {loading && <div className="-mx-3 sm:mx-0 bg-white sm:rounded-xl shadow p-3 sm:p-4">Loading...</div>}
       {error && <div className="-mx-3 sm:mx-0 bg-red-50 text-red-700 p-3 sm:p-3 rounded-none sm:rounded">{error}</div>}
 
   {currentTab === 'dashboard' && (
-    <div className="-mx-3 sm:mx-0 bg-white shadow-sm rounded-none sm:rounded-2xl pt-4 pb-6 px-4 sm:p-5">
-      <h2 className="font-medium mb-2">Dashboard</h2>
-      <div className="grid gap-4 sm:grid-cols-2 md:gap-5 md:grid-cols-3">
-        <StatCard title="Total Billed" value={Number(summary.total_billed || 0)} accent="from-amber-500 to-orange-600" icon="🧾" animate format={v => money(v)} />
-        <StatCard title="Total Paid" value={Number(summary.total_paid || 0)} accent="from-emerald-500 to-emerald-600" icon="💳" animate format={v => money(v)} trend={summary.total_paid && summary.total_billed ? ((summary.total_paid / Math.max(1, summary.total_billed)) * 100) : 0} />
-        <StatCard title="Balance" value={Number(summary.balance || 0)} accent="from-sky-500 to-blue-600" icon="📉" animate format={v => money(v)} />
+    <div className="-mx-3 sm:mx-0 bg-white/95 backdrop-blur-xl border border-slate-200/70 shadow-[0_18px_45px_rgba(15,23,42,0.08)] rounded-none sm:rounded-3xl pt-4 pb-6 px-4 sm:p-6">
+      <h2 className="text-xs font-semibold tracking-[0.18em] text-slate-500 uppercase mb-1">Overview</h2>
+      <p className="text-base sm:text-lg font-semibold text-slate-900 mb-3">Dashboard</p>
+      <div className="space-y-3">
+        {/* Balance - primary card (M-Pesa style) */}
+        <div className="flex items-center gap-3 rounded-2xl bg-gradient-to-r from-emerald-600 to-emerald-500 text-white shadow-lg px-3 py-3 active:scale-[0.99] transition-transform">
+          <div className="flex items-center justify-center w-10 h-10 rounded-full bg-white/15 text-white text-xl">
+            💰
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-white/80">Balance</div>
+            <div className="text-2xl font-semibold tracking-tight truncate">{money(Number(summary.balance || 0))}</div>
+          </div>
+        </div>
+
+        {/* Total Billed */}
+        <div className="flex items-center gap-3 rounded-2xl bg-white shadow-sm border border-slate-200 px-3 py-3 active:scale-[0.99] transition-transform">
+          <div className="flex items-center justify-center w-10 h-10 rounded-full bg-amber-100 text-amber-700 text-xl">
+            🧾
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="text-xs font-medium text-slate-500 uppercase tracking-wide">Total Billed</div>
+            <div className="text-lg font-semibold text-slate-900 truncate">{money(Number(summary.total_billed || 0))}</div>
+          </div>
+        </div>
+
+        {/* Total Paid */}
+        <div className="flex items-center gap-3 rounded-2xl bg-white shadow-sm border border-slate-200 px-3 py-3 active:scale-[0.99] transition-transform">
+          <div className="flex items-center justify-center w-10 h-10 rounded-full bg-emerald-100 text-emerald-700 text-xl">
+            💳
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="text-xs font-medium text-slate-500 uppercase tracking-wide">Total Paid</div>
+            <div className="text-lg font-semibold text-slate-900 truncate">{money(Number(summary.total_paid || 0))}</div>
+          </div>
+          {summary.total_paid && summary.total_billed ? (
+            <span className="text-xs font-semibold px-2 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+              {Math.round((summary.total_paid / Math.max(1, summary.total_billed)) * 100)}%
+            </span>
+          ) : null}
+        </div>
       </div>
 
       {student && (
@@ -371,8 +358,9 @@ export default function StudentDashboard(){
   )}
 
   {currentTab === 'academics' && (
-    <div className="-mx-3 sm:mx-0 bg-white shadow-sm rounded-none sm:rounded-2xl pt-4 pb-6 px-4 sm:p-5">
-      <h2 className="font-medium mb-2">Academics</h2>
+    <div className="-mx-3 sm:mx-0 bg-white/95 backdrop-blur-xl border border-slate-200/70 shadow-[0_18px_45px_rgba(15,23,42,0.08)] rounded-none sm:rounded-3xl pt-4 pb-6 px-4 sm:p-6">
+      <h2 className="text-xs font-semibold tracking-[0.18em] text-slate-500 uppercase mb-1">Performance</h2>
+      <p className="text-base sm:text-lg font-semibold text-slate-900 mb-3">Academics</p>
       <div className="grid md:grid-cols-2 gap-6">
         <div className="bg-white rounded shadow p-4">
           <div className="flex items-center justify-between mb-1">
