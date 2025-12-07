@@ -356,6 +356,7 @@ export default function FinanceDashboard() {
     };
 
     const collectionRate = Math.max(0, Math.min(100, Number(stats?.collectionRate || 0)));
+    const netPosition = Number(stats?.totalRevenue || 0) - Number(stats?.totalExpenses || 0);
     const collectionData = {
         labels: ['Collected', 'Outstanding'],
         datasets: [{
@@ -375,199 +376,376 @@ export default function FinanceDashboard() {
     const colorForEvent = (ev) => { const key = (ev?.category || ev?.audience || ev?.visibility || '').toString().toLowerCase(); if (/student/.test(key)) return { chip:'bg-emerald-50 text-emerald-700 border-emerald-200', dot:'bg-emerald-500' }; if (/teach/.test(key)) return { chip:'bg-purple-50 text-purple-700 border-purple-200', dot:'bg-purple-500' }; if (/parent|guard/.test(key)) return { chip:'bg-amber-50 text-amber-700 border-amber-200', dot:'bg-amber-500' }; if (/exam|assessment|test/.test(key)) return { chip:'bg-rose-50 text-rose-700 border-rose-200', dot:'bg-rose-500' }; if (/holiday|break|vacation/.test(key)) return { chip:'bg-sky-50 text-sky-700 border-sky-200', dot:'bg-sky-500' }; return { chip:'bg-blue-50 text-blue-700 border-blue-200', dot:'bg-blue-500' } }
 
     return (
-        <div className="space-y-6">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                    <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Finance Dashboard</h1>
-                    <p className="text-gray-600 text-sm mt-1">Monitor cashflow, fees and expenses in real time.</p>
-                </div>
-                <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
-                    <div className="hidden sm:flex items-center gap-1 bg-white border border-gray-200 rounded-full p-1">
-                        {[
-                          {k:'', label:'All'},
-                          {k:'7d', label:'7D'},
-                          {k:'30d', label:'30D'},
-                          {k:'ytd', label:'YTD'},
-                        ].map(b=> (
-                          <button key={b.k} onClick={()=>applyPreset(b.k)} className={`px-3 py-1.5 text-xs rounded-full ${preset===b.k? 'bg-gray-900 text-white':'text-gray-700 hover:bg-gray-100'}`}>{b.label}</button>
-                        ))}
+        <div className="min-h-[calc(100vh-4rem)] bg-gradient-to-br from-emerald-50 via-slate-50 to-sky-50 rounded-3xl p-2.5 sm:p-3.5 lg:p-5 xl:p-6">
+            <div className="h-full w-full rounded-3xl bg-white/80 shadow-elevated border border-emerald-50/80 backdrop-blur-xl flex flex-col gap-3.5 sm:gap-4.5 lg:gap-5 p-3 sm:p-4 lg:p-5">
+                {/* Top bar: title, search, filters */}
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                    <div className="space-y-0.5">
+                        <h1 className="text-lg sm:text-xl lg:text-2xl font-extrabold tracking-tight text-slate-900">Finance overview</h1>
+                        <p className="text-[10px] sm:text-[11px] text-slate-600">Track collections, expenses and cashflow across the school in one place.</p>
                     </div>
-                    <input type="date" name="start" value={dateRange.start} onChange={e => setDateRange(prev => ({...prev, start: e.target.value}))} className="w-full sm:w-auto flex-1 sm:flex-none min-w-0 border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" />
-                    <input type="date" name="end" value={dateRange.end} onChange={e => setDateRange(prev => ({...prev, end: e.target.value}))} className="w-full sm:w-auto flex-1 sm:flex-none min-w-0 border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" />
-                </div>
-            </div>
-
-            {/* Quick Actions */}
-            <div className="relative overflow-hidden rounded-2xl shadow-elevated p-5 text-white bg-gradient-to-r from-brand-600 via-indigo-600 to-fuchsia-600">
-                <div className="pointer-events-none absolute -top-8 right-0 w-40 h-40 rounded-full bg-white/20 blur-2 opacity-20" />
-                <div className="flex items-center justify-between mb-3">
-                    <h2 className="text-lg font-semibold tracking-tight">Quick Actions</h2>
-                    <span className="text-xs/5 bg-white/15 border border-white/20 px-2 py-1 rounded-full hidden sm:inline">Fast shortcuts</span>
-                </div>
-                <div className="flex gap-3 overflow-x-auto sm:overflow-visible sm:grid sm:grid-cols-2 lg:grid-cols-3">
-                    <Link to="/finance/payments" className="group min-w-[160px] sm:min-w-0 rounded-xl border border-white/20 bg-white/10 hover:bg-white/20 backdrop-blur-md p-3 text-center transition-all duration-200 hover:-translate-y-0.5 shadow-soft">
-                        <div className="mx-auto mb-2 w-9 h-9 rounded-lg bg-white/20 flex items-center justify-center text-lg">💳</div>
-                        <div className="text-xs font-medium">Record Payment</div>
-                    </Link>
-                    <Link to="/finance/expenses" className="group min-w-[160px] sm:min-w-0 rounded-xl border border-white/20 bg-white/10 hover:bg-white/20 backdrop-blur-md p-3 text-center transition-all duration-200 hover:-translate-y-0.5 shadow-soft">
-                        <div className="mx-auto mb-2 w-9 h-9 rounded-lg bg-white/20 flex items-center justify-center text-lg">💸</div>
-                        <div className="text-xs font-medium">Add Expense</div>
-                    </Link>
-                    <Link to="/finance/reports" className="group min-w-[160px] sm:min-w-0 rounded-xl border border-white/20 bg-white/10 hover:bg-white/20 backdrop-blur-md p-3 text-center transition-all duration-200 hover:-translate-y-0.5 shadow-soft">
-                        <div className="mx-auto mb-2 w-9 h-9 rounded-lg bg-white/20 flex items-center justify-center text-lg">📈</div>
-                        <div className="text-xs font-medium">Open Reports</div>
-                    </Link>
-                </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                <StatCard title="Total Revenue" value={stats?.totalRevenue} icon="💰" accent="from-emerald-500 to-emerald-600" format={v => `KES ${v?.toLocaleString()}`} trend={stats?.trends?.totalRevenue} />
-                <StatCard title="Outstanding Fees" value={stats?.outstandingFees} icon="⚠️" accent="from-rose-500 to-rose-600" format={v => `KES ${v?.toLocaleString()}`} trend={stats?.trends?.outstandingFees} />
-                <StatCard title="Collection Rate" value={stats?.collectionRate} icon="📊" accent="from-sky-500 to-sky-600" format={v => `${v}%`} trend={stats?.trends?.collectionRate} />
-                <StatCard title="Total Expenses" value={stats?.totalExpenses} icon="💸" accent="from-amber-500 to-orange-600" format={v => `KES ${v?.toLocaleString()}`} trend={stats?.trends?.totalExpenses} />
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div className="bg-white rounded-2xl shadow-card border border-gray-200 p-6">
-                    <h2 className="text-lg font-semibold text-gray-900 mb-4">Revenue Over Time</h2>
-                    <div className="h-56 sm:h-64">
-                        <Line data={revenueData} options={{ responsive: true, maintainAspectRatio: false }} />
-                    </div>
-                </div>
-                <div className="bg-white rounded-2xl shadow-card border border-gray-200 p-6">
-                    <h2 className="text-lg font-semibold text-gray-900 mb-4">Expense Breakdown</h2>
-                    <div className="h-56 sm:h-64">
-                        <Bar data={expensesData} options={{ responsive: true, indexAxis: 'y', maintainAspectRatio: false }} />
-                    </div>
-                </div>
-                <div className="bg-white rounded-2xl shadow-card border border-gray-200 p-6">
-                    <h2 className="text-lg font-semibold text-gray-900 mb-4">Collection Progress</h2>
-                    <div className="h-56 flex flex-col sm:flex-row items-center justify-center">
-                        <div className="w-32 sm:w-40">
-                            <Doughnut data={collectionData} options={{ cutout: '70%', plugins:{legend:{display:false}} }} />
+                    <div className="flex flex-col sm:flex-row gap-2 sm:items-center w-full lg:w-auto">
+                        <div className="flex-1 inline-flex items-center gap-1.5 rounded-2xl border border-slate-200 bg-slate-50/70 px-2.5 py-1 shadow-inner">
+                            <span className="text-slate-400 text-[11px]">🔎</span>
+                            <input
+                                placeholder="Search payments, students or invoices"
+                                className="w-full bg-transparent border-none text-[11px] sm:text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-0"
+                            />
                         </div>
-                        <div className="sm:ml-6 mt-3 sm:mt-0 text-center sm:text-left">
-                            <div className="text-3xl font-bold text-gray-900">{collectionRate}%</div>
-                            <div className="text-sm text-gray-600">Fees collected</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div className="lg:col-span-2 bg-white rounded-2xl shadow-card border border-gray-200 p-0 overflow-hidden">
-                    <div className="px-6 py-4 border-b"><h2 className="text-lg font-semibold text-gray-900">Recent Transactions</h2></div>
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-left text-sm">
-                            <thead className="text-[11px] uppercase text-gray-600 bg-gray-50 sticky top-0">
-                                <tr>
-                                    <th className="px-6 py-3 font-semibold">Transaction ID</th>
-                                    <th className="px-6 py-3 font-semibold">Date</th>
-                                    <th className="px-6 py-3 font-semibold">Amount</th>
-                                    <th className="px-6 py-3 font-semibold">Type</th>
-                                    <th className="px-6 py-3 font-semibold">Status</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {(stats?.recentTransactions || []).map((t, i) => (
-                                    <tr key={t.id || i} className={`${i % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'} hover:bg-gray-100 cursor-pointer`} onClick={()=>openReceipt(t.id)}>
-                                        <td className="px-6 py-3 font-medium text-gray-900 whitespace-nowrap">{t.id}</td>
-                                        <td className="px-6 py-3 text-gray-700">{new Date(t.date).toLocaleDateString()}</td>
-                                        <td className="px-6 py-3 font-semibold text-gray-900">KES {Number(t.amount||0).toLocaleString()}</td>
-                                        <td className="px-6 py-3 capitalize text-gray-700">{t.type}</td>
-                                        <td className="px-6 py-3">
-                                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full border ${t.status === 'completed' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>
-                                                <span className={`w-1.5 h-1.5 rounded-full ${t.status === 'completed' ? 'bg-emerald-500' : 'bg-amber-500'}`} />
-                                                {t.status}
-                                            </span>
-                                        </td>
-                                    </tr>
+                        <div className="flex items-center gap-2 justify-end">
+                            <div className="hidden md:flex items-center gap-0.5 bg-slate-50 border border-slate-200 rounded-full p-0.5 shadow-inner">
+                                {[
+                                  {k:'', label:'All'},
+                                  {k:'7d', label:'7D'},
+                                  {k:'30d', label:'30D'},
+                                  {k:'ytd', label:'YTD'},
+                                ].map(b => (
+                                  <button
+                                      key={b.k}
+                                      onClick={() => applyPreset(b.k)}
+                                      className={`px-2.5 py-1 text-[10px] rounded-full transition ${preset===b.k ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-700 hover:bg-white'}`}
+                                  >
+                                      {b.label}
+                                  </button>
                                 ))}
-                                {(!stats?.recentTransactions || stats.recentTransactions.length === 0) && (
-                                    <tr><td colSpan={5} className="px-6 py-6 text-center text-gray-500">No transactions yet.</td></tr>
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-                <div className="bg-white rounded-2xl shadow-card border border-gray-200 p-6">
-                    <div className="flex items-center justify-between mb-4">
-                        <h2 className="text-lg font-semibold text-gray-900">School Calendar</h2>
-                        <div className="flex items-center gap-2">
-                            <button onClick={()=>setViewMonth(prev=>{ const d=new Date(prev); d.setMonth(d.getMonth()-1); return d })} className="p-2 rounded-lg border border-gray-200 hover:bg-gray-50" aria-label="Previous month">‹</button>
-                            <button onClick={()=>setViewMonth(prev=>{ const d=new Date(prev); d.setMonth(d.getMonth()+1); return d })} className="p-2 rounded-lg border border-gray-200 hover:bg-gray-50" aria-label="Next month">›</button>
-                            <button onClick={()=>setViewMonth(new Date())} className="px-2 py-1 text-xs rounded-full border border-gray-200 hover:bg-gray-50">Today</button>
-                        </div>
-                    </div>
-                    <div className="text-sm text-gray-600 mb-2">{viewMonth.toLocaleString(undefined,{ month:'long', year:'numeric' })}</div>
-                    <div className="space-y-3">
-                        <div className="grid grid-cols-7 text-[11px] font-semibold text-gray-500 mb-2">
-                            {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d=> <div key={d} className="px-1 py-1 text-center tracking-wide">{d}</div>)}
-                        </div>
-                        <div className="grid grid-cols-7 gap-1">
-                            {monthDays.map((d,i)=>{
-                                const key = localKey(d)
-                                const inMonth = d.getMonth()===viewMonth.getMonth()
-                                const isToday = key === localKey(new Date())
-                                const dayEvents = eventsByDay[key] || []
-                                const color = dayEvents.length>0 ? colorForEvent(dayEvents[0]) : null
-                                const baseBg = inMonth ? 'bg-white' : 'bg-gray-50'
-                                const activeBg = color ? color.chip.split(' ').find(c=>c.startsWith('bg-')) : baseBg
-                                return (
-                                    <div key={i} className={`relative rounded-xl min-h-[68px] p-2 text-xs border ${inMonth? 'border-gray-200':'border-gray-200/70'} ${dayEvents.length? activeBg : baseBg} hover:border-brand-300 hover:shadow-soft transition-all`}>
-                                        <div className="flex items-center justify-between">
-                                            <div className={`${inMonth? 'text-gray-800':'text-gray-400'} text-[11px] font-semibold`}>{d.getDate()}</div>
-                                            {isToday && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-brand-50 text-brand-700 border border-brand-200">Today</span>}
-                                        </div>
-                                        <div className="mt-1 flex flex-wrap gap-1">
-                                            {dayEvents.slice(0,3).map(ev => {
-                                                const c = colorForEvent(ev)
-                                                return (
-                                                    <span key={ev.id} className={`px-1.5 py-0.5 rounded-full text-[10px] border truncate max-w-full ${c.chip}`} title={ev.title}>
-                                                        {ev.title}
-                                                    </span>
-                                                )
-                                            })}
-                                            {dayEvents.length>3 && <span className="text-[10px] text-gray-500">+{dayEvents.length-3} more</span>}
-                                        </div>
-                                        {dayEvents.length>0 && (
-                                            <div className="absolute bottom-1 right-2 inline-flex items-center gap-1 text-[10px] text-gray-500">
-                                                <span className={`w-1.5 h-1.5 rounded-full ${color?.dot || 'bg-blue-500'}`} />
-                                                {dayEvents.length}
-                                            </div>
-                                        )}
-                                    </div>
-                                )
-                            })}
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <input
+                                    type="date"
+                                    name="start"
+                                    value={dateRange.start}
+                                    onChange={e => setDateRange(prev => ({...prev, start: e.target.value}))}
+                                    className="w-24 sm:w-28 lg:w-32 border border-slate-200 rounded-xl bg-white/80 shadow-sm py-1 px-1.5 text-[10px] sm:text-[11px] focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
+                                />
+                                <span className="text-[10px] text-slate-400">–</span>
+                                <input
+                                    type="date"
+                                    name="end"
+                                    value={dateRange.end}
+                                    onChange={e => setDateRange(prev => ({...prev, end: e.target.value}))}
+                                    className="w-24 sm:w-28 lg:w-32 border border-slate-200 rounded-xl bg-white/80 shadow-sm py-1.5 px-2 text-[11px] sm:text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
+                                />
+                            </div>
                         </div>
                     </div>
                 </div>
-            </div>
-            {/* Print styles injected when receipt modal is open */}
-            {showReceipt && (
-                <style>{`
-                  @page { margin: ${paperSize==='80mm' ? '4mm' : (paperSize==='A5' ? '8mm 8mm 12mm 8mm' : '0mm 12mm 10mm 12mm')}; ${paperSize==='A5' ? 'size: A5 portrait;' : paperSize==='80mm' ? 'size: 80mm auto;' : 'size: A4 portrait;'} }
-                  @media print {
-                    html, body { margin: 0 !important; padding: 0 !important; }
-                    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; background: #fff; }
-                    /* Hide everything except the printable node via visibility (prevents layout collapse) */
-                    * { visibility: hidden !important; }
-                    #printable-receipt, #printable-receipt * { visibility: visible !important; }
-                    /* place it at the top-left for printing */
-                    #printable-receipt { position: fixed; left: 0; top: 0; margin: 0 !important; padding-top: 0 !important; width: ${contentWidthMm}mm; max-width: ${contentWidthMm}mm; max-height: calc(100vh - 8mm); overflow: hidden; page-break-after: avoid; page-break-before: avoid; break-inside: avoid; font-size: ${paperSize==='A5' ? '13px' : '11px'}; line-height: ${paperSize==='A5' ? '1.45' : '1.2'}; }
-                    #printable-receipt > *:first-child, #printable-receipt .header { margin-top: 0 !important; padding-top: 0 !important; }
-                    #printable-receipt .wm { display: none !important; }
-                  }
-                  #printable-receipt table { width: 100% !important; }
-                  #printable-receipt img { max-width: 100% !important; height: auto; }
-                }
-                /* On screen */
-                #printable-receipt { background: #ffffff; color: #111827; }
-              `}</style>
-            )}
 
-            {/* Receipt Modal */}
-            <Modal open={showReceipt} onClose={()=>setShowReceipt(false)} title="Payment Receipt" size="md">
+                {/* Primary row: left overview card + right profit/revenue chart */}
+                <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] gap-4 lg:gap-5">
+                    {/* Collections / card-like summary */}
+                    <div className="relative overflow-hidden rounded-3xl border border-emerald-100 bg-gradient-to-br from-emerald-500 via-teal-500 to-emerald-600 text-white shadow-soft p-3 sm:p-4 lg:p-5 flex flex-col gap-3.5">
+                        <div className="pointer-events-none absolute -right-10 -top-10 w-40 h-40 rounded-full bg-white/20 blur-3 opacity-30" />
+                        <div className="flex items-start justify-start gap-3 pr-20 sm:pr-24 lg:pr-32">
+                            <div>
+                                <div className="text-[10px] uppercase tracking-[0.15em] text-emerald-100 font-semibold">My school collections</div>
+                                <div className="mt-0.5 text-lg sm:text-xl lg:text-2xl font-extrabold tracking-tight">
+                                    KES {Number(stats?.totalRevenue || 0).toLocaleString()}
+                                </div>
+                                <div className="mt-0.5 flex items-center gap-1.5 text-[10px] sm:text-[11px] text-emerald-100/90">
+                                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-900/20 px-2 py-0.5 border border-white/20">
+                                        <span className="text-[10px]">▲</span>
+                                        <span>{Math.round(stats?.trends?.totalRevenue || 0)}% vs last period</span>
+                                    </span>
+                                    <span>Collection rate {Math.round(collectionRate)}%</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="hidden sm:flex absolute right-3 sm:right-5 lg:right-7 top-3 sm:top-4 lg:top-5">
+                            <div className="w-32 sm:w-36 lg:w-40 h-24 rounded-3xl bg-white/12 border border-white/25 shadow-inner flex flex-col justify-between p-2.5 text-[10px] backdrop-blur-sm">
+                                <div className="flex items-center justify-between text-emerald-50">
+                                    <span className="inline-flex items-center gap-1 text-[11px] font-medium">
+                                        <span className="inline-block w-6 h-6 rounded-full bg-white/20 flex items-center justify-center text-sm">💳</span>
+                                        Fees card
+                                    </span>
+                                    <span className="text-[10px]">•••</span>
+                                </div>
+                                <div className="mt-1.5 text-[12px] leading-tight font-semibold tracking-wide">
+                                    Outstanding
+                                </div>
+                                <div className="text-sm font-bold">
+                                    KES {Number(stats?.outstandingFees || 0).toLocaleString()}
+                                </div>
+                            </div>
+                        </div>
+                        <div className="mt-auto pt-2 grid grid-cols-2 md:grid-cols-3 gap-1.5">
+                            <button className="flex items-center justify-center gap-1.5 rounded-2xl bg-emerald-900/10 hover:bg-emerald-900/20 border border-white/15 px-2.5 py-1.5 text-[10px] sm:text-xs font-medium transition">
+                                <span className="w-6 h-6 rounded-full bg-white/15 flex items-center justify-center text-sm shrink-0">➕</span>
+                                <span className="truncate">Record fee</span>
+                            </button>
+                            <Link
+                                to="/finance/expenses"
+                                className="flex items-center justify-center gap-1.5 rounded-2xl bg-emerald-900/5 hover:bg-emerald-900/15 border border-white/15 px-2.5 py-1.5 text-[10px] sm:text-xs font-medium transition"
+                            >
+                                <span className="w-6 h-6 rounded-full bg-white/15 flex items-center justify-center text-sm shrink-0">💸</span>
+                                <span className="truncate">New expense</span>
+                            </Link>
+                            <Link
+                                to="/finance/reports"
+                                className="flex items-center justify-center gap-1.5 rounded-2xl bg-emerald-900/5 hover:bg-emerald-900/15 border border-white/15 px-2.5 py-1.5 text-[10px] sm:text-xs font-medium transition"
+                            >
+                                <span className="w-6 h-6 rounded-full bg-white/15 flex items-center justify-center text-sm shrink-0">📈</span>
+                                <span className="truncate">View reports</span>
+                            </Link>
+                        </div>
+                    </div>
+
+                    {/* Profit / revenue chart */}
+                    <div className="rounded-3xl bg-white/90 border border-slate-100 shadow-card px-3.5 py-2.5 sm:px-4.5 sm:py-3.5 flex flex-col">
+                        <div className="flex items-center justify-between gap-2 mb-2.5">
+                            <h2 className="text-xs sm:text-sm font-semibold text-slate-900">Profit & cashflow</h2>
+                            <div className="flex items-center gap-1 text-[10px] text-slate-500">
+                                <span className="inline-flex items-center gap-1 rounded-full border border-slate-200/80 bg-slate-50 px-2 py-0.5">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                                    Revenue
+                                </span>
+                            </div>
+                        </div>
+                        <div className="h-32 sm:h-40 md:h-44 lg:h-[11rem]">
+                            <Line data={revenueData} options={{ responsive: true, maintainAspectRatio: false }} />
+                        </div>
+                    </div>
+                </div>
+
+                {/* Middle row: income / expenses / collection cards */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 lg:gap-4.5">
+                    <StatCard
+                        title="Net position"
+                        value={netPosition}
+                        icon="⚖️"
+                        accent={netPosition >= 0 ? 'from-emerald-500 to-emerald-600' : 'from-rose-500 to-rose-600'}
+                        format={v => `KES ${Number(v||0).toLocaleString()}`}
+                        trend={stats?.trends?.totalRevenue}
+                        animate
+                    />
+                    <StatCard
+                        title="Expenses"
+                        value={stats?.totalExpenses}
+                        icon="💸"
+                        accent="from-amber-500 to-orange-600"
+                        format={v => `KES ${v?.toLocaleString()}`}
+                        trend={stats?.trends?.totalExpenses}
+                        animate
+                    />
+                    <div className="relative overflow-hidden rounded-2xl border border-slate-100 bg-white/90 shadow-card flex flex-col">
+                        <div className="flex items-center justify-between px-3.5 pt-2.5 pb-1">
+                            <div>
+                                <div className="text-[11px] font-medium text-slate-500">Collection rate</div>
+                                <div className="mt-0.5 text-lg font-extrabold tracking-tight text-slate-900">{collectionRate}%</div>
+                            </div>
+                            <div className="w-18 sm:w-20">
+                                <Doughnut data={collectionData} options={{ cutout: '70%', plugins:{legend:{display:false}} }} />
+                            </div>
+                        </div>
+                        <div className="px-3.5 pb-2.5 text-[10px] text-slate-600 flex items-center justify-between gap-2">
+                            <span className="inline-flex items-center gap-1">
+                                <span className="w-2 h-2 rounded-full bg-emerald-500" /> Collected
+                            </span>
+                            <span className="inline-flex items-center gap-1">
+                                <span className="w-2 h-2 rounded-full bg-slate-200" /> Outstanding
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Charts row: expense breakdown + calendar */}
+                <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] gap-3.5 lg:gap-4.5">
+                    <div className="rounded-3xl bg-white/95 backdrop-blur-sm border border-slate-100 shadow-card p-3.5 sm:p-4.5">
+                        <div className="flex items-center justify-between mb-2.5">
+                            <h2 className="text-xs sm:text-sm font-semibold text-slate-900">Spending by category</h2>
+                            <span className="text-[10px] text-slate-500">KES {Number(stats?.totalExpenses || 0).toLocaleString()}</span>
+                        </div>
+                        <div className="h-40 sm:h-48 lg:h-56">
+                            <Bar data={expensesData} options={{ responsive: true, indexAxis: 'y', maintainAspectRatio: false }} />
+                        </div>
+                    </div>
+
+                    <div className="rounded-3xl bg-white/95 border border-slate-100 shadow-card p-3.5 sm:p-4.5 flex flex-col">
+                        <div className="flex items-center justify-between mb-2.5">
+                            <h2 className="text-xs sm:text-sm font-semibold text-slate-900">School calendar</h2>
+                            <div className="flex items-center gap-1">
+                                <button onClick={()=>setViewMonth(prev=>{ const d=new Date(prev); d.setMonth(d.getMonth()-1); return d })} className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 text-xs" aria-label="Previous month">‹</button>
+                                <button onClick={()=>setViewMonth(prev=>{ const d=new Date(prev); d.setMonth(d.getMonth()+1); return d })} className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 text-xs" aria-label="Next month">›</button>
+                                <button onClick={()=>setViewMonth(new Date())} className="px-2 py-1 text-[11px] rounded-full border border-slate-200 hover:bg-slate-50">Today</button>
+                            </div>
+                        </div>
+                        <div className="text-[11px] text-slate-600 mb-1.5">{viewMonth.toLocaleString(undefined,{ month:'long', year:'numeric' })}</div>
+                        <div className="space-y-2.5">
+                            <div className="grid grid-cols-7 text-[9px] font-semibold text-slate-500 mb-0.5">
+                                {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d=> <div key={d} className="px-1 py-1 text-center tracking-wide">{d}</div>)}
+                            </div>
+                            <div className="grid grid-cols-7 gap-0.5">
+                                {monthDays.map((d,i)=>{
+                                    const key = localKey(d)
+                                    const inMonth = d.getMonth()===viewMonth.getMonth()
+                                    const isToday = key === localKey(new Date())
+                                    const dayEvents = eventsByDay[key] || []
+                                    const color = dayEvents.length>0 ? colorForEvent(dayEvents[0]) : null
+                                    const baseBg = inMonth ? 'bg-white' : 'bg-slate-50'
+                                    const activeBg = color ? color.chip.split(' ').find(c=>c.startsWith('bg-')) : baseBg
+                                    return (
+                                        <div key={i} className={`relative rounded-2xl min-h-[52px] p-1.5 text-[9px] border ${inMonth? 'border-slate-200':'border-slate-200/70'} ${dayEvents.length? activeBg : baseBg} hover:border-emerald-300 hover:shadow-soft transition-all`}>
+                                            <div className="flex items-center justify-between">
+                                                <div className={`${inMonth? 'text-slate-800':'text-slate-400'} text-[9px] font-semibold`}>{d.getDate()}</div>
+                                                {isToday && <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">Today</span>}
+                                            </div>
+                                            <div className="mt-0.5 flex flex-wrap gap-0.5">
+                                                {dayEvents.slice(0,2).map(ev => {
+                                                    const c = colorForEvent(ev)
+                                                    return (
+                                                        <span key={ev.id} className={`px-1.5 py-0.5 rounded-full text-[8px] border truncate max-w-full ${c.chip}`} title={ev.title}>
+                                                            {ev.title}
+                                                        </span>
+                                                    )
+                                                })}
+                                                {dayEvents.length>2 && <span className="text-[8px] text-slate-500">+{dayEvents.length-2} more</span>}
+                                            </div>
+                                            {dayEvents.length>0 && (
+                                                <div className="absolute bottom-1 right-1 inline-flex items-center gap-1 text-[8px] text-slate-500">
+                                                    <span className={`w-1.5 h-1.5 rounded-full ${color?.dot || 'bg-blue-500'}`} />
+                                                    {dayEvents.length}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )
+                                })}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Bottom row: planning + latest transactions + side banner */}
+                <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] gap-3.5 lg:gap-4.5">
+                    <div className="rounded-3xl bg-white/95 border border-slate-100 shadow-card overflow-hidden flex flex-col">
+                        <div className="px-3.5 sm:px-4.5 py-2.5 border-b border-slate-100 flex items-center justify-between">
+                            <h2 className="text-xs sm:text-sm font-semibold text-slate-900">Latest transactions</h2>
+                            <Link to="/finance/payments" className="text-[10px] font-medium text-emerald-700 hover:text-emerald-800">View all</Link>
+                        </div>
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left text-[11px] sm:text-xs">
+                                <thead className="text-[9px] sm:text-[10px] uppercase text-slate-600 bg-slate-50/80 backdrop-blur-sm">
+                                    <tr>
+                                        <th className="px-3.5 sm:px-4.5 py-2 font-semibold">Transaction</th>
+                                        <th className="px-3.5 sm:px-4.5 py-2 font-semibold">Date</th>
+                                        <th className="px-3.5 sm:px-4.5 py-2 font-semibold">Amount</th>
+                                        <th className="px-3.5 sm:px-4.5 py-2 font-semibold">Type</th>
+                                        <th className="px-3.5 sm:px-4.5 py-2 font-semibold">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {(stats?.recentTransactions || []).map((t, i) => (
+                                        <tr
+                                            key={t.id || i}
+                                            className={`${i % 2 === 0 ? 'bg-white' : 'bg-slate-50/70'} hover:bg-emerald-50/70 cursor-pointer transition-colors`}
+                                            onClick={()=>openReceipt(t.id)}
+                                        >
+                                            <td className="px-3.5 sm:px-4.5 py-2 font-medium text-slate-900 whitespace-nowrap">#{t.id}</td>
+                                            <td className="px-3.5 sm:px-4.5 py-2 text-slate-700">{new Date(t.date).toLocaleDateString()}</td>
+                                            <td className="px-3.5 sm:px-4.5 py-2 font-semibold text-slate-900">KES {Number(t.amount||0).toLocaleString()}</td>
+                                            <td className="px-3.5 sm:px-4.5 py-2 capitalize text-slate-700">{t.type}</td>
+                                            <td className="px-3.5 sm:px-4.5 py-2">
+                                                <span className={`inline-flex items-center gap-1 px-2 py-0.5 text-[10px] sm:text-xs font-medium rounded-full border ${t.status === 'completed' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>
+                                                    <span className={`w-1.5 h-1.5 rounded-full ${t.status === 'completed' ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+                                                    {t.status}
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                    {(!stats?.recentTransactions || stats.recentTransactions.length === 0) && (
+                                        <tr><td colSpan={5} className="px-3.5 sm:px-4.5 py-5 text-center text-slate-500">No transactions yet.</td></tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-1 gap-3.5 lg:gap-4.5">
+                        <div className="rounded-3xl bg-white/95 border border-slate-100 shadow-card p-3.5 sm:p-4.5 flex flex-col gap-2.5">
+                            <div className="flex items-center justify-between">
+                                <h2 className="text-xs sm:text-sm font-semibold text-slate-900">Planning</h2>
+                                <button className="text-[10px] text-emerald-700 hover:text-emerald-800 font-medium">Add goal</button>
+                            </div>
+                            <div className="space-y-2.5 text-[11px] sm:text-xs">
+                                <div>
+                                    <div className="flex items-center justify-between mb-1">
+                                        <span className="font-medium text-slate-800">Term fees target</span>
+                                        <span className="text-slate-500">KES {Number(stats?.termTarget || 0).toLocaleString() || '—'}</span>
+                                    </div>
+                                    <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
+                                        <div className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-teal-500" style={{ width: `${Math.min(100, collectionRate || 0)}%` }} />
+                                    </div>
+                                </div>
+                                <div>
+                                    <div className="flex items-center justify-between mb-1">
+                                        <span className="font-medium text-slate-800">Expense ceiling</span>
+                                        <span className="text-slate-500">KES {Number(stats?.expenseLimit || 0).toLocaleString() || '—'}</span>
+                                    </div>
+                                    <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
+                                        <div className="h-full rounded-full bg-gradient-to-r from-amber-400 to-rose-500" style={{ width: `${Math.min(100, (stats && stats.totalExpenses && stats.expenseLimit) ? (100 * Number(stats.totalExpenses)/Number(stats.expenseLimit||1)) : 45)}%` }} />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="rounded-3xl bg-gradient-to-br from-emerald-600 via-emerald-500 to-teal-500 text-white shadow-card p-3.5 sm:p-4.5 flex flex-col justify-between">
+                            <div>
+                                <div className="inline-flex items-center gap-1 rounded-full bg-white/10 px-2 py-0.5 text-[9px] font-medium mb-1.5 border border-white/20">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-300" />
+                                    Collections insight
+                                </div>
+                                <h2 className="text-sm sm:text-base font-semibold tracking-tight">Outstanding fees</h2>
+                                <p className="mt-0.5 text-[10px] sm:text-[11px] text-emerald-50/90 max-w-xs">
+                                    KES {Number(stats?.outstandingFees || 0).toLocaleString()} still to be collected this term.
+                                </p>
+                            </div>
+                            <div className="mt-2.5 flex items-end justify-between gap-2 text-[10px] sm:text-[11px]">
+                                <div className="flex-1 space-y-1.5">
+                                    <div className="flex items-center justify-between gap-2">
+                                        <span className="text-emerald-100/90">Collection rate</span>
+                                        <span className="font-semibold text-white">{collectionRate}%</span>
+                                    </div>
+                                    <div className="h-1.5 rounded-full bg-emerald-900/30 overflow-hidden">
+                                        <div
+                                            className="h-full rounded-full bg-white"
+                                            style={{ width: `${Math.min(100, collectionRate || 0)}%` }}
+                                        />
+                                    </div>
+                                </div>
+                                <Link
+                                    to="/finance/reports"
+                                    className="inline-flex items-center justify-center gap-1.5 rounded-full bg-white/95 text-emerald-700 text-[10px] sm:text-[11px] font-semibold px-3 py-1.5 shadow-soft hover:bg-white transition whitespace-nowrap"
+                                >
+                                    View reports
+                                </Link>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Print styles injected when receipt modal is open */}
+                {showReceipt && (
+                    <style>{`
+                      @page { margin: ${paperSize==='80mm' ? '4mm' : (paperSize==='A5' ? '8mm 8mm 12mm 8mm' : '0mm 12mm 10mm 12mm')}; ${paperSize==='A5' ? 'size: A5 portrait;' : paperSize==='80mm' ? 'size: 80mm auto;' : 'size: A4 portrait;'} }
+                      @media print {
+                        html, body { margin: 0 !important; padding: 0 !important; }
+                        body { -webkit-print-color-adjust: exact; print-color-adjust: exact; background: #fff; }
+                        /* Hide everything except the printable node via visibility (prevents layout collapse) */
+                        * { visibility: hidden !important; }
+                        #printable-receipt, #printable-receipt * { visibility: visible !important; }
+                        /* place it at the top-left for printing */
+                        #printable-receipt { position: fixed; left: 0; top: 0; margin: 0 !important; padding-top: 0 !important; width: ${contentWidthMm}mm; max-width: ${contentWidthMm}mm; max-height: calc(100vh - 8mm); overflow: hidden; page-break-after: avoid; page-break-before: avoid; break-inside: avoid; font-size: ${paperSize==='A5' ? '13px' : '11px'}; line-height: ${paperSize==='A5' ? '1.45' : '1.2'}; }
+                        #printable-receipt > *:first-child, #printable-receipt .header { margin-top: 0 !important; padding-top: 0 !important; }
+                        #printable-receipt .wm { display: none !important; }
+                      }
+                      #printable-receipt table { width: 100% !important; }
+                      #printable-receipt img { max-width: 100% !important; height: auto; }
+                    }
+                    /* On screen */
+                    #printable-receipt { background: #ffffff; color: #111827; }
+                  `}</style>
+                )}
+
+                {/* Receipt Modal */}
+                <Modal open={showReceipt} onClose={()=>setShowReceipt(false)} title="Payment Receipt" size="md">
                 {receiptLoading && (<div className="p-2 text-sm text-gray-600">Loading receipt...</div>)}
                 {!receiptLoading && receipt?.error && (<div className="bg-red-50 text-red-700 text-sm p-2 rounded">{receipt.error}</div>)}
                 {!receiptLoading && receipt && !receipt.error && (
@@ -715,8 +893,8 @@ export default function FinanceDashboard() {
                         </div>
                     </div>
                 )}
-            </Modal>
+                </Modal>
+            </div>
         </div>
     );
 }
-

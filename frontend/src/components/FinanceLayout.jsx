@@ -107,7 +107,8 @@ export default function FinanceLayout({ children }) {
         }
     }, [schoolName]);
 
-    const sidebarBase = isOpen ? 'w-64' : 'w-16';
+    // Sidebar width: comfortable with labels when open, compact icons-only when collapsed
+    const sidebarBase = isOpen ? 'w-56' : 'w-20';
 
     return (
         <div className="min-h-screen bg-gray-50">
@@ -197,17 +198,22 @@ export default function FinanceLayout({ children }) {
             <div className="relative">
                 {isMobileOpen && <div className="fixed inset-0 bg-black/30 z-30 md:hidden" onClick={() => setIsMobileOpen(false)} />}
                 {/* Mobile sidebar drawer */}
-                <aside className={`fixed z-40 top-16 left-0 bottom-0 md:hidden bg-gradient-to-b from-gray-800 to-gray-900 border-r border-gray-700/30 w-72 transform transition-transform duration-200 ${isMobileOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-                    <nav className="p-3 space-y-1 overflow-y-auto h-full">
+                <aside className={`fixed z-40 top-16 left-0 bottom-0 md:hidden bg-gradient-to-b from-emerald-700 via-emerald-600 to-teal-500 border-r border-emerald-800/40 w-72 transform transition-transform duration-200 ${isMobileOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+                    <nav className="p-3 space-y-1.5 overflow-y-auto h-full">
                         {navItems.map(i => {
                             const active = pathname === i.to;
                             return (
-                                <Link key={i.to} to={i.to} className={`${active ? 'bg-white/20 text-white' : 'hover:bg-white/10 text-gray-300 hover:text-white'} flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-300`} title={i.label}>
-                                    <span className="text-lg w-5 text-center">{i.icon}</span>
+                                <Link
+                                    key={i.to}
+                                    to={i.to}
+                                    className={`${active ? 'bg-white/10 text-white shadow-soft' : 'hover:bg-emerald-600/40 text-emerald-50 hover:text-white'} flex items-center gap-3 px-3 py-2.5 rounded-2xl transition-all duration-300`}
+                                    title={i.label}
+                                >
+                                    <span className="text-lg w-6 text-center">{i.icon}</span>
                                     <span className="inline-flex items-center gap-2 text-sm font-medium truncate">
                                         {i.label}
                                         {i.label === 'Messages' && unreadCount > 0 && (
-                                            <span className="ml-1 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] bg-red-600 text-white">
+                                            <span className="ml-1 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] bg-red-500 text-white">
                                                 {unreadCount > 99 ? '99+' : unreadCount}
                                             </span>
                                         )}
@@ -218,30 +224,73 @@ export default function FinanceLayout({ children }) {
                     </nav>
                 </aside>
 
-                <aside className={`fixed z-40 top-16 left-0 bottom-0 bg-gradient-to-b from-gray-800 to-gray-900 border-r border-gray-700/30 transition-all duration-200 ${sidebarBase} hidden md:flex flex-col shadow-2xl`}>
-                    <nav className="p-2 space-y-1 overflow-y-auto">
-                        {navItems.map(i => {
-                            const active = pathname === i.to;
-                            return (
-                                <Link key={i.to} to={i.to} className={`${active ? 'bg-white/20 text-white' : 'hover:bg-white/10 text-gray-300 hover:text-white'} flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-300 group`} title={i.label}>
-                                    <span className="text-lg w-5 text-center">{i.icon}</span>
-                                    {isOpen && 
-                                        <span className="relative inline-flex items-center gap-2 text-sm font-medium truncate">
-                                            {i.label}
-                                            {i.label === 'Messages' && unreadCount > 0 && (
-                                                <span className="ml-1 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] bg-red-600 text-white">
+                {/* Desktop sidebar - curved, collapsible */}
+                <aside className={`fixed z-40 top-16 left-0 bottom-0 hidden md:flex items-stretch transition-all duration-200 ${sidebarBase}`}>
+                    <div className="flex-1 flex">
+                        <div className="relative flex flex-col justify-between w-full max-w-xs bg-gradient-to-b from-emerald-700 via-emerald-600 to-teal-500 rounded-r-3xl shadow-2xl py-4">
+                            {/* Top logo / brand mark */}
+                            <div className={`flex ${isOpen ? 'flex-row items-start px-3 gap-3' : 'flex-col items-center gap-4'}`}>
+                                <button
+                                    type="button"
+                                    className="inline-flex items-center justify-center w-9 h-9 rounded-2xl bg-white/10 border border-white/30 shadow-soft text-white text-lg shrink-0"
+                                    aria-label="Finance home"
+                                    onClick={() => navigate('/finance')}
+                                >
+                                    📊
+                                </button>
+                                {isOpen && (
+                                    <div className="flex flex-col text-white/90 text-xs mt-0.5 min-w-0">
+                                        <span className="font-semibold tracking-wide uppercase opacity-90">Finance</span>
+                                        <span className="text-[11px] truncate">{schoolName || 'EDU-TRACK'}</span>
+                                    </div>
+                                )}
+                            </div>
+
+                            <nav className={`mt-4 flex-1 flex flex-col ${isOpen ? 'items-stretch px-3 gap-1.5' : 'items-center gap-2'}`}>
+                                {navItems.map(i => {
+                                    const active = pathname === i.to;
+                                    const isMessages = i.label === 'Messages';
+                                    const baseActive = active ? 'bg-white text-emerald-600 shadow-soft' : 'bg-emerald-500/15 text-emerald-50 hover:bg-emerald-500/30 hover:text-white';
+                                    return (
+                                        <Link
+                                            key={i.to}
+                                            to={i.to}
+                                            className={`relative flex items-center rounded-2xl text-[18px] transition-all duration-200 ${baseActive} ${isOpen ? 'justify-start px-2.5 py-1.5 gap-2' : 'justify-center w-9 h-9'}`}
+                                            title={i.label}
+                                        >
+                                            <span className="shrink-0 flex items-center justify-center w-6 h-6">{i.icon}</span>
+                                            {isOpen && (
+                                                <span className={`text-xs font-medium truncate pr-2 ${active ? 'text-emerald-800' : 'text-emerald-50'}`}>
+                                                    {i.label}
+                                                </span>
+                                            )}
+                                            {isMessages && unreadCount > 0 && (
+                                                <span className="absolute -top-1.5 -right-1.5 inline-flex items-center justify-center min-w-[16px] h-[16px] px-0.5 rounded-full text-[9px] bg-red-500 text-white">
                                                     {unreadCount > 99 ? '99+' : unreadCount}
                                                 </span>
                                             )}
-                                        </span>
-                                    }
-                                </Link>
-                            );
-                        })}
-                    </nav>
+                                            <span className="sr-only">{i.label}</span>
+                                        </Link>
+                                    );
+                                })}
+                            </nav>
+
+                            {/* Bottom collapse control */}
+                            <div className={`flex ${isOpen ? 'justify-end pr-3' : 'justify-center'} mt-2`}>
+                                <button
+                                    type="button"
+                                    onClick={() => setIsOpen(v => !v)}
+                                    className="inline-flex items-center justify-center w-8 h-8 rounded-2xl bg-emerald-500/20 text-emerald-50 hover:bg-emerald-500/35 text-xs font-medium"
+                                    title={isOpen ? 'Collapse sidebar' : 'Expand sidebar'}
+                                >
+                                    {isOpen ? '◀' : '▶'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
                 </aside>
 
-                <main className={`transition-all duration-200 px-4 md:px-6 py-4 md:py-6 ${isOpen ? 'md:ml-64' : 'md:ml-16'}`}>
+                <main className={`transition-all duration-200 px-4 md:px-6 py-4 md:py-6 ${isOpen ? 'md:ml-56' : 'md:ml-20'}`}>
                     {children}
                 </main>
             </div>

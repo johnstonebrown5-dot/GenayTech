@@ -58,8 +58,8 @@ export default function StatCard({ title, value, icon, accent, animate = false, 
   const iconBoxSize = isSmall ? 'w-10 h-10 text-xl' : 'w-12 h-12 text-2xl'
   const titleTextClass = isSmall ? 'text-xs font-medium text-gray-500' : 'text-sm font-medium text-gray-500'
   const valueTextClass = isSmall
-    ? 'mt-0.5 text-xl sm:text-[1.25rem] md:text-[1.35rem] font-extrabold tracking-tight text-gray-900 truncate whitespace-nowrap'
-    : 'mt-0.5 text-[1.55rem] sm:text-2xl md:text-[1.6rem] font-extrabold tracking-tight text-gray-900 truncate whitespace-nowrap'
+    ? 'mt-0.5 text-lg sm:text-[1.1rem] md:text-[1.2rem] font-extrabold tracking-tight text-gray-900 leading-tight break-words'
+    : 'mt-0.5 text-[1.35rem] sm:text-xl md:text-[1.45rem] font-extrabold tracking-tight text-gray-900 leading-tight break-words'
 
   return (
     <div className="relative overflow-hidden rounded-2xl border border-gray-200/80 bg-white/90 backdrop-blur-xl supports-[backdrop-filter]:bg-white/70 shadow-card hover:shadow-elevated transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.995]">
