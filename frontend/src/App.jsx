@@ -91,7 +91,6 @@ import ReAuth from './pages/ReAuth'
 import HelpCenter from './pages/HelpCenter'
 import FloatingHelpAction from './components/Help/FloatingHelpAction'
 import LockPage from './pages/LockPage'
-import GlobalLoading from './components/GlobalLoading'
 
 function ProtectedRoute({ children, roles, ownerRole }) {
   const { user, loading } = useAuth()
@@ -284,7 +283,6 @@ export default function App() {
             {/* Catch-all 404 */}
             <Route path="*" element={<NotFound/>} />
             </Routes>
-            {pathname !== '/' && <GlobalLoading />}
             <NotificationContainer />
             <BrowserNotificationPrompt />
             <ReportIssuePrompt />

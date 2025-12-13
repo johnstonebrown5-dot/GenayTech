@@ -131,37 +131,13 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'edutrack.wsgi.application'
 
-# Database configuration
-# Allow a lightweight SQLite fallback for local development when USE_SQLITE=True
-USE_SQLITE = os.getenv('USE_SQLITE', 'False') == 'True'
-if USE_SQLITE:
-    DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.sqlite3',
-            'NAME': BASE_DIR / 'db.sqlite3',
-        }
+# Database configuration – force SQLite for local development
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': BASE_DIR / 'db.sqlite3',
     }
-else:
-    DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.postgresql',
-            'NAME': os.getenv('POSTGRES_DB', ''),
-            'USER': os.getenv('POSTGRES_USER', ''),
-            'PASSWORD': os.getenv('POSTGRES_PASSWORD', ''),
-            'HOST': os.getenv('POSTGRES_HOST', ''),
-            'PORT': os.getenv('POSTGRES_PORT', '5432'),
-            'OPTIONS': {'sslmode': 'require'},
-            'CONN_MAX_AGE': 600,
-        }
-    }
-
-# Prefer DATABASE_URL if provided (Render / 12-factor style)
-DATABASE_URL = os.getenv('DATABASE_URL')
-if DATABASE_URL:
-    if DATABASE_URL.startswith('sqlite'):
-        DATABASES['default'] = dj_database_url.parse(DATABASE_URL, conn_max_age=600, ssl_require=False)
-    else:
-        DATABASES['default'] = dj_database_url.parse(DATABASE_URL, conn_max_age=600, ssl_require=True)
+}
 
 AUTH_USER_MODEL = 'accounts.User'
 

@@ -26,7 +26,7 @@ export default function ReportIssuePrompt(){
     const dismissed = sessionStorage.getItem('report_issue_prompt_dismissed') === '1'
     if (block || dismissed) return
 
-    const id = setTimeout(() => setVisible(true), 30_000)
+    const id = setTimeout(() => setVisible(true), 5 * 60 * 1000)
     setTimerId(id)
     return () => clearTimeout(id)
   }, [pathname])

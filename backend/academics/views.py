@@ -45,7 +45,14 @@ from .serializers import (
 
 class IsTeacherOrAdmin(permissions.BasePermission):
     def has_permission(self, request, view):
-        return request.user and request.user.is_authenticated and request.user.role in ('teacher','admin','finance')
+        user = getattr(request, 'user', None)
+        if not (user and user.is_authenticated):
+            return False
+        role = getattr(user, 'role', None)
+        # Treat Django staff/superuser as admin-equivalent for read access
+        if user.is_staff or user.is_superuser:
+            return True
+        return role in ('teacher', 'admin', 'finance')
 
 class IsAdmin(permissions.BasePermission):
     def has_permission(self, request, view):
