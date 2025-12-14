@@ -102,7 +102,7 @@ export default function StudentLayout({ children }){
   }, [user, dismissedIds])
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gradient-to-br from-violet-300 via-violet-200 to-slate-100">
       {broadcastBanner && (
         <div className="sticky top-0 z-40 w-full bg-red-600 text-white">
           <div className="px-3 md:px-6 py-2 flex items-start gap-2">
@@ -143,27 +143,8 @@ export default function StudentLayout({ children }){
             </div>
           </Link>
 
-          {/* Inline nav (desktop, centered) */}
-          <nav className="hidden md:flex items-center gap-2 md:absolute md:left-1/2 md:-translate-x-1/2">
-            {baseNavItems.map(i => {
-              const active = pathname === i.to
-              const isMessages = i.label === 'Messages'
-              return (
-                <Link
-                  key={i.to}
-                  to={i.to}
-                  className={`${active ? 'bg-slate-900 text-white shadow-sm' : 'bg-white/80 text-slate-800 hover:bg-white border-slate-200'} px-3.5 py-2 rounded-full text-sm font-medium inline-flex items-center gap-2 border`}
-                  title={i.label}
-                >
-                  <span className="hidden lg:inline" aria-hidden>{i.icon}</span>
-                  <span>{i.label}</span>
-                  {isMessages && unreadCount>0 && (
-                    <span className="ml-auto inline-flex items-center justify-center min-w-[20px] h-[20px] px-1 rounded-full text-[11px] bg-red-600 text-white">{unreadCount>99 ? '99+' : unreadCount}</span>
-                  )}
-                </Link>
-              )
-            })}
-          </nav>
+          {/* Center area reserved for future breadcrumbs / page title (nav removed) */}
+          <div className="hidden md:flex flex-1 justify-center" />
 
           {/* Spacer */}
           <div className="flex-1" />
@@ -262,8 +243,61 @@ export default function StudentLayout({ children }){
       </div>
 
       {/* Content */}
-      <main className="px-3 md:px-6 py-4 pb-16 md:py-6 md:pb-6">
-        {children}
+      <main className="pt-0 pb-16 md:pt-0 md:pb-0 flex-1 flex">
+        <div className="w-full flex">
+          <div className="w-full rounded-3xl bg-white/90 backdrop-blur-xl shadow-[0_30px_80px_rgba(15,23,42,0.18)] border border-violet-100/80 overflow-hidden flex flex-col md:flex-row md:items-stretch h-full md:min-h-[calc(100vh-4rem)]">
+            {/* Sidebar (desktop) */}
+            <aside className="hidden md:flex w-60 lg:w-64 bg-gradient-to-b from-violet-600 via-violet-600 to-purple-700 text-violet-50 flex-col py-6 px-4 relative md:sticky md:top-0 md:self-start h-full">
+              <div className="mb-6 px-2">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-white/10 flex items-center justify-center text-2xl">
+                    🎓
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-xs uppercase tracking-[0.2em] text-violet-200/90">Student</span>
+                    <span className="text-sm font-semibold leading-tight">Portal</span>
+                  </div>
+                </div>
+              </div>
+              <nav className="space-y-1 flex-1 overflow-y-auto">
+                {baseNavItems.map(item => {
+                  const active = pathname === item.to
+                  return (
+                    <Link
+                      key={item.to}
+                      to={item.to}
+                      className={`${active
+                        ? 'bg-white text-violet-700 shadow-md'
+                        : 'hover:bg-white/10 text-violet-100'} flex items-center gap-3 px-3 py-2.5 rounded-2xl text-sm font-medium transition-all duration-200`}
+                    >
+                      <span className="text-lg" aria-hidden>{item.icon}</span>
+                      <span>{item.label}</span>
+                      {item.label === 'Messages' && unreadCount>0 && (
+                        <span className="ml-auto inline-flex items-center justify-center min-w-[20px] h-[20px] px-1 rounded-full text-[11px] bg-red-500 text-white">
+                          {unreadCount>99 ? '99+' : unreadCount}
+                        </span>
+                      )}
+                    </Link>
+                  )
+                })}
+              </nav>
+              <div className="mt-6 pt-4 border-t border-violet-500/40 text-[11px] text-violet-100 flex items-center justify-between px-2">
+                <span>© {new Date().getFullYear()} EDU-TRACK</span>
+                <span className="inline-flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-300 animate-pulse" />
+                  <span className="opacity-80">Online</span>
+                </span>
+              </div>
+            </aside>
+
+            {/* Main content area */}
+            <div className="flex-1 bg-slate-50/60 md:bg-transparent overflow-x-hidden">
+              <div className="p-0">
+                {children}
+              </div>
+            </div>
+          </div>
+        </div>
       </main>
 
       {/* Bottom Nav (mobile, M-Pesa style) */}
