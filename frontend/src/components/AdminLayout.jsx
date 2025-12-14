@@ -217,16 +217,8 @@ export default function AdminLayout({ children }){
       {/* Top bar */}
       <header className="sticky top-0 z-30 bg-white/80 backdrop-blur-xl supports-[backdrop-filter]:bg-white/65 border-b border-gray-200 px-3 sm:px-4 md:px-6 h-16 pt-[env(safe-area-inset-top)] shadow-[0_6px_20px_-8px_rgba(0,0,0,0.2)]">
         <div className="max-w-screen-2xl mx-auto h-full flex items-center gap-2">
-          {/* Left: menu + brand */}
+          {/* Left: brand / sidebar toggle (desktop only) */}
           <div className="flex items-center gap-2 min-w-0">
-            <button
-              className="p-2.5 rounded-lg hover:bg-gray-100/80 transition-all duration-200 md:hidden"
-              aria-label="Toggle sidebar"
-              onClick={()=>setIsMobileOpen(v=>!v)}>
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5 text-gray-700">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
-              </svg>
-            </button>
             <button
               className="p-2.5 rounded-xl hover:bg-gray-100 transition-all duration-200 hidden md:inline-flex border border-transparent hover:border-gray-200"
               aria-label="Collapse sidebar"
@@ -286,37 +278,20 @@ export default function AdminLayout({ children }){
                 </svg>
               </button>
             </div>
-            <Link
-              to="/admin/messages?tab=system"
-              className="relative inline-flex items-center justify-center w-10 h-10 rounded-xl border border-gray-200 hover:bg-gray-50 transition-all"
-              aria-label="Notifications"
-              title="System messages"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5 text-gray-700">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75V9a6 6 0 10-12 0v.75a8.967 8.967 0 01-2.311 6.022c1.733.64 3.56 1.085 5.455 1.31m5.713 0a24.255 24.255 0 01-5.713 0m5.713 0a3 3 0 11-5.713 0" />
-              </svg>
-              {broadcastUnread > 0 && (
-                <span className="absolute -top-1 -right-1 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] bg-red-600 text-white">
-                  {broadcastUnread > 99 ? '99+' : broadcastUnread}
-                </span>
-              )}
-            </Link>
             {user && (
-              <Link to="/admin/profile" className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-full shadow-sm hover:bg-gray-100 transition-colors" title="Open my profile">
-                <div className="w-6 h-6 rounded-full overflow-hidden bg-brand-600 flex items-center justify-center">
+              <Link
+                to="/admin/profile"
+                className="inline-flex items-center justify-center w-10 h-10 rounded-full border border-gray-200 bg-white hover:bg-gray-50 transition-all shadow-sm"
+                aria-label="Open profile"
+                title="Open my profile"
+              >
+                <div className="w-8 h-8 rounded-full overflow-hidden bg-brand-600 flex items-center justify-center">
                   {avatarUrl ? (
                     <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
                   ) : (
                     <span className="text-white text-xs font-medium">{(user.first_name || user.username || 'U')[0].toUpperCase()}</span>
                   )}
                 </div>
-                <span className="text-sm text-gray-800 font-medium max-w-[12rem] truncate">{user.first_name || user.username}</span>
-                {typeof (selfActive ?? user.is_active) === 'boolean' && (
-                  <span className={`ml-1 inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full border ${(selfActive ?? user.is_active) ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
-                    <span className={`inline-block w-2 h-2 rounded-full ${(selfActive ?? user.is_active) ? 'bg-green-500' : 'bg-red-500'}`}></span>
-                    {(selfActive ?? user.is_active) ? 'Active' : 'Inactive'}
-                  </span>
-                )}
               </Link>
             )}
             <button
@@ -443,10 +418,21 @@ export default function AdminLayout({ children }){
 
         {/* Mobile Drawer Sidebar */}
         <aside
-          className={`fixed z-40 left-0 bottom-0 bg-gradient-to-b from-blue-600 via-blue-700 to-blue-900 border-r border-blue-500/30 w-64 p-2 md:hidden transition-transform duration-200 shadow-2xl ${isMobileOpen? 'translate-x-0':'-translate-x-full'} flex flex-col`}
-          style={{ top: broadcastBanner ? 'calc(4rem + env(safe-area-inset-top) + 40px)' : 'calc(4rem + env(safe-area-inset-top))' }}
+          className={`fixed z-40 left-0 bottom-0 bg-gradient-to-b from-blue-600 via-blue-700 to-blue-900 border-r border-blue-500/30 w-full md:hidden transition-transform duration-200 shadow-2xl ${isMobileOpen? 'translate-x-0':'-translate-x-full'} flex flex-col`}
+          style={{ top: 0 }}
         >
-          <nav className="flex-1 space-y-1 overflow-y-auto overscroll-contain pr-1 pb-[env(safe-area-inset-bottom)]">
+          <div className="flex items-center justify-between px-3 py-2 border-b border-blue-500/40 text-blue-50">
+            <span className="text-sm font-medium">Navigation</span>
+            <button
+              type="button"
+              onClick={()=>setIsMobileOpen(false)}
+              className="p-1.5 rounded-full hover:bg-white/10"
+              aria-label="Close menu"
+            >
+              ✕
+            </button>
+          </div>
+          <nav className="flex-1 space-y-1 overflow-y-auto overscroll-contain px-2 pb-[env(safe-area-inset-bottom)] pt-2">
             {navItems.map(i => {
               const active = pathname === i.to
               return (
@@ -489,8 +475,8 @@ export default function AdminLayout({ children }){
 
       {/* Mobile Bottom Tab Bar */}
       <nav className="fixed bottom-0 inset-x-0 z-30 md:hidden">
-        <div className="max-w-screen-2xl mx-auto px-3 pb-[env(safe-area-inset-bottom)]">
-          <div className="h-14 rounded-2xl bg-white/90 backdrop-blur-xl supports-[backdrop-filter]:bg-white/70 border border-gray-200 shadow-[0_10px_30px_-12px_rgba(0,0,0,0.25)] flex items-stretch justify-between px-1.5">
+        <div className="max-w-screen-2xl mx-auto pb-[env(safe-area-inset-bottom)]">
+          <div className="h-14 bg-white/90 backdrop-blur-xl supports-[backdrop-filter]:bg-white/70 border-t border-gray-200 shadow-[0_10px_30px_-12px_rgba(0,0,0,0.25)] flex items-stretch justify-between px-1.5">
             {/* Home */}
             <Link
               to="/admin"

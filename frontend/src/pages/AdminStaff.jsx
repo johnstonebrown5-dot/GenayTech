@@ -104,62 +104,75 @@ export default function AdminStaff(){
   return (
     <React.Fragment>
       <div className="space-y-6">
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Non-Teaching Staff</h1>
             <p className="text-sm text-gray-600">Create users and link HR profiles.</p>
           </div>
-          <div className="flex gap-2">
-            <button onClick={()=>setShowCreateUser(true)} className="px-3 py-1.5 rounded bg-green-600 hover:bg-green-700 text-white">Create Staff User</button>
+          <div className="w-full sm:w-auto flex justify-start sm:justify-end">
+            <button
+              onClick={()=>setShowCreateUser(true)}
+              className="inline-flex items-center justify-center px-4 py-2 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium shadow-sm w-full sm:w-auto"
+            >
+              Create Staff User
+            </button>
           </div>
         </div>
 
         <div className="bg-white rounded-2xl shadow-card border border-gray-200 p-4 md:p-5">
-          <div className="flex items-center justify-between gap-3 mb-3">
-            <h2 className="text-base font-semibold">Directory</h2>
-            <input className="w-full md:w-64 border p-2 rounded-lg" placeholder="Search name, department or position" value={search} onChange={e=>setSearch(e.target.value)} />
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+            <div>
+              <h2 className="text-base font-semibold text-gray-900">Directory</h2>
+              <p className="text-xs text-gray-500">Search and manage non-teaching staff records.</p>
+            </div>
+            <input
+              className="w-full md:w-64 rounded-full border border-gray-200 bg-gray-50 px-3 py-2 text-sm placeholder:text-gray-400 focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/40"
+              placeholder="Search name, department or position"
+              value={search}
+              onChange={e=>setSearch(e.target.value)}
+            />
           </div>
-          <div className="overflow-x-auto rounded-lg border border-gray-100">
+          <div className="overflow-x-auto rounded-xl border border-gray-100 bg-gray-50/40">
             <table className="w-full text-left text-sm">
-              <thead className="bg-gray-50 text-gray-600">
+              <thead className="bg-gray-50/80 text-gray-600">
                 <tr>
-                  <th className="py-2 px-3">User</th>
-                  <th className="py-2 px-3">Department</th>
-                  <th className="py-2 px-3">Position</th>
-                  <th className="py-2 px-3 text-right">Actions</th>
+                  <th className="py-2.5 px-3 text-[11px] font-semibold uppercase tracking-wide">User</th>
+                  <th className="py-2.5 px-3 text-[11px] font-semibold uppercase tracking-wide">Department</th>
+                  <th className="py-2.5 px-3 text-[11px] font-semibold uppercase tracking-wide">Position</th>
+                  <th className="py-2.5 px-3 text-right text-[11px] font-semibold uppercase tracking-wide">Actions</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="divide-y divide-gray-100 bg-white">
                 {loading ? (
-                  <tr><td colSpan={4} className="py-6 text-center text-gray-500">Loading...</td></tr>
+                  <tr><td colSpan={4} className="py-6 text-center text-gray-500 text-sm">Loading staff directory...</td></tr>
                 ) : filtered.length === 0 ? (
-                  <tr><td colSpan={4} className="py-6 text-center text-gray-500">No staff found.</td></tr>
+                  <tr><td colSpan={4} className="py-6 text-center text-gray-500 text-sm">No staff found. Create a staff user to get started.</td></tr>
                 ) : (
                   filtered.map(row => (
-                    <tr key={row.user.id} className="border-t hover:bg-gray-50/60">
-                      <td className="py-2 px-3">
-                        <div className="font-medium">{row.user.first_name} {row.user.last_name}</div>
+                    <tr key={row.user.id} className="hover:bg-gray-50/80">
+                      <td className="py-2.5 px-3">
+                        <div className="font-medium text-sm text-gray-900">{row.user.first_name} {row.user.last_name}</div>
                         <div className="text-xs text-gray-500">@{row.user.username}</div>
                       </td>
-                      <td className="py-2 px-3">{row.profile?.department || '-'}</td>
-                      <td className="py-2 px-3">{row.profile?.position || '-'}</td>
-                      <td className="py-2 px-3 text-right">
+                      <td className="py-2.5 px-3 text-sm text-gray-700">{row.profile?.department || '-'}</td>
+                      <td className="py-2.5 px-3 text-sm text-gray-700">{row.profile?.position || '-'}</td>
+                      <td className="py-2.5 px-3 text-right">
                         <div className="inline-flex items-center gap-2 justify-end">
                           {!row.profile && (
-                            <button onClick={()=>openAttach(row.user.id)} className="px-2 py-1 rounded border text-xs hover:bg-gray-50">Create Profile</button>
+                            <button onClick={()=>openAttach(row.user.id)} className="px-3 py-1.5 rounded-full border border-gray-200 text-xs font-medium text-gray-700 hover:bg-gray-50 bg-white shadow-sm">Create Profile</button>
                           )}
                           {row.profile && (
                             <>
                               <Link
                                 to={`/admin/staff-payroll?staff=${row.profile.id}`}
-                                className="px-2 py-1 rounded border text-xs hover:bg-gray-50"
+                                className="px-3 py-1.5 rounded-full border border-gray-200 text-xs font-medium text-gray-700 hover:bg-gray-50 bg-white shadow-sm"
                                 title="Manage Payroll"
                               >
                                 Payroll
                               </Link>
                               <Link
                                 to={`/admin/staff-payroll?staff=${row.profile.id}`}
-                                className="px-2 py-1 rounded border text-xs hover:bg-gray-50"
+                                className="px-3 py-1.5 rounded-full border border-gray-200 text-xs font-medium text-gray-700 hover:bg-gray-50 bg-white shadow-sm"
                                 title="View Payslips"
                               >
                                 Payslips

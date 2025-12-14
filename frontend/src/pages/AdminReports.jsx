@@ -107,19 +107,17 @@ export default function AdminReports(){
           <div className="flex items-center gap-2 w-full sm:w-auto overflow-x-auto -mx-1 px-1">
             <button
               onClick={() => load(true)}
-              className="shrink-0 inline-flex items-center justify-center gap-0 sm:gap-2 bg-gray-100 hover:bg-gray-200 px-2.5 sm:px-4 py-2 rounded-lg transition"
+              className="shrink-0 inline-flex items-center justify-center gap-2 bg-gray-100 hover:bg-gray-200 px-3 sm:px-4 py-2 rounded-lg transition text-sm font-medium text-gray-800"
               aria-label="Refresh"
             >
-              <span>🔄</span>
-              <span className="hidden sm:inline">Refresh</span>
+              <span>Refresh</span>
             </button>
             <button
               onClick={exportCSV}
-              className="shrink-0 inline-flex items-center justify-center gap-0 sm:gap-2 bg-blue-600 hover:bg-blue-700 text-white px-2.5 sm:px-4 py-2 rounded-lg transition"
+              className="shrink-0 inline-flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-3 sm:px-4 py-2 rounded-lg transition text-sm font-medium"
               aria-label="Export CSV"
             >
-              <span>📥</span>
-              <span className="hidden sm:inline">Export CSV</span>
+              <span>Export CSV</span>
             </button>
           </div>
         </div>

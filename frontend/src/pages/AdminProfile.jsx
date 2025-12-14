@@ -78,14 +78,19 @@ export default function AdminProfile(){
   return (
     <React.Fragment>
       <div className="max-w-3xl mx-auto space-y-5">
-        <h1 className="text-xl font-semibold">My Profile</h1>
-        {loading && <div className="bg-white p-4 rounded border">Loading...</div>}
-        {error && <div className="bg-red-50 text-red-700 p-2 rounded border border-red-200">{error}</div>}
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-xl sm:text-2xl font-bold text-gray-900">My Profile</h1>
+            <p className="text-sm text-gray-600 mt-1">Update your personal details and profile photo.</p>
+          </div>
+        </div>
+        {loading && <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm text-sm text-gray-600">Loading profile...</div>}
+        {error && <div className="bg-red-50 text-red-700 p-3 rounded-2xl border border-red-100 text-sm">{error}</div>}
 
         {me && (
-          <div className="bg-white rounded border p-4 md:p-6">
-            <div className="flex flex-col sm:flex-row sm:items-center gap-4 mb-6">
-              <div className="h-24 w-24 rounded-full overflow-hidden ring-4 ring-white shadow bg-indigo-50 text-indigo-700 flex items-center justify-center text-2xl">
+          <div className="bg-white rounded-2xl border border-gray-200 shadow-card p-5 md:p-6">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-4 md:gap-6 mb-6">
+              <div className="h-24 w-24 md:h-28 md:w-28 rounded-full overflow-hidden ring-4 ring-white shadow-md bg-indigo-50 text-indigo-700 flex items-center justify-center text-2xl md:text-3xl">
                 {avatarPreview ? (
                   <img src={avatarPreview} alt="Avatar" className="h-full w-full object-cover" />
                 ) : (
@@ -93,9 +98,10 @@ export default function AdminProfile(){
                 )}
               </div>
               <div className="min-w-0 sm:text-left text-center">
-                <div className="text-lg md:text-2xl font-semibold truncate">{me.first_name} {me.last_name}</div>
+                <div className="text-lg md:text-2xl font-semibold text-gray-900 truncate">{me.first_name} {me.last_name}</div>
+                <div className="text-xs text-gray-500 mt-0.5 truncate">{me.email}</div>
                 <div className="mt-3 flex flex-wrap items-center justify-center sm:justify-start gap-2">
-                  <label className={`px-3 py-2 text-xs rounded border cursor-pointer bg-white hover:bg-gray-50 ${avatarSaving ? 'opacity-60 pointer-events-none' : ''}`}>
+                  <label className={`inline-flex items-center justify-center px-3 py-1.5 text-xs font-medium rounded-full border border-gray-200 cursor-pointer bg-white hover:bg-gray-50 shadow-sm ${avatarSaving ? 'opacity-60 pointer-events-none' : ''}`}>
                     {avatarSaving ? 'Uploading…' : 'Change Photo'}
                     <input type="file" accept="image/*" className="hidden" onChange={onPickAvatar} />
                   </label>
@@ -104,26 +110,57 @@ export default function AdminProfile(){
             </div>
 
             <form onSubmit={saveProfile} className="grid gap-4 md:grid-cols-2">
-              {saveErr && <div className="md:col-span-2 bg-red-50 text-red-700 p-2 rounded text-sm">{saveErr}</div>}
-              {saveMsg && <div className="md:col-span-2 bg-green-50 text-green-700 p-2 rounded text-sm">{saveMsg}</div>}
+              {saveErr && <div className="md:col-span-2 bg-red-50 text-red-700 p-3 rounded-xl text-sm border border-red-100">{saveErr}</div>}
+              {saveMsg && <div className="md:col-span-2 bg-emerald-50 text-emerald-700 p-3 rounded-xl text-sm border border-emerald-100">{saveMsg}</div>}
               <label className="grid gap-1">
-                <span className="text-xs text-gray-600">First name</span>
-                <input className="w-full border p-2 rounded" value={form.first_name} onChange={e=>setForm(f=>({...f, first_name:e.target.value}))} />
+                <span className="text-xs font-medium text-gray-700">First name</span>
+                <input
+                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm placeholder:text-gray-400 focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/40"
+                  value={form.first_name}
+                  onChange={e=>setForm(f=>({...f, first_name:e.target.value}))}
+                />
               </label>
               <label className="grid gap-1">
-                <span className="text-xs text-gray-600">Last name</span>
-                <input className="w-full border p-2 rounded" value={form.last_name} onChange={e=>setForm(f=>({...f, last_name:e.target.value}))} />
+                <span className="text-xs font-medium text-gray-700">Last name</span>
+                <input
+                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm placeholder:text-gray-400 focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/40"
+                  value={form.last_name}
+                  onChange={e=>setForm(f=>({...f, last_name:e.target.value}))}
+                />
               </label>
               <label className="grid gap-1 md:col-span-2">
-                <span className="text-xs text-gray-600">Email</span>
-                <input type="email" className="w-full border p-2 rounded" value={form.email} onChange={e=>setForm(f=>({...f, email:e.target.value}))} />
+                <span className="text-xs font-medium text-gray-700">Email</span>
+                <input
+                  type="email"
+                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm placeholder:text-gray-400 focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/40"
+                  value={form.email}
+                  onChange={e=>setForm(f=>({...f, email:e.target.value}))}
+                />
               </label>
               <label className="grid gap-1 md:col-span-2">
-                <span className="text-xs text-gray-600">Phone</span>
-                <input type="tel" className="w-full border p-2 rounded" value={form.phone} onChange={e=>setForm(f=>({...f, phone:e.target.value}))} />
+                <span className="text-xs font-medium text-gray-700">Phone</span>
+                <input
+                  type="tel"
+                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm placeholder:text-gray-400 focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/40"
+                  value={form.phone}
+                  onChange={e=>setForm(f=>({...f, phone:e.target.value}))}
+                />
               </label>
               <div className="md:col-span-2 flex justify-end">
-                <button className="px-4 py-2 rounded bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-60" disabled={saving}>{saving? 'Saving...' : 'Save Profile'}</button>
+                <button
+                  className={`px-5 py-2.5 rounded-full text-sm font-semibold shadow-sm disabled:opacity-60 disabled:cursor-not-allowed
+                    ${saving
+                      ? 'bg-emerald-500 text-white'
+                      : saveErr
+                        ? 'bg-red-600 text-white hover:bg-red-700'
+                        : saveMsg
+                          ? 'bg-emerald-600 text-white hover:bg-emerald-700'
+                          : 'bg-emerald-600 text-white hover:bg-emerald-700'
+                    }`}
+                  disabled={saving}
+                >
+                  {saving ? 'Saving…' : saveErr ? 'Save failed' : saveMsg ? 'Saved' : 'Save Profile'}
+                </button>
               </div>
             </form>
           </div>
