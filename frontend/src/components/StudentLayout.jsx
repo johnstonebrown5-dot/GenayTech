@@ -22,7 +22,6 @@ export default function StudentLayout({ children }){
   const [broadcastUnread, setBroadcastUnread] = useState(0)
   const [broadcastBanner, setBroadcastBanner] = useState(null)
   const [bannerExpanded, setBannerExpanded] = useState(false)
-  const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [dismissedIds, setDismissedIds] = useState(() => {
     try { return JSON.parse(localStorage.getItem('dismissed_broadcast_ids') || '[]') } catch { return [] }
   })
@@ -35,8 +34,6 @@ export default function StudentLayout({ children }){
     if (broadcastBanner?.id === id) setBroadcastBanner(null)
   }
 
-  // close menu when route changes
-  useEffect(() => { setIsMenuOpen(false) }, [pathname])
 
   // Load school info for header
   useEffect(() => {
@@ -149,17 +146,6 @@ export default function StudentLayout({ children }){
           {/* Spacer */}
           <div className="flex-1" />
 
-          {/* Hamburger (mobile only) */}
-          <button
-            className="md:hidden inline-flex items-center justify-center w-10 h-10 rounded-lg border bg-white hover:bg-gray-50"
-            aria-label="Open navigation menu"
-            onClick={()=> setIsMenuOpen(v=>!v)}
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="w-5 h-5">
-              <path strokeLinecap="round" d="M4 7h16M4 12h16M4 17h16" />
-            </svg>
-          </button>
-
           {/* User + Actions */}
           <div className="flex items-center gap-2 sm:gap-2.5">
             {/* Back/Forward (md+) */}
@@ -211,41 +197,12 @@ export default function StudentLayout({ children }){
         </div>
       </header>
 
-      {/* Overlay for menu */}
-      {isMenuOpen && (
-        <div className="fixed inset-0 z-30 bg-black/30" onClick={()=> setIsMenuOpen(false)} />
-      )}
-
-      {/* Dropdown Menu Panel */}
-      <div className={`fixed z-40 top-14 left-0 right-0 px-3 md:px-6 transition-transform duration-200 ${isMenuOpen ? 'translate-y-0 opacity-100' : '-translate-y-2 opacity-0 pointer-events-none'}`}>
-        <div className="bg-white rounded-xl border shadow-card overflow-hidden">
-          <nav className="py-1">
-            {baseNavItems.map(i => {
-              const active = pathname === i.to
-              const isMessages = i.label === 'Messages'
-              return (
-                <Link
-                  key={i.to}
-                  to={i.to}
-                  onClick={()=> setIsMenuOpen(false)}
-                  className={`flex items-center gap-3 px-4 py-2.5 transition-colors ${active ? 'bg-slate-100 text-slate-900' : 'text-slate-700 hover:bg-slate-50'}`}
-                >
-                  <span className="text-lg" aria-hidden>{i.icon}</span>
-                  <span className="text-sm font-medium">{i.label}</span>
-                  {isMessages && unreadCount>0 && (
-                    <span className="ml-auto inline-flex items-center justify-center min-w-[20px] h-[20px] px-1 rounded-full text-[11px] bg-red-600 text-white">{unreadCount>99 ? '99+' : unreadCount}</span>
-                  )}
-                </Link>
-              )
-            })}
-          </nav>
-        </div>
-      </div>
+      
 
       {/* Content */}
       <main className="pt-0 pb-16 md:pt-0 md:pb-0 flex-1 flex">
         <div className="w-full flex">
-          <div className="w-full rounded-3xl bg-white/90 backdrop-blur-xl shadow-[0_30px_80px_rgba(15,23,42,0.18)] border border-violet-100/80 overflow-hidden flex flex-col md:flex-row md:items-stretch h-full md:min-h-[calc(100vh-4rem)]">
+          <div className="w-full bg-white md:bg-white/90 md:backdrop-blur-xl shadow-none md:shadow-[0_30px_80px_rgba(15,23,42,0.18)] border border-violet-100/80 overflow-hidden flex flex-col md:flex-row md:items-stretch h-full md:min-h-[calc(100vh-4rem)]">
             {/* Sidebar (desktop) */}
             <aside className="hidden md:flex w-60 lg:w-64 bg-gradient-to-b from-violet-600 via-violet-600 to-purple-700 text-violet-50 flex-col py-6 px-4 relative md:sticky md:top-0 md:self-start h-full">
               <div className="mb-6 px-2">

@@ -201,6 +201,29 @@ export default function StudentDashboard(){
     }
   }
 
+  async function submitEdit(e){
+    e?.preventDefault?.()
+    if (!student) return
+    try {
+      setEditSubmitting(true)
+      setEditError('')
+      const payload = {
+        email: editForm.email,
+        guardian_id: editForm.phone,
+        address: editForm.address,
+      }
+      await api.patch(`/academics/students/${student.id}/`, payload)
+      const { data } = await api.get('/academics/students/my/')
+      setStudent(data)
+      setShowEdit(false)
+    } catch (err) {
+      const msg = err?.response?.data ? JSON.stringify(err.response.data) : (err?.message || 'Failed to update contact details')
+      setEditError(msg)
+    } finally {
+      setEditSubmitting(false)
+    }
+  }
+
   const openPay = (invoice) => {
     setSelectedInvoice(invoice)
     setPayForm({ amount: '', method: 'mpesa', reference: '' })
@@ -279,8 +302,8 @@ export default function StudentDashboard(){
       <p className="text-base sm:text-lg font-semibold text-slate-900 mb-4">Dashboard</p>
 
       <div className="mt-1 grid gap-4 lg:gap-5 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,2fr)_minmax(260px,1fr)]">
-        {/* Column 1: Fees + Performance graph */}
-        <div className="space-y-4">
+        {/* Column 1: Fees summary */}
+        <div className="space-y-4 order-1">
           {/* Fees / balance summary */}
           <div className="space-y-2.5">
             {/* Balance - primary card (compact) */}
@@ -321,25 +344,10 @@ export default function StudentDashboard(){
               ) : null}
             </div>
           </div>
-
-          {/* Performance graph */}
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-5">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-semibold text-slate-900">Performance graph</h3>
-              {latestExamLabel && (
-                <span className="text-xs text-slate-500">Latest: {latestExamLabel}</span>
-              )}
-            </div>
-            {Array.isArray(performance) && performance.length > 0 ? (
-              <ResponsiveLine data={performance} />
-            ) : (
-              <div className="text-sm text-slate-500">No exam performance data yet.</div>
-            )}
-          </div>
         </div>
 
-        {/* Column 2: Personal details + latest exam summary */}
-        <div className="space-y-4">
+        {/* Column 2: Personal details + performance graph + latest exam summary */}
+        <div className="space-y-4 order-3 lg:order-2">
           {student && (
             <div className="bg-white/80 backdrop-blur border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
               <div className="px-4 sm:px-5 py-3 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-slate-50/70">
@@ -402,6 +410,22 @@ export default function StudentDashboard(){
             </div>
           )}
 
+          {/* Performance graph */}
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-5">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold text-slate-900">Performance graph</h3>
+              {latestExamLabel && (
+                <span className="text-xs text-slate-500">Latest: {latestExamLabel}</span>
+              )}
+            </div>
+            {Array.isArray(performance) && performance.length > 0 ? (
+              <ResponsiveLine data={performance} />
+            ) : (
+              <div className="text-sm text-slate-500">No exam performance data yet.</div>
+            )}
+          </div>
+
+          {/* Latest exam summary */}
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-5">
             <h3 className="text-sm font-semibold text-slate-900 mb-1">Latest exam summary</h3>
             <p className="text-xs text-slate-500 mb-3">Quick snapshot of your most recent published exam.</p>
@@ -431,7 +455,7 @@ export default function StudentDashboard(){
         </div>
 
         {/* Column 3: Photo + calendar */}
-        <div className="space-y-4">
+        <div className="space-y-4 order-2 lg:order-3">
           {student && (
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-5 flex flex-col items-center text-center gap-3">
               <div className="relative w-28 h-28 sm:w-32 sm:h-32 rounded-2xl overflow-hidden border border-slate-200 shadow-inner bg-white/60 flex items-center justify-center">
@@ -629,6 +653,57 @@ export default function StudentDashboard(){
       </div>
     </div>
   )}
+  
+  <Modal open={showEdit} onClose={() => (!editSubmitting && setShowEdit(false))} title="Update contact details" size="sm">
+    <form onSubmit={submitEdit} className="space-y-4">
+      {editError && (
+        <div className="bg-red-50 border border-red-200 rounded p-2 text-sm text-red-700">{editError}</div>
+      )}
+      <div className="space-y-1">
+        <label className="block text-sm font-medium text-slate-700">Email</label>
+        <input
+          type="email"
+          className="w-full border border-slate-300 rounded px-3 py-2 text-sm"
+          value={editForm.email}
+          onChange={e => setEditForm({ ...editForm, email: e.target.value })}
+        />
+      </div>
+      <div className="space-y-1">
+        <label className="block text-sm font-medium text-slate-700">Parent/Guardian Phone</label>
+        <input
+          type="text"
+          className="w-full border border-slate-300 rounded px-3 py-2 text-sm"
+          value={editForm.phone}
+          onChange={e => setEditForm({ ...editForm, phone: e.target.value })}
+        />
+      </div>
+      <div className="space-y-1">
+        <label className="block text-sm font-medium text-slate-700">Postal Address</label>
+        <textarea
+          className="w-full border border-slate-300 rounded px-3 py-2 text-sm min-h-[72px]"
+          value={editForm.address}
+          onChange={e => setEditForm({ ...editForm, address: e.target.value })}
+        />
+      </div>
+      <div className="flex justify-end gap-2 pt-1">
+        <button
+          type="button"
+          className="px-4 py-1.5 rounded border text-sm"
+          onClick={() => !editSubmitting && setShowEdit(false)}
+          disabled={editSubmitting}
+        >
+          Cancel
+        </button>
+        <button
+          type="submit"
+          className="px-4 py-1.5 rounded bg-slate-900 text-white text-sm disabled:opacity-60"
+          disabled={editSubmitting}
+        >
+          {editSubmitting ? 'Saving…' : 'Save changes'}
+        </button>
+      </div>
+    </form>
+  </Modal>
 
   </div>
   )
