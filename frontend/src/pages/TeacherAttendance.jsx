@@ -108,27 +108,47 @@ export default function TeacherAttendance(){
   }, [students, search])
 
   return (
-    <div className="p-6 space-y-4">
-      <div className="text-lg font-semibold">Mark Attendance</div>
+    <div className="px-0 md:px-6 py-4 md:py-6 space-y-4 max-w-3xl mx-auto">
+      {/* Header */}
+      <div className="rounded-2xl border border-gray-200 bg-gradient-to-r from-sky-50 via-white to-indigo-50 px-4 py-3 flex items-center justify-between">
+        <div>
+          <div className="text-base md:text-lg font-semibold tracking-tight text-gray-900">Mark Attendance</div>
+          <div className="text-[11px] md:text-xs text-gray-600">Quickly mark present, absent, or late for your class.</div>
+        </div>
+      </div>
 
-      {loading && <div className="bg-white p-4 rounded shadow">Loading...</div>}
-      {error && <div className="bg-red-50 text-red-700 p-3 rounded">{error}</div>}
-      {message && <div className="bg-green-50 text-green-700 p-3 rounded">{message}</div>}
+      {loading && <div className="bg-white rounded-2xl border border-gray-100 shadow-sm px-4 py-3 text-sm text-gray-600">Loading...</div>}
+      {error && <div className="bg-red-50 text-red-700 px-4 py-3 rounded-2xl border border-red-200 text-sm">{error}</div>}
+      {message && <div className="bg-emerald-50 text-emerald-700 px-4 py-3 rounded-2xl border border-emerald-200 text-sm">{message}</div>}
 
-      <div className="bg-white rounded-2xl shadow p-4 space-y-4 border border-gray-100">
+      <div className="bg-white/90 backdrop-blur rounded-2xl shadow-sm px-4 py-4 md:px-5 md:py-5 space-y-4 border border-gray-100">
         {!isClassTeacher && (
-          <div className="bg-yellow-50 text-yellow-800 border border-yellow-200 px-3 py-2 rounded text-sm">
-            Only the assigned class teacher can mark attendance for the selected class.
+          <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50/80 px-3 py-2 text-xs md:text-sm text-amber-800">
+            <div className="mt-0.5 h-1.5 w-1.5 rounded-full bg-amber-500" />
+            <p>Only the assigned class teacher can mark attendance for the selected class.</p>
           </div>
         )}
-        <div className="flex flex-wrap gap-3 items-center">
-          <label className="text-sm text-gray-600">Class</label>
-          <select className="border p-2 rounded focus:ring-2 focus:ring-indigo-200" value={selected} onChange={e=>setSelected(e.target.value)}>
-            {classes.map(c=> <option key={c.id} value={c.id}>{c.name}</option>)}
-          </select>
-          <label className="text-sm text-gray-600 ml-4">Date</label>
-          <input type="date" className="border p-2 rounded focus:ring-2 focus:ring-indigo-200" value={date} onChange={e=>setDate(e.target.value)} />
-          <div className="ml-auto text-sm text-gray-600">Present: <strong>{presentCount}</strong> / {students.length}</div>
+        <div className="space-y-3 md:space-y-0 md:flex md:flex-wrap md:items-center md:gap-3">
+          <label className="block text-xs md:text-sm text-gray-600 w-full md:w-auto">
+            <span className="block mb-1">Class</span>
+            <select
+              className="w-full md:w-auto border border-gray-200 rounded-xl px-3 py-2 text-xs md:text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-300"
+              value={selected}
+              onChange={e=>setSelected(e.target.value)}
+            >
+              {classes.map(c=> <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </label>
+          <label className="block text-xs md:text-sm text-gray-600 w-full md:w-auto">
+            <span className="block mb-1">Date</span>
+            <input
+              type="date"
+              className="w-full md:w-auto border border-gray-200 rounded-xl px-3 py-2 text-xs md:text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-300"
+              value={date}
+              onChange={e=>setDate(e.target.value)}
+            />
+          </label>
+          <div className="text-xs md:text-sm text-gray-600 md:ml-auto">Present: <strong>{presentCount}</strong> / {students.length}</div>
         </div>
         {/* Actions and search */}
         <div className="space-y-2">

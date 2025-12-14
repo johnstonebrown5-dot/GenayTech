@@ -12,6 +12,7 @@ export default function TeacherResults(){
   const [summary, setSummary] = useState(null)
   const [gradeSummaries, setGradeSummaries] = useState([])
   const [gradeStudents, setGradeStudents] = useState([])
+  const [gradeSubjects, setGradeSubjects] = useState([]) // subjects included in grade combined list
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   // Grading bands (admin-defined). We'll pick the first subject with configured bands as the global for overall Grade.
@@ -120,8 +121,8 @@ export default function TeacherResults(){
 
   // Load grade-level summaries for selected block (grade view)
   useEffect(()=>{
-    if (viewMode !== 'grade'){ setGradeSummaries([]); return }
-    if (!selectedBlock || !currentGrade){ setGradeSummaries([]); return }
+    if (viewMode !== 'grade'){ setGradeSummaries([]); setGradeStudents([]); setGradeSubjects([]); return }
+    if (!selectedBlock || !currentGrade){ setGradeSummaries([]); setGradeStudents([]); setGradeSubjects([]); return }
     let mounted = true
     ;(async()=>{
       try{
@@ -135,6 +136,7 @@ export default function TeacherResults(){
         })
         const summaries = []
         const combined = []
+        const subjectsMap = new Map()
         for (const e of wanted){
           try{
             const id = e.id
@@ -144,6 +146,12 @@ export default function TeacherResults(){
             summaries.push({ classId, className, mean: data?.class_mean ?? null, size: Array.isArray(data?.students)? data.students.length : null })
             // collect student rows
             const studs = Array.isArray(data?.students) ? data.students : []
+            const subs = Array.isArray(data?.subjects) ? data.subjects : []
+            for (const s of subs){
+              if (s && s.id != null && !subjectsMap.has(String(s.id))){
+                subjectsMap.set(String(s.id), s)
+              }
+            }
             for (const s of studs){
               combined.push({
                 id: s.id,
@@ -152,6 +160,7 @@ export default function TeacherResults(){
                 className,
                 total: s.total ?? null,
                 average: s.average ?? null,
+                marks: s.marks || {},
               })
             }
           }catch{}
@@ -166,7 +175,11 @@ export default function TeacherResults(){
           if (t!==lastTotal){ lastPos = i+1; lastTotal = t }
           combined[i].position = lastPos
         }
-        if (mounted) { setGradeSummaries(summaries); setGradeStudents(combined) }
+        if (mounted) {
+          setGradeSummaries(summaries)
+          setGradeStudents(combined)
+          setGradeSubjects(Array.from(subjectsMap.values()))
+        }
       }catch(e){ if (mounted) setError(e?.response?.data?.detail || e?.message || 'Failed to load grade overview') }
       finally{ if (mounted) setLoading(false) }
     })()
@@ -256,29 +269,59 @@ export default function TeacherResults(){
   }
 
   return (
-    <div className="p-4 md:p-6 space-y-4 max-w-7xl mx-auto">
-      <div className="rounded-2xl border border-gray-200 bg-white shadow-sm">
+    <div className="px-0 md:px-6 py-4 md:py-6 space-y-4 max-w-7xl mx-auto min-h-[80vh]">
+      {/* Header */}
+      <div className="relative overflow-hidden rounded-2xl border border-gray-200 bg-gradient-to-r from-sky-50 via-white to-indigo-50 shadow-sm">
+        <div className="pointer-events-none absolute -right-12 -top-10 h-24 w-24 rounded-full bg-indigo-200/40 blur-2" />
         <div className="p-4 md:p-5 flex items-start justify-between gap-4">
           <div>
-            <h1 className="text-lg md:text-xl font-semibold tracking-tight">Results</h1>
-            <div className="text-xs md:text-sm text-gray-600">Published exams for Grade: <b>{currentGrade || '-'}</b></div>
+            <h1 className="text-base md:text-xl font-semibold tracking-tight text-gray-900">Results</h1>
+            <div className="text-[11px] md:text-xs text-gray-600">View published exams and grade overviews for Grade: <b>{currentGrade || '-'}</b></div>
           </div>
           <div className="w-full sm:w-auto grid grid-cols-1 sm:grid-cols-2 gap-2">
             <div className="flex items-center justify-end gap-2">
-              <button className={`px-2 py-1.5 text-xs rounded-full border ${viewMode==='class'? 'bg-gray-900 text-white border-gray-900':'border-gray-200'}`} onClick={()=>setViewMode('class')}>Class</button>
-              <button className={`px-2 py-1.5 text-xs rounded-full border ${viewMode==='grade'? 'bg-gray-900 text-white border-gray-900':'border-gray-200'}`} onClick={()=>setViewMode('grade')}>Grade</button>
+              <div className="inline-flex items-center rounded-full bg-white/70 border border-gray-200 p-0.5 shadow-sm">
+                <button
+                  className={`px-3 py-1.5 text-[11px] rounded-full transition ${viewMode==='class' ? 'bg-gray-900 text-white shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
+                  onClick={()=>setViewMode('class')}
+                >
+                  Class
+                </button>
+                <button
+                  className={`px-3 py-1.5 text-[11px] rounded-full transition ${viewMode==='grade' ? 'bg-gray-900 text-white shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
+                  onClick={()=>setViewMode('grade')}
+                >
+                  Grade
+                </button>
+              </div>
             </div>
             {viewMode==='class' ? (
               <label className="text-xs md:text-sm text-gray-700 flex items-center gap-2">
                 <span className="shrink-0">Class</span>
-                <select className="w-full sm:w-48 border border-gray-200 rounded-lg px-2 py-1.5 text-sm" value={selectedClass} onChange={e=>setSelectedClass(e.target.value)}>
+                <select
+                  className="w-full sm:w-48 border border-gray-200 rounded-xl px-3 py-2 text-xs md:text-sm bg-white disabled:bg-gray-50 disabled:text-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-300"
+                  value={selectedClass}
+                  onChange={e=>setSelectedClass(e.target.value)}
+                  disabled={loading || !classes.length}
+                >
+                  {(!classes.length && loading) && (
+                    <option value="">Loading classes…</option>
+                  )}
                   {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
               </label>
             ) : (
               <label className="text-xs md:text-sm text-gray-700 flex items-center gap-2">
                 <span className="shrink-0">Grade</span>
-                <select className="w-full sm:w-48 border border-gray-200 rounded-lg px-2 py-1.5 text-sm" value={selectedGrade} onChange={e=>setSelectedGrade(e.target.value)}>
+                <select
+                  className="w-full sm:w-48 border border-gray-200 rounded-xl px-3 py-2 text-xs md:text-sm bg-white disabled:bg-gray-50 disabled:text-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-300"
+                  value={selectedGrade}
+                  onChange={e=>setSelectedGrade(e.target.value)}
+                  disabled={loading || !uniqueGrades.length}
+                >
+                  {(!uniqueGrades.length && loading) && (
+                    <option value="">Loading grades…</option>
+                  )}
                   {uniqueGrades.map(g => <option key={g} value={g}>{g}</option>)}
                 </select>
               </label>
@@ -286,8 +329,13 @@ export default function TeacherResults(){
             {viewMode==='class' ? (
               <label className="text-xs md:text-sm text-gray-700 flex items-center gap-2">
                 <span className="shrink-0">Exam</span>
-                <select className="w-full sm:w-72 border border-gray-200 rounded-lg px-2 py-1.5 text-sm" value={selectedExam} onChange={e=>setSelectedExam(e.target.value)}>
-                  <option value="">Most recent published…</option>
+                <select
+                  className="w-full sm:w-72 border border-gray-200 rounded-xl px-3 py-2 text-xs md:text-sm bg-white disabled:bg-gray-50 disabled:text-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-300"
+                  value={selectedExam}
+                  onChange={e=>setSelectedExam(e.target.value)}
+                  disabled={loading || !publishedExams.length}
+                >
+                  <option value="">{loading && !publishedExams.length ? 'Loading exams…' : 'Most recent published…'}</option>
                   {publishedExams.map(ex => (
                     <option key={ex.id} value={ex.id}>{ex.name} • {ex.year} • T{ex.term} • {classNameById(ex.klass)}</option>
                   ))}
@@ -296,8 +344,13 @@ export default function TeacherResults(){
             ) : (
               <label className="text-xs md:text-sm text-gray-700 flex items-center gap-2">
                 <span className="shrink-0">Block</span>
-                <select className="w-full sm:w-72 border border-gray-200 rounded-lg px-2 py-1.5 text-sm" value={selectedBlock} onChange={e=>setSelectedBlock(e.target.value)}>
-                  <option value="">Select exam block…</option>
+                <select
+                  className="w-full sm:w-72 border border-gray-200 rounded-xl px-3 py-2 text-xs md:text-sm bg-white disabled:bg-gray-50 disabled:text-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-300"
+                  value={selectedBlock}
+                  onChange={e=>setSelectedBlock(e.target.value)}
+                  disabled={loading || !examBlocks.length}
+                >
+                  <option value="">{loading && !examBlocks.length ? 'Loading exam blocks…' : 'Select exam block…'}</option>
                   {examBlocks.map(b => (
                     <option key={b.key} value={b.key}>{b.label}</option>
                   ))}
@@ -308,22 +361,22 @@ export default function TeacherResults(){
         </div>
       </div>
 
-      {error && <div className="bg-red-50 text-red-700 text-sm p-2 rounded border border-red-200">{error}</div>}
+      {error && <div className="bg-red-50 text-red-700 text-xs md:text-sm px-3 py-2 rounded-2xl border border-red-200 shadow-sm">{error}</div>}
 
       {viewMode==='class' && !selectedExam ? (
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4 text-sm text-gray-600">No published exams found for this grade.</div>
+        <div className="bg-white/90 backdrop-blur rounded-2xl border border-gray-200 shadow-sm px-4 py-3 text-xs md:text-sm text-gray-600">No published exams found for this grade.</div>
       ) : viewMode==='class' && !summary ? (
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4">Loading…</div>
+        <div className="bg-white/90 backdrop-blur rounded-2xl border border-gray-200 shadow-sm px-4 py-3 text-sm text-gray-700">Loading…</div>
       ) : viewMode==='class' ? (
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm">
+        <div className="bg-white/95 backdrop-blur rounded-2xl border border-gray-200 shadow-sm">
           <div className="p-4 flex items-center justify-between">
-            <div className="text-sm md:text-base text-gray-700">{summary?.exam?.name || 'Exam'} • Year {summary?.exam?.year || ''} • T{summary?.exam?.term || ''}</div>
+            <div className="text-sm md:text-base text-gray-800 font-medium">{summary?.exam?.name || 'Exam'} • Year {summary?.exam?.year || ''} • T{summary?.exam?.term || ''}</div>
             <div className="flex items-center gap-2">
               {summary?.class_mean != null && (
-                <div className="text-sm mr-2">Class Mean: <b>{summary.class_mean}</b></div>
+                <div className="text-xs md:text-sm mr-2 text-gray-600">Class Mean: <b className="text-gray-900">{summary.class_mean}</b></div>
               )}
-              <button onClick={handleClassCSV} className="px-2 py-1 text-xs rounded border border-gray-200">Download CSV</button>
-              <button onClick={handleClassPrint} className="px-2 py-1 text-xs rounded border border-gray-200">Print</button>
+              <button onClick={handleClassCSV} className="px-3 py-1.5 text-[11px] rounded-full border border-gray-200 bg-white hover:bg-gray-50">Download CSV</button>
+              <button onClick={handleClassPrint} className="px-3 py-1.5 text-[11px] rounded-full border border-gray-200 bg-white hover:bg-gray-50">Print</button>
             </div>
           </div>
           <div className="overflow-auto -mx-2 md:mx-0">
@@ -358,15 +411,15 @@ export default function TeacherResults(){
           </div>
         </div>
       ) : (
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm">
+        <div className="bg-white/95 backdrop-blur rounded-2xl border border-gray-200 shadow-sm">
           <div className="p-4 flex items-center justify-between">
-            <div className="text-sm md:text-base text-gray-700">Grade Overview {selectedBlock && `• ${examBlocks.find(b=>b.key===selectedBlock)?.label}`}</div>
+            <div className="text-sm md:text-base text-gray-800 font-medium">Grade Overview {selectedBlock && `• ${examBlocks.find(b=>b.key===selectedBlock)?.label}`}</div>
             <div className="flex items-center gap-2">
               {gradeSummaries.length>0 && (
-                <div className="text-sm text-gray-600 mr-2">Classes: <b>{gradeSummaries.length}</b></div>
+                <div className="text-xs md:text-sm text-gray-600 mr-2">Classes: <b className="text-gray-900">{gradeSummaries.length}</b></div>
               )}
-              <button onClick={handleGradeCSV} className="px-2 py-1 text-xs rounded border border-gray-200">Download CSV</button>
-              <button onClick={handleGradePrint} className="px-2 py-1 text-xs rounded border border-gray-200">Print</button>
+              <button onClick={handleGradeCSV} className="px-3 py-1.5 text-[11px] rounded-full border border-gray-200 bg-white hover:bg-gray-50">Download CSV</button>
+              <button onClick={handleGradePrint} className="px-3 py-1.5 text-[11px] rounded-full border border-gray-200 bg-white hover:bg-gray-50">Print</button>
             </div>
           </div>
           <div className="overflow-auto">
@@ -388,7 +441,7 @@ export default function TeacherResults(){
                 ))}
                 {gradeSummaries.length===0 && (
                   <tr>
-                    <td colSpan="3" className="border border-gray-200 px-2 py-4 text-center text-gray-500">No data to show</td>
+                    <td colSpan="3" className="border border-gray-200 px-2 py-4 text-center text-gray-500">{loading ? 'Loading…' : 'No data to show'}</td>
                   </tr>
                 )}
               </tbody>
@@ -403,6 +456,9 @@ export default function TeacherResults(){
                     <th className="border border-gray-200 px-2 py-2 text-left w-24">Position</th>
                     <th className="border border-gray-200 px-2 py-2 text-left w-56">Student</th>
                     <th className="border border-gray-200 px-2 py-2 text-left w-48">Class</th>
+                    {gradeSubjects.map(sub => (
+                      <th key={sub.id} className="border border-gray-200 px-2 py-2 text-left">{sub.name || sub.code}</th>
+                    ))}
                     <th className="border border-gray-200 px-2 py-2 text-left">Total</th>
                     <th className="border border-gray-200 px-2 py-2 text-left">Grade</th>
                   </tr>
@@ -413,12 +469,15 @@ export default function TeacherResults(){
                       <td className="border border-gray-200 px-2 py-2">{s.position}</td>
                       <td className="border border-gray-200 px-2 py-2">{s.name}</td>
                       <td className="border border-gray-200 px-2 py-2">{s.className}</td>
+                      {gradeSubjects.map(sub => (
+                        <td key={sub.id} className="border border-gray-200 px-2 py-2">{s.marks?.[String(sub.id)] ?? '-'}</td>
+                      ))}
                       <td className="border border-gray-200 px-2 py-2 font-medium">{s.total ?? '-'}</td>
                       <td className="border border-gray-200 px-2 py-2">{toGrade(s.average)}</td>
                     </tr>
                   ))}
                   {gradeStudents.length===0 && (
-                    <tr><td colSpan="5" className="border border-gray-200 px-2 py-4 text-center text-gray-500">No students to show</td></tr>
+                    <tr><td colSpan={5 + gradeSubjects.length} className="border border-gray-200 px-2 py-4 text-center text-gray-500">{loading ? 'Loading…' : 'No students to show'}</td></tr>
                   )}
                 </tbody>
               </table>
