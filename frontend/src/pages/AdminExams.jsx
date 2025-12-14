@@ -54,11 +54,7 @@ export default function AdminExams(){
   const [dayOpen, setDayOpen] = useState(false)
   const [dayKey, setDayKey] = useState('')
   const [dayItems, setDayItems] = useState([])
-
-  // Navigate to CBC Competencies (Curriculum) page
-  const handleCBCCompetencies = () => {
-    navigate('/admin/curriculum')
-  }
+  const [showFilters, setShowFilters] = useState(true)
 
   const bulkPublishExams = async () => {
     const ids = Array.from(selected)
@@ -356,39 +352,43 @@ export default function AdminExams(){
           <div className="font-medium text-gray-800">Manage Exams</div>
           <div className="flex items-center gap-2 w-full sm:w-auto overflow-x-auto -mx-1 px-1">
             <button
-              onClick={handleCBCCompetencies}
-              className="shrink-0 flex-1 sm:flex-none inline-flex items-center justify-center gap-0 sm:gap-2 bg-purple-600 text-white px-2.5 sm:px-3.5 py-2 rounded-lg hover:bg-purple-700 transition-colors"
-              aria-label="CBC Competencies"
-            >
-              <span>📚</span>
-              <span className="hidden sm:inline text-sm font-semibold">CBC Competencies</span>
-            </button>
-            <button
               onClick={()=>setShowCalendar(true)}
               className="shrink-0 flex-1 sm:flex-none inline-flex items-center justify-center gap-0 sm:gap-2 bg-gray-800 text-white px-2.5 sm:px-3.5 py-2 rounded-lg hover:bg-gray-900"
               aria-label="View Calendar"
             >
-              <span>📅</span>
-              <span className="hidden sm:inline text-sm font-semibold">View Calendar</span>
+              <span className="text-xs sm:text-sm font-semibold">Exam Calendar</span>
             </button>
             <button
               onClick={()=>setShowCreateExam(true)}
               className="shrink-0 flex-1 sm:flex-none inline-flex items-center justify-center gap-0 sm:gap-2 bg-blue-600 text-white px-2.5 sm:px-3.5 py-2 rounded-lg hover:bg-blue-700"
               aria-label="Create Exam"
             >
-              <span>➕</span>
-              <span className="hidden sm:inline text-sm font-semibold">Create Exam</span>
+              <span className="text-xs sm:text-sm font-semibold">New Exam</span>
             </button>
           </div>
         </div>
 
         <div className="bg-white rounded-2xl shadow-card border border-gray-200 p-4">
-          <h2 className="text-base font-semibold mb-2">Exams</h2>
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="text-base font-semibold">Exams</h2>
+            <button
+              type="button"
+              onClick={() => setShowFilters(v => !v)}
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-full border border-gray-200 text-xs text-gray-700 hover:bg-gray-50"
+              aria-label={showFilters ? 'Hide filters' : 'Show filters'}
+            >
+              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 5h16M6 12h12M10 19h4" />
+              </svg>
+              <span className="hidden xs:inline">Filters</span>
+              <span className="xs:hidden">Filter</span>
+            </button>
+          </div>
           {banner && (
             <div className="mb-2 text-sm bg-blue-50 text-blue-800 px-3 py-2 rounded">{banner}</div>
           )}
           {/* Filters */}
-          <div className="grid gap-2 md:gap-3 md:grid-cols-5 mb-3">
+          <div className={`${showFilters ? '' : 'hidden'} grid gap-2 md:gap-3 md:grid-cols-5 mb-3`}>
             <label className="grid gap-1">
               <span className="text-xs text-gray-600">Search</span>
               <div className="relative">

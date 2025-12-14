@@ -24,6 +24,9 @@ export default function AdminClasses(){
   const [filterStream, setFilterStream] = useState('')
   const [search, setSearch] = useState('')
   const [streamStats, setStreamStats] = useState({}) // { [streamId]: { classes: number, students: number, loading: boolean } }
+  const [showFilters, setShowFilters] = useState(true)
+  const [showClassesSection, setShowClassesSection] = useState(true)
+  const [showStreamsSection, setShowStreamsSection] = useState(true)
 
   const { showSuccess, showError } = useNotification()
 
@@ -243,38 +246,38 @@ export default function AdminClasses(){
     })()
     return (
       <div key={c.id} className={`group relative bg-white border ${pal.border} rounded-lg shadow-sm hover:shadow-md transition`}>
-        <div className="p-4">
-          <div className="flex items-start justify-between">
-            <Link to={`/admin/classes/${c.id}`} className="text-base font-semibold text-gray-900 hover:text-blue-700">
+        <div className="p-3 sm:p-4">
+          <div className="flex items-start justify-between gap-2">
+            <Link to={`/admin/classes/${c.id}`} className="text-sm sm:text-base font-semibold text-gray-900 hover:text-blue-700">
               {c.name}
             </Link>
-            <span className={`ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${pal.badgeBg} ${pal.badgeText}`}>
+            <span className={`ml-2 inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium ${pal.badgeBg} ${pal.badgeText}`}>
               {c.grade_level}
             </span>
           </div>
-          <div className="mt-2 text-sm text-gray-600">Stream: {streamName}</div>
-          <div className="mt-1 text-sm text-gray-600">Class Teacher: {teacherName}</div>
-          <div className="mt-3 flex flex-wrap gap-1">
+          <div className="mt-1 text-xs text-gray-600">Stream: {streamName}</div>
+          <div className="mt-0.5 text-xs text-gray-600">Class Teacher: {teacherName}</div>
+          <div className="mt-2 flex flex-wrap gap-1">
             {Array.isArray(c.subjects) && c.subjects.length>0 ? (
               <>
                 {c.subjects.slice(0,4).map(s => (
-                  <span key={s.id} className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-gray-100 text-gray-700">{s.code}</span>
+                  <span key={s.id} className="inline-flex items-center px-2 py-0.5 rounded text-[11px] bg-gray-100 text-gray-700">{s.code}</span>
                 ))}
                 {c.subjects.length>4 && (
-                  <span className="text-xs text-gray-500">+{c.subjects.length-4} more</span>
+                  <span className="text-[11px] text-gray-500">+{c.subjects.length-4} more</span>
                 )}
               </>
             ) : (
-              <span className="text-xs text-gray-400">No subjects</span>
+              <span className="text-[11px] text-gray-400">No subjects</span>
             )}
           </div>
         </div>
-        <div className="px-4 py-3 border-t bg-gray-50 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
+        <div className="px-3 sm:px-4 py-2.5 border-t bg-gray-50 flex items-center justify-between gap-2 sm:gap-3">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-[11px] sm:text-xs">
             <Link to={`/admin/classes/${c.id}?tab=results`} className="text-violet-700 hover:underline">View Results</Link>
             <Link to={`/admin/classes/${c.id}?tab=subjects`} className="text-amber-700 hover:underline">Assign Subjects</Link>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-[11px] sm:text-xs">
             <button
               onClick={() => handlePromote(c)}
               className="text-emerald-700 hover:underline"
@@ -344,13 +347,25 @@ export default function AdminClasses(){
       <div>
         {busy && <LoadingOverlay message={busyMessage} transparent />}
         <div className="space-y-6">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
             <h1 className="text-xl font-semibold tracking-tight">Manage Classes</h1>
             <div className="text-sm text-gray-500">Create and organize classes, subjects, and streams</div>
           </div>
 
           {/* Filters */}
-          <div className="bg-white rounded-lg shadow p-4 border border-gray-100 grid gap-3 md:grid-cols-4">
+          <div className="flex items-center justify-between md:hidden">
+            <div className="text-sm font-medium text-gray-700">Filters</div>
+            <button
+              type="button"
+              onClick={() => setShowFilters(v => !v)}
+              className="text-sm inline-flex items-center gap-1 px-3 py-1.5 border rounded-md bg-white shadow-sm"
+            >
+              <span>{showFilters ? 'Hide' : 'Show'} Filters</span>
+              <span className="text-xs text-gray-500">▾</span>
+            </button>
+          </div>
+
+          <div className={`${showFilters ? '' : 'hidden'} md:grid bg-white rounded-lg shadow p-4 border border-gray-100 grid gap-3 md:grid-cols-4`}>
             <label className="text-sm">
               Grade
               <select value={filterGrade} onChange={e=>setFilterGrade(e.target.value)} className="border p-2 rounded w-full mt-1">
@@ -382,102 +397,139 @@ export default function AdminClasses(){
           <div className="grid gap-4 md:grid-cols-3">
             <div className="bg-white rounded-lg shadow p-4 border border-gray-100 flex items-start justify-between">
               <div>
-                <div className="font-medium">Classes</div>
-                <p className="text-sm text-gray-500">Create or edit a class and assign subjects.</p>
+                <div className="font-semibold text-sm text-gray-900">Classes</div>
+                <p className="text-xs text-gray-500 mt-1">Create or edit a class and assign subjects.</p>
               </div>
               <button
                 aria-label="Add Class"
                 onClick={()=>{ setEditing(null); setForm({ grade_level:'', stream: '', subject_ids:[] }); setShowClassModal(true) }}
-                className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
-              >{editing? 'Edit Class' : 'Add Class'}</button>
+                className="inline-flex items-center gap-1 rounded-full bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 text-xs font-semibold shadow-md focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-1 transition-transform hover:scale-105"
+              >
+                <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-white/15 text-base leading-none">+</span>
+                <span>{editing? 'Edit Class' : 'Add Class'}</span>
+              </button>
             </div>
 
             <div className="bg-white rounded-lg shadow p-4 border border-gray-100 flex items-start justify-between">
               <div>
-                <div className="font-medium">Create Subject</div>
-                <p className="text-sm text-gray-500">Add a new subject to the curriculum.</p>
+                <div className="font-semibold text-sm text-gray-900">Create Subject</div>
+                <p className="text-xs text-gray-500 mt-1">Add a new subject to the curriculum.</p>
               </div>
               <button
                 aria-label="Add Subject"
                 onClick={()=>{ setNewSubject({ code:'', name:'' }); setShowSubjectModal(true) }}
-                className="inline-flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-green-400"
-              >Add Subject</button>
+                className="inline-flex items-center gap-1 rounded-full bg-green-600 hover:bg-green-700 text-white px-3 py-2 text-xs font-semibold shadow-md focus:outline-none focus:ring-2 focus:ring-green-400 focus:ring-offset-1 transition-transform hover:scale-105"
+              >
+                <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-white/15 text-base leading-none">+</span>
+                <span>Add Subject</span>
+              </button>
             </div>
 
             <div className="bg-white rounded-lg shadow p-4 border border-gray-100 flex items-start justify-between">
               <div>
-                <div className="font-medium">Manage Streams</div>
-                <p className="text-sm text-gray-500">Add streams such as North, A, B, etc.</p>
+                <div className="font-semibold text-sm text-gray-900">Manage Streams</div>
+                <p className="text-xs text-gray-500 mt-1">Add streams such as North, A, B, etc.</p>
               </div>
               <button
                 aria-label="Add Stream"
                 onClick={() => { setNewStream({ name: '' }); setShowStreamModal(true); }}
-                className="inline-flex items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-400"
-              >Add Stream</button>
+                className="inline-flex items-center gap-1 rounded-full bg-purple-600 hover:bg-purple-700 text-white px-3 py-2 text-xs font-semibold shadow-md focus:outline-none focus:ring-2 focus:ring-purple-400 focus:ring-offset-1 transition-transform hover:scale-105"
+              >
+                <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-white/15 text-base leading-none">+</span>
+                <span>Add Stream</span>
+              </button>
             </div>
           </div>
 
           <div className="bg-white rounded-lg shadow border border-gray-100 overflow-hidden">
-            <div className="px-4 py-3 border-b bg-gray-50"><h2 className="font-medium">Classes</h2></div>
-            {loading ? (
-              <div className="p-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                {Array.from({ length: 6 }).map((_, i) => (
-                  <div key={i} className="bg-white border rounded-lg shadow-sm p-4 animate-pulse">
-                    <div className="h-5 w-2/3 bg-gray-200 rounded" />
-                    <div className="mt-2 h-4 w-1/3 bg-gray-200 rounded" />
-                    <div className="mt-4 flex gap-2">
-                      <div className="h-5 w-12 bg-gray-200 rounded" />
-                      <div className="h-5 w-10 bg-gray-200 rounded" />
-                      <div className="h-5 w-14 bg-gray-200 rounded" />
+            <div className="px-4 py-3 border-b bg-gray-50 flex items-center justify-between">
+              <h2 className="font-medium text-sm text-gray-900">Classes</h2>
+              <button
+                type="button"
+                onClick={() => setShowClassesSection(v => !v)}
+                className="inline-flex items-center justify-center h-7 w-7 rounded-full border border-gray-200 bg-white text-gray-500 hover:bg-gray-100 text-xs"
+                aria-label={showClassesSection ? 'Collapse classes' : 'Expand classes'}
+              >
+                <span className={`transform transition-transform ${showClassesSection ? 'rotate-0' : '-rotate-90'}`}>▾</span>
+              </button>
+            </div>
+            {showClassesSection && (
+              <>
+                {loading ? (
+                  <div className="p-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                    {Array.from({ length: 6 }).map((_, i) => (
+                      <div key={i} className="bg-white border rounded-lg shadow-sm p-4 animate-pulse">
+                        <div className="h-5 w-2/3 bg-gray-200 rounded" />
+                        <div className="mt-2 h-4 w-1/3 bg-gray-200 rounded" />
+                        <div className="mt-4 flex gap-2">
+                          <div className="h-5 w-12 bg-gray-200 rounded" />
+                          <div className="h-5 w-10 bg-gray-200 rounded" />
+                          <div className="h-5 w-14 bg-gray-200 rounded" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : filteredClasses.length === 0 ? (
+                  <div className="p-6 text-sm text-gray-500">No classes yet. Click "Add Class" to create your first class.</div>
+                ) : (
+                  <div className="p-4">
+                    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 transition-opacity duration-300">
+                      {filteredClasses.map(renderCard)}
                     </div>
                   </div>
-                ))}
-              </div>
-            ) : filteredClasses.length === 0 ? (
-              <div className="p-6 text-sm text-gray-500">No classes yet. Click "Add Class" to create your first class.</div>
-            ) : (
-              <div className="p-4">
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 transition-opacity duration-300">
-                  {filteredClasses.map(renderCard)}
-                </div>
-              </div>
+                )}
+              </>
             )}
           </div>
 
           <div className="bg-white rounded-lg shadow border border-gray-100 overflow-hidden">
-            <div className="px-4 py-3 border-b bg-gray-50"><h2 className="font-medium">Streams</h2></div>
-            {loading ? (
-              <div className="p-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                {Array.from({ length: 4 }).map((_, i) => (
-                  <div key={i} className="bg-white border rounded-lg shadow-sm p-4 animate-pulse h-24" />
-                ))}
-              </div>
-            ) : streams.length === 0 ? (
-              <div className="p-6 text-sm text-gray-500">No streams yet. Click "Add Stream" to create one.</div>
-            ) : (
-              <div className="p-4">
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                  {streams.map(s => {
-                    const st = streamStats[String(s.id)] || { classes: 0, students: 0, loading: true }
-                    return (
-                      <div key={s.id} className="bg-white border rounded-lg shadow-sm p-4 flex flex-col gap-2">
-                        <div className="flex items-center justify-between">
-                          <div className="text-base font-semibold text-gray-900">{s.name}</div>
-                          <div className="text-xs text-gray-500">ID: {s.id}</div>
-                        </div>
-                        <div className="text-sm text-gray-700 flex items-center gap-4">
-                          <span>Classes: <b>{st.classes}</b></span>
-                          <span>Students: <b>{st.loading ? '...' : st.students}</b></span>
-                        </div>
-                        <div className="mt-2 flex items-center gap-3 justify-end">
-                          <button onClick={()=>editStream(s)} className="text-blue-600 hover:underline">Edit</button>
-                          <button onClick={()=>delStream(s.id)} className="text-red-600 hover:underline">Delete</button>
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
+            <div className="px-4 py-3 border-b bg-gray-50 flex items-center justify-between">
+              <h2 className="font-medium text-sm text-gray-900">Streams</h2>
+              <button
+                type="button"
+                onClick={() => setShowStreamsSection(v => !v)}
+                className="inline-flex items-center justify-center h-7 w-7 rounded-full border border-gray-200 bg-white text-gray-500 hover:bg-gray-100 text-xs"
+                aria-label={showStreamsSection ? 'Collapse streams' : 'Expand streams'}
+              >
+                <span className={`transform transition-transform ${showStreamsSection ? 'rotate-0' : '-rotate-90'}`}>▾</span>
+              </button>
+            </div>
+            {showStreamsSection && (
+              <>
+                {loading ? (
+                  <div className="p-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                    {Array.from({ length: 4 }).map((_, i) => (
+                      <div key={i} className="bg-white border rounded-lg shadow-sm p-4 animate-pulse h-24" />
+                    ))}
+                  </div>
+                ) : streams.length === 0 ? (
+                  <div className="p-6 text-sm text-gray-500">No streams yet. Click "Add Stream" to create one.</div>
+                ) : (
+                  <div className="p-4">
+                    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                      {streams.map(s => {
+                        const st = streamStats[String(s.id)] || { classes: 0, students: 0, loading: true }
+                        return (
+                          <div key={s.id} className="bg-white border rounded-lg shadow-sm p-4 flex flex-col gap-2">
+                            <div className="flex items-center justify-between">
+                              <div className="text-base font-semibold text-gray-900">{s.name}</div>
+                              <div className="text-xs text-gray-500">ID: {s.id}</div>
+                            </div>
+                            <div className="text-sm text-gray-700 flex items-center gap-4">
+                              <span>Classes: <b>{st.classes}</b></span>
+                              <span>Students: <b>{st.loading ? '...' : st.students}</b></span>
+                            </div>
+                            <div className="mt-2 flex items-center gap-3 justify-end">
+                              <button onClick={()=>editStream(s)} className="text-blue-600 hover:underline">Edit</button>
+                              <button onClick={()=>delStream(s.id)} className="text-red-600 hover:underline">Delete</button>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>

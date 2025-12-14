@@ -412,20 +412,38 @@ export default function AdminStudents(){
           + Enroll
         </button>
 
-        {/* Tabs */}
-        <div className="flex items-center gap-1.5 overflow-x-auto">
+        {/* Tabs: Active / Graduated / Inactive */}
+        <div className="mt-2 inline-flex w-full max-w-xs rounded-full bg-gray-100 p-0.5 shadow-inner">
           <button
-            className={`px-2.5 py-1 rounded-full border text-xs shrink-0 ${tab==='active'?'bg-blue-600 text-white border-blue-600':'bg-white text-gray-700'}`}
+            className={`flex-1 px-2.5 py-1.5 text-[11px] font-medium rounded-full border transition-colors ${
+              tab==='active'
+                ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                : 'bg-transparent text-gray-700 border-transparent hover:bg-white'
+            }`}
             onClick={()=>{ setTab('active'); setSearchTerm(''); setSearchDraft(''); }}
-          >Active</button>
+          >
+            Active
+          </button>
           <button
-            className={`px-2.5 py-1 rounded-full border text-xs shrink-0 ${tab==='graduated'?'bg-blue-600 text-white border-blue-600':'bg-white text-gray-700'}`}
+            className={`flex-1 px-2.5 py-1.5 text-[11px] font-medium rounded-full border transition-colors ${
+              tab==='graduated'
+                ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                : 'bg-transparent text-gray-700 border-transparent hover:bg-white'
+            }`}
             onClick={()=>{ setTab('graduated'); setSearchTerm(''); setSearchDraft(''); }}
-          >Graduated</button>
+          >
+            Graduated
+          </button>
           <button
-            className={`px-2.5 py-1 rounded-full border text-xs shrink-0 ${tab==='inactive'?'bg-blue-600 text-white border-blue-600':'bg-white text-gray-700'}`}
+            className={`flex-1 px-2.5 py-1.5 text-[11px] font-medium rounded-full border transition-colors ${
+              tab==='inactive'
+                ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                : 'bg-transparent text-gray-700 border-transparent hover:bg-white'
+            }`}
             onClick={()=>{ setTab('inactive'); setSearchTerm(''); setSearchDraft(''); }}
-          >Inactive</button>
+          >
+            Inactive
+          </button>
         </div>
 
         {/* Mobile toolbar */}

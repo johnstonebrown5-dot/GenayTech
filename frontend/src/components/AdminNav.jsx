@@ -7,7 +7,6 @@ const items = [
   { to: '/admin/students', label: 'Students' },
   { to: '/admin/teachers', label: 'Teachers' },
   { to: '/admin/classes', label: 'Classes' },
-  { to: '/admin/curriculum', label: 'CBC Competencies' },
   { to: '/admin/reports', label: 'Reports' },
   { to: '/admin/school', label: 'School' },
   { to: '/admin/users', label: 'User Management' },

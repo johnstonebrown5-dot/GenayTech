@@ -46,7 +46,6 @@ import AdminTeacherProfile from './pages/AdminTeacherProfile'
 import AdminStudentDashboard from './pages/AdminStudentDashboard'
 import AdminStudentInvoices from './pages/AdminStudentInvoices'
 import AdminStudentPayments from './pages/AdminStudentPayments'
-import AdminCurriculum from './pages/AdminCurriculum'
 import AdminReports from './pages/AdminReports'
 import AdminClasses from './pages/AdminClasses'
 import AdminClassProfile from './pages/AdminClassProfile'
@@ -219,7 +218,6 @@ export default function App() {
               <Route path="classes/:id" element={<AdminClassProfile/>} />
               <Route path="classes/:id/print-report-cards" element={<AdminClassPrintReportCards/>} />
               <Route path="fees" element={<AdminFees/>} />
-              <Route path="curriculum" element={<AdminCurriculum/>} />
               <Route path="subjects" element={<AdminSubjects/>} />
               <Route path="subjects/:id" element={<AdminSubjectProfile/>} />
               <Route path="exams" element={<AdminExams/>} />
