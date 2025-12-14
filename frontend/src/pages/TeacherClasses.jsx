@@ -136,11 +136,20 @@ export default function TeacherClasses(){
   }
 
   return (
-    <div className="p-6 space-y-4">
-      <div className="text-lg font-semibold">My Classes</div>
+    <div className="p-2 md:p-3 space-y-2 md:space-y-3">
+      {/* Header */}
+      <div className="relative overflow-hidden rounded-2xl border border-gray-200 bg-gradient-to-r from-indigo-500 via-indigo-600 to-sky-500 shadow-md">
+        <div className="pointer-events-none absolute -right-16 -top-16 h-32 w-32 rounded-full bg-white/15 blur-2" />
+        <div className="px-3 py-2.5 md:px-4 md:py-3 flex items-center justify-between gap-3">
+          <div>
+            <div className="text-base md:text-lg font-semibold tracking-tight text-white">My Classes</div>
+            <div className="text-[11px] md:text-xs text-indigo-100">View your assigned classes and students.</div>
+          </div>
+        </div>
+      </div>
 
       {loading && (
-        <div className="bg-white p-4 rounded shadow">
+        <div className="bg-white p-3 rounded-2xl shadow">
           <div className="animate-pulse space-y-3">
             <div className="h-5 w-40 bg-gray-200 rounded" />
             <div className="h-8 w-full bg-gray-100 rounded" />
@@ -155,11 +164,16 @@ export default function TeacherClasses(){
       )}
       {error && <div className="bg-red-50 text-red-700 p-3 rounded">{error}</div>}
 
-      <div className="bg-white rounded-2xl shadow p-4 space-y-3 border border-gray-100">
+      <div className="bg-white rounded-2xl shadow-md p-2.5 md:p-3 space-y-2.5 md:space-y-3 border border-gray-100">
         {/* Top toolbar */}
         <div className="flex flex-wrap items-center gap-2">
           <label className="text-sm text-gray-600">Class</label>
-          <select className="border p-2 rounded w-full sm:w-auto focus:ring-2 focus:ring-indigo-200" value={selected} onChange={e=>setSelected(e.target.value)} disabled={loading}>
+          <select
+            className="border border-gray-200 rounded-xl px-3 py-2 w-full sm:w-auto bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-300"
+            value={selected}
+            onChange={e=>setSelected(e.target.value)}
+            disabled={loading}
+          >
             {classes.map(c=> <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
           {loadingStudents && (
@@ -224,8 +238,8 @@ export default function TeacherClasses(){
 
         {/* Filters */}
         <div className="flex flex-wrap items-center gap-2">
-          <input className="border p-2 rounded w-full sm:w-56" placeholder="Search name or admission..." value={search} onChange={e=>setSearch(e.target.value)} />
-          <select className="border p-2 rounded w-full sm:w-auto" value={gender} onChange={e=>setGender(e.target.value)}>
+          <input className="border px-3 py-2 rounded w-full sm:w-56" placeholder="Search name or admission..." value={search} onChange={e=>setSearch(e.target.value)} />
+          <select className="border px-3 py-2 rounded w-full sm:w-auto" value={gender} onChange={e=>setGender(e.target.value)}>
             <option value="">All Genders</option>
             <option value="Male">Male</option>
             <option value="Female">Female</option>

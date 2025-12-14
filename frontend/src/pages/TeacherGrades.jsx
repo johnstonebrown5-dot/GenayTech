@@ -935,21 +935,44 @@ export default function TeacherGrades(){
   }, [selectedClass, selectedSubject, selectedExamId, students, marks, invalid])
 
   return (
-    <div className="p-4 md:p-6 space-y-4 max-w-4xl mx-auto pb-28 md:pb-0 min-h-screen">
+    <div className="p-3 md:p-4 space-y-3 md:space-y-4 max-w-4xl mx-auto pb-24 md:pb-0 min-h-screen">
       {/* Header */}
-      <div className="rounded-2xl border border-gray-200 bg-gradient-to-r from-sky-50 via-white to-indigo-50 shadow-sm">
-        <div className="p-4 md:p-5 flex items-center justify-between">
+      <div className="relative overflow-hidden rounded-2xl border border-gray-200 bg-gradient-to-r from-indigo-500 via-indigo-600 to-sky-500 shadow-md">
+        <div className="pointer-events-none absolute -right-16 -top-16 h-40 w-40 rounded-full bg-white/15 blur-2" />
+        <div className="p-3 md:p-4 flex items-center justify-between gap-3">
           <div>
-            <div className="text-lg md:text-xl font-semibold tracking-tight text-gray-900">Input Grades</div>
-            <div className="text-xs text-gray-600">Enter and submit exam results for your class</div>
+            <div className="text-lg md:text-xl font-semibold tracking-tight text-white">Input Grades</div>
+            <div className="text-xs md:text-sm text-indigo-100">Enter and submit exam results for your class</div>
           </div>
           <div className="hidden md:flex items-center gap-2">
-            <button onClick={()=>setUnitModal(true)} type="button" className="text-xs px-2 py-1 rounded border bg-white hover:bg-gray-50">Input: {inputAs==='percent' ? 'Percentage (%)' : 'Marks'}</button>
-            <button onClick={()=>setControlsOpen(v=>!v)} className="text-sm px-3 py-1.5 rounded-lg bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-sm">{controlsOpen ? 'Hide Options' : 'Change Selection'}</button>
+            <button
+              onClick={()=>setUnitModal(true)}
+              type="button"
+              className="text-xs px-3 py-1.5 rounded-full bg-white/90 text-indigo-700 border border-white/70 hover:bg-white shadow-sm"
+            >
+              Input: {inputAs==='percent' ? 'Percentage (%)' : 'Marks'}
+            </button>
+            <button
+              onClick={()=>setControlsOpen(v=>!v)}
+              className="text-xs md:text-sm px-3 py-1.5 rounded-full bg-indigo-900/80 text-white border border-white/30 hover:bg-indigo-900 shadow-sm"
+            >
+              {controlsOpen ? 'Hide Options' : 'Change Selection'}
+            </button>
           </div>
-          <div className="md:hidden flex items-center gap-2">
-            <button onClick={()=>setUnitModal(true)} type="button" className="text-[11px] px-2 py-1 rounded border bg-white">{inputAs==='percent' ? '% Input' : 'Marks'}</button>
-            <button onClick={()=>setControlsOpen(v=>!v)} className="text-xs px-2 py-1.5 rounded-lg bg-indigo-600 text-white shadow">{controlsOpen ? 'Hide' : 'Change'}</button>
+          <div className="md:hidden flex items-center gap-1.5">
+            <button
+              onClick={()=>setUnitModal(true)}
+              type="button"
+              className="text-[11px] px-2.5 py-1 rounded-full bg-white/90 text-indigo-700 border border-white/80"
+            >
+              {inputAs==='percent' ? '% Input' : 'Marks'}
+            </button>
+            <button
+              onClick={()=>setControlsOpen(v=>!v)}
+              className="text-[11px] px-2.5 py-1.5 rounded-full bg-indigo-900/90 text-white border border-white/30 shadow-sm"
+            >
+              {controlsOpen ? 'Hide' : 'Change'}
+            </button>
           </div>
         </div>
       </div>
@@ -971,42 +994,64 @@ export default function TeacherGrades(){
 
       {/* Controls */}
       {controlsOpen && (
-      <div className="rounded-2xl border border-gray-200 bg-white shadow-sm p-4 md:p-5 space-y-4">
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-          <div className="grid gap-1">
-            <label className="text-xs text-gray-600">Class</label>
-            <select className="border p-2 rounded focus:ring-2 focus:ring-indigo-200" value={selectedClass} onChange={e=>{ setSelectedClass(e.target.value); setControlsOpen(true) }}>
+      <div className="rounded-2xl border border-gray-100 bg-white/90 backdrop-blur shadow-md p-3 md:p-4 space-y-3 md:space-y-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 md:gap-3">
+          <div className="grid gap-1.5">
+            <label className="text-xs font-medium text-gray-600">Class</label>
+            <select
+              className="border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-300"
+              value={selectedClass}
+              onChange={e=>{ setSelectedClass(e.target.value); setControlsOpen(true) }}
+            >
               {classes.map(c=> <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </div>
-          <div className="grid gap-1">
-            <label className="text-xs text-gray-600">Subject</label>
-            <select className="border p-2 rounded focus:ring-2 focus:ring-indigo-200" value={selectedSubject} onChange={e=>setSelectedSubject(e.target.value)}>
+          <div className="grid gap-1.5">
+            <label className="text-xs font-medium text-gray-600">Subject</label>
+            <select
+              className="border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-300"
+              value={selectedSubject}
+              onChange={e=>setSelectedSubject(e.target.value)}
+            >
               {subjects.map(s=> <option key={s.id} value={s.id}>{s.code} - {s.name}</option>)}
             </select>
           </div>
           {/* Component (Paper) selector if subject has components */}
           {entryMode === 'single' && (
-            <div className="grid gap-1">
-              <label className="text-xs text-gray-600">Paper (Component)</label>
-              <select className="border p-2 rounded focus:ring-2 focus:ring-indigo-200" value={selectedComponentId} onChange={e=>setSelectedComponentId(e.target.value)}>
+            <div className="grid gap-1.5">
+              <label className="text-xs font-medium text-gray-600">Paper (Component)</label>
+              <select
+                className="border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-300"
+                value={selectedComponentId}
+                onChange={e=>setSelectedComponentId(e.target.value)}
+              >
                 {components.length === 0 && <option value="">(No papers) Whole Subject</option>}
                 {components.map(c=> <option key={c.id} value={c.id}>{c.code} - {c.name}</option>)}
               </select>
             </div>
           )}
           {/* Entry mode */}
-          <div className="grid gap-1">
-            <label className="text-xs text-gray-600">Entry Mode</label>
-            <select className="border p-2 rounded focus:ring-2 focus:ring-indigo-200" value={entryMode} onChange={e=>setEntryMode(e.target.value)}>
+          <div className="grid gap-1.5">
+            <label className="text-xs font-medium text-gray-600">Entry Mode</label>
+            <select
+              className="border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-300"
+              value={entryMode}
+              onChange={e=>setEntryMode(e.target.value)}
+            >
               <option value="single">Single Paper</option>
               <option value="all">All Papers</option>
             </select>
           </div>
-          <div className="grid gap-1">
-            <label className="text-xs text-gray-600">Input Unit</label>
+          <div className="grid gap-1.5">
+            <label className="text-xs font-medium text-gray-600">Input Unit</label>
             <div className="flex items-center gap-2">
-              <button type="button" onClick={()=>setUnitModal(true)} className="border rounded px-2 py-1 text-xs bg-white hover:bg-gray-50">{inputAs==='percent' ? 'Percentage (%)' : 'Marks'}</button>
+              <button
+                type="button"
+                onClick={()=>setUnitModal(true)}
+                className="inline-flex items-center rounded-full border border-gray-200 px-3 py-1 text-[11px] bg-white hover:bg-gray-50"
+              >
+                {inputAs==='percent' ? 'Percentage (%)' : 'Marks'}
+              </button>
               <span className="text-[11px] text-gray-500">Change how you type values</span>
             </div>
           </div>
@@ -1014,7 +1059,15 @@ export default function TeacherGrades(){
           {entryMode === 'single' ? (
             <div className="grid gap-1">
               <label className="text-xs text-gray-600">Marks Out Of</label>
-              <input className="border p-2 rounded focus:ring-2 focus:ring-indigo-200" type="number" inputMode="decimal" min={1} step="1" value={outOf} onChange={e=>setOutOf(e.target.value)} />
+              <input
+                className="border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-300"
+                type="number"
+                inputMode="decimal"
+                min={1}
+                step="1"
+                value={outOf}
+                onChange={e=>setOutOf(e.target.value)}
+              />
             </div>
           ) : (
             <div className="grid gap-1">
@@ -1207,8 +1260,8 @@ export default function TeacherGrades(){
       
 
       {/* Sticky mobile save bar */}
-      <div className="md:hidden fixed inset-x-0 bottom-0 z-40">
-        <div className="mx-auto max-w-4xl px-4 pb-4">
+      <div className="md:hidden fixed inset-x-0 bottom-14 z-40">
+        <div className="mx-auto max-w-4xl px-4 pb-2">
           <div className="rounded-2xl bg-white shadow-xl border border-gray-200 p-3 flex items-center justify-between">
             <div className="text-xs text-gray-600">Total Students: <span className="font-medium text-gray-800">{students.length}</span></div>
             <button onClick={submit} disabled={saving || !canSubmit} className="px-4 py-2 rounded-lg text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 shadow-soft">{saving ? 'Saving...' : 'Save Grades'}</button>
@@ -1216,7 +1269,7 @@ export default function TeacherGrades(){
         </div>
       </div>
       {/* Spacer so the fixed bar doesn't cover content */}
-      <div className="h-24 md:hidden" aria-hidden="true" />
+      <div className="h-28 md:hidden" aria-hidden="true" />
 
       {/* Input Unit Modal */}
       <Modal open={unitModal} onClose={()=>setUnitModal(false)} title="Choose Input Unit" size="sm">

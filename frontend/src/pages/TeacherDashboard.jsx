@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import api from '../api'
 
@@ -15,6 +15,7 @@ export default function TeacherDashboard(){
   const [periods, setPeriods] = useState([])
   const [blockAssignments, setBlockAssignments] = useState({})
   const [nextClass, setNextClass] = useState(null) // {label, start: Date}
+  const sliderRef = useRef(null)
 
 function DutiesPanel({ duties=[], onChanged }){
   const [busyId, setBusyId] = React.useState(null)
@@ -25,7 +26,7 @@ function DutiesPanel({ duties=[], onChanged }){
   }
   const list = Array.isArray(duties) ? duties.slice(0,5) : []
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white/90 backdrop-blur p-4 shadow-sm">
+    <div className="rounded-2xl border border-gray-200 bg-white/90 backdrop-blur p-3 shadow-sm">
       <div className="flex items-center justify-between mb-2">
         <div className="font-medium text-slate-900">My Duties</div>
         <span className="text-xs text-slate-500">{duties?.length || 0} pending</span>
@@ -138,6 +139,24 @@ function DutiesPanel({ duties=[], onChanged }){
     return ()=>{ mounted = false }
   },[])
 
+  // Auto-advance summary cards on mobile (every 3s)
+  useEffect(() => {
+    const el = sliderRef.current
+    if (!el) return
+    const children = el.children || []
+    if (children.length <= 1) return
+    let index = 0
+    try { el.scrollTo({ left: 0, behavior: 'auto' }) } catch {}
+    const id = setInterval(() => {
+      index = (index + 1) % children.length
+      const child = children[index]
+      if (child && typeof child.offsetLeft === 'number'){
+        try { el.scrollTo({ left: child.offsetLeft, behavior: 'smooth' }) } catch {}
+      }
+    }, 3000)
+    return () => clearInterval(id)
+  }, [classes.length])
+
   // Derive next class for TODAY using template periods and block assignments
   useEffect(()=>{
     if (!me || !plan || !template || !periods?.length || !classes?.length) { setNextClass(null); return }
@@ -204,12 +223,12 @@ function DutiesPanel({ duties=[], onChanged }){
   }, [nextClass?.start])
 
   return (
-    <div className="p-4 md:p-6 space-y-6 max-w-7xl mx-auto bg-gradient-to-b from-slate-50 to-white">
+    <div className="p-3 md:p-4 space-y-4 md:space-y-5 max-w-7xl mx-auto bg-gradient-to-b from-slate-50 to-white">
       {/* Header - elevated gradient card */}
-      <div className="relative overflow-hidden rounded-2xl border border-gray-200 bg-white/80 backdrop-blur supports-[backdrop-filter]:bg-white/60 shadow-[0_10px_30px_rgba(2,6,23,0.06)]">
+      <div className="relative overflow-hidden rounded-2xl border border-gray-200 bg-white/80 backdrop-blur supports-[backdrop-filter]:bg-white/60 shadow-[0_8px_24px_rgba(2,6,23,0.05)]">
         <div className="pointer-events-none absolute -top-10 right-0 h-44 w-44 rounded-full bg-indigo-500/15 blur-2" />
         <div className="pointer-events-none absolute -bottom-12 -left-12 h-56 w-56 rounded-full bg-fuchsia-400/10 blur-3xl" />
-        <div className="p-4 md:p-6 flex items-center justify-between gap-4">
+        <div className="p-3 md:p-5 flex items-center justify-between gap-3 md:gap-4">
           <div className="flex items-center gap-4">
             {school?.logo_url ? (
               <img src={school.logo_url} alt="School logo" className="h-12 w-12 rounded-xl bg-white p-1 object-contain border border-gray-200 shadow-sm" />
@@ -231,7 +250,7 @@ function DutiesPanel({ duties=[], onChanged }){
       {/* Summary cards */}
       {/* Mobile: horizontal snap scroller */}
       <div className="sm:hidden -mx-2 px-2">
-        <div className="flex gap-3 overflow-x-auto snap-x snap-mandatory pb-1 no-scrollbar">
+        <div ref={sliderRef} className="flex gap-3 overflow-x-auto snap-x snap-mandatory pb-1 no-scrollbar scroll-smooth">
           <DashCard title="Classes" value={classes.length} icon="📚" to="/teacher/classes" accent="from-indigo-500 to-indigo-600"/>
           <DashCard title="Attendance" value="Mark" icon="🗓️" to="/teacher/attendance" accent="from-emerald-500 to-emerald-600"/>
           <DashCard title="Lesson Plans" value="Create" icon="🧭" to="/teacher/lessons" accent="from-fuchsia-500 to-pink-600"/>
@@ -247,13 +266,13 @@ function DutiesPanel({ duties=[], onChanged }){
       </div>
 
       {/* Next class + Today's tasks */}
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid gap-3 md:gap-4 sm:grid-cols-2">
         <NextClassCard nextClass={nextClass} countdown={countdown} />
         <TodayTasksCard classes={classes} me={me} plansCount={todayPlanCount} />
       </div>
 
       {/* Main content: Calendar left, Quick panels right on large screens */}
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="grid gap-3 md:gap-4 lg:grid-cols-3">
         <div className="lg:col-span-2">
           <SectionCard title="Events Calendar" action={<Link to="/teacher/events" className="text-sm text-blue-600 hover:underline">View All →</Link>}>
             <MiniCalendar events={events} month={viewMonth} onPrev={()=>setViewMonth(prev=>{ const d=new Date(prev); d.setMonth(d.getMonth()-1); return d })} onNext={()=>setViewMonth(prev=>{ const d=new Date(prev); d.setMonth(d.getMonth()+1); return d })} onToday={()=>setViewMonth(new Date())} />
@@ -354,11 +373,11 @@ function QuickPanel({ title, description, link, actionLabel }){
 function SectionCard({ title, action, children }){
   return (
     <div className="bg-white/90 backdrop-blur rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-      <div className="border-b px-4 py-2 flex items-center justify-between bg-gray-50">
+      <div className="border-b px-3 py-2 flex items-center justify-between bg-gray-50">
         <div className="font-medium text-slate-800">{title}</div>
         {action}
       </div>
-      <div className="p-4">{children}</div>
+      <div className="p-3 md:p-4">{children}</div>
     </div>
   )
 }

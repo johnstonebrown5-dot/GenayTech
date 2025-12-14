@@ -299,7 +299,7 @@ export default function TeacherLayout({ children }){
       <div className="relative">
         {/* Overlay for mobile */}
         {isMobileOpen && (
-          <div className="fixed inset-0 bg-black/30 z-30 md:hidden" onClick={()=>setIsMobileOpen(false)} />
+          <div className="fixed inset-0 bg-black/50 z-30 md:hidden" onClick={()=>setIsMobileOpen(false)} />
         )}
 
         {/* Sidebar */}
@@ -345,9 +345,21 @@ export default function TeacherLayout({ children }){
 
         {/* Mobile Drawer Sidebar */}
         <aside
-          className={`fixed z-40 left-0 bottom-0 bg-gradient-to-b from-blue-600 via-blue-700 to-blue-900 border-r border-blue-500/30 w-64 p-2 md:hidden transition-transform duration-200 shadow-2xl ${isMobileOpen? 'translate-x-0':'-translate-x-full'}`}
-          style={{ top: broadcastBanner ? 'calc(3.5rem + 40px)' : '3.5rem' }}
+          className={`fixed inset-y-0 z-40 left-0 bg-gradient-to-b from-blue-600 via-blue-700 to-blue-900 border-r border-blue-500/30 w-full max-w-sm pt-2 pb-3 px-2 md:hidden transition-transform duration-200 shadow-2xl ${isMobileOpen? 'translate-x-0':'-translate-x-full'}`}
         >
+          <div className="flex items-center justify-between mb-2 px-1">
+            <span className="text-sm font-semibold text-white/90">Menu</span>
+            <button
+              type="button"
+              onClick={()=> setIsMobileOpen(false)}
+              className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-white text-gray-900 shadow-sm hover:bg-gray-100"
+              aria-label="Close menu"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
           <nav className="space-y-1 overflow-y-auto">
             {([ ...(hasAttendanceAccess? [{ to: '/teacher/attendance', label: 'Attendance', icon: '🗓️' }] : []), ...baseNavItems ]).map(i => {
               const active = pathname === i.to
@@ -371,21 +383,79 @@ export default function TeacherLayout({ children }){
               )
             })}
           </nav>
-          <div className="mt-auto p-3 text-xs text-blue-200/80">
+          <div className="mt-3 pt-2 border-t border-blue-500/30 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={lock}
+              className="flex-1 px-3 py-2 rounded-lg text-sm font-medium bg-white/10 text-white border border-white/20 hover:bg-white/20 transition-colors"
+            >
+              Lock
+            </button>
+            <button
+              type="button"
+              onClick={()=> setShowLogoutConfirm(true)}
+              className="flex-1 px-3 py-2 rounded-lg text-sm font-semibold bg-red-500 text-white hover:bg-red-600 transition-colors"
+            >
+              Logout
+            </button>
+          </div>
+          <div className="mt-2 p-2 text-[11px] text-blue-200/80 space-y-1">
             {schoolName && (
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></div>
                 <span>© {new Date().getFullYear()} {schoolName}</span>
               </div>
             )}
+            <div className="text-[10px] text-blue-100/90">Powered by EduTrack</div>
           </div>
         </aside>
 
         {/* Content area */}
-        <main className={`transition-all duration-200 px-3 md:px-6 py-4 md:py-6 ${isOpen? 'md:ml-64':'md:ml-16'}`}>
+        <main className={`transition-all duration-200 px-3 md:px-6 py-4 pb-16 md:py-6 md:pb-6 ${isOpen? 'md:ml-64':'md:ml-16'}`}>
           {children}
         </main>
       </div>
+      {/* Bottom Nav (mobile) */}
+      <nav className="sm:hidden fixed bottom-0 inset-x-0 z-30 border-t border-slate-200 bg-white/95 backdrop-blur-xl">
+        <div className="max-w-xl mx-auto flex items-stretch justify-around py-1.5">
+          {([
+            ...(hasAttendanceAccess ? [{ to: `/teacher/attendance${classTeacherClassId ? `?class=${classTeacherClassId}` : ''}`, label: 'Attendance', icon: '🗓️' }] : []),
+            { to: '/teacher', label: 'Dashboard', icon: '📊' },
+            { to: '/teacher/classes', label: 'Classes', icon: '📚' },
+            { to: '/teacher/grades', label: 'Grades', icon: '📝' },
+            { to: '/teacher/messages', label: 'Messages', icon: '✉️' },
+            { type: 'more', label: 'More', icon: '⋯' },
+          ]).map(item => {
+            const isMore = item.type === 'more'
+            const active = isMore ? isMobileOpen : pathname === item.to
+            const commonClasses = `flex flex-col items-center justify-center flex-1 gap-0.5 text-[11px] ${active ? 'text-blue-600' : 'text-slate-500'}`
+            const iconClass = `text-lg ${active ? 'scale-110' : ''}`
+            if (isMore){
+              return (
+                <button
+                  key="teacher-bottom-more"
+                  type="button"
+                  onClick={() => setIsMobileOpen(true)}
+                  className={commonClasses}
+                >
+                  <span className={iconClass} aria-hidden>{item.icon}</span>
+                  <span className="leading-tight">{item.label}</span>
+                </button>
+              )
+            }
+            return (
+              <Link
+                key={item.to}
+                to={item.to}
+                className={commonClasses}
+              >
+                <span className={iconClass} aria-hidden>{item.icon}</span>
+                <span className="leading-tight">{item.label}</span>
+              </Link>
+            )
+          })}
+        </div>
+      </nav>
       {/* Floating Logout button for mobile only */}
       {(() => {
         const root = typeof document !== 'undefined' ? document.getElementById('floating-actions-root') : null
