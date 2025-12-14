@@ -12,6 +12,7 @@ export default function Messages(){
   const [outbox, setOutbox] = useState([])
   const [loading, setLoading] = useState(true)
   const [allUsers, setAllUsers] = useState([])
+  const [loadingUsers, setLoadingUsers] = useState(false)
   const [query, setQuery] = useState('')
   const [activeUser, setActiveUser] = useState(null)
   const [message, setMessage] = useState('')
@@ -74,6 +75,7 @@ export default function Messages(){
 
   // Load users list by allowed roles and query
   const loadUsers = async (q='') => {
+    setLoadingUsers(true)
     try {
       // Admin: show everyone in school; others: fetch and filter by allowedRoles
       const { data } = await api.get(`/auth/users/?q=${encodeURIComponent(q)}`)
@@ -84,6 +86,8 @@ export default function Messages(){
       setAllUsers(filtered.filter(u => u.id !== user?.id))
     } catch {
       setAllUsers([])
+    } finally {
+      setLoadingUsers(false)
     }
   }
 
@@ -561,7 +565,10 @@ export default function Messages(){
         </div>
         {viewTab === 'chats' && (
           <div className="flex-1 overflow-y-auto">
-            {sortedUsers.map(u => {
+            {loadingUsers && (
+              <div className="p-3 text-sm text-gray-500">Loading users and conversationseee</div>
+            )}
+            {!loadingUsers && sortedUsers.map(u => {
               const isActive = activeUser?.id === u.id
               const meta = userMeta.get(u.id)
               const lastText = meta?.last?.body ? String(meta.last.body).slice(0, 50) : ''
@@ -611,8 +618,8 @@ export default function Messages(){
                 </button>
               )
             })}
-            {sortedUsers.length===0 && (
-              <div className="p-3 text-sm text-gray-500">No users</div>
+            {!loadingUsers && sortedUsers.length===0 && (
+              <div className="p-3 text-sm text-gray-500">No messages yet. Add users to start messaging.</div>
             )}
           </div>
         )}
@@ -676,7 +683,9 @@ export default function Messages(){
                 </button>
               )
             })}
-            {sortedUsers.length===0 && (<div className="p-3 text-sm text-gray-500">No users</div>)}
+            {!loadingUsers && sortedUsers.length===0 && (
+              <div className="p-3 text-sm text-gray-500">No messages yet. Add users to start messaging.</div>
+            )}
           </div>
         </div>
       )}
@@ -793,7 +802,7 @@ export default function Messages(){
           <span />
         </div>
         {viewTab!=='system' && (
-        <form onSubmit={sendToActive} className="min-h-16 p-2 flex items-center gap-2 fixed inset-x-0 bottom-0 z-20 bg-white border-t sm:sticky sm:bottom-0">
+        <form onSubmit={sendToActive} className="min-h-16 p-2 flex items-center gap-2 fixed inset-x-0 bottom-[4.5rem] z-20 bg-white border-t sm:sticky sm:bottom-0">
           {/* Forward banner */}
           {isAdmin && forwardSource && (
             <div className="absolute -top-8 left-0 right-0 px-2">
@@ -846,6 +855,7 @@ export default function Messages(){
             }}
             placeholder={activeUser? 'Type a message':'Select a user to start chatting'}
             className={`flex-1 resize-none rounded-2xl px-4 py-2.5 bg-gray-50 border ${activeUser? 'border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500':'border-gray-200'} shadow-inner text-[15px] placeholder:text-gray-400`}
+            style={{ overflowY: message.length > 120 ? 'auto' : 'hidden' }}
             disabled={!activeUser}
           />
           {/* Attach */}

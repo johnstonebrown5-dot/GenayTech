@@ -300,15 +300,13 @@ export default function AdminEvents(){
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-semibold tracking-tight text-gray-900">School Events</h1>
-            <span className="text-xs px-2 py-1 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100">Modern View</span>
           </div>
-          <div className="flex items-center gap-2 ml-auto w-full sm:w-auto overflow-x-auto -mx-1 px-1">
-            <button onClick={handleAcademicCalendar} className="shrink-0 inline-flex items-center gap-0 sm:gap-2 px-2.5 sm:px-3.5 py-2 rounded-lg bg-emerald-600 text-white shadow-sm hover:bg-emerald-700 transition" aria-label="Academic Calendar">
-              <span>📆</span><span className="hidden sm:inline">Academic Calendar</span>
+          <div className="flex items-center gap-2 ml-auto w-full sm:w-auto flex-wrap">
+            <button onClick={handleAcademicCalendar} className="shrink-0 inline-flex items-center justify-center px-2.5 sm:px-3.5 py-2 rounded-lg bg-emerald-600 text-white text-xs sm:text-sm font-semibold shadow-sm hover:bg-emerald-700 transition flex-1 sm:flex-none" aria-label="Academic Calendar">
+              Academic Calendar
             </button>
-            <button onClick={()=>setViewMode(v=> v==='list' ? 'calendar' : 'list')} className="shrink-0 px-2.5 sm:px-3.5 py-2 rounded-lg border bg-white hover:bg-gray-50 shadow-sm" aria-label="Toggle View">
-              <span className="sm:hidden">{viewMode==='list' ? '📅' : '📋'}</span>
-              <span className="hidden sm:inline">{viewMode==='list' ? 'Calendar View' : 'List View'}</span>
+            <button onClick={()=>setViewMode(v=> v==='list' ? 'calendar' : 'list')} className="shrink-0 inline-flex items-center justify-center px-2.5 sm:px-3.5 py-2 rounded-lg border bg-white hover:bg-gray-50 text-xs sm:text-sm font-semibold shadow-sm flex-1 sm:flex-none" aria-label="Toggle View">
+              {viewMode==='list' ? 'Calendar View' : 'List View'}
             </button>
             {viewMode==='calendar' && (
               <div className="shrink-0 flex items-center gap-2">
@@ -317,8 +315,12 @@ export default function AdminEvents(){
                 <button className="px-2.5 py-2 rounded-lg border bg-white hover:bg-gray-50 shadow-sm" onClick={()=> setMonth(m=> new Date(m.getFullYear(), m.getMonth()+1, 1))}>Next</button>
               </div>
             )}
-            <button onClick={()=>setIsCreateOpen(true)} className="shrink-0 inline-flex items-center gap-0 sm:gap-2 px-2.5 sm:px-3.5 py-2 rounded-lg bg-indigo-600 text-white shadow-sm hover:bg-indigo-700" aria-label="Create Event">
-              <span>＋</span><span className="hidden sm:inline">Create Event</span>
+            <button
+              onClick={()=>setIsCreateOpen(true)}
+              className="shrink-0 inline-flex items-center justify-center px-2.5 sm:px-3.5 py-2 rounded-lg bg-indigo-600 text-white text-xs sm:text-sm font-semibold shadow-sm hover:bg-indigo-700 w-full sm:w-auto sm:ml-0 basis-full sm:basis-auto"
+              aria-label="Create Event"
+            >
+              New Event
             </button>
           </div>
         </div>

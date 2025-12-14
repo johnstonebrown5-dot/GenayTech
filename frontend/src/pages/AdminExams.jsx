@@ -54,7 +54,7 @@ export default function AdminExams(){
   const [dayOpen, setDayOpen] = useState(false)
   const [dayKey, setDayKey] = useState('')
   const [dayItems, setDayItems] = useState([])
-  const [showFilters, setShowFilters] = useState(true)
+  const [showFilters, setShowFilters] = useState(false)
 
   const bulkPublishExams = async () => {
     const ids = Array.from(selected)

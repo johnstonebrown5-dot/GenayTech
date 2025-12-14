@@ -60,6 +60,8 @@ export default function AdminTimetable() {
   const [lastSavedAt, setLastSavedAt] = useState(null)
   // Prevent initial autosave race that can overwrite server with {}
   const [assignmentsLoaded, setAssignmentsLoaded] = useState(false)
+  // UI: show/hide top notice when no plan is selected
+  const [showNoPlanNotice, setShowNoPlanNotice] = useState(true)
 
   // Prefetch all subjects once so manual assignment isn't blocked when classes lack attached subjects
   useEffect(()=>{ (async()=>{
@@ -953,9 +955,19 @@ export default function AdminTimetable() {
   return (
     <React.Fragment>
       <div className="space-y-6">
-        {!currentPlan?.id && (
-          <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-800">
-            No timetable plan is selected. Create or select a plan to enable saving. Use the "New Timetable" button.
+        {!currentPlan?.id && showNoPlanNotice && (
+          <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 flex items-start justify-between gap-3 text-sm">
+            <div>
+              No timetable plan is selected. Create or select a plan to enable saving. Use the "New Timetable" button.
+            </div>
+            <button
+              type="button"
+              onClick={()=>setShowNoPlanNotice(false)}
+              className="shrink-0 p-1.5 rounded-full hover:bg-amber-100 text-amber-700"
+              aria-label="Dismiss message"
+            >
+              ✕
+            </button>
           </div>
         )}
         {saveError && (
@@ -973,20 +985,18 @@ export default function AdminTimetable() {
             <h1 className="text-3xl font-bold text-gray-900">Timetable</h1>
             <p className="text-gray-600 mt-1">Manage and view school-wide timetables.</p>
           </div>
-          <div className="flex items-center gap-2 w-full sm:w-auto overflow-x-auto -mx-1 px-1">
+          <div className="flex items-center gap-2 w-full sm:w-auto flex-wrap">
             <button
               onClick={openManage}
-              className="shrink-0 inline-flex items-center gap-0 sm:gap-2 px-2.5 sm:px-4 py-2 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-gray-800 text-sm font-medium shadow-sm"
+              className="shrink-0 inline-flex items-center justify-center px-2.5 sm:px-4 py-2 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-gray-800 text-xs sm:text-sm font-medium shadow-sm flex-1 sm:flex-none"
               aria-label="Manage Timetables">
-              <span className="sm:hidden">📋</span>
-              <span className="hidden sm:inline">Manage Timetables</span>
+              Manage Timetables
             </button>
             <button
               onClick={()=>setShowCreate(true)}
-              className="shrink-0 inline-flex items-center gap-0 sm:gap-2 px-2.5 sm:px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium shadow"
+              className="shrink-0 inline-flex items-center justify-center px-2.5 sm:px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm font-medium shadow flex-1 sm:flex-none"
               aria-label="New Timetable">
-              <span className="sm:hidden">➕</span>
-              <span className="hidden sm:inline">New Timetable</span>
+              New Timetable
             </button>
           </div>
         </div>
@@ -1006,11 +1016,21 @@ export default function AdminTimetable() {
         )}
 
         {/* Template Sessions Editor */}
-        <div className="bg-white rounded-xl border border-gray-200">
-          <div className="px-4 py-2 border-b flex items-center justify-between">
-            <div className="font-medium text-gray-800">Template Sessions</div>
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
+          <div className="px-4 py-2 border-b border-gray-100 flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <button onClick={()=>setShowSessions(s=>!s)} className="px-3 py-1.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-sm">{showSessions? 'Collapse' : 'Expand'}</button>
+              <h2 className="text-sm font-semibold text-gray-900">Template Sessions</h2>
+              <span className="hidden sm:inline-flex items-center px-2 py-0.5 rounded-full text-[11px] bg-gray-50 text-gray-500 border border-gray-200">Configure day blocks</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={()=>setShowSessions(s=>!s)}
+                className="inline-flex items-center justify-center h-8 w-8 rounded-full border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 text-xs"
+                aria-label={showSessions ? 'Collapse template sessions' : 'Expand template sessions'}
+              >
+                <span className={`transform transition-transform ${showSessions ? 'rotate-0' : '-rotate-90'}`}>▾</span>
+              </button>
               {showSessions && (!editingTimes ? (
                 <button onClick={()=>setEditingTimes(true)} className="px-3 py-1.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-sm">Edit Sessions</button>
               ) : (
@@ -1436,28 +1456,44 @@ export default function AdminTimetable() {
         {showCreate && (
           <div className="fixed inset-0 z-50 flex items-center justify-center">
             <div className="absolute inset-0 bg-black/40" onClick={()=>setShowCreate(false)} />
-            <div className="relative bg-white w-full max-w-xl mx-4 rounded-2xl shadow-xl border border-gray-200">
-              <div className="p-5 border-b border-gray-200 flex items-center justify-between">
-                <h3 className="text-lg font-semibold text-gray-900">Create Timetable</h3>
-                <button className="p-2 hover:bg-gray-100 rounded-lg" onClick={()=>setShowCreate(false)} aria-label="Close">✕</button>
+            <div className="relative bg-white w-full max-w-xl mx-4 rounded-2xl shadow-2xl border border-gray-100">
+              <div className="px-5 pt-5 pb-3 border-b border-gray-100 flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900">Create Timetable</h3>
+                  <p className="mt-1 text-xs text-gray-500">Set up a new school-wide timetable plan.</p>
+                </div>
+                <button className="p-2 rounded-full text-gray-500 hover:bg-gray-100" onClick={()=>setShowCreate(false)} aria-label="Close">✕</button>
               </div>
-              <div className="p-5 space-y-4">
+              <div className="p-5 space-y-5">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="md:col-span-2">
-                    <label className="text-sm text-gray-700">Name</label>
-                    <input value={createName} onChange={(e)=>setCreateName(e.target.value)} className="mt-1 w-full rounded-lg border-gray-300 focus:ring-blue-500 focus:border-blue-500" placeholder="e.g. Term 3 2025" />
+                    <label className="text-xs font-medium text-gray-700">Name</label>
+                    <input
+                      value={createName}
+                      onChange={(e)=>setCreateName(e.target.value)}
+                      className="mt-1 w-full rounded-xl border border-gray-200 bg-gray-50/80 px-3 py-2 text-sm placeholder-gray-400 focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/40"
+                      placeholder="e.g. Term 3 2025"
+                    />
                   </div>
                   <div>
-                    <label className="text-sm text-gray-700">Academic Year</label>
-                    <select value={selectedYearId || ''} onChange={(e)=>{ const v=e.target.value? Number(e.target.value):null; setSelectedYearId(v); const first = (terms||[]).find(t=>t.academic_year===v); setCreateTermId(first?.id || null) }} className="mt-1 w-full rounded-lg border-gray-300 focus:ring-blue-500 focus:border-blue-500">
+                    <label className="text-xs font-medium text-gray-700">Academic Year</label>
+                    <select
+                      value={selectedYearId || ''}
+                      onChange={(e)=>{ const v=e.target.value? Number(e.target.value):null; setSelectedYearId(v); const first = (terms||[]).find(t=>t.academic_year===v); setCreateTermId(first?.id || null) }}
+                      className="mt-1 w-full rounded-xl border border-gray-200 bg-gray-50/80 px-3 py-2 text-sm focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/40"
+                    >
                       {(years||[]).map(y=> (
                         <option key={y.id} value={y.id}>{y.label}</option>
                       ))}
                     </select>
                   </div>
                   <div>
-                    <label className="text-sm text-gray-700">Term</label>
-                    <select value={createTermId || ''} onChange={(e)=>setCreateTermId(e.target.value? Number(e.target.value): null)} className="mt-1 w-full rounded-lg border-gray-300 focus:ring-blue-500 focus:border-blue-500">
+                    <label className="text-xs font-medium text-gray-700">Term</label>
+                    <select
+                      value={createTermId || ''}
+                      onChange={(e)=>setCreateTermId(e.target.value? Number(e.target.value): null)}
+                      className="mt-1 w-full rounded-xl border border-gray-200 bg-gray-50/80 px-3 py-2 text-sm focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/40"
+                    >
                       {(termsForYear||[]).map(t=> (
                         <option key={t.id} value={t.id}>{t.name? t.name: `Term ${t.number}`}</option>
                       ))}
@@ -1465,9 +1501,20 @@ export default function AdminTimetable() {
                   </div>
                 </div>
               </div>
-              <div className="p-5 border-t border-gray-200 flex items-center justify-end gap-2">
-                <button onClick={()=>setShowCreate(false)} className="px-4 py-2 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-gray-800 text-sm">Cancel</button>
-                <button onClick={handleCreatePlan} disabled={saving || !createTermId} className={`px-4 py-2 rounded-lg text-sm ${saving? 'bg-gray-300 text-gray-600':'bg-blue-600 text-white hover:bg-blue-700'}`}>{saving? 'Creating...':'Create'}</button>
+              <div className="px-5 pb-5 pt-3 border-t border-gray-100 flex items-center justify-end gap-2 bg-gray-50/60">
+                <button
+                  onClick={()=>setShowCreate(false)}
+                  className="px-4 py-2 rounded-full border border-gray-200 bg-white hover:bg-gray-50 text-gray-700 text-sm font-medium shadow-sm"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleCreatePlan}
+                  disabled={saving || !createTermId}
+                  className={`px-4 py-2 rounded-full text-sm font-semibold shadow-sm transition-colors ${saving || !createTermId ? 'bg-gray-300 text-gray-600 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700'}`}
+                >
+                  {saving? 'Creating...' : 'Create'}
+                </button>
               </div>
             </div>
           </div>
