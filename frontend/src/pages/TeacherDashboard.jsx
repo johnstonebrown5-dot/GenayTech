@@ -279,7 +279,6 @@ function DutiesPanel({ duties=[], onChanged }){
           </SectionCard>
         </div>
         <div className="space-y-4">
-          <QuickPanel title="Lesson Plans" description="Plan upcoming lessons, objectives and activities." link="/teacher/lessons" actionLabel="Create Plan"/>
           <QuickPanel title="Profile" description="Update your info or change your password." link="/teacher/profile" actionLabel="Open Profile"/>
           <DutiesPanel duties={duties} onChanged={async ()=>{
             try{

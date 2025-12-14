@@ -383,73 +383,107 @@ export default function TeacherAnalytics(){
   }
 
   return (
-    <div className="space-y-6 px-3 sm:px-0">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-        <div>
-          <h1 className="text-lg font-semibold">Analytics</h1>
-          <div className="text-xs text-gray-600">Analyze results and compare exams or subjects</div>
-        </div>
-        <div className="flex items-center gap-2 w-full sm:w-auto">
-          <label className="text-sm w-full sm:w-auto">Class
-            <select className="border p-2 rounded ml-2 w-full sm:w-auto" value={selectedClass} onChange={e=>setSelectedClass(e.target.value)}>
-              {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
-          </label>
+    <div className="max-w-5xl mx-auto px-3 md:px-4 space-y-5 md:space-y-6">
+      {/* Header */}
+      <div className="relative overflow-hidden rounded-2xl border border-gray-200 bg-gradient-to-r from-indigo-500 via-indigo-600 to-sky-500 shadow-md">
+        <div className="pointer-events-none absolute -right-16 -top-16 h-32 w-32 rounded-full bg-white/15 blur-2" />
+        <div className="px-3 py-3 md:px-4 md:py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <h1 className="text-base md:text-lg font-semibold tracking-tight text-white">Analytics</h1>
+            <div className="text-[11px] md:text-xs text-indigo-100">Analyze results and compare exams or subjects</div>
+          </div>
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <label className="text-xs md:text-sm text-indigo-50 flex items-center gap-2 w-full sm:w-auto">
+              <span className="shrink-0">Class</span>
+              <select
+                className="border border-white/60 bg-white/95 text-gray-900 rounded-xl px-3 py-1.5 text-xs md:text-sm w-full sm:w-auto focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-300"
+                value={selectedClass}
+                onChange={e=>setSelectedClass(e.target.value)}
+              >
+                {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </label>
+          </div>
         </div>
       </div>
 
-      {error && <div className="bg-red-50 text-red-700 text-sm p-2 rounded border border-red-200">{error}</div>}
+      {error && <div className="bg-red-50 text-red-700 text-xs md:text-sm p-2 rounded-lg border border-red-200 shadow-sm">{error}</div>}
 
       {/* Mode switcher */}
       <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
-        <div className="text-sm text-gray-700 shrink-0">View:</div>
-        <div className="inline-flex rounded border overflow-hidden shrink-0">
-          <button type="button" onClick={()=>setMode('exam')} className={`px-3 py-1 text-sm ${mode==='exam' ? 'bg-gray-900 text-white' : 'bg-white hover:bg-gray-50'}`}>Exam vs Exam</button>
-          <button type="button" onClick={()=>setMode('subject')} className={`px-3 py-1 text-sm border-l ${mode==='subject' ? 'bg-gray-900 text-white' : 'bg-white hover:bg-gray-50'}`}>Subject vs Subject</button>
+        <div className="text-xs md:text-sm text-gray-700 shrink-0">View:</div>
+        <div className="inline-flex shrink-0 items-center rounded-full bg-gray-100 p-0.5 border border-gray-200">
+          <button
+            type="button"
+            onClick={()=>setMode('exam')}
+            className={`px-3 py-1.5 text-[11px] md:text-xs rounded-full transition-colors ${mode==='exam' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+          >
+            Exam vs Exam
+          </button>
+          <button
+            type="button"
+            onClick={()=>setMode('subject')}
+            className={`px-3 py-1.5 text-[11px] md:text-xs rounded-full transition-colors ${mode==='subject' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+          >
+            Subject vs Subject
+          </button>
         </div>
       </div>
 
       {mode === 'exam' && (
-        <div className="bg-white rounded-2xl shadow p-4">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-3">
-            <div className="font-medium">Compare Exams</div>
-            <button onClick={doCompareExams} className="px-3 py-2 rounded-xl bg-gray-900 text-white text-sm hover:bg-gray-800 w-full sm:w-auto">Compare</button>
+        <div className="rounded-2xl border border-gray-100 bg-white/90 backdrop-blur shadow-sm p-4 md:p-5 space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+            <div>
+              <div className="text-sm font-semibold text-gray-900">Compare Exams</div>
+              <div className="text-[11px] text-gray-500">See how two exams performed by subject and over time.</div>
+            </div>
+            <button onClick={doCompareExams} className="inline-flex items-center justify-center px-4 py-2 rounded-full bg-gray-900 text-white text-xs md:text-sm hover:bg-black/90 shadow-sm w-full sm:w-auto">Compare</button>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
-            <label className="text-sm">Exam A
-              <select className="border p-2 rounded ml-2 w-full" value={examA} onChange={e=>setExamA(e.target.value)}>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <div className="text-xs font-medium text-gray-600">Exam A</div>
+              <select
+                className="border border-gray-200 rounded-xl px-3 py-2 text-xs md:text-sm bg-white w-full focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-300"
+                value={examA}
+                onChange={e=>setExamA(e.target.value)}
+              >
                 {exams.map(ex => <option key={ex.id} value={ex.id}>{examLabel(ex)}</option>)}
               </select>
-            </label>
-            <label className="text-sm">Exam B
-              <select className="border p-2 rounded ml-2 w-full" value={examB} onChange={e=>setExamB(e.target.value)}>
+            </div>
+            <div className="space-y-1">
+              <div className="text-xs font-medium text-gray-600">Exam B</div>
+              <select
+                className="border border-gray-200 rounded-xl px-3 py-2 text-xs md:text-sm bg-white w-full focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-300"
+                value={examB}
+                onChange={e=>setExamB(e.target.value)}
+              >
                 {exams.map(ex => <option key={ex.id} value={ex.id}>{examLabel(ex)}</option>)}
               </select>
-            </label>
+            </div>
           </div>
           {!examCompare ? (
-            <div className="text-sm text-gray-600">Select two exams and click Compare.</div>
+            <div className="text-xs md:text-sm text-gray-600">Select two exams and click Compare.</div>
           ) : (
-            <div className="space-y-3">
-              <div className="text-sm">Class Mean Δ: <b>{examCompare?.deltas?.class_mean_delta ?? '-'}</b></div>
+            <div className="space-y-4">
+              <div className="text-xs md:text-sm">Class Mean Δ: <b>{examCompare?.deltas?.class_mean_delta ?? '-'}</b></div>
               {examCompareBarData && (
-                <div className="bg-white p-2 rounded border">
+                <div className="bg-white rounded-xl border border-gray-100 p-2 md:p-3">
                   <Bar data={examCompareBarData} options={examCompareBarOpts} />
                 </div>
               )}
               {trendChartData && (
-                <div className="bg-white p-2 rounded border">
+                <div className="bg-white rounded-xl border border-gray-100 p-2 md:p-3">
                   <div className="flex items-center justify-between mb-2">
-                    <div className="text-sm font-medium">Class Mean Over Time</div>
-                    <button onClick={exportTrendPNG} className="px-2 py-1 text-xs rounded bg-gray-800 text-white hover:bg-gray-700">Export PNG</button>
+                    <div className="text-xs md:text-sm font-medium">Class Mean Over Time</div>
+                    <button onClick={exportTrendPNG} className="px-2 py-1 text-[11px] rounded-full bg-gray-800 text-white hover:bg-gray-700">Export PNG</button>
                   </div>
                   <Line ref={trendLineRef} data={trendChartData} options={trendChartOpts} />
                 </div>
               )}
-              <div className="overflow-auto">
-                <table className="min-w-full text-sm">
+              <div className="overflow-auto rounded-xl border border-gray-100 bg-white">
+                <table className="min-w-full text-xs md:text-sm">
                   <thead>
-                    <tr>
+                    <tr className="bg-gray-50 text-xs text-gray-600">
                       <th className="border px-2 py-1 text-left">Subject</th>
                       <th className="border px-2 py-1 text-left">Mean A</th>
                       <th className="border px-2 py-1 text-left">Mean B</th>
@@ -458,7 +492,7 @@ export default function TeacherAnalytics(){
                   </thead>
                   <tbody>
                     {(examCompare?.deltas?.subject_means || []).map(row => (
-                      <tr key={row.subject}>
+                      <tr key={row.subject} className="odd:bg-white even:bg-gray-50">
                         <td className="border px-2 py-1">{subjectLabelFromCompare(row.subject)}</td>
                         <td className="border px-2 py-1">{row.mean_a ?? '-'}</td>
                         <td className="border px-2 py-1">{row.mean_b ?? '-'}</td>
@@ -474,21 +508,24 @@ export default function TeacherAnalytics(){
       )}
 
       {mode === 'subject' && (
-        <div className="bg-white rounded-2xl shadow p-4">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-3">
-            <div className="font-medium">Compare Subjects (within an exam)</div>
-            <button onClick={doCompareSubjects} className="px-3 py-2 rounded-xl bg-gray-900 text-white text-sm hover:bg-gray-800 w-full sm:w-auto">Compare</button>
+        <div className="rounded-2xl border border-gray-100 bg-white/90 backdrop-blur shadow-sm p-4 md:p-5 space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+            <div>
+              <div className="text-sm font-semibold text-gray-900">Compare Subjects (within an exam)</div>
+              <div className="text-[11px] text-gray-500">Track subject performance over time and between two subjects.</div>
+            </div>
+            <button onClick={doCompareSubjects} className="inline-flex items-center justify-center px-4 py-2 rounded-full bg-gray-900 text-white text-xs md:text-sm hover:bg-black/90 shadow-sm w-full sm:w-auto">Compare</button>
           </div>
           {/* Subject trends controls */}
-          <div className="grid grid-cols-1 sm:flex sm:flex-wrap items-center gap-2 mb-3">
-            <label className="text-sm">From
-              <input type="date" className="border p-2 rounded ml-2 w-full sm:w-auto" value={trendStart} onChange={e=>setTrendStart(e.target.value)} />
+          <div className="grid grid-cols-1 sm:flex sm:flex-wrap items-center gap-2 mb-1">
+            <label className="text-xs md:text-sm">From
+              <input type="date" className="border border-gray-200 rounded-xl px-3 py-2 text-xs md:text-sm ml-2 w-full sm:w-auto focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-300" value={trendStart} onChange={e=>setTrendStart(e.target.value)} />
             </label>
-            <label className="text-sm">To
-              <input type="date" className="border p-2 rounded ml-2 w-full sm:w-auto" value={trendEnd} onChange={e=>setTrendEnd(e.target.value)} />
+            <label className="text-xs md:text-sm">To
+              <input type="date" className="border border-gray-200 rounded-xl px-3 py-2 text-xs md:text-sm ml-2 w-full sm:w-auto focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-300" value={trendEnd} onChange={e=>setTrendEnd(e.target.value)} />
             </label>
-            <label className="text-sm">Subjects
-              <select multiple className="border p-2 rounded ml-2 min-w-[180px] w-full sm:w-auto" value={trendSubjects} onChange={e=> setTrendSubjects(Array.from(e.target.selectedOptions).map(o=>o.value))}>
+            <label className="text-xs md:text-sm">Subjects
+              <select multiple className="border border-gray-200 rounded-xl px-3 py-2 text-xs md:text-sm ml-2 min-w-[180px] w-full sm:w-auto focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-300" value={trendSubjects} onChange={e=> setTrendSubjects(Array.from(e.target.selectedOptions).map(o=>o.value))}>
                 {(currentClass?.subjects || []).map(s => (
                   <option key={s.id} value={String(s.id)}>{s.name || s.code}</option>
                 ))}
@@ -496,44 +533,47 @@ export default function TeacherAnalytics(){
             </label>
           </div>
           {subjectTrendChartData && (
-            <div className="bg-white p-2 rounded border mb-4">
-              <div className="text-sm font-medium mb-2">Subject Mean Over Time</div>
+            <div className="bg-white rounded-xl border border-gray-100 p-2 md:p-3 mb-2">
+              <div className="text-xs md:text-sm font-medium mb-2">Subject Mean Over Time</div>
               <Line data={subjectTrendChartData} options={subjectTrendChartOpts} />
             </div>
           )}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-3">
-            <label className="text-sm">Exam
-              <select className="border p-2 rounded ml-2 w-full" value={subjectExam} onChange={e=>setSubjectExam(e.target.value)}>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-2">
+            <div className="space-y-1">
+              <div className="text-xs font-medium text-gray-600">Exam</div>
+              <select className="border border-gray-200 rounded-xl px-3 py-2 text-xs md:text-sm w-full focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-300" value={subjectExam} onChange={e=>setSubjectExam(e.target.value)}>
                 {exams.map(ex => <option key={ex.id} value={ex.id}>{examLabel(ex)}</option>)}
               </select>
-            </label>
-            <label className="text-sm">Subject A
-              <select className="border p-2 rounded ml-2 w-full" value={subjectA} onChange={e=>setSubjectA(e.target.value)}>
+            </div>
+            <div className="space-y-1">
+              <div className="text-xs font-medium text-gray-600">Subject A</div>
+              <select className="border border-gray-200 rounded-xl px-3 py-2 text-xs md:text-sm w-full focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-300" value={subjectA} onChange={e=>setSubjectA(e.target.value)}>
                 {subjectOptions.map(s => <option key={s.id} value={s.id}>{s.name || s.code}</option>)}
               </select>
-            </label>
-            <label className="text-sm">Subject B
-              <select className="border p-2 rounded ml-2 w-full" value={subjectB} onChange={e=>setSubjectB(e.target.value)}>
+            </div>
+            <div className="space-y-1">
+              <div className="text-xs font-medium text-gray-600">Subject B</div>
+              <select className="border border-gray-200 rounded-xl px-3 py-2 text-xs md:text-sm w-full focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-300" value={subjectB} onChange={e=>setSubjectB(e.target.value)}>
                 {subjectOptions.map(s => <option key={s.id} value={s.id}>{s.name || s.code}</option>)}
               </select>
-            </label>
+            </div>
           </div>
           {!subjectCompare ? (
-            <div className="text-sm text-gray-600">Pick an exam and two subjects, then click Compare.</div>
+            <div className="text-xs md:text-sm text-gray-600">Pick an exam and two subjects, then click Compare.</div>
           ) : (
-            <div className="space-y-3">
-              <div className="text-sm">Mean % {subjectName(subjectA)}: <b>{subjectCompare?.subject_a?.mean_percentage ?? '-'}</b></div>
-              <div className="text-sm">Mean % {subjectName(subjectB)}: <b>{subjectCompare?.subject_b?.mean_percentage ?? '-'}</b></div>
-              <div className="text-sm">Mean % Δ (B - A): <b>{subjectCompare?.deltas?.mean_percentage_delta ?? '-'}</b></div>
+            <div className="space-y-4">
+              <div className="text-xs md:text-sm">Mean % {subjectName(subjectA)}: <b>{subjectCompare?.subject_a?.mean_percentage ?? '-'}</b></div>
+              <div className="text-xs md:text-sm">Mean % {subjectName(subjectB)}: <b>{subjectCompare?.subject_b?.mean_percentage ?? '-'}</b></div>
+              <div className="text-xs md:text-sm">Mean % Δ (B - A): <b>{subjectCompare?.deltas?.mean_percentage_delta ?? '-'}</b></div>
               {subjectMeansBarData && (
-                <div className="bg-white p-2 rounded border">
+                <div className="bg-white rounded-xl border border-gray-100 p-2 md:p-3">
                   <Bar data={subjectMeansBarData} options={subjectMeansBarOpts} />
                 </div>
               )}
-              <div className="overflow-auto">
-                <table className="min-w-full text-sm">
+              <div className="overflow-auto rounded-xl border border-gray-100 bg-white">
+                <table className="min-w-full text-xs md:text-sm">
                   <thead>
-                    <tr>
+                    <tr className="bg-gray-50 text-xs text-gray-600">
                       <th className="border px-2 py-1 text-left">Student</th>
                       <th className="border px-2 py-1 text-left">A %</th>
                       <th className="border px-2 py-1 text-left">B %</th>
@@ -542,7 +582,7 @@ export default function TeacherAnalytics(){
                   </thead>
                   <tbody>
                     {(subjectCompare?.per_student || []).map(row => (
-                      <tr key={row.student_id}>
+                      <tr key={row.student_id} className="odd:bg-white even:bg-gray-50">
                         <td className="border px-2 py-1">{row.student}</td>
                         <td className="border px-2 py-1">{row.a_pct ?? '-'}</td>
                         <td className="border px-2 py-1">{row.b_pct ?? '-'}</td>
@@ -553,7 +593,7 @@ export default function TeacherAnalytics(){
                 </table>
               </div>
               {perStudentDeltaBarData && (
-                <div className="bg-white p-2 rounded border">
+                <div className="bg-white rounded-xl border border-gray-100 p-2 md:p-3">
                   <Bar data={perStudentDeltaBarData} options={perStudentDeltaBarOpts} />
                 </div>
               )}
@@ -562,7 +602,7 @@ export default function TeacherAnalytics(){
         </div>
       )}
 
-      {loading && <div className="bg-white rounded shadow p-3">Loading…</div>}
+      {loading && <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-3 text-sm text-gray-600">Loading…</div>}
     </div>
   )
 }

@@ -190,6 +190,14 @@ export default function TeacherLayout({ children }){
 
   const sidebarBase = isOpen ? 'w-64' : 'w-16'
 
+  const displayName = user?.first_name || user?.username || 'Profile'
+  const initials = (() => {
+    const first = (user?.first_name || user?.username || '').trim().charAt(0)
+    const last = (user?.last_name || '').trim().charAt(0)
+    const value = (first + last).toUpperCase()
+    return value || 'U'
+  })()
+
   return (
     <div className="min-h-screen bg-gray-50">
       {broadcastBanner && (
@@ -220,14 +228,6 @@ export default function TeacherLayout({ children }){
       )}
       {/* Top bar - refreshed style */}
       <header className="sticky top-0 z-30 bg-white text-gray-900 px-3 md:px-4 h-14 flex items-center gap-2 md:gap-3 shadow-sm border-b border-gray-200">
-        <button
-          className="p-2 rounded hover:bg-gray-100 md:hidden"
-          aria-label="Toggle sidebar"
-          onClick={()=>setIsMobileOpen(v=>!v)}>
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
-          </svg>
-        </button>
         <button
           className="p-2 rounded hover:bg-gray-100 hidden md:inline-flex"
           aria-label="Collapse sidebar"
@@ -270,25 +270,18 @@ export default function TeacherLayout({ children }){
         </div>
         <div className="ml-auto flex items-center gap-2 md:gap-3">
           <Link
-            to="/teacher/messages?tab=system"
-            className="relative inline-flex items-center justify-center w-10 h-10 rounded-lg border border-gray-200 hover:bg-gray-50"
-            aria-label="Notifications"
-            title="System messages"
+            to="/teacher/profile"
+            className="inline-flex items-center gap-2 px-2.5 py-1.5 rounded-full border border-gray-200 bg-white hover:bg-gray-50 shadow-sm transition-colors"
+            aria-label="Open profile"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5 text-gray-700">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75V9a6 6 0 10-12 0v.75a8.967 8.967 0 01-2.311 6.022c1.733.64 3.56 1.085 5.455 1.31m5.713 0a24.255 24.255 0 01-5.713 0m5.713 0a3 3 0 11-5.713 0" />
-            </svg>
-            {broadcastUnread > 0 && (
-              <span className="absolute -top-1 -right-1 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] bg-red-600 text-white">
-                {broadcastUnread > 99 ? '99+' : broadcastUnread}
-              </span>
-            )}
+            <div className="h-8 w-8 rounded-full bg-indigo-500 text-white flex items-center justify-center text-xs font-semibold">
+              {initials}
+            </div>
+            <div className="hidden sm:flex flex-col leading-tight max-w-[140px]">
+              <span className="text-xs font-medium text-gray-800 truncate">{displayName}</span>
+              <span className="text-[10px] text-gray-500">View profile</span>
+            </div>
           </Link>
-          {user && (
-            <span className="text-sm hidden sm:inline text-gray-600">
-              {user.first_name || user.username}
-            </span>
-          )}
           {/* Hide header logout on mobile; show only on md+ */}
           <button onClick={lock} className="hidden md:inline-flex px-3 py-1.5 rounded text-sm bg-gray-800 text-white hover:bg-gray-900 transition-colors shadow-soft">Lock</button>
           <button onClick={logout} className="hidden md:inline-flex px-3 py-1.5 rounded text-sm bg-gray-900 text-white hover:bg-gray-800 transition-colors shadow-soft">Logout</button>
@@ -411,7 +404,7 @@ export default function TeacherLayout({ children }){
         </aside>
 
         {/* Content area */}
-        <main className={`transition-all duration-200 px-3 md:px-6 py-4 pb-16 md:py-6 md:pb-6 ${isOpen? 'md:ml-64':'md:ml-16'}`}>
+        <main className={`transition-all duration-200 px-0 md:px-6 py-4 pb-16 md:py-6 md:pb-6 ${isOpen? 'md:ml-64':'md:ml-16'}`}>
           {children}
         </main>
       </div>

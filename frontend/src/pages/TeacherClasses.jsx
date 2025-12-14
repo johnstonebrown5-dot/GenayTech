@@ -187,31 +187,26 @@ export default function TeacherClasses(){
           )}
           <div className="ml-0 sm:ml-auto w-full">
             <div className="text-xs text-gray-600 mb-1 sm:hidden">Quick Actions</div>
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 w-full">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 w-full">
               <button
                 onClick={()=>navigate(`/teacher/attendance?class=${selected}`)}
                 disabled={loading || loadingStudents || !selected}
-                className="h-12 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 text-white text-xs sm:text-sm disabled:opacity-60 flex items-center justify-center px-2"
+                className="h-11 sm:h-12 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white text-[11px] sm:text-xs font-medium disabled:opacity-60 flex items-center justify-center px-3 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all"
               >Mark Attendance</button>
               <button
                 onClick={()=>navigate(`/teacher/grades?class=${selected}`)}
                 disabled={loading || loadingStudents || !selected}
-                className="h-12 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white text-xs sm:text-sm disabled:opacity-60 flex items-center justify-center px-2"
+                className="h-11 sm:h-12 rounded-2xl bg-gradient-to-r from-indigo-500 to-purple-600 text-white text-[11px] sm:text-xs font-medium disabled:opacity-60 flex items-center justify-center px-3 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all"
               >Enter Grades</button>
-              <button
-                onClick={()=>navigate('/teacher/messages')}
-                disabled={loading || loadingStudents}
-                className="h-12 rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 text-white text-xs sm:text-sm disabled:opacity-60 flex items-center justify-center px-2"
-              >Message Class</button>
               <button
                 onClick={handlePrint}
                 disabled={loading || loadingStudents || filtered.length===0}
-                className="h-12 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 text-white text-xs sm:text-sm disabled:opacity-60 flex items-center justify-center px-2"
+                className="h-11 sm:h-12 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-600 text-white text-[11px] sm:text-xs font-medium disabled:opacity-60 flex items-center justify-center px-3 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all"
               >Print</button>
               <button
                 onClick={handleDownloadCSV}
                 disabled={loading || loadingStudents || filtered.length===0}
-                className="h-12 rounded-xl bg-gradient-to-r from-pink-600 to-rose-600 text-white text-xs sm:text-sm disabled:opacity-60 flex items-center justify-center px-2"
+                className="h-11 sm:h-12 rounded-2xl bg-gradient-to-r from-pink-500 to-rose-600 text-white text-[11px] sm:text-xs font-medium disabled:opacity-60 flex items-center justify-center px-3 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all"
               >Download CSV</button>
             </div>
           </div>

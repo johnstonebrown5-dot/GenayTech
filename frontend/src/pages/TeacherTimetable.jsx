@@ -314,7 +314,6 @@ export default function TeacherTimetable() {
           <div className="min-w-0">
             <h1 className="text-xl sm:text-2xl font-extrabold text-gray-900">Your Timetable</h1>
             <div className="mt-1 flex flex-wrap items-center gap-2 text-xs sm:text-sm">
-              <span className="px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">Plan: {plan?.name||'-'}</span>
               <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">Term: {plan?.term_detail?.name || (currentTerm ? (`T${currentTerm?.number||''}`) : (currentYear?.terms?.find(t=>t.is_current)?.name || ''))}</span>
               <span className="px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">Year: {plan?.term_detail?.academic_year_label || currentYear?.label || ''}</span>
               {teacherName && <span className="px-2 py-0.5 rounded-full bg-sky-50 text-sky-700 border border-sky-200">Teacher: {teacherName}</span>}
@@ -336,7 +335,6 @@ export default function TeacherTimetable() {
                 className="px-3 py-1.5 rounded-lg text-white bg-gradient-to-r from-sky-500 to-blue-600 text-sm"
               >Block View</button>
             </div>
-            <button className="px-3 py-1.5 rounded-lg text-white bg-gradient-to-r from-emerald-600 to-teal-600 text-sm" onClick={()=>setRefreshTick(v=>v+1)}>Refresh</button>
             <button className="px-3 py-1.5 rounded-lg text-white bg-gradient-to-r from-amber-500 to-orange-600 text-sm" onClick={()=>window.print()}>Print</button>
           </div>
         </div>
@@ -358,26 +356,19 @@ export default function TeacherTimetable() {
           <div>Term: <span className="font-semibold">{plan?.term_detail?.name || (currentTerm ? (`T${currentTerm?.number||''}`) : (currentYear?.terms?.find(t=>t.is_current)?.name || ''))}</span></div>
           <div>Year: <span className="font-semibold">{plan?.term_detail?.academic_year_label || currentYear?.label || ''}</span></div>
         </div>
-        {/* Diagnostics (hidden when data looks good) */}
-        {(classList.length===0 || teacherClasses.length===0) && (
-          <div className="text-xs text-gray-500 mb-2">
-            Debug: planId={String(plan?.id||'')} • classesLoaded={classList.length} • teacherClasses={teacherClasses.length} • assignments={Object.keys(blockAssignments||{}).length}
-          </div>
-        )}
-
         {loading? (
           <div className="text-gray-500">Loading…</div>
         ) : (
-          <div className="a4-sheet bg-white rounded-lg border border-gray-200 shadow-sm mx-auto">
+          <div className="a4-sheet bg-white rounded-lg border border-gray-200 shadow-sm mx-auto min-h-[60vh] flex flex-col">
             <div className="overflow-x-auto -mx-2 px-2">
               <table className="w-full min-w-[800px] md:min-w-0 table-fixed text-[11px] md:text-[12px] border-collapse">
                 <thead>
                   <tr className="bg-blue-50/60">
-                    <th className="px-2 py-3 text-left text-gray-700 w-20 uppercase tracking-wide sticky left-0 z-20 bg-blue-50/60">Day</th>
+                    <th className="px-2 py-5 text-left text-gray-700 w-20 uppercase tracking-wide sticky left-0 z-20 bg-blue-50/60">Day</th>
                     {displayPeriods.map(p=> {
                       const isNow = p.period_index===currentPeriodIndex
                       return (
-                      <th key={`h-${p.period_index}`} className={`px-2 py-3 text-center font-semibold ${isNow? 'text-emerald-800 bg-emerald-50 ring-1 ring-emerald-300':'text-gray-800'}`}>
+                      <th key={`h-${p.period_index}`} className={`px-2 py-5 text-center font-semibold ${isNow? 'text-emerald-800 bg-emerald-50 ring-1 ring-emerald-300':'text-gray-800'}`}>
                         {p.kind==='lesson'? `Lesson ${p.period_index}` : (p.label||p.kind.toUpperCase())}
                       </th>)
                     })}
@@ -388,21 +379,21 @@ export default function TeacherTimetable() {
                     const isToday = d===currentDay
                     return (
                     <tr key={`d-${d}`} className="border-t">
-                      <td className={`px-2 py-3 font-semibold uppercase align-middle sticky left-0 z-10 ${isToday? 'text-emerald-800 bg-emerald-50 ring-1 ring-emerald-300':'text-gray-900 bg-gray-50'}`}>{dayNames[d]}</td>
+                      <td className={`px-2 py-5 font-semibold uppercase align-middle sticky left-0 z-10 ${isToday? 'text-emerald-800 bg-emerald-50 ring-1 ring-emerald-300':'text-gray-900 bg-gray-50'}`}>{dayNames[d]}</td>
                       {displayPeriods.map(p=>{
                         if(p.kind==='break' || p.kind==='lunch'){
                           const isNow = p.period_index===currentPeriodIndex && isToday
                           const bg = isNow ? 'bg-emerald-200 text-emerald-900' : (p.kind==='break'? 'bg-amber-200 text-amber-900' : 'bg-yellow-200 text-yellow-900')
-                          return <td key={`c-${d}-${p.period_index}`} className={`px-2 py-3 text-center font-bold align-middle ${bg}`}>{(p.label||p.kind||'').toString().toUpperCase()}</td>
+                          return <td key={`c-${d}-${p.period_index}`} className={`px-2 py-5 text-center font-bold align-middle ${bg}`}>{(p.label||p.kind||'').toString().toUpperCase()}</td>
                         }
                         const entries = periods.length? cellEntries(d, p.period_index) : []
                         if(entries.length===0){
                           const isNow = p.period_index===currentPeriodIndex && isToday
-                          return <td key={`c-${d}-${p.period_index}`} className={`px-2 py-3 text-center align-middle ${isNow? 'bg-emerald-50 text-emerald-700 font-medium':'text-gray-400'}`}>—</td>
+                          return <td key={`c-${d}-${p.period_index}`} className={`px-2 py-5 text-center align-middle ${isNow? 'bg-emerald-50 text-emerald-700 font-medium':'text-gray-400'}`}>—</td>
                         }
                         const isNow = p.period_index===currentPeriodIndex && isToday
                         return (
-                          <td key={`c-${d}-${p.period_index}`} className={`px-2 py-3 text-center align-middle ${isNow? 'bg-emerald-50 ring-1 ring-emerald-200':''}`}>
+                          <td key={`c-${d}-${p.period_index}`} className={`px-2 py-5 text-center align-middle ${isNow? 'bg-emerald-50 ring-1 ring-emerald-200':''}`}>
                             {entries.map((txt, idx)=> (
                               <div key={idx} className="leading-tight text-gray-900">{txt}</div>
                             ))}
