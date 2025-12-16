@@ -278,12 +278,14 @@ class ClassViewSet(viewsets.ModelViewSet):
             rows = (
                 StudentClassHistory.objects
                 .filter(Q(from_class=klass) | Q(to_class=klass))
-                .select_related('student','from_class','to_class')
-                .order_by('created_at','id')
+                .select_related('student', 'from_class', 'to_class')
+                .order_by('created_at', 'id')
             )
             events = []
+            students_in = []
+            students_out = []
             for h in rows:
-                events.append({
+                ev = {
                     'id': getattr(h, 'id', None),
                     'student': {
                         'id': getattr(getattr(h, 'student', None), 'id', None),
@@ -297,9 +299,35 @@ class ClassViewSet(viewsets.ModelViewSet):
                     'term': getattr(h, 'term', None),
                     'note': getattr(h, 'note', ''),
                     'created_at': getattr(h, 'created_at', None),
-                })
+                }
+                events.append(ev)
+
+                # Map into "students in" / "students out" buckets used by the AdminClassProfile UI
+                action = ev.get('action')
+                # Students coming into this class
+                if getattr(h, 'to_class_id', None) == klass.id and action in ('assigned', 'promoted', 'moved'):
+                    students_in.append({
+                        'student_id': ev['student']['id'],
+                        'student_name': ev['student']['name'],
+                        'from': ev.get('from') or 'Unassigned',
+                        'year': ev.get('year'),
+                        'term': ev.get('term'),
+                        'created_at': ev.get('created_at'),
+                    })
+                # Students leaving this class (including graduation / unassignment)
+                if getattr(h, 'from_class_id', None) == klass.id and action in ('promoted', 'moved', 'graduated', 'unassigned'):
+                    students_out.append({
+                        'student_id': ev['student']['id'],
+                        'student_name': ev['student']['name'],
+                        'to': ev.get('to') or ('Unassigned' if action == 'unassigned' else None),
+                        'year': ev.get('year'),
+                        'term': ev.get('term'),
+                        'created_at': ev.get('created_at'),
+                    })
         except Exception:
             events = []
+            students_in = []
+            students_out = []
         # Lightweight summary
         summary = {
             'total_events': len(events),
@@ -309,7 +337,35 @@ class ClassViewSet(viewsets.ModelViewSet):
             'graduated': len([e for e in events if e.get('action') == 'graduated']),
             'unassigned': len([e for e in events if e.get('action') == 'unassigned']),
         }
-        return Response({'class': {'id': klass.id, 'name': klass.name, 'grade_level': klass.grade_level}, 'events': events, 'summary': summary})
+        # Exams grouped by academic year and term for this class
+        exams_by_term = []
+        try:
+            qs_exams = Exam.objects.filter(klass=klass).order_by('year', 'term', 'date', 'id')
+            grouped = {}
+            for ex in qs_exams:
+                key = (getattr(ex, 'year', None), getattr(ex, 'term', None))
+                if key not in grouped:
+                    grouped[key] = []
+                grouped[key].append(getattr(ex, 'name', '') or f"Exam #{getattr(ex, 'id', '')}")
+            for (year, term), names in grouped.items():
+                exams_by_term.append({
+                    'year': year,
+                    'term': term,
+                    'exams': ', '.join([n for n in names if n]),
+                })
+        except Exception:
+            exams_by_term = []
+
+        payload = {
+            'class': {'id': klass.id, 'name': klass.name, 'grade_level': klass.grade_level},
+            'events': events,
+            'summary': summary,
+            # Structured history used by AdminClassProfile
+            'students_in': students_in,
+            'students_out': students_out,
+            'exams_by_term': exams_by_term,
+        }
+        return Response(payload)
 
     @action(detail=True, methods=['post'], permission_classes=[IsAdmin], url_path='promote')
     def promote(self, request, pk=None):
@@ -1271,6 +1327,23 @@ class ExamViewSet(viewsets.ModelViewSet):
         if not st_row:
             return Response({'detail': 'No results found for this student in this exam'}, status=404)
 
+        # Simple helper to convert a percentage score into a performance grade.
+        # Mirrors the default frontend logic when custom grading bands are not applied.
+        def _letter_from_percentage(pct: float | int | None) -> str:
+            try:
+                n = float(pct)
+            except (TypeError, ValueError):
+                return '-'
+            if n >= 80:
+                return 'A'
+            if n >= 70:
+                return 'B'
+            if n >= 60:
+                return 'C'
+            if n >= 50:
+                return 'D'
+            return 'E'
+
         from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image
         from reportlab.lib.pagesizes import A4
         from reportlab.lib.styles import getSampleStyleSheet
@@ -1444,19 +1517,31 @@ class ExamViewSet(viewsets.ModelViewSet):
         except Exception:
             pass
 
-        rows = [['Subject','Marks']]
+        # Per-subject performance table: Subject | Marks | Grade
+        rows = [['Subject', 'Marks', 'Grade']]
+        subject_percentages = st_row.get('subject_percentages') or {}
         for s in subjects:
             sid = str(s['id'])
             mark = st_row['marks'].get(sid)
-            rows.append([s.get('code') or s.get('name'), '' if mark is None else round(float(mark),2)])
-        rows.append(['Total', st_row.get('total', 0)])
-        rows.append(['Average', st_row.get('average', 0)])
+            pct = subject_percentages.get(sid)
+            grade = _letter_from_percentage(pct)
+            rows.append([
+                s.get('code') or s.get('name'),
+                '' if mark is None else round(float(mark), 2),
+                grade,
+            ])
+        # Totals row (overall marks and average percentage for the exam)
+        total = st_row.get('total', 0)
+        avg = st_row.get('average', 0)
+        rows.append(['Total', total, ''])
+        rows.append(['Average', avg, _letter_from_percentage(avg)])
 
-        tbl = Table(rows, colWidths=[120*mm, 40*mm])
+        tbl = Table(rows, colWidths=[90*mm, 30*mm, 30*mm])
         tbl.setStyle(TableStyle([
             ('GRID',(0,0),(-1,-1),0.3, colors.lightgrey),
             ('BACKGROUND',(0,0),(-1,0), colors.whitesmoke),
             ('ALIGN',(1,1),(1,-1),'RIGHT'),
+            ('ALIGN',(2,1),(2,-1),'CENTER'),
             ('FONTNAME',(0,0),(-1,0),'Helvetica-Bold'),
             ('BOTTOMPADDING',(0,0),(-1,0),6),
         ]))

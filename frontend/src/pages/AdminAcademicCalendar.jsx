@@ -1,7 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import api from '../api'
 
 export default function AdminAcademicCalendar(){
+  const navigate = useNavigate()
   const [years, setYears] = useState([])
   const [currentYear, setCurrentYear] = useState(null)
   const [currentTerm, setCurrentTerm] = useState(null)
@@ -67,9 +69,19 @@ export default function AdminAcademicCalendar(){
   const createYear = async (e) => {
     e.preventDefault(); setError('')
     try {
-      await api.post('/academics/academic_years/', yearForm)
+      const res = await api.post('/academics/academic_years/', yearForm)
+      const created = res?.data
       setYearForm({ label:'', start_date:'', end_date:'', is_current:false })
       await load()
+
+      // After creating a new academic year, gently remind the admin to run promotions
+      if (created?.id) {
+        const doPromote = window.confirm('Academic year created successfully.\n\nDo you want to promote classes/students now for this new academic year?')
+        if (doPromote) {
+          // Redirect admin to the Classes page where promotions are managed
+          navigate('/admin/classes')
+        }
+      }
     } catch (e) {
       setError(e?.response?.data ? JSON.stringify(e.response.data) : e.message)
     }
@@ -96,8 +108,10 @@ export default function AdminAcademicCalendar(){
     }
   }
 
-  const promoteYear = async (id) => {
-    if (!window.confirm('Promote classes/students for this academic year now?\n\nNote: Grade 9 students will be marked as Graduated and removed from classes.')) return
+  const promoteYear = async (id, skipConfirm=false) => {
+    if (!skipConfirm) {
+      if (!window.confirm('Promote classes/students for this academic year now?\n\nNote: Grade 9 students will be marked as Graduated and removed from classes.')) return
+    }
     try {
       const res = await api.post(`/academics/academic_years/${id}/promote/`)
       const s = res?.data?.summary

@@ -16,6 +16,7 @@ export default function StudentReportCardViewer({ embedded=false, hideControls=f
   const [ranks, setRanks] = useState({})
   const [bandsBySubject, setBandsBySubject] = useState(new Map())
   const [globalBands, setGlobalBands] = useState(null)
+  const [selectedExamClass, setSelectedExamClass] = useState(null)
 
   const termYearOptions = useMemo(()=>{
     const set = new Set()
@@ -87,7 +88,7 @@ export default function StudentReportCardViewer({ embedded=false, hideControls=f
       const term = ed.term || ed?.inferred_term?.number || null
       if (year === parsedTermYear.year && term === parsedTermYear.term){
         seen.add(String(id))
-        list.push({ id, name: ed.name || String(r.exam || ''), total_marks: ed.total_marks, term, year, grade: ed.grade_level_tag })
+        list.push({ id, name: ed.name || String(r.exam || ''), total_marks: ed.total_marks, term, year, grade: ed.grade_level_tag, klass: ed.klass })
       }
     }
     return list
@@ -109,6 +110,26 @@ export default function StudentReportCardViewer({ embedded=false, hideControls=f
       if (onSelectedExamIdChange){ onSelectedExamIdChange(fallback) } else { setSelectedExamId(fallback) }
     }
   }, [termExams, effectiveExamId, onSelectedExamIdChange])
+
+  // Load the class associated with the selected exam so we can show
+  // the historical class name/grade at the time of the exam.
+  useEffect(()=>{
+    let active = true
+    ;(async ()=>{
+      try{
+        setSelectedExamClass(null)
+        const klassId = selectedExam?.klass
+        if (!klassId) return
+        const res = await api.get(`/academics/classes/${klassId}/`)
+        if (!active) return
+        setSelectedExamClass(res.data)
+      }catch{
+        if (!active) return
+        setSelectedExamClass(null)
+      }
+    })()
+    return ()=>{ active = false }
+  }, [selectedExam?.klass])
 
   useEffect(()=>{
     let mounted = true
@@ -257,7 +278,9 @@ export default function StudentReportCardViewer({ embedded=false, hideControls=f
       for (const r of examResults){
         const ed = r.exam_detail || {}
         if (!ed?.published) continue
-        if (!parsedTermYear || ed.year !== parsedTermYear.year || ed.term !== parsedTermYear.term) continue
+        const year = ed.year || (ed?.date ? (isNaN(new Date(ed.date)) ? null : new Date(ed.date).getFullYear()) : null)
+        const term = ed.term || ed?.inferred_term?.number || null
+        if (!parsedTermYear || year !== parsedTermYear.year || term !== parsedTermYear.term) continue
         const sid = r.subject_detail?.id || r.subject
         if (!sid) continue
         if (byExam[exId][String(sid)] === undefined) continue
@@ -416,8 +439,18 @@ export default function StudentReportCardViewer({ embedded=false, hideControls=f
               <div className="flex items-start justify-between text-sm mb-6">
                 <div className="space-y-1">
                   <div className="flex gap-3"><span className="font-semibold">Students name</span><span className="font-medium">{student?.name || '-'}</span></div>
-                  <div className="flex gap-3"><span className="font-semibold">Class</span><span className="font-medium">{student?.klass_detail?.name || student?.klass || '-'}</span></div>
-                  <div className="flex gap-3"><span className="font-semibold">Grade</span><span className="font-medium">{student?.klass_detail?.grade_level || '-'}</span></div>
+                  <div className="flex gap-3">
+                    <span className="font-semibold">Class</span>
+                    <span className="font-medium">
+                      {selectedExamClass?.name || student?.klass_detail?.name || student?.klass || '-'}
+                    </span>
+                  </div>
+                  <div className="flex gap-3">
+                    <span className="font-semibold">Grade</span>
+                    <span className="font-medium">
+                      {selectedExam?.grade || selectedExamClass?.grade_level || student?.klass_detail?.grade_level || '-'}
+                    </span>
+                  </div>
                   <div className="flex gap-3"><span className="font-semibold">Admission number</span><span className="font-medium">{student?.admission_no || '-'}</span></div>
                 </div>
                 <div className="text-right space-y-1">

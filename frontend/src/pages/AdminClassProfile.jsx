@@ -26,6 +26,8 @@ export default function AdminClassProfile(){
   const [classHistory, setClassHistory] = useState(null)
   const [loadingHistory, setLoadingHistory] = useState(false)
   const [historyError, setHistoryError] = useState('')
+  const [historyOutPage, setHistoryOutPage] = useState(1)
+  const [historyInPage, setHistoryInPage] = useState(1)
   const [showAddStudents, setShowAddStudents] = useState(false)
   const [unassigned, setUnassigned] = useState([])
   const [unassignedSearch, setUnassignedSearch] = useState('')
@@ -87,6 +89,12 @@ export default function AdminClassProfile(){
     if (activeTab === 'class') loadHistory()
     return ()=>{ cancelled = true }
   }, [id, activeTab])
+
+  useEffect(() => {
+    // Reset Students Out pagination whenever history changes
+    setHistoryOutPage(1)
+    setHistoryInPage(1)
+  }, [classHistory])
 
   useEffect(() => {
     try{
@@ -364,6 +372,64 @@ export default function AdminClassProfile(){
     return { boys, girls, total }
   }, [classStudents])
 
+  const studentsOutPageSize = 20
+  const studentsInPageSize = 20
+
+  const sortedStudentsIn = useMemo(() => {
+    const list = Array.isArray(classHistory?.students_in) ? [...classHistory.students_in] : []
+    // Sort by academic year, term, then created_at (latest first)
+    list.sort((a, b) => {
+      const ya = a?.year || 0
+      const yb = b?.year || 0
+      if (yb !== ya) return yb - ya
+      const ta = a?.term || 0
+      const tb = b?.term || 0
+      if (tb !== ta) return tb - ta
+      const da = a?.created_at ? new Date(a.created_at).getTime() : 0
+      const db = b?.created_at ? new Date(b.created_at).getTime() : 0
+      return db - da
+    })
+    return list
+  }, [classHistory])
+  const sortedStudentsOut = useMemo(() => {
+    const list = Array.isArray(classHistory?.students_out) ? [...classHistory.students_out] : []
+    // Sort by academic year, term, then created_at (latest first)
+    list.sort((a, b) => {
+      const ya = a?.year || 0
+      const yb = b?.year || 0
+      if (yb !== ya) return yb - ya
+      const ta = a?.term || 0
+      const tb = b?.term || 0
+      if (tb !== ta) return tb - ta
+      const da = a?.created_at ? new Date(a.created_at).getTime() : 0
+      const db = b?.created_at ? new Date(b.created_at).getTime() : 0
+      return db - da
+    })
+    return list
+  }, [classHistory])
+
+  const studentsInTotalPages = useMemo(() => {
+    if (!sortedStudentsIn.length) return 1
+    return Math.max(1, Math.ceil(sortedStudentsIn.length / studentsInPageSize))
+  }, [sortedStudentsIn])
+
+  const pagedStudentsIn = useMemo(() => {
+    const page = Math.min(Math.max(historyInPage, 1), studentsInTotalPages)
+    const start = (page - 1) * studentsInPageSize
+    return sortedStudentsIn.slice(start, start + studentsInPageSize)
+  }, [sortedStudentsIn, historyInPage, studentsInTotalPages])
+
+  const studentsOutTotalPages = useMemo(() => {
+    if (!sortedStudentsOut.length) return 1
+    return Math.max(1, Math.ceil(sortedStudentsOut.length / studentsOutPageSize))
+  }, [sortedStudentsOut])
+
+  const pagedStudentsOut = useMemo(() => {
+    const page = Math.min(Math.max(historyOutPage, 1), studentsOutTotalPages)
+    const start = (page - 1) * studentsOutPageSize
+    return sortedStudentsOut.slice(start, start + studentsOutPageSize)
+  }, [sortedStudentsOut, historyOutPage, studentsOutTotalPages])
+
   // Load exams and derive most recent for this class
   useEffect(() => {
     let cancelled = false
@@ -610,12 +676,20 @@ export default function AdminClassProfile(){
                                     </tr>
                                   </thead>
                                   <tbody>
-                                    {(classHistory.students_in||[]).length === 0 ? (
+                                    {(sortedStudentsIn||[]).length === 0 ? (
                                       <tr><td className="px-3 py-3 text-gray-500" colSpan={3}>No entries.</td></tr>
                                     ) : (
-                                      classHistory.students_in.map((h, i) => (
+                                      pagedStudentsIn.map((h, i) => (
                                         <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-indigo-50/50'}>
-                                          <td className="px-3 py-2 border-t">{h.student_name}</td>
+                                          <td className="px-3 py-2 border-t">
+                                            {h.student_id ? (
+                                              <Link to={`/admin/students/${h.student_id}`} className="text-blue-700 hover:underline">
+                                                {h.student_name}
+                                              </Link>
+                                            ) : (
+                                              h.student_name
+                                            )}
+                                          </td>
                                           <td className="px-3 py-2 border-t">{h.from || '-'}</td>
                                           <td className="px-3 py-2 border-t">{h.year ? `${h.year}-T${h.term||'-'}` : (h.created_at || '').slice(0,10)}</td>
                                         </tr>
@@ -623,6 +697,31 @@ export default function AdminClassProfile(){
                                     )}
                                   </tbody>
                                 </table>
+                                {sortedStudentsIn.length > studentsInPageSize && (
+                                  <div className="flex items-center justify-between px-3 py-2 text-xs text-gray-600 border-t bg-indigo-50/60">
+                                    <div>
+                                      Page {historyInPage} of {studentsInTotalPages} • Showing {pagedStudentsIn.length} of {sortedStudentsIn.length}
+                                    </div>
+                                    <div className="flex items-center gap-1">
+                                      <button
+                                        type="button"
+                                        onClick={() => setHistoryInPage(p => Math.max(1, p - 1))}
+                                        className="px-2 py-1 border rounded disabled:opacity-40"
+                                        disabled={historyInPage <= 1}
+                                      >
+                                        Prev
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => setHistoryInPage(p => Math.min(studentsInTotalPages, p + 1))}
+                                        className="px-2 py-1 border rounded disabled:opacity-40"
+                                        disabled={historyInPage >= studentsInTotalPages}
+                                      >
+                                        Next
+                                      </button>
+                                    </div>
+                                  </div>
+                                )}
                               </div>
                             </div>
                             <div className="rounded-lg border border-rose-200 overflow-hidden bg-white">
@@ -637,12 +736,20 @@ export default function AdminClassProfile(){
                                     </tr>
                                   </thead>
                                   <tbody>
-                                    {(classHistory.students_out||[]).length === 0 ? (
+                                    {(sortedStudentsOut||[]).length === 0 ? (
                                       <tr><td className="px-3 py-3 text-gray-500" colSpan={3}>No entries.</td></tr>
                                     ) : (
-                                      classHistory.students_out.map((h, i) => (
+                                      pagedStudentsOut.map((h, i) => (
                                         <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-rose-50/50'}>
-                                          <td className="px-3 py-2 border-t">{h.student_name}</td>
+                                          <td className="px-3 py-2 border-t">
+                                            {h.student_id ? (
+                                              <Link to={`/admin/students/${h.student_id}`} className="text-blue-700 hover:underline">
+                                                {h.student_name}
+                                              </Link>
+                                            ) : (
+                                              h.student_name
+                                            )}
+                                          </td>
                                           <td className="px-3 py-2 border-t">{h.to || '-'}</td>
                                           <td className="px-3 py-2 border-t">{h.year ? `${h.year}-T${h.term||'-'}` : (h.created_at || '').slice(0,10)}</td>
                                         </tr>
@@ -650,6 +757,31 @@ export default function AdminClassProfile(){
                                     )}
                                   </tbody>
                                 </table>
+                                {sortedStudentsOut.length > studentsOutPageSize && (
+                                  <div className="flex items-center justify-between px-3 py-2 text-xs text-gray-600 border-t bg-rose-50/60">
+                                    <div>
+                                      Page {historyOutPage} of {studentsOutTotalPages} • Showing {pagedStudentsOut.length} of {sortedStudentsOut.length}
+                                    </div>
+                                    <div className="flex items-center gap-1">
+                                      <button
+                                        type="button"
+                                        onClick={() => setHistoryOutPage(p => Math.max(1, p - 1))}
+                                        className="px-2 py-1 border rounded disabled:opacity-40"
+                                        disabled={historyOutPage <= 1}
+                                      >
+                                        Prev
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => setHistoryOutPage(p => Math.min(studentsOutTotalPages, p + 1))}
+                                        className="px-2 py-1 border rounded disabled:opacity-40"
+                                        disabled={historyOutPage >= studentsOutTotalPages}
+                                      >
+                                        Next
+                                      </button>
+                                    </div>
+                                  </div>
+                                )}
                               </div>
                             </div>
                           </div>
@@ -684,18 +816,20 @@ export default function AdminClassProfile(){
 
                     <div className="grid md:grid-cols-3 gap-4">
                       <div className="p-4 rounded-xl border border-cyan-200 bg-cyan-50 shadow-sm">
-                        <div className="text-sm font-semibold mb-2 text-gray-800">Gender Distribution</div>
+                        <div className="text-lg font-semibold mb-3 text-gray-800">Gender Distribution</div>
                         <div className="flex items-end gap-6 h-24">
                           <div className="flex flex-col items-center flex-1">
                             <div className="w-10 bg-blue-500 rounded-t" style={{height: `${genderStats.total? Math.round((genderStats.boys/genderStats.total)*100) : 0}%`}}></div>
-                            <div className="text-xs text-gray-600 mt-1">Boys ({genderStats.boys})</div>
+                            <div className="mt-1 text-base font-medium text-gray-900">Boys ({genderStats.boys})</div>
                           </div>
                           <div className="flex flex-col items-center flex-1">
-                            <div className="w-10 bg-pink-500 rounded-t" style={{height: `${genderStats.total? Math.round((genderStats.girls/genderStats.total)*100) : 0}%`}}></div>
-                            <div className="text-xs text-gray-600 mt-1">Girls ({genderStats.girls})</div>
+                            <div className="w-10 bg-pink-400 rounded-t" style={{height: `${genderStats.total? Math.round((genderStats.girls/genderStats.total)*100) : 0}%`}}></div>
+                            <div className="mt-1 text-base font-medium text-gray-900">Girls ({genderStats.girls})</div>
+                          </div>
+                          <div className="flex flex-col justify-end text-base text-gray-800 min-w-[72px]">
+                            <div>Total: <span className="font-semibold">{genderStats.total}</span></div>
                           </div>
                         </div>
-                        <div className="text-xs text-gray-500 mt-2">Total: {genderStats.total}</div>
                       </div>
 
                       <div className="md:col-span-2 p-4 rounded-xl border border-violet-200 bg-violet-50 shadow-sm">
