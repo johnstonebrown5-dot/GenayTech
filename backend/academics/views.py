@@ -358,28 +358,10 @@ class ClassViewSet(viewsets.ModelViewSet):
 
         with transaction.atomic():
             if current_grade_num == 9:
-                # Graduation path with fee clearance check
+                # Graduation path: graduate all students in this class.
+                # Finance data (invoices/payments) is left untouched so any fee arrears remain recorded.
                 moved_count = 0
-                not_cleared = []
-                try:
-                    from finance.models import Invoice, Payment
-                    from django.db.models import Sum
-                except Exception:
-                    Invoice = Payment = None
-                    Sum = None
                 for stu in klass.student_set.select_for_update().all():
-                    # Fee balance
-                    balance = 0
-                    try:
-                        if Invoice and Payment and Sum:
-                            total_billed = Invoice.objects.filter(student=stu).aggregate(s=Sum('amount'))['s'] or 0
-                            total_paid = Payment.objects.filter(invoice__student=stu).aggregate(s=Sum('amount'))['s'] or 0
-                            balance = float(total_billed or 0) - float(total_paid or 0)
-                    except Exception:
-                        balance = 0
-                    if balance > 0:
-                        not_cleared.append({'student_id': stu.id, 'name': stu.name, 'balance': balance})
-                        continue
                     try:
                         HistoryModel.objects.create(
                             student=stu,
@@ -401,8 +383,10 @@ class ClassViewSet(viewsets.ModelViewSet):
                     moved_count += 1
                 summary['mode'] = 'graduated'
                 summary['students_graduated'] = moved_count
-                if not_cleared:
-                    summary['not_cleared'] = not_cleared
+                # If all students were graduated (no students left in the class), clear the class teacher
+                if moved_count > 0 and not klass.student_set.exists():
+                    klass.teacher = None
+                    klass.save(update_fields=['teacher'])
             else:
                 # Promotion path to next grade in same stream
                 new_grade_num = current_grade_num + 1

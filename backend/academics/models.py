@@ -599,6 +599,10 @@ class AcademicYear(models.Model):
                             'students': moved_count,
                             'graduation_year': grad_year,
                         })
+                        # If all students were graduated (no students left in the class), clear the class teacher
+                        if moved_count > 0 and not class_obj.student_set.exists():
+                            class_obj.teacher = None
+                            class_obj.save(update_fields=['teacher'])
                         if not_cleared:
                             summary.setdefault('not_cleared', []).extend(not_cleared)
                     else:
@@ -610,38 +614,42 @@ class AcademicYear(models.Model):
                             grade_level=Class.format_grade_level(str(new_grade_num))
                         ).first()
                         if target:
-                            # Reassign class teacher to the destination class and clear from the old class
-                            target.teacher = class_obj.teacher
-                            target.save(update_fields=['teacher'])
-                            class_obj.teacher = None
-                            class_obj.save(update_fields=['teacher'])
-                            # Move students one-by-one to the existing destination class
-                            moved_count = 0
-                            for stu in class_obj.student_set.select_for_update().all():
-                                try:
-                                    StudentClassHistory.objects.create(
-                                        student=stu,
-                                        from_class=class_obj,
-                                        to_class=target,
-                                        action='promoted',
-                                        year=getattr(self.end_date, 'year', None) if getattr(self, 'end_date', None) else None,
-                                        term=None,
-                                        note='Auto promotion to next grade'
-                                    )
-                                except Exception:
-                                    pass
-                                stu.klass = target
-                                stu.is_graduated = False
-                                stu.school = class_obj.school
-                                stu.save(update_fields=['klass','is_graduated','school'])
-                                moved_count += 1
-                            summary['moved_classes'].append({
-                                'from_id': class_obj.id,
-                                'from': getattr(class_obj, 'name', ''),
-                                'to_id': target.id,
-                                'to': getattr(target, 'name', ''),
-                                'students': moved_count,
-                            })
+                            # Enforce: only promote into an empty target class
+                            if target.student_set.exists():
+                                summary['skipped'].append({'class_id': class_obj.id, 'name': getattr(class_obj, 'name', ''), 'reason': f'target class {getattr(target, "name", "")} is not empty'})
+                            else:
+                                # Reassign class teacher to the destination class and clear from the old class
+                                target.teacher = class_obj.teacher
+                                target.save(update_fields=['teacher'])
+                                class_obj.teacher = None
+                                class_obj.save(update_fields=['teacher'])
+                                # Move students one-by-one to the existing destination class
+                                moved_count = 0
+                                for stu in class_obj.student_set.select_for_update().all():
+                                    try:
+                                        StudentClassHistory.objects.create(
+                                            student=stu,
+                                            from_class=class_obj,
+                                            to_class=target,
+                                            action='promoted',
+                                            year=getattr(self.end_date, 'year', None) if getattr(self, 'end_date', None) else None,
+                                            term=None,
+                                            note='Auto promotion to next grade'
+                                        )
+                                    except Exception:
+                                        pass
+                                    stu.klass = target
+                                    stu.is_graduated = False
+                                    stu.school = class_obj.school
+                                    stu.save(update_fields=['klass','is_graduated','school'])
+                                    moved_count += 1
+                                summary['moved_classes'].append({
+                                    'from_id': class_obj.id,
+                                    'from': getattr(class_obj, 'name', ''),
+                                    'to_id': target.id,
+                                    'to': getattr(target, 'name', ''),
+                                    'students': moved_count,
+                                })
                         else:
                             # In-place promote: update this class's grade_level so name regenerates
                             try:
