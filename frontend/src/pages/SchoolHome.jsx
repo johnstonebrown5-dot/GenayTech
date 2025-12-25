@@ -430,7 +430,7 @@ export default function SchoolHome() {
         }
       `}</style>
       {/* Header */}
-      <header className="sticky top-0 z-30 bg-white/70 backdrop-blur supports-[backdrop-filter]:backdrop-blur border-b border-transparent shadow-sm">
+      <header className="sticky top-0 z-30 bg-white/60 backdrop-blur-xl supports-[backdrop-filter]:backdrop-blur border-b border-white/40 shadow-[0_10px_30px_rgba(15,23,42,0.06)]">
         <div className="mx-auto max-w-7xl px-4 md:px-6 py-3 md:py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             {school.logo_url ? (
@@ -446,21 +446,32 @@ export default function SchoolHome() {
             )}
             <span className="text-xl font-semibold tracking-tight text-gray-900">{school.name}</span>
           </div>
-          <nav className="hidden md:flex items-center gap-8 text-sm text-gray-600">
-            <a href="#about" className="hover:text-gray-900">About</a>
-            <a href="#headteacher" className="hover:text-gray-900">Headteacher</a>
-            <a href="#academics" className="hover:text-gray-900">Academics</a>
-            <Link to="/teachers" className="hover:text-gray-900">Teachers</Link>
-            <a href="#admissions" className="hover:text-gray-900">Admissions</a>
-            <a href="#news" className="hover:text-gray-900">News</a>
-            <a href="#contact" className="hover:text-gray-900">Contact</a>
+          <nav className="hidden md:flex items-center gap-6 text-sm text-gray-600">
+            <a href="#about" className="relative px-1 py-1 transition-colors hover:text-gray-900 after:absolute after:left-0 after:-bottom-0.5 after:h-0.5 after:w-0 after:bg-gradient-to-r after:from-indigo-500 after:to-purple-500 after:rounded-full hover:after:w-full after:transition-all after:duration-300">About</a>
+            <a href="#headteacher" className="relative px-1 py-1 transition-colors hover:text-gray-900 after:absolute after:left-0 after:-bottom-0.5 after:h-0.5 after:w-0 after:bg-gradient-to-r after:from-indigo-500 after:to-purple-500 after:rounded-full hover:after:w-full after:transition-all after:duration-300">Headteacher</a>
+            <a href="#academics" className="relative px-1 py-1 transition-colors hover:text-gray-900 after:absolute after:left-0 after:-bottom-0.5 after:h-0.5 after:w-0 after:bg-gradient-to-r after:from-indigo-500 after:to-purple-500 after:rounded-full hover:after:w-full after:transition-all after:duration-300">Academics</a>
+            <Link to="/teachers" className="relative px-1 py-1 transition-colors hover:text-gray-900 after:absolute after:left-0 after:-bottom-0.5 after:h-0.5 after:w-0 after:bg-gradient-to-r after:from-indigo-500 after:to-purple-500 after:rounded-full hover:after:w-full after:transition-all after:duration-300">Teachers</Link>
+            <a href="#admissions" className="relative px-1 py-1 transition-colors hover:text-gray-900 after:absolute after:left-0 after:-bottom-0.5 after:h-0.5 after:w-0 after:bg-gradient-to-r after:from-indigo-500 after:to-purple-500 after:rounded-full hover:after:w-full after:transition-all after:duration-300">Admissions</a>
+            <a href="#news" className="relative px-1 py-1 transition-colors hover:text-gray-900 after:absolute after:left-0 after:-bottom-0.5 after:h-0.5 after:w-0 after:bg-gradient-to-r after:from-indigo-500 after:to-purple-500 after:rounded-full hover:after:w-full after:transition-all after:duration-300">News</a>
+            <a href="#contact" className="relative px-1 py-1 transition-colors hover:text-gray-900 after:absolute after:left-0 after:-bottom-0.5 after:h-0.5 after:w-0 after:bg-gradient-to-r after:from-indigo-500 after:to-purple-500 after:rounded-full hover:after:w-full after:transition-all after:duration-300">Contact</a>
           </nav>
           <div className="hidden md:flex items-center gap-3">
-            <Link to="/login" className="px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 rounded-md hover:bg-gray-50">Portal Login</Link>
-            <Link to="/app" onClick={onOpenApp} className="px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-indigo-600 to-purple-600 rounded-lg shadow hover:opacity-95">Open App</Link>
+            <Link
+              to="/login"
+              className="px-4 py-2 text-sm font-medium text-gray-700 rounded-full border border-transparent hover:border-gray-200 hover:bg-white/70 hover:text-gray-900 transition-colors"
+            >
+              Portal Login
+            </Link>
+            <Link
+              to="/app"
+              onClick={onOpenApp}
+              className="px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-indigo-600 to-purple-600 rounded-full shadow-md hover:shadow-lg hover:brightness-110 transition-transform transition-shadow hover:-translate-y-0.5"
+            >
+              Open App
+            </Link>
           </div>
           <button
-            className="md:hidden inline-flex items-center justify-center p-2 rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50"
+            className="md:hidden inline-flex items-center justify-center p-2 rounded-xl border border-gray-200/80 bg-white/70 text-gray-700 shadow-sm hover:bg-white"
             aria-label="Open menu"
             aria-expanded={mobileOpen}
             onClick={() => setMobileOpen((v) => !v)}
@@ -475,7 +486,7 @@ export default function SchoolHome() {
           </button>
         </div>
         {mobileOpen && (
-          <div className="md:hidden border-t border-gray-100 bg-white">
+          <div className="md:hidden border-t border-gray-100 bg-white/95 backdrop-blur-sm">
             <div className="px-6 py-4 flex flex-col gap-3 text-gray-700">
               <a href="#about" onClick={() => setMobileOpen(false)} className="py-2">About</a>
               <a href="#headteacher" onClick={() => setMobileOpen(false)} className="py-2">Headteacher</a>
@@ -485,8 +496,20 @@ export default function SchoolHome() {
               <a href="#news" onClick={() => setMobileOpen(false)} className="py-2">News</a>
               <a href="#contact" onClick={() => setMobileOpen(false)} className="py-2">Contact</a>
               <div className="flex gap-3 pt-2">
-                <Link to="/login" onClick={() => setMobileOpen(false)} className="flex-1 px-4 py-2 text-sm font-medium text-gray-700 border border-gray-200 rounded-lg text-center">Portal Login</Link>
-                <Link to="/app" onClick={(e) => { setMobileOpen(false); onOpenApp(e) }} className="flex-1 px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg text-center">Open App</Link>
+                <Link
+                  to="/login"
+                  onClick={() => setMobileOpen(false)}
+                  className="flex-1 px-4 py-2 text-sm font-medium text-gray-700 border border-gray-200 rounded-full text-center bg-white/80"
+                >
+                  Portal Login
+                </Link>
+                <Link
+                  to="/app"
+                  onClick={(e) => { setMobileOpen(false); onOpenApp(e) }}
+                  className="flex-1 px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-indigo-600 to-purple-600 rounded-full text-center shadow-sm"
+                >
+                  Open App
+                </Link>
               </div>
             </div>
           </div>
@@ -495,90 +518,79 @@ export default function SchoolHome() {
 
       {/* Hero */}
       <section className="relative overflow-hidden">
-        <div className="absolute inset-0" style={{ backgroundImage: `radial-gradient(1200px 600px at -10% -10%, ${heroColor}, transparent 60%), radial-gradient(700px 420px at 85% 45%, ${heroColor}, transparent 65%), radial-gradient(1200px 600px at 110% 30%, rgba(147,51,234,0.12), transparent 60%), linear-gradient(to bottom, white, rgba(248,250,252,0.6))` }} />
-        {/* decorative blobs removed to reduce motion */}
+        {/* Image layer */}
+        <div
+          className="absolute inset-0"
+          style={{
+            backgroundImage: heroImages[heroIndex] ? `url(${heroImages[heroIndex]})` : 'none',
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            backgroundRepeat: 'no-repeat'
+          }}
+        />
+        {/* Gradient overlay */}
+        <div
+          className="absolute inset-0 bg-gradient-to-b from-indigo-50/90 via-white/92 to-slate-50/96"
+          style={{
+            backgroundImage: `radial-gradient(1100px 520px at -10% -20%, ${heroColor}, transparent 60%), radial-gradient(900px 520px at 110% 10%, rgba(129,140,248,0.16), transparent 60%), linear-gradient(to bottom, #F9FAFB, #FFFFFF)`
+          }}
+        />
         <div className="relative mx-auto max-w-7xl px-4 md:px-6 pt-12 md:pt-16 pb-16 md:pb-24">
-          <div className="grid lg:grid-cols-2 gap-12 items-center">
+          <div className="grid lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] gap-12 items-center">
             <div>
-              <div className="inline-flex items-center gap-2 rounded-full bg-indigo-100 text-indigo-700 px-3 py-1 text-xs font-semibold mb-4 shadow-sm">
+              <div
+                className="inline-flex items-center gap-2 rounded-full bg-white/80 px-3 py-1 text-[11px] font-semibold text-indigo-700 shadow-sm ring-1 ring-indigo-100"
+                style={{ animation: 'pulseBadge 2.4s ease-out infinite' }}
+              >
+                <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-indigo-600 text-[10px] text-white">★</span>
                 <span>{school.homepage?.hero?.badge || school.motto}</span>
               </div>
-              <h1 className="text-3xl sm:text-4xl md:text-5xl font-extrabold leading-tight tracking-tight text-gray-900">
+              <h1 className="mt-4 text-3xl sm:text-4xl md:text-5xl font-extrabold leading-tight tracking-tight text-slate-900">
                 {school.homepage?.hero?.title ? (
                   school.homepage?.hero?.title
                 ) : (
-                  <span>
-                    {`Welcome to `}
-                    <span
-                      className="text-gray-950 dark:text-white font-extrabold border-r-2 border-blue-600 pr-1"
-                      aria-label="typing"
-                      style={{ WebkitTextStroke: '0.8px #2563eb', textShadow: '0 1px 0 rgba(37,99,235,0.15)' }}
-                    >
-                      {typed}
+                  <>
+                    <span className="block text-slate-800">Welcome to</span>
+                    <span className="bg-gradient-to-r from-indigo-600 via-purple-600 to-sky-500 bg-clip-text text-transparent">
+                      {typed || school.name}
                     </span>
-                  </span>
+                  </>
                 )}
               </h1>
-              <div className="mt-3 h-1.5 w-24 rounded-full bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 animate-pulse" />
-              <p className="mt-4 text-base sm:text-lg text-gray-600">
+              <p className="mt-4 text-base sm:text-lg text-slate-600 max-w-xl">
                 {school.homepage?.hero?.subtitle || 'A nurturing, diverse and high-achieving community empowering students to thrive in academics, character, and service.'}
               </p>
-              <div className="mt-8 grid grid-cols-1 sm:flex gap-3">
-                <a href={school.homepage?.hero?.ctaPrimaryLink || '#admissions'} className="w-full sm:w-auto px-6 py-3 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-semibold shadow-lg hover:shadow-xl hover:opacity-95 transition ring-1 ring-indigo-500/30">
+              <div className="mt-7 flex flex-wrap gap-3">
+                <a
+                  href={school.homepage?.hero?.ctaPrimaryLink || '#admissions'}
+                  className="inline-flex items-center justify-center gap-2 rounded-full bg-indigo-600 px-6 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 hover:shadow-md transition"
+                >
                   {school.homepage?.hero?.ctaPrimaryText || 'Start Your Application'}
                 </a>
-                <a href={school.homepage?.hero?.ctaSecondaryLink || '#about'} className="w-full sm:w-auto px-6 py-3 rounded-xl border border-gray-300 text-gray-700 font-medium hover:bg-gray-50 transition">
+                <a
+                  href={school.homepage?.hero?.ctaSecondaryLink || '#about'}
+                  className="inline-flex items-center justify-center gap-2 rounded-full border border-slate-200 bg-white/80 px-6 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 transition"
+                >
                   {school.homepage?.hero?.ctaSecondaryText || 'Learn More'}
                 </a>
               </div>
-              <div className="mt-6 flex flex-wrap gap-2 text-xs text-gray-600">
-                <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-gray-200 bg-white"><span className="h-1.5 w-1.5 rounded-full bg-green-500"/>Safe Environment</span>
-                <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-gray-200 bg-white"><span className="h-1.5 w-1.5 rounded-full bg-indigo-500"/>Dedicated Staff</span>
-                <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-gray-200 bg-white"><span className="h-1.5 w-1.5 rounded-full bg-purple-500"/>Holistic Learning</span>
+              <div className="mt-6 flex flex-wrap gap-2 text-[11px] text-slate-600">
+                <span className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white/80 px-3 py-1">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                  Safe environment
+                </span>
+                <span className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white/80 px-3 py-1">
+                  <span className="h-1.5 w-1.5 rounded-full bg-indigo-500" />
+                  Dedicated staff
+                </span>
+                <span className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white/80 px-3 py-1">
+                  <span className="h-1.5 w-1.5 rounded-full bg-purple-500" />
+                  Holistic learning
+                </span>
               </div>
             </div>
             <div className="relative">
-              <div className="rounded-3xl border border-gray-200 shadow-2xl overflow-hidden bg-white ring-1 ring-gray-100 transform transition hover:-translate-y-0.5 hover:shadow-[0_20px_50px_rgba(79,70,229,0.15)]" style={{ boxShadow: `0 20px 60px ${heroColor}` }}>
-                <div className="relative w-full h-64 sm:h-72 md:h-80">
-                  {heroImages.map((src, i) => {
-                    const isActive = i === heroIndex
-                    const common = {
-                      transitionProperty: 'opacity, filter',
-                      zIndex: isActive ? 2 : 1,
-                    }
-                    const fadeStyle = common
-                    const dissolveStyle = common
-                    const boxStyle = {
-                      transitionProperty: 'clip-path, opacity',
-                      clipPath: isActive ? 'inset(0% 0% 0% 0%)' : 'inset(50% 50% 50% 50%)',
-                      zIndex: isActive ? 2 : 1,
-                    }
-                    return (
-                      <ProgressiveImage
-                        key={`hero-${i}`}
-                        src={src}
-                        candidates={imageCandidates(src)}
-                        alt="Hero"
-                        className={`absolute inset-0 w-full h-full transition-all duration-700 ${animationVariant === 'fade' ? (isActive ? 'opacity-100' : 'opacity-0') : ''} ${animationVariant === 'dissolve' ? (isActive ? 'opacity-100 blur-0' : 'opacity-0 blur-sm') : ''}`}
-                        style={animationVariant === 'box' ? boxStyle : (animationVariant === 'dissolve' ? dissolveStyle : fadeStyle)}
-                      />
-                    )
-                  })}
-                </div>
-                <div className="grid grid-cols-3 divide-x divide-gray-100">
-                  {heroImages.slice(0, 3).map((src, i) => (
-                    <button key={`thumb-${i}`} type="button" onClick={() => setHeroIndex(i)} className="relative group">
-                      <ProgressiveImage
-                        src={src}
-                        candidates={imageCandidates(src)}
-                        alt="Thumb"
-                        className="h-20 sm:h-24 md:h-28 w-full overflow-hidden rounded-none"
-                      />
-                      <span className={`absolute inset-0 ring-2 ${heroIndex === i ? 'ring-indigo-500' : 'ring-transparent'} pointer-events-none`} />
-                    </button>
-                  ))}
-                </div>
-              </div>
+              <div className="h-64 sm:h-72 md:h-80" />
               {(() => {
                 const st = school?.homepage?.stats || {}
                 const students = st?.students ?? '—'
@@ -606,7 +618,10 @@ export default function SchoolHome() {
             </div>
           </div>
         </div>
-        <div className="hidden md:flex items-center gap-2 absolute left-1/2 -translate-x-1/2 bottom-6 text-gray-500/80">
+        <div
+          className="hidden md:flex items-center gap-2 absolute left-1/2 -translate-x-1/2 bottom-6 text-gray-500/80"
+          style={{ animation: 'bounceY 1.6s ease-in-out infinite' }}
+        >
           <span className="text-xs tracking-wider uppercase">Scroll</span>
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4">
             <path d="M12 16.5a1 1 0 0 1-.7-.29l-5-5a1 1 0 1 1 1.4-1.42l4.3 4.3 4.3-4.3a1 1 0 0 1 1.4 1.42l-5 5a1 1 0 0 1-.7.29Z" />
@@ -616,58 +631,114 @@ export default function SchoolHome() {
       </section>
 
       {/* About */}
-      <section id="about" className="relative overflow-hidden bg-gradient-to-b from-slate-50 via-indigo-50/20 to-white">
-        <div aria-hidden className="absolute inset-0 pointer-events-none opacity-10 [background:radial-gradient(rgba(99,102,241,0.14)_1px,transparent_1px)] [background-size:22px_22px]" />
-        <div className="mx-auto max-w-7xl px-4 md:px-6 py-14 md:py-20">
-          <div className="grid lg:grid-cols-2 gap-12 items-start">
-          <div>
-            <h2 className="text-3xl font-bold text-gray-900">{school.homepage?.about?.title || `About ${school.name}`}</h2>
-            <p className="mt-4 text-lg text-gray-600">{school.homepage?.about?.text || `Founded on excellence and integrity, ${school.name} offers a rich curriculum, vibrant co-curricular life and a caring environment that inspires students to reach their full potential.`}</p>
-            <ul className="mt-6 space-y-3 text-gray-700">
-              {(school.homepage?.about?.bullets && school.homepage.about.bullets.length ? school.homepage.about.bullets : [
-                'Experienced and caring teachers',
-                'Strong STEM and Humanities programs',
-                'Sports, arts, clubs and community service',
-                'Safe, inclusive and diverse community'
-              ]).map((b, idx)=> (
-                <li key={`${idx}-${b}`} className="flex gap-2"><span className="text-indigo-600">•</span> {b}</li>
-              ))}
-            </ul>
-          </div>
-          <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-lg">
-            <h3 className="text-lg font-semibold text-gray-900">At a Glance</h3>
-            <div className="mt-4 grid grid-cols-2 md:grid-cols-3 gap-4 text-sm text-gray-700">
-              <div className="rounded-lg bg-gray-50 p-4">
-                <CountUp value={school.homepage?.stats?.students ?? '—'} className="text-2xl font-bold text-indigo-700" />
-                <div className="mt-1">Students</div>
-              </div>
-              <div className="rounded-lg bg-gray-50 p-4">
-                <CountUp value={school.homepage?.stats?.teachers ?? '—'} className="text-2xl font-bold text-indigo-700" />
-                <div className="mt-1">Teachers</div>
-              </div>
-              <div className="rounded-lg bg-gray-50 p-4">
-                <CountUp value={school.homepage?.stats?.satisfaction || '98%'} className="text-2xl font-bold text-indigo-700" />
-                <div className="mt-1">Parent Satisfaction</div>
-              </div>
-              <div className="rounded-lg bg-gray-50 p-4">
-                <div className="text-2xl font-bold text-indigo-700">{school.homepage?.stats?.ratio || '15:1'}</div>
-                <div className="mt-1">Student-Teacher Ratio</div>
-              </div>
-              {school.homepage?.stats?.completion ? (
-                <div className="rounded-lg bg-gray-50 p-4">
-                  <CountUp value={school.homepage.stats.completion} className="text-2xl font-bold text-indigo-700" />
-                  <div className="mt-1">KCSE Completion</div>
+      <section id="about" className="relative overflow-hidden bg-gradient-to-b from-slate-50 via-indigo-50/25 to-white">
+        <div
+          aria-hidden
+          className="absolute inset-0 pointer-events-none opacity-10 [background:radial-gradient(rgba(99,102,241,0.14)_1px,transparent_1px)] [background-size:22px_22px]"
+        />
+        <div className="relative mx-auto max-w-7xl px-4 md:px-6 py-14 md:py-20">
+          <div className="grid lg:grid-cols-2 gap-10 lg:gap-14 items-start">
+            <div>
+              <p className="text-xs font-semibold tracking-[0.2em] uppercase text-indigo-500/80">
+                Our community
+              </p>
+              <h2 className="mt-2 text-3xl md:text-4xl font-semibold md:font-bold tracking-tight text-slate-900">
+                {school.homepage?.about?.title || `About ${school.name}`}
+              </h2>
+              <p className="mt-4 text-base md:text-lg leading-relaxed text-slate-600 max-w-xl">
+                {school.homepage?.about?.text || `Founded on excellence and integrity, ${school.name} offers a rich curriculum, vibrant co-curricular life and a caring environment that inspires students to reach their full potential.`}
+              </p>
+              <ul className="mt-6 space-y-3 text-sm md:text-base text-slate-700">
+                {(school.homepage?.about?.bullets && school.homepage.about.bullets.length
+                  ? school.homepage.about.bullets
+                  : [
+                      'Experienced and caring teachers',
+                      'Strong STEM and Humanities programs',
+                      'Sports, arts, clubs and community service',
+                      'Safe, inclusive and diverse community',
+                    ]
+                ).map((b, idx) => (
+                  <li
+                    key={`${idx}-${b}`}
+                    className="flex items-start gap-3 rounded-xl bg-white/70 px-3 py-2 ring-1 ring-slate-100 shadow-[0_1px_3px_rgba(15,23,42,0.06)]"
+                  >
+                    <span className="mt-1 inline-flex h-5 w-5 items-center justify-center rounded-full bg-indigo-50 text-indigo-600 text-xs font-semibold">
+                      ✓
+                    </span>
+                    <span>{b}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div className="relative">
+              <div className="pointer-events-none absolute -inset-6 -z-10 bg-gradient-to-tr from-indigo-500/10 via-fuchsia-500/5 to-sky-500/10 blur-2xl" />
+              <div className="rounded-3xl border border-slate-200/80 bg-white/90 backdrop-blur-sm p-6 sm:p-7 shadow-[0_18px_45px_rgba(15,23,42,0.12)]">
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <h3 className="text-sm font-semibold tracking-wide text-slate-900">At a Glance</h3>
+                    <p className="mt-1 text-xs text-slate-500">Key highlights of our school community</p>
+                  </div>
+                  <span className="inline-flex items-center gap-1 rounded-full bg-indigo-50 px-3 py-1 text-[10px] font-medium text-indigo-700">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                    Growing every term
+                  </span>
                 </div>
-              ) : null}
-              <div className="rounded-lg bg-gray-50 p-4">
-                <CountUp value={school.homepage?.stats?.clubs || '40+'} className="text-2xl font-bold text-indigo-700" />
-                <div className="mt-1">Co-curricular Clubs</div>
+                <div className="mt-5 grid grid-cols-2 md:grid-cols-3 gap-4 text-sm text-slate-700">
+                  <div className="group rounded-2xl border border-slate-100 bg-gradient-to-br from-slate-50 to-indigo-50/40 p-4 shadow-sm hover:shadow-md hover:border-indigo-100 transition-all">
+                    <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-slate-500">Students</div>
+                    <CountUp
+                      value={school.homepage?.stats?.students ?? '—'}
+                      className="mt-1 text-2xl font-semibold text-slate-900 group-hover:text-indigo-700"
+                    />
+                    <p className="mt-1 text-xs text-slate-500">Active learners</p>
+                  </div>
+                  <div className="group rounded-2xl border border-slate-100 bg-gradient-to-br from-slate-50 to-purple-50/40 p-4 shadow-sm hover:shadow-md hover:border-purple-100 transition-all">
+                    <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-slate-500">Teachers</div>
+                    <CountUp
+                      value={school.homepage?.stats?.teachers ?? '—'}
+                      className="mt-1 text-2xl font-semibold text-slate-900 group-hover:text-indigo-700"
+                    />
+                    <p className="mt-1 text-xs text-slate-500">Dedicated educators</p>
+                  </div>
+                  <div className="group rounded-2xl border border-slate-100 bg-gradient-to-br from-slate-50 to-emerald-50/60 p-4 shadow-sm hover:shadow-md hover:border-emerald-100 transition-all">
+                    <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-slate-500">Parent satisfaction</div>
+                    <CountUp
+                      value={school.homepage?.stats?.satisfaction || '98%'}
+                      className="mt-1 text-2xl font-semibold text-slate-900 group-hover:text-emerald-700"
+                    />
+                    <p className="mt-1 text-xs text-slate-500">Based on feedback</p>
+                  </div>
+                  <div className="group rounded-2xl border border-slate-100 bg-gradient-to-br from-slate-50 to-sky-50/60 p-4 shadow-sm hover:shadow-md hover:border-sky-100 transition-all">
+                    <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-slate-500">Student–teacher ratio</div>
+                    <div className="mt-1 text-2xl font-semibold text-slate-900 group-hover:text-indigo-700">
+                      {school.homepage?.stats?.ratio || '15:1'}
+                    </div>
+                    <p className="mt-1 text-xs text-slate-500">Personalized attention</p>
+                  </div>
+                  {school.homepage?.stats?.completion ? (
+                    <div className="group rounded-2xl border border-slate-100 bg-gradient-to-br from-slate-50 to-amber-50/60 p-4 shadow-sm hover:shadow-md hover:border-amber-100 transition-all">
+                      <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-slate-500">KCSE completion</div>
+                      <CountUp
+                        value={school.homepage.stats.completion}
+                        className="mt-1 text-2xl font-semibold text-slate-900 group-hover:text-amber-700"
+                      />
+                      <p className="mt-1 text-xs text-slate-500">Graduation success</p>
+                    </div>
+                  ) : null}
+                  <div className="group rounded-2xl border border-slate-100 bg-gradient-to-br from-slate-50 to-pink-50/60 p-4 shadow-sm hover:shadow-md hover:border-pink-100 transition-all">
+                    <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-slate-500">Clubs & activities</div>
+                    <CountUp
+                      value={school.homepage?.stats?.clubs || '40+'}
+                      className="mt-1 text-2xl font-semibold text-slate-900 group-hover:text-pink-700"
+                    />
+                    <p className="mt-1 text-xs text-slate-500">Co-curricular options</p>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
-          </div>
         </div>
-        
+
       </section>
 
       <section id="headteacher" className="relative overflow-hidden bg-gradient-to-b from-white via-amber-50/20 to-white">

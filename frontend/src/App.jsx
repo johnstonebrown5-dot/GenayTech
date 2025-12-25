@@ -81,7 +81,6 @@ import FloatingButton from './components/Assistant/FloatingButton'
 import AssistantPanel from './components/Assistant/AssistantPanel'
 import FloatingActions from './components/FloatingActions'
 import ReportIssuePrompt from './components/ReportIssuePrompt'
-import ServiceReviewPopup from './components/ServiceReviewPopup'
 import LockProvider from './components/LockProvider'
 import PublicReceipt from './pages/PublicReceipt'
 import NotFound from './pages/NotFound'
@@ -284,7 +283,6 @@ export default function App() {
             <NotificationContainer />
             <BrowserNotificationPrompt />
             <ReportIssuePrompt />
-            <ServiceReviewPopup />
             {!hideAssistant && <FloatingActions />}
             {!hideAssistant && <FloatingHelpAction />}
             {!hideAssistant && <FloatingButton />}
@@ -295,4 +293,3 @@ export default function App() {
     </NotificationProvider>
   )
 }
-
