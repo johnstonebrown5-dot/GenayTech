@@ -430,7 +430,7 @@ export default function SchoolHome() {
         }
       `}</style>
       {/* Header */}
-      <header className="sticky top-0 z-30 bg-white/60 backdrop-blur-xl supports-[backdrop-filter]:backdrop-blur border-b border-white/40 shadow-[0_10px_30px_rgba(15,23,42,0.06)]">
+      <header className="sticky top-0 z-30 bg-white/70 backdrop-blur supports-[backdrop-filter]:backdrop-blur border-b border-transparent shadow-sm">
         <div className="mx-auto max-w-7xl px-4 md:px-6 py-3 md:py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             {school.logo_url ? (
@@ -446,32 +446,21 @@ export default function SchoolHome() {
             )}
             <span className="text-xl font-semibold tracking-tight text-gray-900">{school.name}</span>
           </div>
-          <nav className="hidden md:flex items-center gap-6 text-sm text-gray-600">
-            <a href="#about" className="relative px-1 py-1 transition-colors hover:text-gray-900 after:absolute after:left-0 after:-bottom-0.5 after:h-0.5 after:w-0 after:bg-gradient-to-r after:from-indigo-500 after:to-purple-500 after:rounded-full hover:after:w-full after:transition-all after:duration-300">About</a>
-            <a href="#headteacher" className="relative px-1 py-1 transition-colors hover:text-gray-900 after:absolute after:left-0 after:-bottom-0.5 after:h-0.5 after:w-0 after:bg-gradient-to-r after:from-indigo-500 after:to-purple-500 after:rounded-full hover:after:w-full after:transition-all after:duration-300">Headteacher</a>
-            <a href="#academics" className="relative px-1 py-1 transition-colors hover:text-gray-900 after:absolute after:left-0 after:-bottom-0.5 after:h-0.5 after:w-0 after:bg-gradient-to-r after:from-indigo-500 after:to-purple-500 after:rounded-full hover:after:w-full after:transition-all after:duration-300">Academics</a>
-            <Link to="/teachers" className="relative px-1 py-1 transition-colors hover:text-gray-900 after:absolute after:left-0 after:-bottom-0.5 after:h-0.5 after:w-0 after:bg-gradient-to-r after:from-indigo-500 after:to-purple-500 after:rounded-full hover:after:w-full after:transition-all after:duration-300">Teachers</Link>
-            <a href="#admissions" className="relative px-1 py-1 transition-colors hover:text-gray-900 after:absolute after:left-0 after:-bottom-0.5 after:h-0.5 after:w-0 after:bg-gradient-to-r after:from-indigo-500 after:to-purple-500 after:rounded-full hover:after:w-full after:transition-all after:duration-300">Admissions</a>
-            <a href="#news" className="relative px-1 py-1 transition-colors hover:text-gray-900 after:absolute after:left-0 after:-bottom-0.5 after:h-0.5 after:w-0 after:bg-gradient-to-r after:from-indigo-500 after:to-purple-500 after:rounded-full hover:after:w-full after:transition-all after:duration-300">News</a>
-            <a href="#contact" className="relative px-1 py-1 transition-colors hover:text-gray-900 after:absolute after:left-0 after:-bottom-0.5 after:h-0.5 after:w-0 after:bg-gradient-to-r after:from-indigo-500 after:to-purple-500 after:rounded-full hover:after:w-full after:transition-all after:duration-300">Contact</a>
+          <nav className="hidden md:flex items-center gap-8 text-sm text-gray-600">
+            <a href="#about" className="hover:text-gray-900">About</a>
+            <a href="#headteacher" className="hover:text-gray-900">Headteacher</a>
+            <a href="#academics" className="hover:text-gray-900">Academics</a>
+            <Link to="/teachers" className="hover:text-gray-900">Teachers</Link>
+            <a href="#admissions" className="hover:text-gray-900">Admissions</a>
+            <a href="#news" className="hover:text-gray-900">News</a>
+            <a href="#contact" className="hover:text-gray-900">Contact</a>
           </nav>
           <div className="hidden md:flex items-center gap-3">
-            <Link
-              to="/login"
-              className="px-4 py-2 text-sm font-medium text-gray-700 rounded-full border border-transparent hover:border-gray-200 hover:bg-white/70 hover:text-gray-900 transition-colors"
-            >
-              Portal Login
-            </Link>
-            <Link
-              to="/app"
-              onClick={onOpenApp}
-              className="px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-indigo-600 to-purple-600 rounded-full shadow-md hover:shadow-lg hover:brightness-110 transition-transform transition-shadow hover:-translate-y-0.5"
-            >
-              Open App
-            </Link>
+            <Link to="/login" className="px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 rounded-md hover:bg-gray-50">Portal Login</Link>
+            <Link to="/app" onClick={onOpenApp} className="px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-indigo-600 to-purple-600 rounded-lg shadow hover:opacity-95">Open App</Link>
           </div>
           <button
-            className="md:hidden inline-flex items-center justify-center p-2 rounded-xl border border-gray-200/80 bg-white/70 text-gray-700 shadow-sm hover:bg-white"
+            className="md:hidden inline-flex items-center justify-center p-2 rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50"
             aria-label="Open menu"
             aria-expanded={mobileOpen}
             onClick={() => setMobileOpen((v) => !v)}
@@ -486,7 +475,7 @@ export default function SchoolHome() {
           </button>
         </div>
         {mobileOpen && (
-          <div className="md:hidden border-t border-gray-100 bg-white/95 backdrop-blur-sm">
+          <div className="md:hidden border-t border-gray-100 bg-white">
             <div className="px-6 py-4 flex flex-col gap-3 text-gray-700">
               <a href="#about" onClick={() => setMobileOpen(false)} className="py-2">About</a>
               <a href="#headteacher" onClick={() => setMobileOpen(false)} className="py-2">Headteacher</a>
@@ -496,20 +485,8 @@ export default function SchoolHome() {
               <a href="#news" onClick={() => setMobileOpen(false)} className="py-2">News</a>
               <a href="#contact" onClick={() => setMobileOpen(false)} className="py-2">Contact</a>
               <div className="flex gap-3 pt-2">
-                <Link
-                  to="/login"
-                  onClick={() => setMobileOpen(false)}
-                  className="flex-1 px-4 py-2 text-sm font-medium text-gray-700 border border-gray-200 rounded-full text-center bg-white/80"
-                >
-                  Portal Login
-                </Link>
-                <Link
-                  to="/app"
-                  onClick={(e) => { setMobileOpen(false); onOpenApp(e) }}
-                  className="flex-1 px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-indigo-600 to-purple-600 rounded-full text-center shadow-sm"
-                >
-                  Open App
-                </Link>
+                <Link to="/login" onClick={() => setMobileOpen(false)} className="flex-1 px-4 py-2 text-sm font-medium text-gray-700 border border-gray-200 rounded-lg text-center">Portal Login</Link>
+                <Link to="/app" onClick={(e) => { setMobileOpen(false); onOpenApp(e) }} className="flex-1 px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg text-center">Open App</Link>
               </div>
             </div>
           </div>
@@ -518,19 +495,8 @@ export default function SchoolHome() {
 
       {/* Hero */}
       <section className="relative overflow-hidden">
-        {/* Image layer */}
         <div
-          className="absolute inset-0"
-          style={{
-            backgroundImage: heroImages[heroIndex] ? `url(${heroImages[heroIndex]})` : 'none',
-            backgroundSize: 'cover',
-            backgroundPosition: 'center',
-            backgroundRepeat: 'no-repeat'
-          }}
-        />
-        {/* Gradient overlay */}
-        <div
-          className="absolute inset-0 bg-gradient-to-b from-indigo-50/90 via-white/92 to-slate-50/96"
+          className="absolute inset-0 bg-gradient-to-b from-indigo-50 via-white to-slate-50"
           style={{
             backgroundImage: `radial-gradient(1100px 520px at -10% -20%, ${heroColor}, transparent 60%), radial-gradient(900px 520px at 110% 10%, rgba(129,140,248,0.16), transparent 60%), linear-gradient(to bottom, #F9FAFB, #FFFFFF)`
           }}
@@ -538,10 +504,7 @@ export default function SchoolHome() {
         <div className="relative mx-auto max-w-7xl px-4 md:px-6 pt-12 md:pt-16 pb-16 md:pb-24">
           <div className="grid lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] gap-12 items-center">
             <div>
-              <div
-                className="inline-flex items-center gap-2 rounded-full bg-white/80 px-3 py-1 text-[11px] font-semibold text-indigo-700 shadow-sm ring-1 ring-indigo-100"
-                style={{ animation: 'pulseBadge 2.4s ease-out infinite' }}
-              >
+              <div className="inline-flex items-center gap-2 rounded-full bg-white/80 px-3 py-1 text-[11px] font-semibold text-indigo-700 shadow-sm ring-1 ring-indigo-100">
                 <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-indigo-600 text-[10px] text-white">★</span>
                 <span>{school.homepage?.hero?.badge || school.motto}</span>
               </div>
@@ -590,7 +553,50 @@ export default function SchoolHome() {
               </div>
             </div>
             <div className="relative">
-              <div className="h-64 sm:h-72 md:h-80" />
+              <div
+                className="rounded-3xl border border-slate-200 bg-white/90 shadow-[0_18px_45px_rgba(15,23,42,0.16)] overflow-hidden ring-1 ring-indigo-100/70 backdrop-blur-sm transform transition hover:-translate-y-1 hover:shadow-[0_24px_65px_rgba(79,70,229,0.35)]"
+                style={{ boxShadow: `0 22px 60px ${heroColor}` }}
+              >
+                <div className="relative w-full h-64 sm:h-72 md:h-80">
+                  {heroImages.map((src, i) => {
+                    const isActive = i === heroIndex
+                    const common = {
+                      transitionProperty: 'opacity, filter',
+                      zIndex: isActive ? 2 : 1,
+                    }
+                    const fadeStyle = common
+                    const dissolveStyle = common
+                    const boxStyle = {
+                      transitionProperty: 'clip-path, opacity',
+                      clipPath: isActive ? 'inset(0% 0% 0% 0%)' : 'inset(50% 50% 50% 50%)',
+                      zIndex: isActive ? 2 : 1,
+                    }
+                    return (
+                      <ProgressiveImage
+                        key={`hero-${i}`}
+                        src={src}
+                        candidates={imageCandidates(src)}
+                        alt="Hero"
+                        className={`absolute inset-0 w-full h-full transition-all duration-700 ${animationVariant === 'fade' ? (isActive ? 'opacity-100' : 'opacity-0') : ''} ${animationVariant === 'dissolve' ? (isActive ? 'opacity-100 blur-0' : 'opacity-0 blur-sm') : ''}`}
+                        style={animationVariant === 'box' ? boxStyle : (animationVariant === 'dissolve' ? dissolveStyle : fadeStyle)}
+                      />
+                    )
+                  })}
+                </div>
+                <div className="grid grid-cols-3 divide-x divide-gray-100">
+                  {heroImages.slice(0, 3).map((src, i) => (
+                    <button key={`thumb-${i}`} type="button" onClick={() => setHeroIndex(i)} className="relative group">
+                      <ProgressiveImage
+                        src={src}
+                        candidates={imageCandidates(src)}
+                        alt="Thumb"
+                        className="h-20 sm:h-24 md:h-28 w-full overflow-hidden rounded-none"
+                      />
+                      <span className={`absolute inset-0 ring-2 ${heroIndex === i ? 'ring-indigo-500' : 'ring-transparent'} pointer-events-none`} />
+                    </button>
+                  ))}
+                </div>
+              </div>
               {(() => {
                 const st = school?.homepage?.stats || {}
                 const students = st?.students ?? '—'
@@ -618,10 +624,7 @@ export default function SchoolHome() {
             </div>
           </div>
         </div>
-        <div
-          className="hidden md:flex items-center gap-2 absolute left-1/2 -translate-x-1/2 bottom-6 text-gray-500/80"
-          style={{ animation: 'bounceY 1.6s ease-in-out infinite' }}
-        >
+        <div className="hidden md:flex items-center gap-2 absolute left-1/2 -translate-x-1/2 bottom-6 text-gray-500/80">
           <span className="text-xs tracking-wider uppercase">Scroll</span>
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4">
             <path d="M12 16.5a1 1 0 0 1-.7-.29l-5-5a1 1 0 1 1 1.4-1.42l4.3 4.3 4.3-4.3a1 1 0 0 1 1.4 1.42l-5 5a1 1 0 0 1-.7.29Z" />
