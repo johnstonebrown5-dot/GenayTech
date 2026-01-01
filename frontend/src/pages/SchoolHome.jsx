@@ -295,7 +295,8 @@ export default function SchoolHome() {
 
   useEffect(() => {
     let t
-    const autoplay = Boolean(school?.homepage?.hero?.autoplay)
+    // Disable hero image index autoplay; background now scrolls continuously instead
+    const autoplay = false
     if (!autoplay) return
     const intervalMs = Math.max(3500, Number(school?.homepage?.hero?.interval) || 5500)
     function tick(){ setHeroIndex((i) => (i + 1) % heroImages.length) }
@@ -371,13 +372,10 @@ export default function SchoolHome() {
       <div className="min-h-screen grid place-items-center bg-white text-gray-600">
         <div className="flex flex-col items-center gap-3">
           {!slowLoading ? (
-            <>
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" className="h-8 w-8 animate-spin text-indigo-600" aria-hidden="true" role="status">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 0 1 8-8v4a4 4 0 0 0-4 4H4z" />
-              </svg>
-              <div>Loading school…</div>
-            </>
+            <div className="text-center">
+              <div className="text-xl font-semibold text-gray-900">Welcome</div>
+              <p className="mt-1 text-sm text-gray-600">Website powered by EduTrack</p>
+            </div>
           ) : (
             <div className="text-center max-w-sm">
               <div className="mx-auto mb-3 h-10 w-10 rounded-full bg-amber-100 text-amber-700 grid place-items-center">
@@ -425,6 +423,36 @@ export default function SchoolHome() {
           0% { background-position: -200% 0; }
           100% { background-position: 200% 0; }
         }
+        @keyframes heroScroll {
+          0% { background-position: center 100%; }
+          100% { background-position: center 0%; }
+        }
+        .hero-bg-scroll {
+          animation: heroScroll 120s linear infinite;
+          background-repeat: repeat-y;
+        }
+        /* Hero fly-in animations */
+        @keyframes heroFlyDown {
+          0% { opacity: 0; transform: translateY(-30px); }
+          100% { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes heroFlyUp {
+          0% { opacity: 0; transform: translateY(30px); }
+          100% { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes heroFlyLeft {
+          0% { opacity: 0; transform: translateX(40px); }
+          100% { opacity: 1; transform: translateX(0); }
+        }
+        @keyframes heroFlyRight {
+          0% { opacity: 0; transform: translateX(-40px); }
+          100% { opacity: 1; transform: translateX(0); }
+        }
+        .hero-fly-down   { animation: heroFlyDown 700ms ease-out forwards; }
+        .hero-fly-up     { animation: heroFlyUp 800ms ease-out forwards; animation-delay: 80ms; }
+        .hero-fly-left   { animation: heroFlyLeft 850ms ease-out forwards; animation-delay: 140ms; }
+        .hero-fly-right  { animation: heroFlyRight 900ms ease-out forwards; animation-delay: 200ms; }
+        .hero-fly-badges { animation: heroFlyUp 950ms ease-out forwards; animation-delay: 260ms; }
         @media (prefers-reduced-motion: reduce) {
           * { animation: none !important; transition: none !important; }
         }
@@ -496,19 +524,19 @@ export default function SchoolHome() {
       {/* Hero */}
       <section className="relative overflow-hidden">
         <div
-          className="absolute inset-0 bg-gradient-to-b from-indigo-50 via-white to-slate-50"
+          className="absolute inset-0 bg-cover bg-center hero-bg-scroll"
           style={{
-            backgroundImage: `radial-gradient(1100px 520px at -10% -20%, ${heroColor}, transparent 60%), radial-gradient(900px 520px at 110% 10%, rgba(129,140,248,0.16), transparent 60%), linear-gradient(to bottom, #F9FAFB, #FFFFFF)`
+            backgroundImage: `linear-gradient(to bottom, rgba(249,250,251,0.65), rgba(255,255,255,0.82)), radial-gradient(1100px 520px at -10% -20%, ${heroColor}, transparent 65%), radial-gradient(900px 520px at 110% 10%, rgba(129,140,248,0.18), transparent 65%), url(${heroImages[heroIndex] || ''})`
           }}
         />
-        <div className="relative mx-auto max-w-7xl px-4 md:px-6 pt-12 md:pt-16 pb-16 md:pb-24">
-          <div className="grid lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] gap-12 items-center">
-            <div>
-              <div className="inline-flex items-center gap-2 rounded-full bg-white/80 px-3 py-1 text-[11px] font-semibold text-indigo-700 shadow-sm ring-1 ring-indigo-100">
+        <div className="relative mx-auto max-w-7xl px-4 md:px-6 pt-10 md:pt-14 pb-12 md:pb-20">
+          <div className="grid lg:grid-cols-1 gap-12 items-center justify-items-center text-center">
+            <div className="max-w-2xl mx-auto">
+              <div className="inline-flex items-center gap-2 rounded-full bg-white/80 px-3 py-1 text-[11px] font-semibold text-indigo-700 shadow-sm ring-1 ring-indigo-100 hero-fly-down">
                 <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-indigo-600 text-[10px] text-white">★</span>
                 <span>{school.homepage?.hero?.badge || school.motto}</span>
               </div>
-              <h1 className="mt-4 text-3xl sm:text-4xl md:text-5xl font-extrabold leading-tight tracking-tight text-slate-900">
+              <h1 className="mt-4 text-3xl sm:text-4xl md:text-5xl font-extrabold leading-tight tracking-tight text-slate-900 hero-fly-up">
                 {school.homepage?.hero?.title ? (
                   school.homepage?.hero?.title
                 ) : (
@@ -520,10 +548,10 @@ export default function SchoolHome() {
                   </>
                 )}
               </h1>
-              <p className="mt-4 text-base sm:text-lg text-slate-600 max-w-xl">
+              <p className="mt-4 text-base sm:text-lg text-slate-600 max-w-xl mx-auto hero-fly-left">
                 {school.homepage?.hero?.subtitle || 'A nurturing, diverse and high-achieving community empowering students to thrive in academics, character, and service.'}
               </p>
-              <div className="mt-7 flex flex-wrap gap-3">
+              <div className="mt-7 flex flex-wrap gap-3 justify-center hero-fly-right">
                 <a
                   href={school.homepage?.hero?.ctaPrimaryLink || '#admissions'}
                   className="inline-flex items-center justify-center gap-2 rounded-full bg-indigo-600 px-6 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 hover:shadow-md transition"
@@ -536,8 +564,14 @@ export default function SchoolHome() {
                 >
                   {school.homepage?.hero?.ctaSecondaryText || 'Learn More'}
                 </a>
+                <Link
+                  to="/login"
+                  className="inline-flex items-center justify-center gap-2 rounded-full border border-slate-200 bg-white/90 px-6 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 transition"
+                >
+                  Login
+                </Link>
               </div>
-              <div className="mt-6 flex flex-wrap gap-2 text-[11px] text-slate-600">
+              <div className="mt-6 flex flex-wrap gap-2 justify-center text-[11px] text-slate-600 hero-fly-badges">
                 <span className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white/80 px-3 py-1">
                   <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
                   Safe environment
@@ -551,76 +585,6 @@ export default function SchoolHome() {
                   Holistic learning
                 </span>
               </div>
-            </div>
-            <div className="relative">
-              <div
-                className="rounded-3xl border border-slate-200 bg-white/90 shadow-[0_18px_45px_rgba(15,23,42,0.16)] overflow-hidden ring-1 ring-indigo-100/70 backdrop-blur-sm transform transition hover:-translate-y-1 hover:shadow-[0_24px_65px_rgba(79,70,229,0.35)]"
-                style={{ boxShadow: `0 22px 60px ${heroColor}` }}
-              >
-                <div className="relative w-full h-64 sm:h-72 md:h-80">
-                  {heroImages.map((src, i) => {
-                    const isActive = i === heroIndex
-                    const common = {
-                      transitionProperty: 'opacity, filter',
-                      zIndex: isActive ? 2 : 1,
-                    }
-                    const fadeStyle = common
-                    const dissolveStyle = common
-                    const boxStyle = {
-                      transitionProperty: 'clip-path, opacity',
-                      clipPath: isActive ? 'inset(0% 0% 0% 0%)' : 'inset(50% 50% 50% 50%)',
-                      zIndex: isActive ? 2 : 1,
-                    }
-                    return (
-                      <ProgressiveImage
-                        key={`hero-${i}`}
-                        src={src}
-                        candidates={imageCandidates(src)}
-                        alt="Hero"
-                        className={`absolute inset-0 w-full h-full transition-all duration-700 ${animationVariant === 'fade' ? (isActive ? 'opacity-100' : 'opacity-0') : ''} ${animationVariant === 'dissolve' ? (isActive ? 'opacity-100 blur-0' : 'opacity-0 blur-sm') : ''}`}
-                        style={animationVariant === 'box' ? boxStyle : (animationVariant === 'dissolve' ? dissolveStyle : fadeStyle)}
-                      />
-                    )
-                  })}
-                </div>
-                <div className="grid grid-cols-3 divide-x divide-gray-100">
-                  {heroImages.slice(0, 3).map((src, i) => (
-                    <button key={`thumb-${i}`} type="button" onClick={() => setHeroIndex(i)} className="relative group">
-                      <ProgressiveImage
-                        src={src}
-                        candidates={imageCandidates(src)}
-                        alt="Thumb"
-                        className="h-20 sm:h-24 md:h-28 w-full overflow-hidden rounded-none"
-                      />
-                      <span className={`absolute inset-0 ring-2 ${heroIndex === i ? 'ring-indigo-500' : 'ring-transparent'} pointer-events-none`} />
-                    </button>
-                  ))}
-                </div>
-              </div>
-              {(() => {
-                const st = school?.homepage?.stats || {}
-                const students = st?.students ?? '—'
-                const teachers = st?.teachers ?? '—'
-                const satisfaction = st?.satisfaction || '98%'
-                return (
-                  <>
-                    <div className="hidden md:block pointer-events-none absolute -bottom-5 left-4 right-4 md:left-6 md:right-auto z-10">
-                      <div className="rounded-xl border border-gray-200 bg-white/80 backdrop-blur px-3 py-2 shadow-md flex gap-4 text-sm">
-                        <div className="flex items-baseline gap-1"><CountUp value={students} className="text-indigo-700 font-semibold" /><span className="text-gray-600">Students</span></div>
-                        <div className="flex items-baseline gap-1"><CountUp value={teachers} className="text-indigo-700 font-semibold" /><span className="text-gray-600">Teachers</span></div>
-                        <div className="flex items-baseline gap-1"><CountUp value={satisfaction} className="text-indigo-700 font-semibold" /><span className="text-gray-600">Satisfaction</span></div>
-                      </div>
-                    </div>
-                    <div className="md:hidden pointer-events-none absolute -bottom-5 left-3 right-3 z-10">
-                      <div className="rounded-xl border border-gray-200 bg-white/90 backdrop-blur px-3 py-2 shadow flex items-center justify-between text-xs">
-                        <div className="flex items-baseline gap-1"><CountUp value={students} className="text-indigo-700 font-semibold" /><span className="text-gray-600">Students</span></div>
-                        <div className="flex items-baseline gap-1"><CountUp value={teachers} className="text-indigo-700 font-semibold" /><span className="text-gray-600">Teachers</span></div>
-                        <div className="flex items-baseline gap-1"><CountUp value={satisfaction} className="text-indigo-700 font-semibold" /><span className="text-gray-600">Satisfaction</span></div>
-                      </div>
-                    </div>
-                  </>
-                )
-              })()}
             </div>
           </div>
         </div>
