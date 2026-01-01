@@ -122,6 +122,7 @@ export default function App() {
   const nav = useNavigate()
   const [blockLandscape, setBlockLandscape] = React.useState(false)
   const hideAssistant = pathname === '/login' || pathname === '/' || pathname === '/report-issue'
+  const isPublicLanding = pathname === '/'
   const prevPathRef = React.useRef(pathname)
   React.useEffect(() => {
     if (prevPathRef.current !== pathname) {
@@ -281,8 +282,8 @@ export default function App() {
             <Route path="*" element={<NotFound/>} />
             </Routes>
             <NotificationContainer />
-            <BrowserNotificationPrompt />
-            <ReportIssuePrompt />
+            {!isPublicLanding && <BrowserNotificationPrompt />}
+            {!isPublicLanding && <ReportIssuePrompt />}
             {!hideAssistant && <FloatingActions />}
             {!hideAssistant && <FloatingHelpAction />}
             {!hideAssistant && <FloatingButton />}

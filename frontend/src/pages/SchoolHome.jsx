@@ -28,6 +28,47 @@ export default function SchoolHome() {
     return <div className={className}>{children}</div>
   }
 
+  // Scroll-triggered animations for About bullets and stats card
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof IntersectionObserver === 'undefined') return
+    const bulletNodes = Array.from(document.querySelectorAll('.about-bullet'))
+    const statsNode = document.querySelector('.stats-curtain')
+    const aboutNodes = Array.from(document.querySelectorAll('.about-animate'))
+    const sectionNodes = Array.from(document.querySelectorAll('.section-animate'))
+    if (!bulletNodes.length && !statsNode && !aboutNodes.length && !sectionNodes.length) return
+
+    const opts = { threshold: 0.2 }
+    const onEntry = (entries, observer) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return
+        const el = entry.target
+        if (el.classList.contains('about-bullet')) {
+          el.classList.add('about-bullet-visible')
+        }
+        if (el.classList.contains('stats-curtain')) {
+          el.classList.add('stats-curtain-visible')
+        }
+        if (el.classList.contains('about-animate')) {
+          el.classList.add('about-animate-visible')
+        }
+        if (el.classList.contains('section-animate')) {
+          el.classList.add('section-animate-visible')
+        }
+        observer.unobserve(el)
+      })
+    }
+
+    const observer = new IntersectionObserver(onEntry, opts)
+    bulletNodes.forEach((el) => observer.observe(el))
+    aboutNodes.forEach((el) => observer.observe(el))
+    sectionNodes.forEach((el) => observer.observe(el))
+    if (statsNode) observer.observe(statsNode)
+
+    return () => {
+      try { observer.disconnect() } catch {}
+    }
+  }, [])
+
   
 
   function CountUp({ value, className = '' }) {
@@ -453,6 +494,63 @@ export default function SchoolHome() {
         .hero-fly-left   { animation: heroFlyLeft 850ms ease-out forwards; animation-delay: 140ms; }
         .hero-fly-right  { animation: heroFlyRight 900ms ease-out forwards; animation-delay: 200ms; }
         .hero-fly-badges { animation: heroFlyUp 950ms ease-out forwards; animation-delay: 260ms; }
+        /* About section scroll-triggered animations */
+        @keyframes bulletFlyRL {
+          0% { opacity: 0; transform: translateX(40px); }
+          100% { opacity: 1; transform: translateX(0); }
+        }
+        .about-bullet {
+          /* Visible by default; animation will handle opacity when triggered */
+        }
+        .about-bullet-visible {
+          animation: bulletFlyRL 650ms ease-out forwards;
+        }
+        .about-animate {
+          opacity: 0;
+        }
+        .about-animate-visible.about-animate-down {
+          animation: heroFlyDown 650ms ease-out forwards;
+        }
+        .about-animate-visible.about-animate-up {
+          animation: heroFlyUp 700ms ease-out forwards;
+        }
+        .about-animate-visible.about-animate-left {
+          animation: heroFlyLeft 700ms ease-out forwards;
+        }
+        .about-animate-visible.about-animate-right {
+          animation: heroFlyRight 700ms ease-out forwards;
+        }
+        /* Generic section fly-in (for non-hero sections) */
+        .section-animate {
+          opacity: 0;
+          transform: translateY(24px);
+        }
+        .section-animate-visible {
+          opacity: 1;
+          transform: translateY(0);
+          transition: opacity 700ms ease-out, transform 700ms ease-out;
+        }
+        @keyframes curtainSlide {
+          0% { transform: translateX(0); }
+          100% { transform: translateX(100%); }
+        }
+        .stats-curtain {
+          position: relative;
+          overflow: hidden;
+        }
+        .stats-curtain::after {
+          content: none;
+        }
+        .stats-curtain-visible::after {
+          content: '';
+          position: absolute;
+          inset: 0;
+          background: rgba(255,255,255,0.98);
+          pointer-events: none;
+          transform: translateX(0);
+          animation: curtainSlide 800ms ease-out forwards;
+          animation-delay: var(--curtain-delay, 0.9s);
+        }
         @media (prefers-reduced-motion: reduce) {
           * { animation: none !important; transition: none !important; }
         }
@@ -598,7 +696,7 @@ export default function SchoolHome() {
       </section>
 
       {/* About */}
-      <section id="about" className="relative overflow-hidden bg-gradient-to-b from-slate-50 via-indigo-50/25 to-white">
+      <section id="about" className="relative overflow-hidden bg-gradient-to-b from-indigo-50 via-indigo-100 to-white section-animate">
         <div
           aria-hidden
           className="absolute inset-0 pointer-events-none opacity-10 [background:radial-gradient(rgba(99,102,241,0.14)_1px,transparent_1px)] [background-size:22px_22px]"
@@ -606,13 +704,13 @@ export default function SchoolHome() {
         <div className="relative mx-auto max-w-7xl px-4 md:px-6 py-14 md:py-20">
           <div className="grid lg:grid-cols-2 gap-10 lg:gap-14 items-start">
             <div>
-              <p className="text-xs font-semibold tracking-[0.2em] uppercase text-indigo-500/80">
+              <p className="text-xs font-semibold tracking-[0.2em] uppercase text-indigo-500/80 about-animate about-animate-down">
                 Our community
               </p>
-              <h2 className="mt-2 text-3xl md:text-4xl font-semibold md:font-bold tracking-tight text-slate-900">
+              <h2 className="mt-2 text-3xl md:text-4xl font-semibold md:font-bold tracking-tight text-slate-900 about-animate about-animate-up">
                 {school.homepage?.about?.title || `About ${school.name}`}
               </h2>
-              <p className="mt-4 text-base md:text-lg leading-relaxed text-slate-600 max-w-xl">
+              <p className="mt-4 text-base md:text-lg leading-relaxed text-slate-600 max-w-xl about-animate about-animate-left">
                 {school.homepage?.about?.text || `Founded on excellence and integrity, ${school.name} offers a rich curriculum, vibrant co-curricular life and a caring environment that inspires students to reach their full potential.`}
               </p>
               <ul className="mt-6 space-y-3 text-sm md:text-base text-slate-700">
@@ -627,7 +725,8 @@ export default function SchoolHome() {
                 ).map((b, idx) => (
                   <li
                     key={`${idx}-${b}`}
-                    className="flex items-start gap-3 rounded-xl bg-white/70 px-3 py-2 ring-1 ring-slate-100 shadow-[0_1px_3px_rgba(15,23,42,0.06)]"
+                    className="flex items-start gap-3 rounded-xl bg-white/70 px-3 py-2 ring-1 ring-slate-100 shadow-[0_1px_3px_rgba(15,23,42,0.06)] about-bullet"
+                    style={{ animationDelay: `${0.25 + idx * 0.2}s` }}
                   >
                     <span className="mt-1 inline-flex h-5 w-5 items-center justify-center rounded-full bg-indigo-50 text-indigo-600 text-xs font-semibold">
                       ✓
@@ -637,9 +736,12 @@ export default function SchoolHome() {
                 ))}
               </ul>
             </div>
-            <div className="relative">
+            <div className="relative about-animate about-animate-right stats-curtain">
               <div className="pointer-events-none absolute -inset-6 -z-10 bg-gradient-to-tr from-indigo-500/10 via-fuchsia-500/5 to-sky-500/10 blur-2xl" />
-              <div className="rounded-3xl border border-slate-200/80 bg-white/90 backdrop-blur-sm p-6 sm:p-7 shadow-[0_18px_45px_rgba(15,23,42,0.12)]">
+              <div
+                className="rounded-3xl border border-slate-200/80 bg-white/90 backdrop-blur-sm p-6 sm:p-7 shadow-[0_18px_45px_rgba(15,23,42,0.12)]"
+                style={{ ['--curtain-delay']: '0.9s' }}
+              >
                 <div className="flex items-center justify-between gap-2">
                   <div>
                     <h3 className="text-sm font-semibold tracking-wide text-slate-900">At a Glance</h3>
@@ -708,8 +810,8 @@ export default function SchoolHome() {
 
       </section>
 
-      <section id="headteacher" className="relative overflow-hidden bg-gradient-to-b from-white via-amber-50/20 to-white">
-        <div aria-hidden className="absolute inset-0 pointer-events-none opacity-10 [background:radial-gradient(rgba(245,158,11,0.14)_1px,transparent_1px)] [background-size:22px_22px]" />
+      <section id="headteacher" className="relative overflow-hidden bg-gradient-to-b from-sky-50 via-sky-100 to-sky-50 section-animate">
+        <div aria-hidden className="absolute inset-0 pointer-events-none opacity-25 [background:radial-gradient(rgba(56,189,248,0.18)_1px,transparent_1px)] [background-size:22px_22px]" />
         <div className="mx-auto max-w-7xl px-4 md:px-6 py-14 md:py-16">
           {(() => {
             const ht = school?.homepage?.headteacher || {}
@@ -743,7 +845,7 @@ export default function SchoolHome() {
       </section>
 
       {/* Academics */}
-      <section id="academics" className="relative overflow-hidden bg-gradient-to-b from-white via-sky-50 to-indigo-50/20">
+      <section id="academics" className="relative overflow-hidden bg-gradient-to-b from-emerald-50 via-emerald-100 to-white section-animate">
         <div aria-hidden className="absolute inset-0 pointer-events-none opacity-10 [background:radial-gradient(rgba(16,185,129,0.14)_1px,transparent_1px)] [background-size:22px_22px]" />
         
         <div className="mx-auto max-w-7xl px-4 md:px-6 py-14 md:py-16">
@@ -772,7 +874,7 @@ export default function SchoolHome() {
       </section>
 
       {/* Admissions CTA */}
-      <section id="admissions" className="relative overflow-hidden bg-gradient-to-b from-white via-rose-50/20 to-white">
+      <section id="admissions" className="relative overflow-hidden bg-gradient-to-b from-rose-50 via-rose-100 to-white section-animate">
         <div aria-hidden className="absolute inset-0 pointer-events-none opacity-10 [background:radial-gradient(rgba(244,114,182,0.14)_1px,transparent_1px)] [background-size:22px_22px]" />
         
         <div className="mx-auto max-w-7xl px-4 md:px-6 py-16 md:py-20">
@@ -821,7 +923,7 @@ export default function SchoolHome() {
       </section>
 
       {/* News / Highlights */}
-      <section id="news" className="relative overflow-hidden bg-gradient-to-b from-white via-violet-50/20 to-white">
+      <section id="news" className="relative overflow-hidden bg-gradient-to-b from-violet-50 via-violet-100 to-white section-animate">
         <div aria-hidden className="absolute inset-0 pointer-events-none opacity-10 [background:radial-gradient(rgba(147,51,234,0.14)_1px,transparent_1px)] [background-size:22px_22px]" />
         
         <div className="mx-auto max-w-7xl px-4 md:px-6 py-14 md:py-16">
@@ -859,7 +961,7 @@ export default function SchoolHome() {
       </section>
 
       {/* Featured */}
-      <section id="featured" className="relative overflow-hidden bg-gradient-to-b from-white via-indigo-50/20 to-white">
+      <section id="featured" className="relative overflow-hidden bg-gradient-to-b from-indigo-50 via-indigo-100 to-white section-animate">
         <div aria-hidden className="absolute inset-0 pointer-events-none opacity-10 [background:radial-gradient(rgba(99,102,241,0.14)_1px,transparent_1px)] [background-size:22px_22px]" />
         
         <div className="mx-auto max-w-7xl px-4 md:px-6 py-14 md:py-16">
@@ -880,7 +982,7 @@ export default function SchoolHome() {
       </section>
 
       {/* Testimonials */}
-      <section id="testimonials" className="relative overflow-hidden bg-gradient-to-b from-white via-slate-50 to-white">
+      <section id="testimonials" className="relative overflow-hidden bg-gradient-to-b from-slate-50 via-slate-100 to-white section-animate">
         <div aria-hidden className="absolute inset-0 pointer-events-none opacity-10 [background:radial-gradient(rgba(99,102,241,0.12)_1px,transparent_1px)] [background-size:22px_22px]" />
         <div className="relative mx-auto max-w-7xl px-4 md:px-6 py-14 md:py-16">
           <div className="text-center max-w-2xl mx-auto">
@@ -892,7 +994,7 @@ export default function SchoolHome() {
       </section>
 
       {/* Gallery */}
-      <section id="gallery" className="relative overflow-hidden bg-gradient-to-b from-white via-amber-50/20 to-white">
+      <section id="gallery" className="relative overflow-hidden bg-gradient-to-b from-amber-50 via-amber-100 to-white section-animate">
         <div aria-hidden className="absolute inset-0 pointer-events-none opacity-10 [background:radial-gradient(rgba(251,191,36,0.14)_1px,transparent_1px)] [background-size:22px_22px]" />
         <div className="mx-auto max-w-7xl px-4 md:px-6 py-14 md:py-16">
           {(() => {
@@ -937,7 +1039,7 @@ export default function SchoolHome() {
 
       {/* Partners */}
       {Array.isArray(school.homepage?.partners) && school.homepage.partners.length ? (
-        <section id="partners" className="relative overflow-hidden bg-gradient-to-b from-white via-slate-50/20 to-white">
+        <section id="partners" className="relative overflow-hidden bg-gradient-to-b from-slate-50 via-slate-100 to-white section-animate">
           <div aria-hidden className="absolute inset-0 pointer-events-none opacity-10 [background:radial-gradient(rgba(99,102,241,0.12)_1px,transparent_1px)] [background-size:22px_22px]" />
           <div className="mx-auto max-w-7xl px-4 md:px-6 py-14 md:py-16">
             <div className="text-center max-w-3xl mx-auto">
@@ -971,7 +1073,7 @@ export default function SchoolHome() {
 
       {/* Sponsors */}
       {Array.isArray(school.homepage?.sponsors) && school.homepage.sponsors.length ? (
-        <section id="sponsors" className="relative overflow-hidden bg-gradient-to-b from-white via-slate-50/20 to-white">
+        <section id="sponsors" className="relative overflow-hidden bg-gradient-to-b from-slate-50 via-slate-100 to-white section-animate">
           <div aria-hidden className="absolute inset-0 pointer-events-none opacity-10 [background:radial-gradient(rgba(99,102,241,0.12)_1px,transparent_1px)] [background-size:22px_22px]" />
           <div className="mx-auto max-w-7xl px-4 md:px-6 py-14 md:py-16">
             <div className="text-center max-w-3xl mx-auto">
@@ -1004,7 +1106,7 @@ export default function SchoolHome() {
       ) : null}
 
       {/* Contact */}
-      <section id="contact" className="relative overflow-hidden bg-gradient-to-b from-white via-blue-50/20 to-white">
+      <section id="contact" className="relative overflow-hidden bg-gradient-to-b from-blue-50 via-blue-100 to-white section-animate">
         <div aria-hidden className="absolute inset-0 pointer-events-none opacity-10 [background:radial-gradient(rgba(59,130,246,0.14)_1px,transparent_1px)] [background-size:22px_22px]" />
         <div className="mx-auto max-w-7xl px-4 md:px-6 py-14 md:py-16">
           <div className="grid md:grid-cols-2 gap-10 items-start">
@@ -1132,13 +1234,15 @@ export default function SchoolHome() {
         </div>
       </footer>
 
-      {/* Sticky mobile CTA */}
-      <div className={`md:hidden fixed inset-x-3 bottom-4 z-40 transition-all duration-300 ${showStickyCta ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4 pointer-events-none'}`}>
-        <div className="rounded-2xl border border-gray-200 bg-white/90 backdrop-blur p-2 shadow-elevated flex items-center gap-2">
-          <a href={school.homepage?.hero?.ctaPrimaryLink || '#admissions'} className="flex-1 px-4 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white text-sm font-semibold text-center">Apply</a>
-          <a href={`tel:${(school.phone||'').replace(/\s/g,'')}`} className="px-4 py-2 rounded-xl border border-gray-300 text-gray-700 text-sm font-medium bg-white">Call</a>
+      {/* Sticky mobile CTA disabled per design; kept for reference but not rendered */}
+      {false && (
+        <div className={`md:hidden fixed inset-x-3 bottom-4 z-40 transition-all duration-300 ${showStickyCta ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4 pointer-events-none'}`}>
+          <div className="rounded-2xl border border-gray-200 bg-white/90 backdrop-blur p-2 shadow-elevated flex items-center gap-2">
+            <a href={school.homepage?.hero?.ctaPrimaryLink || '#admissions'} className="flex-1 px-4 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white text-sm font-semibold text-center">Apply</a>
+            <a href={`tel:${(school.phone||'').replace(/\s/g,'')}`} className="px-4 py-2 rounded-xl border border-gray-300 text-gray-700 text-sm font-medium bg-white">Call</a>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Contact Modal */}
       {contactOpen && (
