@@ -279,9 +279,37 @@ export default function LoginPage() {
                   )}
 
                   {formStep === 'credentials' && (
-                    <div className="mt-8">
+                    <div className="mt-8 space-y-4">
+                      <div className={`flex items-center justify-center ${error ? 'animate-shake' : ''}`}>
+                        <div className={`inline-flex items-center justify-center h-10 w-10 rounded-full border text-sky-700 bg-sky-50/70 border-sky-100 shadow-soft ${isLoading ? 'animate-pulse' : ''}`} aria-hidden>
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            className="w-5 h-5"
+                          >
+                            <path
+                              d="M8.5 10V8.75a3.5 3.5 0 1 1 7 0V10"
+                              className="stroke-current"
+                              strokeWidth="1.6"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+                            <rect
+                              x="6.75"
+                              y="10"
+                              width="10.5"
+                              height="8"
+                              rx="2"
+                              className="stroke-current"
+                              strokeWidth="1.6"
+                            />
+                            <circle cx="12" cy="14" r="1" className="fill-current" />
+                          </svg>
+                        </div>
+                      </div>
                       {error && (
-                        <div className="mb-4 text-sm text-red-700 bg-red-100 border border-red-200 rounded-md px-3 py-2" role="alert">{error}</div>
+                        <div className="text-center text-[11px] text-red-700">Check your email and password, then try again.</div>
                       )}
                       <form onSubmit={submit} className="space-y-5">
                         <div className="relative">
@@ -491,8 +519,36 @@ export default function LoginPage() {
                         <span className="px-2 py-0.5 rounded-full bg-sky-50 text-sky-700 border border-sky-200">{role}</span>
                       </div>
                     )}
+                    <div className="flex items-center justify-center">
+                      <div className={`inline-flex items-center justify-center h-9 w-9 rounded-full border text-sky-700 bg-sky-50/80 border-sky-100 shadow-soft ${isLoading ? 'animate-pulse' : ''} ${error ? 'animate-shake' : ''}`} aria-hidden>
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          className="w-4 h-4"
+                        >
+                          <path
+                            d="M8.5 10V8.75a3.5 3.5 0 1 1 7 0V10"
+                            className="stroke-current"
+                            strokeWidth="1.6"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                          <rect
+                            x="6.75"
+                            y="10"
+                            width="10.5"
+                            height="8"
+                            rx="2"
+                            className="stroke-current"
+                            strokeWidth="1.6"
+                          />
+                          <circle cx="12" cy="14" r="1" className="fill-current" />
+                        </svg>
+                      </div>
+                    </div>
                     {error && (
-                      <div className="text-[11px] text-red-700 bg-red-50 border border-red-200 rounded-md px-2 py-1.5">{error}</div>
+                      <div className="text-[11px] text-red-700 text-center">Check your details and try again.</div>
                     )}
                     <form onSubmit={submit} className="space-y-3">
                       <div className="space-y-1">
