@@ -89,27 +89,23 @@ export default function AdminStudentDashboard() {
   const [histAcademicYear, setHistAcademicYear] = useState('')
   const [histIncludeSubjects, setHistIncludeSubjects] = useState(false)
 
+  // Fast core loader: fetch student + main dashboard data once per student
+  // without waiting for the heavier history endpoint or history filters.
   useEffect(() => {
     let isMounted = true
-    async function load() {
+    async function loadCore() {
       try {
         setLoading(true)
         setError('')
         try { showLoadingHint('Loading student dashboard…', 10) } catch {}
-        const params = {}
-        if (histYear) params.year = histYear
-        if (histTerm) params.term = histTerm
-        if (histAcademicYear) params.academic_year = histAcademicYear
-        if (histIncludeSubjects) params.include_subjects = 'true'
         try { setLoadingProgress(25) } catch {}
-        const [st, asRes, atRes, exRes, fin, cl, hist] = await Promise.all([
+        const [st, asRes, atRes, exRes, fin, cl] = await Promise.all([
           api.get(`/academics/students/${id}/`),
           api.get(`/academics/assessments/?student=${id}`),
           api.get(`/academics/attendance/?student=${id}`),
           api.get(`/academics/exam_results/?student=${id}`),
           api.get(`/finance/invoices/student-summary?student=${id}`),
           api.get('/academics/classes/'),
-          api.get(`/academics/students/${id}/history/`, { params })
         ])
         try { setLoadingProgress(80) } catch {}
         if (!isMounted) return
@@ -123,19 +119,41 @@ export default function AdminStudentDashboard() {
         setFinance(fin.data)
         const classesData = Array.isArray(cl.data) ? cl.data : (Array.isArray(cl.data?.results) ? cl.data.results : [])
         setClasses(classesData)
-        setHistoryData(hist.data)
-        setHistoryError('')
       } catch (e) {
         if (!isMounted) return
         setError(e?.response?.data?.detail || e?.message || 'Failed to load student dashboard')
-        setHistoryError(e?.response?.data?.detail || e?.message || 'Failed to load history')
       } finally {
         if (isMounted) setLoading(false)
         try { setLoadingProgress(100); clearLoadingHint() } catch {}
       }
     }
-    load()
+    loadCore()
     return () => { isMounted = false }
+  }, [id])
+
+  // History loader: runs independently so slow history queries
+  // don't block the main student dashboard from rendering.
+  useEffect(() => {
+    let active = true
+    async function loadHistory() {
+      try {
+        setHistoryError('')
+        setHistoryData(null)
+        const params = {}
+        if (histYear) params.year = histYear
+        if (histTerm) params.term = histTerm
+        if (histAcademicYear) params.academic_year = histAcademicYear
+        if (histIncludeSubjects) params.include_subjects = 'true'
+        const hist = await api.get(`/academics/students/${id}/history/`, { params })
+        if (!active) return
+        setHistoryData(hist.data)
+      } catch (e) {
+        if (!active) return
+        setHistoryError(e?.response?.data?.detail || e?.message || 'Failed to load history')
+      }
+    }
+    loadHistory()
+    return () => { active = false }
   }, [id, histYear, histTerm, histAcademicYear, histIncludeSubjects])
 
   async function onPhotoChange(e){
