@@ -1,6 +1,28 @@
 from django.urls import path
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
-from .views import me, users, create_user, update_user_status, reset_password, school_me, update_user, change_password, school_info, trial_signup, verify_email, logout, logout_all, school_public, school_teachers_public, teacher_public_detail, non_teaching_staff, non_teaching_staff_detail
+from .views import (
+    me,
+    users,
+    create_user,
+    update_user_status,
+    reset_password,
+    school_me,
+    update_user,
+    change_password,
+    school_info,
+    trial_signup,
+    verify_email,
+    logout,
+    logout_all,
+    school_public,
+    school_teachers_public,
+    teacher_public_detail,
+    non_teaching_staff,
+    non_teaching_staff_detail,
+    password_reset_request,
+    password_reset_verify,
+    password_reset_confirm,
+)
 
 urlpatterns = [
     path('token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
@@ -14,6 +36,9 @@ urlpatterns = [
     path('users/status/', update_user_status, name='users-status'),
     path('users/reset_password/', reset_password, name='users-reset-password'),
     path('users/change_password/', change_password, name='users-change-password'),
+    path('password-reset/request/', password_reset_request, name='password-reset-request'),
+    path('password-reset/verify/', password_reset_verify, name='password-reset-verify'),
+    path('password-reset/confirm/', password_reset_confirm, name='password-reset-confirm'),
     path('school/me/', school_me, name='school-me'),
     path('school/info/', school_info, name='school-info'),
     path('school/public/', school_public, name='school-public'),

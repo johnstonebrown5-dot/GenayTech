@@ -46,6 +46,24 @@ class EmailVerificationToken(models.Model):
         return timezone.now() >= self.expires_at
 
 
+class PasswordResetCode(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='password_reset_codes')
+    email = models.EmailField()
+    code = models.CharField(max_length=6)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    attempts = models.IntegerField(default=0)
+    is_used = models.BooleanField(default=False)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["email", "code"]),
+            models.Index(fields=["expires_at"]),
+        ]
+
+    def is_expired(self):
+        return timezone.now() >= self.expires_at
+
 class NonTeachingStaff(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='non_teaching_profile')
     school = models.ForeignKey(School, on_delete=models.CASCADE, related_name='non_teaching_staff')

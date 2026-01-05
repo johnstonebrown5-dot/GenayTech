@@ -13,7 +13,7 @@ from django.db.models import Q
 from django.utils.text import slugify
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
-from .models import School, EmailVerificationToken, NonTeachingStaff
+from .models import School, EmailVerificationToken, NonTeachingStaff, PasswordResetCode
 from django.core.cache import cache
 from django.core.mail import send_mail
 from django.conf import settings
@@ -348,6 +348,167 @@ def change_password(request):
     user.set_password(new_password)
     user.save(update_fields=['password'])
     return Response({"detail": "Password changed"})
+
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+@parser_classes([JSONParser])
+def password_reset_request(request):
+    """Public endpoint: request a 6-digit password reset code to be sent to the user's email.
+    Body: { email }
+    Always returns 200 to avoid leaking which emails exist.
+    """
+    data = request.data or {}
+    raw_email = (data.get('email') or '').strip().lower()
+    if not raw_email:
+        return Response({"detail": "email is required"}, status=400)
+
+    # Simple rate limiting per email/IP
+    ip = request.META.get('HTTP_X_FORWARDED_FOR', '').split(',')[0].strip() or request.META.get('REMOTE_ADDR', '')
+    cache_key = f"pwd_reset_req:{raw_email}:{ip}"
+    attempts = cache.get(cache_key, 0)
+    if attempts and int(attempts) >= 5:
+        # Pretend success but do nothing
+        return Response({"detail": "If this email exists, a code has been sent."})
+    cache.set(cache_key, int(attempts) + 1, 60 * 60)
+
+    try:
+        user = User.objects.get(email__iexact=raw_email)
+    except User.DoesNotExist:
+        # Do not reveal whether email exists
+        return Response({"detail": "If this email exists, a code has been sent."})
+
+    # Invalidate previous codes for this user/email
+    PasswordResetCode.objects.filter(user=user, email__iexact=raw_email, is_used=False).delete()
+
+    # Generate 6-digit numeric code
+    code_int = secrets.randbelow(900000) + 100000
+    code = f"{code_int:06d}"
+
+    expires_at = timezone.now() + timedelta(minutes=15)
+    PasswordResetCode.objects.create(user=user, email=raw_email, code=code, expires_at=expires_at)
+
+    # Send email best-effort
+    subject = "EduTrack password reset code"
+    message = (
+        f"Hello {user.first_name or user.username},\n\n"
+        f"Your EduTrack password reset code is: {code}.\n"
+        "This code will expire in 15 minutes. If you did not request this, you can ignore this email.\n\n"
+        "Thanks,\nEduTrack"
+    )
+    try:
+        send_mail(
+            subject=subject,
+            message=message,
+            from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', None) or 'no-reply@edutrack.local',
+            recipient_list=[raw_email],
+            fail_silently=True,
+        )
+    except Exception:
+        # Do not expose internal errors to client
+        pass
+
+    return Response({"detail": "If this email exists, a code has been sent."})
+
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+@parser_classes([JSONParser])
+def password_reset_verify(request):
+    """Public endpoint: verify a 6-digit code without changing the password.
+    Body: { email, code }
+    Used by the frontend to decide whether to show the new password modal.
+    """
+    data = request.data or {}
+    raw_email = (data.get('email') or '').strip().lower()
+    code = (data.get('code') or '').strip()
+
+    if not raw_email or not code:
+        return Response({"detail": "email and code are required"}, status=400)
+
+    try:
+        user = User.objects.get(email__iexact=raw_email)
+    except User.DoesNotExist:
+        # Do not reveal whether email exists
+        return Response({"detail": "Invalid code or email"}, status=400)
+
+    rec = (
+        PasswordResetCode.objects
+        .filter(user=user, email__iexact=raw_email, is_used=False)
+        .order_by('-created_at')
+        .first()
+    )
+    if not rec:
+        return Response({"detail": "Invalid code or email"}, status=400)
+
+    # Check expiry & attempts
+    if rec.is_expired() or rec.attempts >= 5:
+        rec.is_used = True
+        rec.save(update_fields=['is_used', 'attempts'])
+        return Response({"detail": "Code expired. Please request a new one."}, status=400)
+
+    if rec.code != code:
+        rec.attempts += 1
+        rec.save(update_fields=['attempts'])
+        return Response({"detail": "Invalid code or email"}, status=400)
+
+    # Valid code, but do not mark as used so it can be used shortly for confirm
+    return Response({"detail": "Code verified"})
+
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+@parser_classes([JSONParser])
+def password_reset_confirm(request):
+    """Public endpoint: verify a 6-digit code and set a new password.
+    Body: { email, code, new_password }
+    """
+    data = request.data or {}
+    raw_email = (data.get('email') or '').strip().lower()
+    code = (data.get('code') or '').strip()
+    new_password = data.get('new_password') or ''
+
+    if not raw_email or not code or not new_password:
+        return Response({"detail": "email, code and new_password are required"}, status=400)
+    if len(new_password) < 6:
+        return Response({"detail": "New password must be at least 6 characters"}, status=400)
+
+    try:
+        user = User.objects.get(email__iexact=raw_email)
+    except User.DoesNotExist:
+        # Do not reveal whether email exists
+        return Response({"detail": "Invalid code or email"}, status=400)
+
+    rec = (
+        PasswordResetCode.objects
+        .filter(user=user, email__iexact=raw_email, code=code, is_used=False)
+        .order_by('-created_at')
+        .first()
+    )
+    if not rec:
+        return Response({"detail": "Invalid code or email"}, status=400)
+
+    # Check expiry & attempts
+    if rec.is_expired() or rec.attempts >= 5:
+        rec.is_used = True
+        rec.save(update_fields=['is_used', 'attempts'])
+        return Response({"detail": "Code expired. Please request a new one."}, status=400)
+
+    if rec.code != code:
+        rec.attempts += 1
+        rec.save(update_fields=['attempts'])
+        return Response({"detail": "Invalid code or email"}, status=400)
+
+    # All good: update password
+    user.set_password(new_password)
+    user.save(update_fields=['password'])
+    rec.is_used = True
+    rec.attempts += 1
+    rec.save(update_fields=['is_used', 'attempts'])
+    # Clean up older codes for this user/email
+    PasswordResetCode.objects.filter(user=user, email__iexact=raw_email).exclude(id=rec.id).delete()
+
+    return Response({"detail": "Password has been reset. You can now log in with your new password."})
 
 
 @api_view(["PATCH"])

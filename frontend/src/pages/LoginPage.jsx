@@ -3,6 +3,7 @@ import AppLogo from '../components/AppLogo'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth'
 import { useNotification } from '../components/NotificationContext'
+import api from '../api'
  
 
 export default function LoginPage() {
@@ -23,12 +24,126 @@ export default function LoginPage() {
   const [installReady, setInstallReady] = useState(false)
   const [tilt, setTilt] = useState({ x: 0, y: 0 })
   const [showAppIntro, setShowAppIntro] = useState(false)
+  const [resetOpen, setResetOpen] = useState(false)
+  const [resetStep, setResetStep] = useState('request') // 'request' | 'verify'
+  const [resetEmail, setResetEmail] = useState('')
+  const [resetCode, setResetCode] = useState('')
+  const [resetNewPassword, setResetNewPassword] = useState('')
+  const [resetLoading, setResetLoading] = useState(false)
+  const [resetMessage, setResetMessage] = useState('')
+  const [resetError, setResetError] = useState('')
+  const [resetResendIn, setResetResendIn] = useState(0) // seconds until user can resend code
+  const [resetResending, setResetResending] = useState(false)
+  const [resetCodeConfirmed, setResetCodeConfirmed] = useState(false)
+  const [resetPasswordModalOpen, setResetPasswordModalOpen] = useState(false)
 
   const notifyError = (message, title = 'Login error') => {
     setError(message)
     try {
       showError(title, message)
     } catch {}
+  }
+
+  const openReset = () => {
+    setResetOpen(true)
+    setResetStep('request')
+    setResetMessage('')
+    setResetError('')
+    setResetCode('')
+    setResetNewPassword('')
+    setResetResendIn(0)
+    setResetCodeConfirmed(false)
+    setResetPasswordModalOpen(false)
+  }
+
+  const closeReset = () => {
+    if (resetLoading) return
+    setResetOpen(false)
+  }
+
+  const submitResetRequest = async (e) => {
+    e?.preventDefault?.()
+    if (!resetEmail) return
+    setResetLoading(true)
+    setResetError('')
+    setResetMessage('')
+    try {
+      await api.post('/auth/password-reset/request/', { email: resetEmail })
+      setResetStep('verify')
+      setResetMessage('We have sent a 6 digit code to your email if it exists in our system.')
+      setResetResendIn(90)
+      setResetCodeConfirmed(false)
+    } catch (err) {
+      setResetError('Could not start reset. Please try again in a moment.')
+    } finally {
+      setResetLoading(false)
+    }
+  }
+
+  const handleConfirmResetCode = (codeOverride) => {
+    const codeToUse = (codeOverride || resetCode || '').trim()
+    if (!codeToUse || codeToUse.length !== 6) {
+      setResetError('Enter the full 6 digit code to confirm.')
+      return
+    }
+    setResetLoading(true)
+    setResetError('')
+    setResetMessage('')
+    api.post('/auth/password-reset/verify/', {
+      email: resetEmail,
+      code: codeToUse,
+    }).then(() => {
+      setResetCodeConfirmed(true)
+      setResetPasswordModalOpen(true)
+      setResetOpen(false)
+    }).catch((err) => {
+      const msg = err?.response?.data?.detail || 'Invalid code or email. Please check and try again.'
+      setResetError(msg)
+    }).finally(() => {
+      setResetLoading(false)
+    })
+  }
+
+  const handleResendCode = async () => {
+    if (resetResendIn > 0 || !resetEmail) return
+    setResetResending(true)
+    setResetError('')
+    setResetMessage('')
+    try {
+      await api.post('/auth/password-reset/request/', { email: resetEmail })
+      setResetMessage('We have sent a new 6 digit code to your email if it exists in our system.')
+      setResetResendIn(90)
+      setResetCode('')
+      setResetCodeConfirmed(false)
+    } catch (err) {
+      setResetError('Could not resend code. Please try again in a moment.')
+    } finally {
+      setResetResending(false)
+    }
+  }
+
+  const submitResetConfirm = async (e) => {
+    e?.preventDefault?.()
+    if (!resetEmail || !resetCode || !resetNewPassword) return
+    setResetLoading(true)
+    setResetError('')
+    setResetMessage('')
+    try {
+      await api.post('/auth/password-reset/confirm/', {
+        email: resetEmail,
+        code: resetCode,
+        new_password: resetNewPassword,
+      })
+      setResetMessage('Your password has been reset. You can now log in with the new password.')
+      setTimeout(() => {
+        setResetPasswordModalOpen(false)
+      }, 900)
+    } catch (err) {
+      const msg = err?.response?.data?.detail || 'Invalid code or email. Please check and try again.'
+      setResetError(msg)
+    } finally {
+      setResetLoading(false)
+    }
   }
   
 
@@ -177,26 +292,34 @@ export default function LoginPage() {
   const mobileTiltTransform = `rotateX(${tilt.x}deg) rotateY(${tilt.y}deg) translateZ(0) translateY(${mounted ? 0 : 14}px) scale(${mounted ? 1 : 0.96})`
 
   return (
-    <div className="relative min-h-screen w-full overflow-hidden bg-gradient-to-br from-indigo-50 via-white to-sky-50">
-      <div className="pointer-events-none absolute inset-0 -z-10">
-        <div className="absolute -top-24 -left-24 h-[500px] w-[500px] rounded-full blur-3xl bg-[radial-gradient(closest-side,rgba(56,189,248,0.35),transparent)]" />
-        <div className="absolute top-1/2 -translate-y-1/2 -right-24 h-[560px] w-[560px] rounded-full blur-3xl bg-[radial-gradient(closest-side,rgba(99,102,241,0.30),transparent)]" />
-        <div className="absolute bottom-[-120px] left-1/2 -translate-x-1/2 h-[420px] w-[420px] rounded-full blur-3xl bg-[radial-gradient(closest-side,rgba(2,132,199,0.25),transparent)]" />
-      </div>
+    <div
+      className="relative min-h-screen w-full overflow-hidden bg-black"
+      style={{
+        backgroundImage: "url('/images/Login Background.jpg')",
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        backgroundRepeat: 'no-repeat',
+      }}
+    >
+      {/* Dark / blur overlay to keep content readable */}
+      <div className="absolute inset-0 -z-10 bg-slate-950/60 backdrop-blur-[2px]" />
       {/* Header */}
       <header className="hidden sm:flex relative z-10 items-center justify-between px-6 md:px-10 py-5 text-slate-700">
         <div className="flex items-center gap-3">
-          <AppLogo size={36} className="w-9 h-9 rounded-lg bg-white/10 p-1" />
-          <a href="/" className="hidden sm:block text-sm hover:underline">Home</a>
+          <AppLogo size={36} className="w-9 h-9 rounded-lg bg-white shadow-soft border border-slate-100 p-1" />
+          <a href="/" className="hidden sm:block text-sm text-slate-700 hover:text-slate-900 hover:underline">Home</a>
         </div>
-        <div className="text-center font-semibold tracking-widest drop-shadow">EDU-TRACK</div>
+        <div className="text-center font-semibold tracking-widest text-slate-800">EDU-TRACK</div>
         <div className="flex items-center gap-3">
           {installReady && (
-            <button onClick={onInstallClick} className="text-sm px-3 py-1.5 rounded-md bg-white/15 hover:bg-white/25 border border-white/20 shadow-sm">
+            <button
+              onClick={onInstallClick}
+              className="text-sm px-3 py-1.5 rounded-md bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-100 shadow-sm"
+            >
               Install App
             </button>
           )}
-          <a href="mailto:EduTrack46@gmail.com" className="text-sm hover:underline">Contact Us</a>
+          <a href="mailto:EduTrack46@gmail.com" className="text-sm text-slate-700 hover:text-slate-900 hover:underline">Contact Us</a>
         </div>
       </header>
 
@@ -204,7 +327,7 @@ export default function LoginPage() {
       <main className="hidden sm:flex relative z-10 min-h-[calc(100vh-96px)] items-center justify-center">
         <div className="mx-auto w-full px-6 py-10">
           <div className="mx-auto w-full max-w-[980px]">
-            <div className="relative overflow-hidden rounded-[28px] bg-white/75 backdrop-blur-2xl shadow-elevated border border-white/70 ring-1 ring-black/5 px-10 py-10 md:px-12 md:py-12">
+            <div className="relative overflow-hidden rounded-[28px] bg-white/55 backdrop-blur-2xl shadow-elevated border border-white/60 ring-1 ring-black/10 px-10 py-10 md:px-12 md:py-12">
               <div className="absolute inset-x-16 -top-24 h-40 bg-gradient-to-r from-sky-500/30 via-indigo-500/25 to-sky-400/30 blur-3xl pointer-events-none" />
               <div className="relative z-10 grid gap-10 md:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] items-center">
                 {/* Intro copy (minimal) */}
@@ -226,7 +349,7 @@ export default function LoginPage() {
                 </div>
 
                 {/* Form area */}
-                <div className="relative rounded-2xl border border-slate-100 bg-white/80 shadow-soft px-6 py-7">
+                <div className="relative rounded-2xl border border-slate-100/80 bg-white/70 backdrop-blur-xl shadow-soft px-6 py-7">
                   <div className="flex items-center justify-center">
                     <h2 className="text-xl font-semibold text-slate-900 text-center">{formStep === 'role' ? 'Select your role' : 'Log in'}</h2>
                   </div>
@@ -348,15 +471,25 @@ export default function LoginPage() {
                             className="w-full rounded-xl border border-gray-200 bg-white px-10 py-3.5 pr-16 text-[15px] shadow-inner focus:outline-none focus:ring-2 focus:ring-sky-300 focus:border-sky-500 transition"
                             required
                           />
-                          <button type="button" aria-pressed={showPassword} aria-label={showPassword ? 'Hide password' : 'Show password'} onClick={()=>setShowPassword(v=>!v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-sky-700 hover:text-sky-900">{showPassword?'Hide':'Show'}</button>
-                          {capsLockOn && <div className="mt-1 text-[11px] text-amber-700">Caps Lock is ON</div>}
+                          <button
+                            type="button"
+                            aria-pressed={showPassword}
+                            aria-label={showPassword ? 'Hide password' : 'Show password'}
+                            onClick={()=>setShowPassword(v=>!v)}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-sky-700 hover:text-sky-900"
+                          >
+                            {showPassword ? 'Hide' : 'Show'}
+                          </button>
+                          {capsLockOn && (
+                            <div className="mt-1 text-[11px] text-amber-700">Caps Lock is ON</div>
+                          )}
                         </div>
                         <div className="flex items-center justify-between">
                           <label className="inline-flex items-center gap-2 text-xs text-slate-700 select-none">
                             <input type="checkbox" className="accent-sky-600" checked={remember} onChange={(e)=>setRemember(e.target.checked)} />
                             Remember me
                           </label>
-                          <a href="mailto:EduTrack46@gmail.com?subject=Password%20help" className="text-xs text-sky-700 hover:underline">Forgot password?</a>
+                          <button type="button" onClick={openReset} className="text-xs text-sky-700 hover:underline">Forgot password?</button>
                         </div>
                         <button type="submit" disabled={isLoading} className="w-full rounded-full bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-600 text-white font-semibold py-3 disabled:opacity-60 shadow-md transition-transform active:scale-[.99]">{isLoading?'Signing In…':'Sign In'}</button>
                       </form>
@@ -602,12 +735,13 @@ export default function LoginPage() {
                           <input type="checkbox" className="accent-sky-600" checked={remember} onChange={e => setRemember(e.target.checked)} />
                           Remember me
                         </label>
-                        <a
-                          href="mailto:EduTrack46@gmail.com?subject=Password%20help"
+                        <button
+                          type="button"
+                          onClick={openReset}
                           className="text-[11px] text-sky-700 underline"
                         >
                           Forgot password?
-                        </a>
+                        </button>
                       </div>
                       <button
                         type="submit"
@@ -662,6 +796,149 @@ export default function LoginPage() {
         </div>
         )}
       </div>
+
+      {/* Password reset dialog - step 1: email + code */}
+      {resetOpen && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 backdrop-blur-sm px-4 sm:px-0">
+          <div className={`w-full max-w-md rounded-2xl bg-white/95 shadow-elevated border border-slate-200 p-6 sm:p-7 space-y-4 ${resetError ? 'animate-shake' : ''}`}>
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-slate-900">Reset password</h2>
+              <button
+                type="button"
+                onClick={closeReset}
+                className="text-xs text-slate-500 hover:text-slate-700"
+              >
+                Close
+              </button>
+            </div>
+            <p className="text-xs text-slate-500">
+              Enter your email and we will send you a 6 digit code to create a new password.
+            </p>
+            <form
+              onSubmit={resetStep === 'request'
+                ? submitResetRequest
+                : (e) => {
+                    e.preventDefault()
+                    handleConfirmResetCode()
+                  }
+              }
+              className="space-y-3"
+            >
+              <div className="space-y-1">
+                <label className="block text-[12px] text-slate-700">Email</label>
+                <input
+                  type="email"
+                  value={resetEmail}
+                  onChange={(e)=>setResetEmail(e.target.value)}
+                  required
+                  className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-300 ${resetError && resetStep === 'request' ? 'border-red-300 bg-red-50/60' : 'border-slate-200'}`}
+                />
+              </div>
+              {resetStep === 'verify' && (
+                <>
+                  <div className="space-y-1">
+                    <label className="block text-[12px] text-slate-700">6 digit code</label>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={6}
+                      value={resetCode}
+                      onChange={(e)=>{
+                        const value = e.target.value.replace(/[^0-9]/g,'')
+                        setResetCode(value)
+                        setResetCodeConfirmed(false)
+                        if (value.length === 6) {
+                          handleConfirmResetCode(value)
+                        }
+                      }}
+                      required
+                      className={`w-full rounded-lg border px-3 py-2 text-sm tracking-[0.4em] text-center focus:outline-none focus:ring-2 focus:ring-sky-300 ${resetError ? 'border-red-300 bg-red-50/60' : 'border-slate-200'}`}
+                    />
+                    <div className="mt-1 flex items-center justify-end text-[11px] text-slate-500">
+                      <button
+                        type="button"
+                        onClick={handleResendCode}
+                        disabled={resetResendIn > 0 || resetResending}
+                        className="text-[11px] font-medium text-sky-700 disabled:text-slate-400 disabled:cursor-not-allowed hover:underline tabular-nums"
+                      >
+                        {resetResendIn > 0
+                          ? `Resend in ${Math.floor(resetResendIn / 60)}:${(resetResendIn % 60).toString().padStart(2,'0')}`
+                          : (resetResending ? 'Resending…' : 'Resend code')}
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
+              {resetError && (
+                <div className="flex items-start gap-2 text-[11px] text-red-700 bg-red-50 border border-red-200 rounded-md px-2.5 py-1.5">
+                  <span className="mt-[2px] h-3 w-3 rounded-full border border-red-400 flex items-center justify-center text-[9px] font-bold">!</span>
+                  <span>{resetError}</span>
+                </div>
+              )}
+              {resetMessage && (
+                <div className="text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-md px-2 py-1.5">{resetMessage}</div>
+              )}
+              <button
+                type="submit"
+                disabled={resetLoading}
+                className="w-full mt-1 rounded-full bg-gradient-to-r from-sky-600 to-indigo-600 text-white text-sm font-semibold py-2.5 disabled:opacity-60"
+              >
+                {resetStep === 'request' ? (resetLoading ? 'Sending code…' : 'Send code') : (resetLoading ? 'Checking…' : 'Check code')}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Password reset dialog - step 2: new password only, after code verified */}
+      {resetPasswordModalOpen && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 backdrop-blur-sm px-4 sm:px-0">
+          <div className="w-full max-w-md rounded-2xl bg-white/95 shadow-elevated border border-slate-200 p-6 sm:p-7 space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-slate-900">Set new password</h2>
+              <button
+                type="button"
+                onClick={() => setResetPasswordModalOpen(false)}
+                className="text-xs text-slate-500 hover:text-slate-700"
+              >
+                Close
+              </button>
+            </div>
+            <p className="text-xs text-slate-500">
+              Enter a new password for <span className="font-medium">{resetEmail}</span>.
+            </p>
+            <form onSubmit={submitResetConfirm} className="space-y-3">
+              <div className="space-y-1">
+                <label className="block text-[12px] text-slate-700">New password</label>
+                <input
+                  type="password"
+                  value={resetNewPassword}
+                  onChange={(e)=>setResetNewPassword(e.target.value)}
+                  minLength={6}
+                  required
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-300"
+                />
+              </div>
+              {resetError && (
+                <div className="flex items-start gap-2 text-[11px] text-red-700 bg-red-50 border border-red-200 rounded-md px-2.5 py-1.5">
+                  <span className="mt-[2px] h-3 w-3 rounded-full border border-red-400 flex items-center justify-center text-[9px] font-bold">!</span>
+                  <span>{resetError}</span>
+                </div>
+              )}
+              {resetMessage && (
+                <div className="text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-md px-2 py-1.5">{resetMessage}</div>
+              )}
+              <button
+                type="submit"
+                disabled={resetLoading}
+                className="w-full mt-1 rounded-full bg-gradient-to-r from-sky-600 to-indigo-600 text-white text-sm font-semibold py-2.5 disabled:opacity-60"
+              >
+                {resetLoading ? 'Updating…' : 'Save new password'}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

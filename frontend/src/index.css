@@ -62,6 +62,38 @@ body { @apply text-gray-800; }
   .shadow-soft { box-shadow: 0 6px 16px -6px rgba(0,0,0,0.15), 0 2px 6px -2px rgba(0,0,0,0.12); }
   .shadow-card { box-shadow: 0 10px 20px -10px rgba(0,0,0,0.12), 0 4px 8px -4px rgba(0,0,0,0.10); }
   .shadow-elevated { box-shadow: 0 20px 40px -20px rgba(0,0,0,0.18), 0 8px 16px -8px rgba(0,0,0,0.14); }
+
+  /* Tech-style animated background helpers */
+  @keyframes tech-pan {
+    0% { transform: translate3d(0, 0, 0); }
+    100% { transform: translate3d(-80px, -80px, 0); }
+  }
+
+  .bg-tech-grid {
+    background-image:
+      linear-gradient(to right, rgba(148, 163, 184, 0.14) 1px, transparent 0),
+      linear-gradient(to bottom, rgba(148, 163, 184, 0.14) 1px, transparent 0);
+    background-size: 40px 40px;
+    mask-image: radial-gradient(circle at top, rgba(0,0,0,0.9), transparent 65%);
+  }
+
+  .animate-tech-pan { animation: tech-pan 36s linear infinite; }
+
+  @keyframes tech-orbit {
+    0% { transform: rotate(0deg) translateX(0); }
+    100% { transform: rotate(360deg) translateX(0); }
+  }
+
+  .tech-orbit-ring {
+    border-radius: 9999px;
+    border-width: 1px;
+    border-style: solid;
+    border-color: rgba(59, 130, 246, 0.25);
+    box-shadow: 0 0 40px rgba(59, 130, 246, 0.25);
+  }
+
+  .animate-tech-orbit-slow { animation: tech-orbit 26s linear infinite; }
+  .animate-tech-orbit-fast { animation: tech-orbit 14s linear infinite; }
 }
 
 :root { color-scheme: light; }
