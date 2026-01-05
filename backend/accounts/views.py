@@ -3,6 +3,7 @@ from rest_framework.parsers import JSONParser, FormParser, MultiPartParser
 import json
 from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
+from edutrack.pagination import CustomPageNumberPagination
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from django.contrib.auth import get_user_model
 from .serializers import UserSerializer, SchoolSerializer, NonTeachingStaffSerializer
@@ -101,9 +102,82 @@ def users(request):
     role = request.query_params.get('role')
     q = request.query_params.get('q')
     param_school_id = request.query_params.get('school')
-    qs = User.objects.all().select_related('school')
+    include_orphans = str(request.query_params.get('include_orphans', '')).lower() in ('1','true','yes')
+    qs = User.objects.all().select_related('school', 'student')
     # Scope by school: default to the request user's school for all roles
     user_school_id = getattr(getattr(request.user, 'school', None), 'id', None)
+    # Resolve school from related models if missing (student/teacher/staff)
+    if not user_school_id:
+        try:
+            from academics.models import Student, Class, TeacherProfile, ClassSubjectTeacher  # type: ignore
+        except Exception:
+            Student = Class = TeacherProfile = ClassSubjectTeacher = None  # type: ignore
+        # Student → class.school or student.school
+        if user_school_id is None and Student is not None:
+            try:
+                row = (
+                    Student.objects
+                    .filter(user_id=getattr(request.user, 'id', None))
+                    .values('klass__school_id', 'school_id')
+                    .first()
+                )
+                if row:
+                    user_school_id = row.get('klass__school_id') or row.get('school_id') or None
+            except Exception:
+                pass
+        # Class teacher → Class.school
+        if user_school_id is None and Class is not None:
+            try:
+                sid = (
+                    Class.objects
+                    .filter(teacher_id=getattr(request.user, 'id', None))
+                    .values_list('school_id', flat=True)
+                    .first()
+                )
+                if sid:
+                    user_school_id = sid
+            except Exception:
+                pass
+        # TeacherProfile → klass.school
+        if user_school_id is None and TeacherProfile is not None:
+            try:
+                sid = (
+                    TeacherProfile.objects
+                    .filter(user_id=getattr(request.user, 'id', None))
+                    .values_list('klass__school_id', flat=True)
+                    .first()
+                )
+                if sid:
+                    user_school_id = sid
+            except Exception:
+                pass
+        # Subject teacher mapping → klass.school
+        if user_school_id is None and ClassSubjectTeacher is not None:
+            try:
+                sid = (
+                    ClassSubjectTeacher.objects
+                    .filter(teacher_id=getattr(request.user, 'id', None))
+                    .values_list('klass__school_id', flat=True)
+                    .first()
+                )
+                if sid:
+                    user_school_id = sid
+            except Exception:
+                pass
+        # Non-teaching staff → profile.school
+        if user_school_id is None:
+            try:
+                from .models import NonTeachingStaff  # local import
+                sid = (
+                    NonTeachingStaff.objects
+                    .filter(user_id=getattr(request.user, 'id', None))
+                    .values_list('school_id', flat=True)
+                    .first()
+                )
+                if sid:
+                    user_school_id = sid
+            except Exception:
+                pass
     if param_school_id:
         # Explicit override only for staff/superusers
         if request.user.is_superuser or request.user.is_staff:
@@ -115,9 +189,27 @@ def users(request):
             else:
                 qs = qs.none()
     else:
-        # No override provided: if the requester has a school, scope to it
+        # No override provided: if the requester has a school, scope to it and any related links
         if user_school_id:
-            qs = qs.filter(school_id=user_school_id)
+            school_q = (
+                Q(school_id=user_school_id) |
+                Q(student__klass__school_id=user_school_id) |
+                Q(student__school_id=user_school_id) |
+                Q(class_teacher__school_id=user_school_id) |
+                Q(teacherprofile__klass__school_id=user_school_id) |
+                Q(non_teaching_profile__school_id=user_school_id)
+            )
+            orphan_q = Q()
+            if include_orphans:
+                orphan_q = Q(school__isnull=True) & Q(role__in=['admin','teacher','finance','non_teaching','student'])
+            try:
+                from academics.models import ClassSubjectTeacher  # local import to avoid hard dep at import time
+                subject_teacher_ids = ClassSubjectTeacher.objects.filter(
+                    klass__school_id=user_school_id
+                ).values_list('teacher_id', flat=True)
+                qs = qs.filter(school_q | orphan_q | Q(id__in=subject_teacher_ids)).distinct()
+            except Exception:
+                qs = qs.filter(school_q | orphan_q).distinct()
         elif not (request.user.is_superuser or request.user.is_staff):
             # Regular users without a school should see nothing
             qs = qs.none()
@@ -130,7 +222,8 @@ def users(request):
                 Q(username__icontains=q) |
                 Q(first_name__icontains=q) |
                 Q(last_name__icontains=q) |
-                Q(email__icontains=q)
+                Q(email__icontains=q) |
+                Q(student__admission_no__icontains=q)
             )
     # Order by stable key
     qs = qs.order_by('id')
@@ -138,16 +231,18 @@ def users(request):
     # Narrow fields to those used by UserSerializer and nested SchoolSerializer
     try:
         qs = qs.only(
-            'id','username','first_name','last_name','email','role','phone','is_staff','is_superuser','email_verified','profile_picture',
+            'id','username','first_name','last_name','email','role','phone','is_staff','is_superuser','email_verified','is_active','profile_picture',
             'school','school__id','school__name','school__code','school__address','school__motto','school__aim','school__logo','school__social_links',
             'school__is_trial','school__trial_expires_at','school__trial_student_limit','school__feature_flags',
+            # Student fields used by serializer helpers
+            'student__admission_no','student__name','student__photo',
         )
     except Exception:
         # Fallback if .only causes issues
         pass
 
-    # Paginate
-    paginator = PageNumberPagination()
+    # Paginate (supports ?page_size up to 2000 via CustomPageNumberPagination)
+    paginator = CustomPageNumberPagination()
     page = paginator.paginate_queryset(qs, request)
     if page is not None:
         ser = UserSerializer(page, many=True, context={"request": request})

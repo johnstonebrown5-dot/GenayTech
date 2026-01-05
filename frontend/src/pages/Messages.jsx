@@ -35,15 +35,6 @@ export default function Messages(){
     { value: 'student', label: 'Student' },
   ]
 
-  // Allowed roles to show in people list
-  const allowedRoles = useMemo(() => {
-    if (user?.role === 'admin') return ['admin','teacher','finance','student']
-    if (user?.role === 'teacher') return ['admin']
-    if (user?.role === 'finance') return ['admin','teacher','student']
-    if (user?.role === 'student') return ['admin','finance']
-    return []
-  }, [user])
-
   // Load inbox + outbox
   const [isSyncing, setIsSyncing] = useState(false)
   const loadMessages = async (silent = true) => {
@@ -73,17 +64,41 @@ export default function Messages(){
     }
   }
 
-  // Load users list by allowed roles and query
+  // Load users list by query (scoped to current school by backend)
   const loadUsers = async (q='') => {
     setLoadingUsers(true)
     try {
-      // Admin: show everyone in school; others: fetch and filter by allowedRoles
-      const { data } = await api.get(`/auth/users/?q=${encodeURIComponent(q)}`)
-      // Support multiple response shapes: array, {results: [...]}, {users: [...]}
-      const raw = (Array.isArray(data) ? data : (Array.isArray(data?.results) ? data.results : (Array.isArray(data?.users) ? data.users : [])))
-      const list = Array.isArray(raw) ? raw : []
-      const filtered = (user?.role === 'admin') ? list : list.filter(u => allowedRoles.includes(u.role))
-      setAllUsers(filtered.filter(u => u.id !== user?.id))
+      // Request a large page size so we get the full directory (backend caps at 2000)
+      let url = `/auth/users/?q=${encodeURIComponent(q)}&page_size=2000&include_orphans=1`
+      const acc = []
+      const seen = new Set()
+      let pages = 0
+      while (url && pages < 200) { // generous safety cap; follow `next` until null
+        const { data } = await api.get(url)
+        if (Array.isArray(data)) {
+          for (const u of data) { if (u && !seen.has(u.id)) { seen.add(u.id); acc.push(u) } }
+          break
+        }
+        const batch = Array.isArray(data?.results) ? data.results : (Array.isArray(data?.users) ? data.users : [])
+        for (const u of (batch||[])) { if (u && !seen.has(u.id)) { seen.add(u.id); acc.push(u) } }
+        // DRF may return absolute next URLs. Convert to API-relative if needed.
+        const nextUrl = data?.next || null
+        if (!nextUrl) { url = null }
+        else if (typeof nextUrl === 'string' && /^https?:\/\//i.test(nextUrl)) {
+          try {
+            const u = new URL(nextUrl)
+            const path = (u.pathname || '') + (u.search || '')
+            url = path.startsWith('/api/') ? path.replace('/api/', '/') : path
+          } catch {
+            url = null
+          }
+        } else {
+          url = nextUrl
+        }
+        pages += 1
+      }
+      // Show all users in the same school (backend already applies school scoping), except the current user
+      setAllUsers(acc.filter(u => u.id !== user?.id))
     } catch {
       setAllUsers([])
     } finally {
@@ -214,7 +229,7 @@ export default function Messages(){
   }, [allUsers, userMeta])
 
   // Helpers for display names and role tags
-  const roleLabelMap = { admin: 'Admin', teacher: 'Teacher', finance: 'Finance', student: 'Student' }
+  const roleLabelMap = { admin: 'Admin', teacher: 'Teacher', finance: 'Finance', student: 'Student', non_teaching: 'Staff' }
   const roleBadgeClass = (role)=>{
     switch(role){
       case 'admin': return 'bg-purple-50 text-purple-700 border-purple-200'
@@ -228,7 +243,8 @@ export default function Messages(){
     const first = u?.first_name || ''
     const last = u?.last_name || ''
     const full = `${first} ${last}`.trim()
-    return full || u?.username || u?.email || `User #${u?.id}`
+    const alt = u?.student_name || ''
+    return full || alt || u?.username || u?.email || `User #${u?.id}`
   }
   const avatarUrl = (u)=> u?.avatar_url || u?.profile_image_url || u?.profile_photo_url || u?.photo_url || u?.image_url || u?.avatar || ''
   const initials = (u)=>{
@@ -304,7 +320,15 @@ export default function Messages(){
       const username = (u.username || '').toLowerCase()
       const email = (u.email || '').toLowerCase()
       const roleLbl = (roleLabelMap[u.role] || u.role || '').toLowerCase()
-      return first.includes(q) || last.includes(q) || username.includes(q) || email.includes(q) || roleLbl.includes(q)
+      const admission = ((u.admission_no || u.student_admission_no || '') + '').toLowerCase()
+      return (
+        first.includes(q) ||
+        last.includes(q) ||
+        username.includes(q) ||
+        email.includes(q) ||
+        roleLbl.includes(q) ||
+        admission.includes(q)
+      )
     })
   }, [allUsers, query])
 
@@ -315,21 +339,21 @@ export default function Messages(){
     const metaUnread = (id)=> userMeta.get(id)?.unread || 0
 
     if (!q){
-      // No search: show recent chats only (participants with any message), sorted by latest
-      const recentIds = Array.from(userMeta.keys())
-      const recentUsers = recentIds
+      // No search: show ALL users. Put recent conversations first, followed by the rest alphabetically.
+      const recentIds = new Set(Array.from(userMeta.keys()))
+      const recentUsers = Array.from(recentIds)
         .map(id => filteredUsers.find(u => u.id === id) || allUsers.find(u => u.id === id))
         .filter(Boolean)
       recentUsers.sort((a,b)=> metaTs(b.id) - metaTs(a.id))
-      if (recentUsers.length > 0) return recentUsers
-      // Fallback: show directory if no recent chats
-      const dir = [...filteredUsers]
-      dir.sort((a,b)=>{
-        const na = (a.first_name || a.username || '').toLowerCase()
-        const nb = (b.first_name || b.username || '').toLowerCase()
-        return na.localeCompare(nb)
-      })
-      return dir
+      // Remaining directory excluding recent
+      const rest = filteredUsers
+        .filter(u => !recentIds.has(u.id))
+        .sort((a,b)=>{
+          const na = (a.first_name || a.username || '').toLowerCase()
+          const nb = (b.first_name || b.username || '').toLowerCase()
+          return na.localeCompare(nb)
+        })
+      return [...recentUsers, ...rest]
     }
     // With search: show directory matches, but sort by latest desc, then unread, then name
     const arr = [...filteredUsers]

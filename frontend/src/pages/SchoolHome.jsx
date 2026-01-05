@@ -506,7 +506,8 @@ export default function SchoolHome() {
           animation: bulletFlyRL 650ms ease-out forwards;
         }
         .about-animate {
-          opacity: 0;
+          /* Keep elements visible by default; animation classes will handle any motion.
+             This avoids the entire page appearing blank if IntersectionObserver fails. */
         }
         .about-animate-visible.about-animate-down {
           animation: heroFlyDown 650ms ease-out forwards;
@@ -522,13 +523,13 @@ export default function SchoolHome() {
         }
         /* Generic section fly-in (for non-hero sections) */
         .section-animate {
-          opacity: 0;
-          transform: translateY(24px);
+          /* Sections remain visible even before animation triggers, to prevent blank content
+             if scroll observers do not run. */
+          transform: translateY(0);
         }
         .section-animate-visible {
-          opacity: 1;
           transform: translateY(0);
-          transition: opacity 700ms ease-out, transform 700ms ease-out;
+          transition: transform 700ms ease-out;
         }
         @keyframes curtainSlide {
           0% { transform: translateX(0); }

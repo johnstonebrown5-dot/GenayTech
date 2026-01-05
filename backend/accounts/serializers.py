@@ -30,13 +30,14 @@ class UserSerializer(serializers.ModelSerializer):
     school = SchoolSerializer(read_only=True)
     profile_picture = serializers.ImageField(required=False, allow_null=True)
     avatar_url = serializers.SerializerMethodField()
+    student_admission_no = serializers.SerializerMethodField()
 
     class Meta:
         model = User
         fields = [
             "id","username","email","first_name","last_name",
             "role","phone","school","is_staff","is_superuser","email_verified","is_active",
-            "profile_picture","avatar_url",
+            "profile_picture","avatar_url","student_admission_no",
         ]
 
     def get_avatar_url(self, obj):
@@ -53,6 +54,27 @@ class UserSerializer(serializers.ModelSerializer):
             except Exception:
                 return url
         return url
+
+    def get_student_admission_no(self, obj):
+        try:
+            stu = getattr(obj, "student", None)
+        except Exception:
+            stu = None
+        try:
+            if stu is not None and getattr(stu, "admission_no", None):
+                return stu.admission_no
+        except Exception:
+            pass
+        # Fallback: lightweight lookup by user id
+        try:
+            from academics.models import Student  # local import to avoid circulars
+            uid = getattr(obj, "id", None)
+            if not uid:
+                return None
+            stu = Student.objects.filter(user_id=uid).only("admission_no").first()
+            return getattr(stu, "admission_no", None) if stu is not None else None
+        except Exception:
+            return None
 
 
 class NonTeachingStaffSerializer(serializers.ModelSerializer):

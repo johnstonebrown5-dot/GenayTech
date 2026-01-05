@@ -55,7 +55,7 @@ export default function AdminClassProfile(){
     return preferred.length > 0 ? preferred : list
   }, [teachers, id])
 
-  useEffect(() => {
+  useEffect(() => { 
     let cancelled = false
     async function load(){
       try {
