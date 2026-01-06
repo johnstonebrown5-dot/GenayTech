@@ -73,6 +73,34 @@ export default function AdminLayout({ children }){
     return () => { mounted = false }
   }, [])
 
+  // Background prefetch of heavy admin data (students, teachers, classes, subjects, fees)
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        await Promise.allSettled([
+          // Students list (first page / capped size)
+          api.get('/academics/students/?page_size=500', { _skipGlobalLoading: true }),
+          // Teachers + supporting data
+          api.get('/academics/teachers/', { _skipGlobalLoading: true }),
+          api.get('/auth/users/?role=teacher', { _skipGlobalLoading: true }),
+          // Classes & subjects (used across multiple admin pages)
+          api.get('/academics/classes/?page_size=2000', { _skipGlobalLoading: true }),
+          api.get('/academics/subjects/', { _skipGlobalLoading: true }),
+          // Core finance/fees endpoints
+          api.get('/finance/fee-categories/', { _skipGlobalLoading: true }),
+          api.get('/finance/class-fees/', { _skipGlobalLoading: true }),
+          api.get('/finance/student-fees/', { _skipGlobalLoading: true }),
+        ])
+      } catch {
+        // Silent: this is best-effort warming only
+      } finally {
+        if (cancelled) return
+      }
+    })()
+    return () => { cancelled = true }
+  }, [])
+
   // Keep browser tab title in sync with active school
   useEffect(() => {
     if (typeof document !== 'undefined') {

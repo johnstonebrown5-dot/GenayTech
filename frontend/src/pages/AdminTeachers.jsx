@@ -5,6 +5,15 @@ import { useNotification } from '../components/NotificationContext'
 import { Link } from 'react-router-dom'
 import StatCard from '../components/StatCard'
 
+// Simple in-memory cache so revisiting this page in the same session can
+// reuse previously loaded data without refetching immediately.
+let cachedTeachers = null
+let cachedClasses = null
+let cachedSubjects = null
+let cachedUsers = null
+let teachersCacheTimestamp = 0
+const TEACHERS_CACHE_TTL_MS = 5 * 60 * 1000 // 5 minutes
+
 export default function AdminTeachers(){
   const [teachers, setTeachers] = useState([])
   const [classes, setClasses] = useState([])
@@ -52,13 +61,38 @@ export default function AdminTeachers(){
       const activeUsers = uArr.filter(u => u?.is_active !== false)
       setUsers(activeUsers)
       setSubjects(sArr)
+      // Update cache
+      cachedTeachers = activeTeachers
+      cachedClasses = clArr
+      cachedSubjects = sArr
+      cachedUsers = activeUsers
+      teachersCacheTimestamp = Date.now()
     } catch (e) {
       showError('Failed to Load Teachers', 'There was a problem loading teachers data. Please refresh.')
     } finally {
       setLoading(false)
     }
   }
-  useEffect(()=>{ load() },[])
+  useEffect(()=>{ 
+    // Try hydrate from cache first
+    const now = Date.now()
+    if (
+      cachedTeachers &&
+      cachedClasses &&
+      cachedSubjects &&
+      cachedUsers &&
+      now - teachersCacheTimestamp < TEACHERS_CACHE_TTL_MS
+    ){
+      setTeachers(cachedTeachers)
+      setPastTeachers(Array.isArray(pastTeachers) ? pastTeachers : [])
+      setClasses(cachedClasses)
+      setUsers(cachedUsers)
+      setSubjects(cachedSubjects)
+      setLoading(false)
+    } else {
+      load()
+    }
+  },[])
 
   useEffect(() => {
     if (typeof window === 'undefined' || !window.matchMedia) return

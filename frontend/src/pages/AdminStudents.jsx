@@ -6,6 +6,14 @@ import { useNotification } from '../components/NotificationContext'
 import StatCard from '../components/StatCard'
 import { showLoadingHint, setLoadingProgress, clearLoadingHint } from '../utils/loading'
 
+// Simple in-memory cache so that navigating away and back within the same
+// session can reuse previously loaded data without refetching immediately.
+let cachedStudents = null
+let cachedClasses = null
+let cachedTab = 'active'
+let studentsCacheTimestamp = 0
+const STUDENTS_CACHE_TTL_MS = 5 * 60 * 1000 // 5 minutes
+
 export default function AdminStudents(){
   const [students, setStudents] = useState([])
   const [classes, setClasses] = useState([])
@@ -60,6 +68,11 @@ export default function AdminStudents(){
       const clData = Array.isArray(cl.data) ? cl.data : (Array.isArray(cl.data?.results) ? cl.data.results : [])
       setStudents(stData)
       setClasses(clData)
+      // Update cache for this tab
+      cachedStudents = stData
+      cachedClasses = clData
+      cachedTab = tab
+      studentsCacheTimestamp = Date.now()
     } catch (e) {
       showError('Load Failed', 'Could not load students or classes.')
     } finally {
@@ -79,9 +92,27 @@ export default function AdminStudents(){
   }
 
   useEffect(()=>{ 
-    load()
-    loadSchoolName()
+    // Try to hydrate from cache first for this tab
+    const now = Date.now()
+    if (
+      cachedStudents &&
+      cachedClasses &&
+      cachedTab === tab &&
+      now - studentsCacheTimestamp < STUDENTS_CACHE_TTL_MS
+    ){
+      setStudents(cachedStudents)
+      setClasses(cachedClasses)
+      setIsLoading(false)
+      try { clearLoadingHint() } catch {}
+    } else {
+      load()
+    }
   },[tab])
+
+  // Load school name for print header (once per session)
+  useEffect(() => {
+    loadSchoolName()
+  }, [])
 
   useEffect(() => {
     if (typeof window === 'undefined' || !window.matchMedia) return

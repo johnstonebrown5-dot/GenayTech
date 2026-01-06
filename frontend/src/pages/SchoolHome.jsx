@@ -297,27 +297,6 @@ export default function SchoolHome() {
     return () => clearTimeout(t)
   }, [typeIdx, isDeleting, typingText])
 
-  // Fast typing animation for headteacher message
-  const [typedHeadMsg, setTypedHeadMsg] = useState('')
-  const headteacherMessage = (school?.homepage?.headteacher?.message || 'Welcome to our school. We are committed to academic excellence, character formation, and holistic growth of every learner entrusted to us.').toString()
-  useEffect(() => {
-    if (!headteacherMessage) return
-    let idx = 0
-    const baseSpeed = 60
-    let timeoutId
-    const startDelay = 250
-    function tick(){
-      idx += 1
-      setTypedHeadMsg(headteacherMessage.slice(0, idx))
-      if (idx < headteacherMessage.length) {
-        timeoutId = setTimeout(tick, baseSpeed)
-      }
-    }
-    setTypedHeadMsg('')
-    timeoutId = setTimeout(tick, startDelay)
-    return () => { if (timeoutId) clearTimeout(timeoutId) }
-  }, [headteacherMessage])
-
   function extractDominantColor(src) {
     return new Promise((resolve) => {
       const img = new Image()
@@ -832,7 +811,7 @@ export default function SchoolHome() {
             const name = ht.name || 'Headteacher'
             const title = ht.title || 'Headteacher'
             const photo = ht.photo ? toAbsoluteUrl(ht.photo) : ''
-            const message = headteacherMessage
+            const message = ht.message || 'Welcome to our school. We are committed to academic excellence, character formation, and holistic growth of every learner entrusted to us.'
             return (
               <div className="grid lg:grid-cols-3 gap-8 items-start">
                 <div className="lg:col-span-1">
@@ -851,7 +830,7 @@ export default function SchoolHome() {
                     <h2 className="text-3xl md:text-4xl font-bold tracking-tight text-slate-900">Message from the Headteacher</h2>
                     <div className="mt-2 h-1 w-16 rounded-full bg-gradient-to-r from-indigo-500 via-sky-400 to-emerald-400" />
                     <p className="mt-5 text-base md:text-lg leading-relaxed text-slate-800 whitespace-pre-line">
-                      {typedHeadMsg || message}
+                      {message}
                     </p>
                   </div>
                 </div>
