@@ -281,7 +281,7 @@ export default function SchoolHome() {
   const [isDeleting, setIsDeleting] = useState(false)
   const [typeIdx, setTypeIdx] = useState(0)
   useEffect(() => {
-    const baseSpeed = 90
+    const baseSpeed = 120
     const speed = isDeleting ? baseSpeed / 2 : baseSpeed
     const t = setTimeout(() => {
       const full = typingText
@@ -289,16 +289,34 @@ export default function SchoolHome() {
         const next = full.slice(0, typeIdx + 1)
         setTyped(next)
         setTypeIdx(typeIdx + 1)
-        if (next === full) setIsDeleting(true)
+        if (next === full) return
       } else {
-        const next = full.slice(0, Math.max(0, typeIdx - 1))
-        setTyped(next)
-        setTypeIdx(Math.max(0, typeIdx - 1))
-        if (next.length === 0) setIsDeleting(false)
+        return
       }
     }, typeIdx === 0 && !isDeleting ? 500 : speed)
     return () => clearTimeout(t)
   }, [typeIdx, isDeleting, typingText])
+
+  // Fast typing animation for headteacher message
+  const [typedHeadMsg, setTypedHeadMsg] = useState('')
+  const headteacherMessage = (school?.homepage?.headteacher?.message || 'Welcome to our school. We are committed to academic excellence, character formation, and holistic growth of every learner entrusted to us.').toString()
+  useEffect(() => {
+    if (!headteacherMessage) return
+    let idx = 0
+    const baseSpeed = 60
+    let timeoutId
+    const startDelay = 250
+    function tick(){
+      idx += 1
+      setTypedHeadMsg(headteacherMessage.slice(0, idx))
+      if (idx < headteacherMessage.length) {
+        timeoutId = setTimeout(tick, baseSpeed)
+      }
+    }
+    setTypedHeadMsg('')
+    timeoutId = setTimeout(tick, startDelay)
+    return () => { if (timeoutId) clearTimeout(timeoutId) }
+  }, [headteacherMessage])
 
   function extractDominantColor(src) {
     return new Promise((resolve) => {
@@ -625,7 +643,7 @@ export default function SchoolHome() {
         <div
           className="absolute inset-0 bg-cover bg-center hero-bg-scroll"
           style={{
-            backgroundImage: `linear-gradient(to bottom, rgba(249,250,251,0.65), rgba(255,255,255,0.82)), radial-gradient(1100px 520px at -10% -20%, ${heroColor}, transparent 65%), radial-gradient(900px 520px at 110% 10%, rgba(129,140,248,0.18), transparent 65%), url(${heroImages[heroIndex] || ''})`
+            backgroundImage: `linear-gradient(to bottom, rgba(30,64,175,0.38), rgba(15,23,42,0.48)), radial-gradient(1100px 520px at -10% -20%, ${heroColor}, transparent 65%), radial-gradient(900px 520px at 110% 10%, rgba(129,140,248,0.18), transparent 65%), url(${heroImages[heroIndex] || ''})`
           }}
         />
         <div className="relative mx-auto max-w-7xl px-4 md:px-6 pt-10 md:pt-14 pb-12 md:pb-20">
@@ -635,19 +653,19 @@ export default function SchoolHome() {
                 <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-indigo-600 text-[10px] text-white">★</span>
                 <span>{school.homepage?.hero?.badge || school.motto}</span>
               </div>
-              <h1 className="mt-4 text-3xl sm:text-4xl md:text-5xl font-extrabold leading-tight tracking-tight text-slate-900 hero-fly-up">
+              <h1 className="mt-4 text-3xl sm:text-4xl md:text-5xl font-extrabold leading-tight tracking-tight text-white hero-fly-up">
                 {school.homepage?.hero?.title ? (
                   school.homepage?.hero?.title
                 ) : (
                   <>
-                    <span className="block text-slate-800">Welcome to</span>
+                    <span className="block text-slate-100">Welcome to</span>
                     <span className="bg-gradient-to-r from-indigo-600 via-purple-600 to-sky-500 bg-clip-text text-transparent">
                       {typed || school.name}
                     </span>
                   </>
                 )}
               </h1>
-              <p className="mt-4 text-base sm:text-lg text-slate-600 max-w-xl mx-auto hero-fly-left">
+              <p className="mt-4 text-base sm:text-lg text-slate-100 max-w-xl mx-auto hero-fly-left">
                 {school.homepage?.hero?.subtitle || 'A nurturing, diverse and high-achieving community empowering students to thrive in academics, character, and service.'}
               </p>
               <div className="mt-7 flex flex-wrap gap-3 justify-center hero-fly-right">
@@ -697,10 +715,10 @@ export default function SchoolHome() {
       </section>
 
       {/* About */}
-      <section id="about" className="relative overflow-hidden bg-gradient-to-b from-indigo-50 via-indigo-100 to-white section-animate">
+      <section id="about" className="relative overflow-hidden bg-gradient-to-b from-slate-50 via-indigo-50 to-slate-100 section-animate">
         <div
           aria-hidden
-          className="absolute inset-0 pointer-events-none opacity-10 [background:radial-gradient(rgba(99,102,241,0.14)_1px,transparent_1px)] [background-size:22px_22px]"
+          className="absolute inset-0 pointer-events-none opacity-20 [background:radial-gradient(rgba(129,140,248,0.18)_1px,transparent_1px)] [background-size:22px_22px]"
         />
         <div className="relative mx-auto max-w-7xl px-4 md:px-6 py-14 md:py-20">
           <div className="grid lg:grid-cols-2 gap-10 lg:gap-14 items-start">
@@ -726,7 +744,7 @@ export default function SchoolHome() {
                 ).map((b, idx) => (
                   <li
                     key={`${idx}-${b}`}
-                    className="flex items-start gap-3 rounded-xl bg-white/70 px-3 py-2 ring-1 ring-slate-100 shadow-[0_1px_3px_rgba(15,23,42,0.06)] about-bullet"
+                    className="flex items-start gap-3 rounded-2xl bg-white/70 px-3.5 py-2.5 ring-1 ring-slate-100/90 shadow-[0_8px_25px_rgba(15,23,42,0.06)] backdrop-blur-sm transition-transform transition-shadow duration-200 hover:-translate-y-0.5 hover:shadow-[0_14px_35px_rgba(15,23,42,0.12)] about-bullet"
                     style={{ animationDelay: `${0.25 + idx * 0.2}s` }}
                   >
                     <span className="mt-1 inline-flex h-5 w-5 items-center justify-center rounded-full bg-indigo-50 text-indigo-600 text-xs font-semibold">
@@ -738,9 +756,9 @@ export default function SchoolHome() {
               </ul>
             </div>
             <div className="relative about-animate about-animate-right stats-curtain">
-              <div className="pointer-events-none absolute -inset-6 -z-10 bg-gradient-to-tr from-indigo-500/10 via-fuchsia-500/5 to-sky-500/10 blur-2xl" />
+              <div className="pointer-events-none absolute -inset-6 -z-10 bg-gradient-to-tr from-indigo-500/15 via-fuchsia-500/8 to-sky-500/16 blur-2xl" />
               <div
-                className="rounded-3xl border border-slate-200/80 bg-white/90 backdrop-blur-sm p-6 sm:p-7 shadow-[0_18px_45px_rgba(15,23,42,0.12)]"
+                className="rounded-3xl border border-slate-100 bg-white/90 backdrop-blur-md p-6 sm:p-7 shadow-[0_22px_55px_rgba(15,23,42,0.16)]"
                 style={{ ['--curtain-delay']: '0.9s' }}
               >
                 <div className="flex items-center justify-between gap-2">
@@ -754,28 +772,25 @@ export default function SchoolHome() {
                   </span>
                 </div>
                 <div className="mt-5 grid grid-cols-2 md:grid-cols-3 gap-4 text-sm text-slate-700">
-                  <div className="group rounded-2xl border border-slate-100 bg-gradient-to-br from-slate-50 to-indigo-50/40 p-4 shadow-sm hover:shadow-md hover:border-indigo-100 transition-all">
+                  <div className="group rounded-2xl border border-slate-100 bg-gradient-to-br from-slate-50 to-indigo-50/40 p-4 shadow-sm hover:shadow-md hover:border-indigo-100 hover:-translate-y-0.5 transition-all">
                     <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-slate-500">Students</div>
-                    <CountUp
-                      value={school.homepage?.stats?.students ?? '—'}
-                      className="mt-1 text-2xl font-semibold text-slate-900 group-hover:text-indigo-700"
-                    />
+                    <div className="mt-1 text-2xl font-semibold text-slate-900 group-hover:text-indigo-700">
+                      {school.homepage?.stats?.students ?? '—'}
+                    </div>
                     <p className="mt-1 text-xs text-slate-500">Active learners</p>
                   </div>
-                  <div className="group rounded-2xl border border-slate-100 bg-gradient-to-br from-slate-50 to-purple-50/40 p-4 shadow-sm hover:shadow-md hover:border-purple-100 transition-all">
+                  <div className="group rounded-2xl border border-slate-100 bg-gradient-to-br from-slate-50 to-purple-50/40 p-4 shadow-sm hover:shadow-md hover:border-purple-100 hover:-translate-y-0.5 transition-all">
                     <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-slate-500">Teachers</div>
-                    <CountUp
-                      value={school.homepage?.stats?.teachers ?? '—'}
-                      className="mt-1 text-2xl font-semibold text-slate-900 group-hover:text-indigo-700"
-                    />
+                    <div className="mt-1 text-2xl font-semibold text-slate-900 group-hover:text-indigo-700">
+                      {school.homepage?.stats?.teachers ?? '—'}
+                    </div>
                     <p className="mt-1 text-xs text-slate-500">Dedicated educators</p>
                   </div>
-                  <div className="group rounded-2xl border border-slate-100 bg-gradient-to-br from-slate-50 to-emerald-50/60 p-4 shadow-sm hover:shadow-md hover:border-emerald-100 transition-all">
+                  <div className="group rounded-2xl border border-slate-100 bg-gradient-to-br from-slate-50 to-emerald-50/60 p-4 shadow-sm hover:shadow-md hover:border-emerald-100 hover:-translate-y-0.5 transition-all">
                     <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-slate-500">Parent satisfaction</div>
-                    <CountUp
-                      value={school.homepage?.stats?.satisfaction || '98%'}
-                      className="mt-1 text-2xl font-semibold text-slate-900 group-hover:text-emerald-700"
-                    />
+                    <div className="mt-1 text-2xl font-semibold text-slate-900 group-hover:text-emerald-700">
+                      {school.homepage?.stats?.satisfaction || '98%'}
+                    </div>
                     <p className="mt-1 text-xs text-slate-500">Based on feedback</p>
                   </div>
                   <div className="group rounded-2xl border border-slate-100 bg-gradient-to-br from-slate-50 to-sky-50/60 p-4 shadow-sm hover:shadow-md hover:border-sky-100 transition-all">
@@ -786,21 +801,19 @@ export default function SchoolHome() {
                     <p className="mt-1 text-xs text-slate-500">Personalized attention</p>
                   </div>
                   {school.homepage?.stats?.completion ? (
-                    <div className="group rounded-2xl border border-slate-100 bg-gradient-to-br from-slate-50 to-amber-50/60 p-4 shadow-sm hover:shadow-md hover:border-amber-100 transition-all">
+                    <div className="group rounded-2xl border border-slate-100 bg-gradient-to-br from-slate-50 to-amber-50/60 p-4 shadow-sm hover:shadow-md hover:border-amber-100 hover:-translate-y-0.5 transition-all">
                       <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-slate-500">KCSE completion</div>
-                      <CountUp
-                        value={school.homepage.stats.completion}
-                        className="mt-1 text-2xl font-semibold text-slate-900 group-hover:text-amber-700"
-                      />
+                      <div className="mt-1 text-2xl font-semibold text-slate-900 group-hover:text-amber-700">
+                        {school.homepage.stats.completion}
+                      </div>
                       <p className="mt-1 text-xs text-slate-500">Graduation success</p>
                     </div>
                   ) : null}
-                  <div className="group rounded-2xl border border-slate-100 bg-gradient-to-br from-slate-50 to-pink-50/60 p-4 shadow-sm hover:shadow-md hover:border-pink-100 transition-all">
+                  <div className="group rounded-2xl border border-slate-100 bg-gradient-to-br from-slate-50 to-pink-50/60 p-4 shadow-sm hover:shadow-md hover:border-pink-100 hover:-translate-y-0.5 transition-all">
                     <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-slate-500">Clubs & activities</div>
-                    <CountUp
-                      value={school.homepage?.stats?.clubs || '40+'}
-                      className="mt-1 text-2xl font-semibold text-slate-900 group-hover:text-pink-700"
-                    />
+                    <div className="mt-1 text-2xl font-semibold text-slate-900 group-hover:text-pink-700">
+                      {school.homepage?.stats?.clubs || '40+'}
+                    </div>
                     <p className="mt-1 text-xs text-slate-500">Co-curricular options</p>
                   </div>
                 </div>
@@ -819,11 +832,11 @@ export default function SchoolHome() {
             const name = ht.name || 'Headteacher'
             const title = ht.title || 'Headteacher'
             const photo = ht.photo ? toAbsoluteUrl(ht.photo) : ''
-            const message = ht.message || 'Welcome to our school. We are committed to academic excellence, character formation, and holistic growth of every learner entrusted to us.'
+            const message = headteacherMessage
             return (
               <div className="grid lg:grid-cols-3 gap-8 items-start">
                 <div className="lg:col-span-1">
-                  <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-lg text-center">
+                  <div className="text-center">
                     {photo ? (
                       <ProgressiveImage src={photo} candidates={imageCandidates(photo)} alt={name} className="mx-auto h-36 w-36 rounded-2xl border border-gray-200 overflow-hidden" />
                     ) : (
@@ -834,9 +847,12 @@ export default function SchoolHome() {
                   </div>
                 </div>
                 <div className="lg:col-span-2">
-                  <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-lg">
-                    <h2 className="text-3xl font-bold text-gray-900">Message from the Headteacher</h2>
-                    <p className="mt-4 text-lg leading-relaxed text-gray-700 whitespace-pre-line">{message}</p>
+                  <div className="max-w-3xl">
+                    <h2 className="text-3xl md:text-4xl font-bold tracking-tight text-slate-900">Message from the Headteacher</h2>
+                    <div className="mt-2 h-1 w-16 rounded-full bg-gradient-to-r from-indigo-500 via-sky-400 to-emerald-400" />
+                    <p className="mt-5 text-base md:text-lg leading-relaxed text-slate-800 whitespace-pre-line">
+                      {typedHeadMsg || message}
+                    </p>
                   </div>
                 </div>
               </div>
