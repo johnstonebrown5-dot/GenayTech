@@ -1,7 +1,9 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
+from django.db.models import Q
 from .models import Notification, Event, ArrearsMessageCampaign, Message, MessageRecipient, DeliveryLog, ServiceReview
 from accounts.models import School
+from academics.models import Student
 
 User = get_user_model()
 
@@ -177,7 +179,21 @@ class MessageSerializer(serializers.ModelSerializer):
         # Enforce role-based constraints on USERS audience by filtering only allowed targets
         role = getattr(user, 'role', None)
         if role == 'teacher':
-            recipients_qs = recipients_qs.filter(role='admin')
+            # Teachers can always message admins directly.
+            admin_q = Q(role='admin')
+            # Additionally, allow class teachers to message students in their own classes.
+            try:
+                allowed_student_ids = list(
+                    Student.objects.filter(
+                        klass__teacher_id=user.id,
+                        is_active=True,
+                        user__isnull=False,
+                    ).values_list('user_id', flat=True)
+                )
+            except Exception:
+                allowed_student_ids = []
+            student_q = Q(role='student', id__in=allowed_student_ids) if allowed_student_ids else Q(pk__in=[])
+            recipients_qs = recipients_qs.filter(admin_q | student_q)
         elif role == 'finance':
             recipients_qs = recipients_qs.filter(role__in=['admin','teacher','student'])
         elif role == 'student':

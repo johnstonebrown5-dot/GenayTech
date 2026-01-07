@@ -13,6 +13,9 @@ export default function TeacherClasses(){
   const [search, setSearch] = useState('')
   const [gender, setGender] = useState('')
   const [me, setMe] = useState(null)
+  const [messageBody, setMessageBody] = useState('')
+  const [sendingMessage, setSendingMessage] = useState(false)
+  const [messageStatus, setMessageStatus] = useState('') // success or error text
 
   useEffect(()=>{
     let mounted = true
@@ -135,6 +138,38 @@ export default function TeacherClasses(){
     document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url)
   }
 
+  const handleSendClassMessage = async () => {
+    const body = messageBody.trim()
+    if (!body || !selected) return
+    setSendingMessage(true)
+    setMessageStatus('')
+    try {
+      // Fetch full student objects for this class so we have linked user IDs
+      const res = await api.get(`/academics/classes/${selected}/students/`)
+      const data = Array.isArray(res.data) ? res.data : []
+      const recipientIds = data
+        .filter(s => s && s.is_active !== false && s.user)
+        .map(s => s.user)
+        .filter((v, i, arr) => arr.indexOf(v) === i)
+      if (!recipientIds.length) {
+        setMessageStatus('No active student accounts found for this class.')
+        return
+      }
+      await api.post('/communications/messages/', {
+        body,
+        audience: 'users',
+        recipient_ids: recipientIds,
+      })
+      setMessageBody('')
+      setMessageStatus('Message sent to class students.')
+    } catch (e) {
+      const msg = e?.response?.data?.detail || e?.message || 'Failed to send message'
+      setMessageStatus(msg)
+    } finally {
+      setSendingMessage(false)
+    }
+  }
+
   return (
     <div className="p-2 md:p-3 space-y-2 md:space-y-3">
       {/* Header */}
@@ -211,6 +246,36 @@ export default function TeacherClasses(){
             </div>
           </div>
         </div>
+
+        {/* Message this class */}
+        {currentClass && (
+          <div className="bg-white rounded-2xl shadow-md p-3 md:p-4 space-y-2 border border-indigo-100">
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <div className="text-sm font-semibold text-gray-900">Message this class</div>
+                <div className="text-xs text-gray-500">Send a simple announcement to all active students in {currentClass.name}.</div>
+              </div>
+            </div>
+            <textarea
+              className="mt-2 w-full border border-gray-200 rounded-xl px-3 py-2 text-sm min-h-[72px] focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-300"
+              placeholder="Type a short message to class students..."
+              value={messageBody}
+              onChange={e => setMessageBody(e.target.value)}
+            />
+            <div className="flex items-center justify-between gap-2">
+              <div className="text-[11px] text-gray-500">Recipients: all active students with accounts in this class.</div>
+              <button
+                type="button"
+                onClick={handleSendClassMessage}
+                disabled={sendingMessage || !messageBody.trim() || !selected}
+                className="inline-flex items-center justify-center px-3 py-2 rounded-xl bg-indigo-600 text-white text-xs font-medium disabled:opacity-60 shadow-sm hover:bg-indigo-700"
+              >{sendingMessage ? 'Sending...' : 'Send to Class'}</button>
+            </div>
+            {messageStatus && (
+              <div className="text-[11px] text-gray-600 mt-1">{messageStatus}</div>
+            )}
+          </div>
+        )}
 
         {/* Class summary card */}
         {currentClass && (

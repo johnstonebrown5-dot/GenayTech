@@ -28,6 +28,7 @@ except Exception:
     REPORTLAB_AVAILABLE = False
 import csv, io
 from django_filters.rest_framework import DjangoFilterBackend
+from communications.utils import send_sms, send_email_safe, log_delivery, create_messages_for_users, resolve_default_sender_id
 from .models import (
     Class, Student, Competency, Assessment, Attendance, TeacherProfile, Subject, SubjectComponent,
     Exam, ExamResult, AcademicYear, Term, Stream, LessonPlan, ClassSubjectTeacher, SubjectGradingBand,
@@ -366,6 +367,229 @@ class ClassViewSet(viewsets.ModelViewSet):
             'exams_by_term': exams_by_term,
         }
         return Response(payload)
+
+    @action(detail=True, methods=['post'], permission_classes=[IsAdmin], url_path='share-results')
+    def share_results(self, request, pk=None):
+        """Send concise exam results summaries to parents/guardians for this class.
+        Body: { exam_id: <optional exam id>, channel: 'sms' | 'both' }
+        - SMS is sent to Student.guardian_id (phone).
+        - Email (when requested) is sent to student.email or linked user.email.
+        Summaries include total marks, average and class position.
+        """
+        klass = self.get_object()
+        school_id = getattr(klass, 'school_id', None)
+        exam_id = request.data.get('exam_id') or None
+        channel = (str(request.data.get('channel') or 'sms') or 'sms').lower()
+        # Resolve exam: prefer provided id, else latest for this class
+        exam = None
+        if exam_id:
+            try:
+                exam = Exam.objects.get(id=int(exam_id), klass=klass)
+            except (Exam.DoesNotExist, ValueError, TypeError):
+                return Response({'detail': 'Exam not found for this class'}, status=status.HTTP_404_NOT_FOUND)
+        else:
+            exam = (
+                Exam.objects
+                .filter(klass=klass)
+                .order_by('-date', '-id')
+                .first()
+            )
+            if not exam:
+                return Response({'detail': 'No exams found for this class'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Build per-student totals and averages. Use the same filtering rules as the exam summary
+        # so we do not miss historical results where the student may have moved classes.
+        results = (
+            ExamResult.objects
+            .filter(exam=exam, student__is_active=True)
+            .filter(subject__is_examinable=True)
+            .select_related('student', 'subject')
+        )
+        if not results.exists():
+            return Response({'detail': 'No results captured for this exam'}, status=status.HTTP_400_BAD_REQUEST)
+
+        per_student = {}
+        for r in results:
+            s = r.student
+            entry = per_student.setdefault(s.id, {
+                'student': s,
+                'total': 0.0,
+                'count': 0,
+                'subjects': {},  # subject_code -> total marks
+            })
+            entry['total'] += float(r.marks)
+            entry['count'] += 1
+            try:
+                sub_code = getattr(r.subject, 'code', None) or getattr(r.subject, 'name', None) or ''
+            except Exception:
+                sub_code = ''
+            if sub_code:
+                prev_mark = entry['subjects'].get(sub_code, 0.0)
+                entry['subjects'][sub_code] = prev_mark + float(r.marks)
+
+        # Compute averages and sort by total desc for positions
+        ordered = []
+        for sid, data in per_student.items():
+            total = data['total']
+            count = data['count'] or 1
+            avg = total / count
+            ordered.append({
+                'student': data['student'],
+                'total': round(total, 2),
+                'average': round(avg, 2),
+            })
+        ordered.sort(key=lambda x: x['total'], reverse=True)
+        # Assign positions (simple ranking by total, ties share same position)
+        last_total = None
+        position = 0
+        for idx, row in enumerate(ordered):
+            if last_total is None or row['total'] < last_total:
+                position = idx + 1
+                last_total = row['total']
+            row['position'] = position
+
+        # Prepare optional chat sender for in-app/email/SMS via unified Messages system
+        sender_id = resolve_default_sender_id(school_id) if school_id else None
+        recipient_user_ids = []
+
+        # Resolve class/grade and class teacher info for richer messages
+        grade_label = getattr(klass, 'grade_level', '') or ''
+        class_name = getattr(klass, 'name', '') or grade_label
+        teacher_obj = getattr(klass, 'teacher', None)
+        teacher_name = ''
+        teacher_phone = ''
+        try:
+            if teacher_obj:
+                first = getattr(teacher_obj, 'first_name', '') or ''
+                last = getattr(teacher_obj, 'last_name', '') or ''
+                teacher_name = (first + ' ' + last).strip() or getattr(teacher_obj, 'username', '') or ''
+                # Prefer TeacherProfile.phone, fallback to user.phone
+                from .models import TeacherProfile as TP
+                prof_phone = (
+                    TP.objects.filter(user=teacher_obj).values_list('phone', flat=True).first()
+                    if TP is not None else None
+                )
+                teacher_phone = prof_phone or getattr(teacher_obj, 'phone', '') or ''
+        except Exception:
+            teacher_name = teacher_name or ''
+            teacher_phone = teacher_phone or ''
+
+        # Send SMS / email per student
+        exam_name = getattr(exam, 'name', 'Exam')
+        sent_sms = 0
+        sent_email = 0
+        for row in ordered:
+            stu = row['student']
+            total = row['total']
+            avg = row['average']
+            pos = row['position']
+            name = getattr(stu, 'name', '') or getattr(stu, 'admission_no', '') or f"Student {stu.id}"
+            adm = getattr(stu, 'admission_no', '') or ''
+            # Subject performance summary like: MATH 80, ENG 75, SCI 78
+            subj_marks = per_student.get(stu.id, {}).get('subjects', {})
+            try:
+                items = sorted(subj_marks.items(), key=lambda kv: kv[0])
+            except Exception:
+                items = list(subj_marks.items())
+            subj_parts = []
+            for code, mark in items:
+                try:
+                    mark_val = float(mark)
+                except Exception:
+                    mark_val = 0.0
+                subj_parts.append(f"{code} {mark_val:.0f}")
+            subjects_str = ', '.join(subj_parts)
+
+            # Build tailored message including student, class, grade, subjects and class teacher
+            base = f"{exam_name}: {name}"
+            if adm:
+                base += f" (ADM {adm})"
+            if grade_label or class_name:
+                base += f" - {grade_label or class_name}"
+                if class_name and class_name != grade_label:
+                    base += f" {class_name}"
+            summary = f" Total {total:.0f}, Avg {avg:.1f}, Position {pos}."
+            subjects_clause = f" Subjects: {subjects_str}." if subjects_str else ''
+            teacher_clause = ''
+            if teacher_name:
+                teacher_clause = f" Class teacher: {teacher_name}"
+                if teacher_phone:
+                    teacher_clause += f" ({teacher_phone})."
+                else:
+                    teacher_clause += '.'
+            msg = base + summary + subjects_clause + ' ' + teacher_clause
+
+            # Queue in-app + student-targeted email/SMS via Messages if the student has a linked user
+            if sender_id and getattr(stu, 'user_id', None):
+                recipient_user_ids.append(stu.user_id)
+
+            # SMS to guardian
+            phone = getattr(stu, 'guardian_id', None)
+            if phone and channel in ('sms', 'both'):
+                ok_sms = False
+                try:
+                    ok_sms = send_sms(phone, msg)
+                except Exception:
+                    ok_sms = False
+                try:
+                    log_delivery(
+                        school_id=school_id,
+                        channel='sms',
+                        recipient=str(phone),
+                        ok=bool(ok_sms),
+                        message=msg,
+                        context=f"results:exam:{exam.id};student:{stu.id}",
+                    )
+                except Exception:
+                    pass
+                if ok_sms:
+                    sent_sms += 1
+
+            # Email
+            if channel == 'both':
+                email = getattr(stu, 'email', None) or getattr(getattr(stu, 'user', None), 'email', None)
+                if email:
+                    ok_email = False
+                    try:
+                        ok_email = send_email_safe(exam_name, msg, email)
+                    except Exception:
+                        ok_email = False
+                    try:
+                        log_delivery(
+                            school_id=school_id,
+                            channel='email',
+                            recipient=str(email),
+                            ok=bool(ok_email),
+                            message=msg,
+                            context=f"results:exam:{exam.id};student:{stu.id}",
+                        )
+                    except Exception:
+                        pass
+                    if ok_email:
+                        sent_email += 1
+
+        # Mirror to chat/messages so students also see this in-app and via the generic delivery pipeline
+        if sender_id and recipient_user_ids:
+            try:
+                # One shared body per exam; this will create a Message per user and queue email/SMS using user.phone/email
+                body = f"{exam_name} results are available for your class {klass.name}. Please check your portal or SMS for details."
+                create_messages_for_users(
+                    school_id=school_id,
+                    sender_id=sender_id,
+                    body=body,
+                    recipient_user_ids=list(set(recipient_user_ids)),
+                    system_tag='exam_results',
+                )
+            except Exception:
+                pass
+
+        return Response({
+            'detail': 'results_notifications_queued',
+            'exam_id': exam.id,
+            'students': len(ordered),
+            'sms_sent_attempts': sent_sms,
+            'email_sent_attempts': sent_email,
+        })
 
     @action(detail=True, methods=['post'], permission_classes=[IsAdmin], url_path='promote')
     def promote(self, request, pk=None):

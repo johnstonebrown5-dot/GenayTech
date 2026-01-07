@@ -12,6 +12,7 @@ from django.views.decorators.csrf import csrf_exempt
 import json
 import os
 import logging
+from communications.utils import notify_payment_received
 from .mpesa import MpesaClient
 from .coop_stk import CoopStkClient
 from .models import Invoice, Payment, FeeCategory, ClassFee, MpesaConfig, ExpenseCategory, Expense, PocketMoneyWallet, PocketMoneyTransaction, PaymentMethod, IncomingPayment, StudentFee, StaffPayroll, StaffPayslip
@@ -411,7 +412,6 @@ class InvoiceViewSet(viewsets.ModelViewSet):
 
         # Notify student of payment and updated balance
         try:
-            from communications.utils import notify_payment_received
             notify_payment_received(invoice, pay)
         except Exception as e:
             pass
@@ -479,6 +479,11 @@ class InvoiceViewSet(viewsets.ModelViewSet):
                 )
             except Exception as e:
                 return Response({'detail': f'Failed to create payment: {e}'}, status=500)
+            # Notify student/guardian of payment and updated balance
+            try:
+                notify_payment_received(inv, pay)
+            except Exception:
+                pass
             created_ids.append(pay.id)
             remaining -= alloc
             # update invoice status
@@ -566,6 +571,11 @@ class IncomingPaymentViewSet(viewsets.ModelViewSet):
                 reference=reference,
                 recorded_by=recorded_by if getattr(recorded_by, 'is_authenticated', False) else None,
             )
+            # Notify student/guardian of payment and updated balance
+            try:
+                notify_payment_received(inv, pay)
+            except Exception:
+                pass
             created_ids.append(pay.id)
             # update invoice status
             new_paid = paid_so_far + float(alloc)
@@ -661,6 +671,11 @@ class IncomingPaymentViewSet(viewsets.ModelViewSet):
                     recorded_by=request.user if request.user.is_authenticated else None,
                 )
                 created_ids.append(pay.id)
+                # Notify student/guardian of payment and updated balance
+                try:
+                    notify_payment_received(inv, pay)
+                except Exception:
+                    pass
                 new_paid = paid_so_far + float(alloc)
                 if new_paid >= float(inv.amount):
                     inv.status = 'paid'

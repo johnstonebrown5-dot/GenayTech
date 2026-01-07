@@ -99,7 +99,7 @@ export default function AdminClassProfile(){
   useEffect(() => {
     try{
       const t = (searchParams.get('tab') || '').toLowerCase()
-      if (['class','subjects','students','results'].includes(t)) {
+      if (['class','subjects','students','results','messages'].includes(t)) {
         setActiveTab(t)
       }
     }catch{}
@@ -595,6 +595,155 @@ export default function AdminClassProfile(){
     })
   }, [filteredTeachers, assignSearch])
 
+  const [messageMode, setMessageMode] = useState('all') // all | single | category | results
+  const [classMessageBody, setClassMessageBody] = useState('')
+  const [sendingClassMessage, setSendingClassMessage] = useState(false)
+  const [classMessageStatus, setClassMessageStatus] = useState('')
+  const [singleStudentId, setSingleStudentId] = useState('')
+  const [categoryBoarding, setCategoryBoarding] = useState('all') // all | boarding | day
+  const [categoryGender, setCategoryGender] = useState('all') // all | boys | girls
+  const [categoryOutstandingOnly, setCategoryOutstandingOnly] = useState(false)
+  const [shareExamId, setShareExamId] = useState('')
+  const [shareChannel, setShareChannel] = useState('sms') // sms | both
+  const [sharingRecentExam, setSharingRecentExam] = useState(false)
+  const [recentExamShareStatus, setRecentExamShareStatus] = useState('')
+
+  const loadClassStudentsForMessaging = async () => {
+    const res = await api.get(`/academics/classes/${id}/students/`)
+    const data = Array.isArray(res.data) ? res.data : []
+    return data.filter(s => s && s.is_active !== false)
+  }
+
+  const sendMessageToRecipients = async (body, ids) => {
+    if (!ids || !ids.length) {
+      setClassMessageStatus('No matching student accounts found.')
+      return
+    }
+    await api.post('/communications/messages/', {
+      body,
+      audience: 'users',
+      recipient_ids: ids,
+    })
+  }
+
+  const handleSendClassMessage = async () => {
+    const body = classMessageBody.trim()
+    if (!id) return
+    // For normal messaging modes we require a non-empty body, but results mode does not need one
+    if (messageMode !== 'results' && !body) return
+    setSendingClassMessage(true)
+    if (messageMode === 'results') {
+      setClassMessageStatus('Preparing to send…')
+    } else {
+      setClassMessageStatus('Sending…')
+    }
+    try {
+      if (messageMode === 'all') {
+        const stu = await loadClassStudentsForMessaging()
+        const recipientIds = stu
+          .filter(s => s.user)
+          .map(s => s.user)
+          .filter((v, i, arr) => arr.indexOf(v) === i)
+        await sendMessageToRecipients(body, recipientIds)
+        setClassMessageBody('')
+        setClassMessageStatus('Message sent to all students in this class.')
+      } else if (messageMode === 'single') {
+        const sid = singleStudentId
+        if (!sid) {
+          setClassMessageStatus('Select a student first.')
+          return
+        }
+        const stu = await loadClassStudentsForMessaging()
+        const target = stu.find(s => String(s.id) === String(sid))
+        if (!target || !target.user) {
+          setClassMessageStatus('Selected student does not have an account.')
+          return
+        }
+        await sendMessageToRecipients(body, [target.user])
+        setClassMessageBody('')
+        setClassMessageStatus('Message sent to selected student.')
+      } else if (messageMode === 'category') {
+        const stu = await loadClassStudentsForMessaging()
+        let filtered = stu
+        if (categoryBoarding === 'boarding') {
+          filtered = filtered.filter(s => String(s.boarding_status || '').toLowerCase() === 'boarding')
+        } else if (categoryBoarding === 'day') {
+          filtered = filtered.filter(s => String(s.boarding_status || '').toLowerCase() === 'day')
+        }
+        if (categoryGender === 'boys') {
+          filtered = filtered.filter(s => String(s.gender || '').toLowerCase().startsWith('m'))
+        } else if (categoryGender === 'girls') {
+          filtered = filtered.filter(s => String(s.gender || '').toLowerCase().startsWith('f'))
+        }
+        if (categoryOutstandingOnly) {
+          // Use arrears campaign helper: create a one-off campaign scoped to this class
+          const camp = await api.post('/communications/arrears_campaigns/', {
+            klass: Number(id),
+            message: body,
+            send_in_app: true,
+            send_sms: true,
+            send_email: false,
+            min_balance: 0,
+          })
+          try {
+            await api.post(`/communications/arrears_campaigns/${camp.data.id}/send/`)
+            setClassMessageBody('')
+            setClassMessageStatus('Queued messages to guardians of students with outstanding balances.')
+          } catch (e) {
+            const msg = e?.response?.data?.detail || e?.message || 'Failed to queue arrears messages'
+            setClassMessageStatus(msg)
+          }
+          return
+        }
+        const recipientIds = filtered
+          .filter(s => s.user)
+          .map(s => s.user)
+          .filter((v, i, arr) => arr.indexOf(v) === i)
+        await sendMessageToRecipients(body, recipientIds)
+        setClassMessageBody('')
+        setClassMessageStatus('Message sent to filtered students in this class.')
+      } else if (messageMode === 'results') {
+        const examId = shareExamId || (recentExam && recentExam.id)
+        if (!examId) {
+          setClassMessageStatus('No exam selected to share.')
+          return
+        }
+        // Transition from preparing state to sending state once we start the API call
+        setClassMessageStatus('Sending…')
+        await api.post(`/academics/classes/${id}/share-results/`, {
+          exam_id: examId,
+          channel: shareChannel,
+        })
+        setClassMessageBody('')
+        setClassMessageStatus('Results notifications queued. Messages are now being sent to parents and students; you can review details in the delivery log.')
+      }
+    } catch (e) {
+      const msg = e?.response?.data?.detail || e?.message || 'Failed to send message'
+      setClassMessageStatus(msg)
+    } finally {
+      setSendingClassMessage(false)
+    }
+  }
+
+  const handleShareRecentExam = async () => {
+    if (!recentExam || !id) return
+    setSharingRecentExam(true)
+    setRecentExamShareStatus('Preparing to send…')
+    try {
+      setRecentExamShareStatus('Sending…')
+      await api.post(`/academics/classes/${id}/share-results/`, {
+        exam_id: recentExam.id,
+        channel: 'sms', // default quick action: SMS to guardians; detailed options are in Messages tab
+      })
+      setRecentExamShareStatus('Results notifications queued for this exam. Messages are now being sent to parents and students; you can review details in the delivery log.')
+    } catch (e) {
+      const msg = e?.response?.data?.detail || e?.message || 'Failed to share results'
+      setRecentExamShareStatus(msg)
+    } finally {
+      setSharingRecentExam(false)
+    }
+  }
+
   return (
     <React.Fragment>
       <div className="space-y-4">
@@ -619,6 +768,7 @@ export default function AdminClassProfile(){
                 { key: 'subjects', label: 'Subjects' },
                 { key: 'students', label: 'Students' },
                 { key: 'results', label: 'Results' },
+                { key: 'messages', label: 'Messages' },
               ].map(t => (
                 <button
                   key={t.key}
@@ -652,7 +802,6 @@ export default function AdminClassProfile(){
                         </div>
                       </div>
                     </div>
-
                     <div className="p-4 rounded-xl border border-slate-200 bg-slate-50 shadow-sm">
                       <div className="flex items-center justify-between mb-3">
                         <div className="text-sm font-semibold text-gray-800">Class History</div>
@@ -860,6 +1009,175 @@ export default function AdminClassProfile(){
                   </div>
                 )}
 
+                {activeTab === 'messages' && (
+                  <div className="space-y-4 max-w-4xl">
+                    <div className="flex flex-wrap items-center gap-2 text-xs">
+                      <span className="text-gray-600">Mode:</span>
+                      {[
+                        { key: 'all', label: 'All students' },
+                        { key: 'single', label: 'Single student' },
+                        { key: 'category', label: 'By category' },
+                        { key: 'results', label: 'Share results with parents' },
+                      ].map(m => (
+                        <button
+                          key={m.key}
+                          type="button"
+                          onClick={() => { setMessageMode(m.key); setClassMessageStatus('') }}
+                          className={`px-3 py-1.5 rounded-full border text-xs ${messageMode===m.key ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'}`}
+                        >{m.label}</button>
+                      ))}
+                    </div>
+
+                    {messageMode !== 'results' && (
+                      <div className="p-4 rounded-xl border border-indigo-100 bg-white shadow-sm">
+                        {messageMode === 'all' && (
+                          <>
+                            <div className="text-sm font-semibold text-gray-800">Message all students</div>
+                            <div className="text-xs text-gray-500 mb-2">Send a message to all active students with accounts in {klass?.name || 'this class'}.</div>
+                          </>
+                        )}
+                        {messageMode === 'single' && (
+                          <>
+                            <div className="flex flex-wrap items-center gap-3 mb-2">
+                              <div className="text-sm font-semibold text-gray-800">Message a single student</div>
+                              <select
+                                className="border border-gray-200 rounded-md px-2 py-1 text-sm"
+                                value={singleStudentId}
+                                onChange={e => setSingleStudentId(e.target.value)}
+                              >
+                                <option value="">Select student</option>
+                                {classStudents.map(s => (
+                                  <option key={s.id} value={s.id}>{s.name} ({s.admission_no})</option>
+                                ))}
+                              </select>
+                            </div>
+                            <div className="text-xs text-gray-500 mb-1">Only students with linked accounts will receive in-app messages.</div>
+                          </>
+                        )}
+                        {messageMode === 'category' && (
+                          <>
+                            <div className="text-sm font-semibold text-gray-800 mb-2">Message by category</div>
+                            <div className="flex flex-wrap items-center gap-3 mb-2 text-xs">
+                              <label className="flex items-center gap-1">
+                                <span className="text-gray-600">Boarding:</span>
+                                <select
+                                  className="border border-gray-200 rounded-md px-2 py-1 text-xs"
+                                  value={categoryBoarding}
+                                  onChange={e => setCategoryBoarding(e.target.value)}
+                                >
+                                  <option value="all">All</option>
+                                  <option value="boarding">Boarding only</option>
+                                  <option value="day">Day only</option>
+                                </select>
+                              </label>
+                              <label className="flex items-center gap-1">
+                                <span className="text-gray-600">Gender:</span>
+                                <select
+                                  className="border border-gray-200 rounded-md px-2 py-1 text-xs"
+                                  value={categoryGender}
+                                  onChange={e => setCategoryGender(e.target.value)}
+                                >
+                                  <option value="all">All</option>
+                                  <option value="boys">Boys</option>
+                                  <option value="girls">Girls</option>
+                                </select>
+                              </label>
+                              <label className="flex items-center gap-1">
+                                <input
+                                  type="checkbox"
+                                  className="h-3 w-3"
+                                  checked={categoryOutstandingOnly}
+                                  onChange={e => setCategoryOutstandingOnly(e.target.checked)}
+                                />
+                                <span className="text-gray-700">Target students with outstanding fee balances (uses arrears campaign)</span>
+                              </label>
+                            </div>
+                          </>
+                        )}
+
+                        <textarea
+                          className="mt-2 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm min-h-[96px] focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-300"
+                          placeholder="Type a short message..."
+                          value={classMessageBody}
+                          onChange={e => setClassMessageBody(e.target.value)}
+                        />
+                        <div className="mt-2 flex items-center justify-between gap-2">
+                          <div className="text-[11px] text-gray-500">
+                            {messageMode === 'all' && 'Recipients: all active students with accounts in this class.'}
+                            {messageMode === 'single' && 'Recipient: the selected student (if they have an account).'}
+                            {messageMode === 'category' && (categoryOutstandingOnly
+                              ? 'Recipients: guardians of students with outstanding balances in this class (via arrears campaign).'
+                              : 'Recipients: students in this class matching the selected filters.')}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={handleSendClassMessage}
+                            disabled={sendingClassMessage || !classMessageBody.trim()}
+                            className="inline-flex items-center justify-center px-3 py-1.5 rounded-md bg-indigo-600 text-white text-xs font-medium disabled:opacity-60 shadow-sm hover:bg-indigo-700"
+                          >{sendingClassMessage ? 'Sending...' : 'Send'}</button>
+                        </div>
+                        {classMessageStatus && (
+                          <div
+                            className={`mt-1 text-[11px] ${String(classMessageStatus).toLowerCase().includes('fail') || String(classMessageStatus).toLowerCase().includes('error') ? 'text-red-600' : 'text-emerald-700'}`}
+                          >
+                            {classMessageStatus}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {messageMode === 'results' && (
+                      <div className="p-4 rounded-xl border border-emerald-100 bg-white shadow-sm">
+                        <div className="flex flex-wrap items-center gap-3 mb-2">
+                          <div className="text-sm font-semibold text-gray-800">Share exam results with parents</div>
+                          <label className="flex items-center gap-1 text-xs text-gray-700">
+                            <span>Exam:</span>
+                            <select
+                              className="border border-gray-200 rounded-md px-2 py-1 text-xs"
+                              value={shareExamId || (recentExam?.id ? String(recentExam.id) : '')}
+                              onChange={e => setShareExamId(e.target.value)}
+                            >
+                              <option value="">Latest exam for this class</option>
+                              {exams.filter(e => String(e.klass) === String(id)).map(e => (
+                                <option key={e.id} value={e.id}>{e.name}</option>
+                              ))}
+                            </select>
+                          </label>
+                          <label className="flex items-center gap-1 text-xs text-gray-700">
+                            <span>Channel:</span>
+                            <select
+                              className="border border-gray-200 rounded-md px-2 py-1 text-xs"
+                              value={shareChannel}
+                              onChange={e => setShareChannel(e.target.value)}
+                            >
+                              <option value="sms">SMS to guardians</option>
+                              <option value="both">SMS + Email</option>
+                            </select>
+                          </label>
+                        </div>
+                        <div className="text-xs text-gray-500 mb-2">
+                          This sends a concise results summary per student to their guardian phone (from guardian ID) and optionally email, and may take a few minutes to complete.
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleSendClassMessage}
+                          disabled={sendingClassMessage}
+                          className="inline-flex items-center justify-center px-3 py-1.5 rounded-md bg-emerald-600 text-white text-xs font-medium disabled:opacity-60 shadow-sm hover:bg-emerald-700"
+                        >{sendingClassMessage
+                          ? (String(classMessageStatus).toLowerCase().includes('preparing') ? 'Preparing to send…' : 'Sending…')
+                          : 'Share results with parents'}</button>
+                        {classMessageStatus && (
+                          <div
+                            className={`mt-2 text-[11px] ${String(classMessageStatus).toLowerCase().includes('fail') || String(classMessageStatus).toLowerCase().includes('error') ? 'text-red-600' : 'text-emerald-700'}`}
+                          >
+                            {classMessageStatus}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {activeTab === 'subjects' && (
                   <div>
                     <div className="flex items-center justify-between mb-2">
@@ -1005,9 +1323,26 @@ export default function AdminClassProfile(){
                             </div>
                           </>
                         )}
-                        <div className="flex items-center gap-2">
-                          <button onClick={handlePrintResults} className="inline-flex items-center gap-2 px-3 py-1.5 rounded border bg-white hover:bg-gray-50 w-fit">Print Results</button>
-                          <Link to={`/admin/results?exam=${recentExam.id}&grade=${encodeURIComponent(klass?.grade_level || '')}`} className="inline-flex items-center gap-2 px-3 py-1.5 rounded bg-violet-600 text-white hover:bg-violet-700 w-fit">Open in Results</Link>
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+                          <div className="flex items-center gap-2">
+                            <button onClick={handlePrintResults} className="inline-flex items-center gap-2 px-3 py-1.5 rounded border bg-white hover:bg-gray-50 w-fit">Print Results</button>
+                            <Link to={`/admin/results?exam=${recentExam.id}&grade=${encodeURIComponent(klass?.grade_level || '')}`} className="inline-flex items-center gap-2 px-3 py-1.5 rounded bg-violet-600 text-white hover:bg-violet-700 w-fit">Open in Results</Link>
+                            <button
+                              type="button"
+                              onClick={handleShareRecentExam}
+                              disabled={sharingRecentExam}
+                              className="inline-flex items-center gap-2 px-3 py-1.5 rounded bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-60 w-fit"
+                            >{sharingRecentExam
+                              ? (String(recentExamShareStatus).toLowerCase().includes('preparing') ? 'Preparing to send…' : 'Sending…')
+                              : 'Share results'}</button>
+                          </div>
+                          {recentExamShareStatus && (
+                            <div
+                              className={`text-[11px] sm:text-xs ${String(recentExamShareStatus).toLowerCase().includes('fail') || String(recentExamShareStatus).toLowerCase().includes('error') ? 'text-red-600' : 'text-emerald-700'}`}
+                            >
+                              {recentExamShareStatus}
+                            </div>
+                          )}
                         </div>
                       </div>
                     )}

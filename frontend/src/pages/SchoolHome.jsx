@@ -1131,8 +1131,8 @@ export default function SchoolHome() {
       </section>
 
       {/* Footer */}
-      <footer className="relative border-t border-indigo-100 bg-indigo-50">
-        <div aria-hidden className="pointer-events-none absolute -top-6 left-0 right-0 h-6 bg-gradient-to-r from-indigo-200/50 via-purple-200/50 to-indigo-200/50" />
+      <footer className="relative border-t border-blue-200 bg-blue-100">
+        <div aria-hidden className="pointer-events-none absolute -top-6 left-0 right-0 h-6 bg-gradient-to-r from-blue-300/70 via-sky-300/70 to-blue-300/70" />
         <div className="mx-auto max-w-7xl px-6 py-12">
           <div className="grid gap-10 md:grid-cols-3">
             <div className="space-y-3">
