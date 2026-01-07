@@ -97,6 +97,11 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         qs = self.get_queryset()
         if student_id:
             qs = qs.filter(student_id=student_id)
+        # Apply standard DRF pagination so large invoice lists remain fast
+        page = self.paginate_queryset(qs)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
         serializer = self.get_serializer(qs, many=True)
         return Response(serializer.data)
 
@@ -143,18 +148,35 @@ class InvoiceViewSet(viewsets.ModelViewSet):
             stu_qs = stu_qs.filter(klass__school=school)
         if klass_id:
             stu_qs = stu_qs.filter(klass_id=klass_id)
+        # Use grouped aggregations instead of per-student aggregate queries for performance
+        student_ids = list(stu_qs.values_list('id', flat=True))
 
-        data = []
-        for stu in stu_qs:
-            inv_qs = Invoice.objects.filter(student=stu)
+        if student_ids:
+            inv_qs = Invoice.objects.filter(student_id__in=student_ids)
             if school:
                 inv_qs = inv_qs.filter(student__klass__school=school)
-            total_billed = inv_qs.aggregate(s=Sum('amount'))['s'] or 0
-            pay_qs = Payment.objects.filter(invoice__student=stu)
+            inv_totals = {
+                row['student_id']: float(row['total'] or 0)
+                for row in inv_qs.values('student_id').annotate(total=Sum('amount'))
+            }
+
+            pay_qs = Payment.objects.filter(invoice__student_id__in=student_ids)
             if school:
                 pay_qs = pay_qs.filter(invoice__student__klass__school=school)
-            total_paid = pay_qs.aggregate(s=Sum('amount'))['s'] or 0
-            balance = float(total_billed or 0) - float(total_paid or 0)
+            pay_totals = {
+                row['invoice__student_id']: float(row['total'] or 0)
+                for row in pay_qs.values('invoice__student_id').annotate(total=Sum('amount'))
+            }
+        else:
+            inv_totals = {}
+            pay_totals = {}
+
+        data = []
+        # select_related to avoid extra queries when reading klass
+        for stu in stu_qs.select_related('klass'):
+            total_billed = inv_totals.get(stu.id, 0.0)
+            total_paid = pay_totals.get(stu.id, 0.0)
+            balance = float(total_billed) - float(total_paid)
             if balance > min_balance:
                 data.append({
                     'student_id': stu.id,
@@ -186,17 +208,33 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         if klass_id:
             stu_qs = stu_qs.filter(klass_id=klass_id)
 
-        rows = []
-        for stu in stu_qs:
-            inv_qs = Invoice.objects.filter(student=stu)
+        student_ids = list(stu_qs.values_list('id', flat=True))
+
+        if student_ids:
+            inv_qs = Invoice.objects.filter(student_id__in=student_ids)
             if school:
                 inv_qs = inv_qs.filter(student__klass__school=school)
-            total_billed = inv_qs.aggregate(s=Sum('amount'))['s'] or 0
-            pay_qs = Payment.objects.filter(invoice__student=stu)
+            inv_totals = {
+                row['student_id']: float(row['total'] or 0)
+                for row in inv_qs.values('student_id').annotate(total=Sum('amount'))
+            }
+
+            pay_qs = Payment.objects.filter(invoice__student_id__in=student_ids)
             if school:
                 pay_qs = pay_qs.filter(invoice__student__klass__school=school)
-            total_paid = pay_qs.aggregate(s=Sum('amount'))['s'] or 0
-            balance = float(total_billed or 0) - float(total_paid or 0)
+            pay_totals = {
+                row['invoice__student_id']: float(row['total'] or 0)
+                for row in pay_qs.values('invoice__student_id').annotate(total=Sum('amount'))
+            }
+        else:
+            inv_totals = {}
+            pay_totals = {}
+
+        rows = []
+        for stu in stu_qs.select_related('klass'):
+            total_billed = inv_totals.get(stu.id, 0.0)
+            total_paid = pay_totals.get(stu.id, 0.0)
+            balance = float(total_billed) - float(total_paid)
             if balance > min_balance:
                 rows.append([
                     stu.id,

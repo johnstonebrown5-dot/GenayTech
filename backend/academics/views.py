@@ -231,8 +231,12 @@ class ClassViewSet(viewsets.ModelViewSet):
             # Fallback: if anything goes wrong, do not exclude
             pass
         # Optimize list: only basic fields needed by filters
-        if getattr(self, 'action', None) == 'list':
+        act = getattr(self, 'action', None)
+        if act == 'list':
             qs = qs.only('id','name','grade_level')
+        else:
+            # For profile/detail views, prefetch related collections used in ClassSerializer
+            qs = qs.prefetch_related('subjects', 'subject_teachers__teacher')
         return qs
 
     def get_serializer_class(self):

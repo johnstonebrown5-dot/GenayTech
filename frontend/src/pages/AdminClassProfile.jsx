@@ -677,7 +677,8 @@ export default function AdminClassProfile(){
         }
         if (categoryOutstandingOnly) {
           // Use arrears campaign helper: create a one-off campaign scoped to this class
-          const camp = await api.post('/communications/arrears_campaigns/', {
+          // Backend router path is 'arrears-campaigns' (with dash), not 'arrears_campaigns'
+          const camp = await api.post('/communications/arrears-campaigns/', {
             klass: Number(id),
             message: body,
             send_in_app: true,
@@ -686,7 +687,7 @@ export default function AdminClassProfile(){
             min_balance: 0,
           })
           try {
-            await api.post(`/communications/arrears_campaigns/${camp.data.id}/send/`)
+            await api.post(`/communications/arrears-campaigns/${camp.data.id}/send/`)
             setClassMessageBody('')
             setClassMessageStatus('Queued messages to guardians of students with outstanding balances.')
           } catch (e) {
