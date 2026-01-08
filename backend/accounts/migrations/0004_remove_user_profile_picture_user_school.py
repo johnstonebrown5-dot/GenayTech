@@ -21,6 +21,43 @@ def add_school_field_if_not_exists(apps, schema_editor):
             cursor.execute('ALTER TABLE accounts_user ADD COLUMN school_id BIGINT NULL REFERENCES accounts_school(id) DEFERRABLE INITIALLY DEFERRED')
 
 
+def remove_profile_picture_if_exists(apps, schema_editor):
+    """Drop profile_picture column only if it exists (for MySQL compatibility)."""
+    table_name = 'accounts_user'
+    column_name = 'profile_picture'
+
+    with connection.cursor() as cursor:
+        if connection.vendor == 'mysql':
+            # Check INFORMATION_SCHEMA for the column
+            cursor.execute(
+                """
+                SELECT COLUMN_NAME
+                FROM INFORMATION_SCHEMA.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE()
+                  AND TABLE_NAME = %s
+                  AND COLUMN_NAME = %s
+                """,
+                [table_name, column_name],
+            )
+            exists = cursor.fetchone() is not None
+        elif connection.vendor == 'sqlite':
+            cursor.execute(f"PRAGMA table_info({table_name})")
+            columns = [column[1] for column in cursor.fetchall()]
+            exists = column_name in columns
+        else:
+            # Fallback: attempt to drop and ignore failure
+            exists = True
+
+        if not exists:
+            return
+
+        try:
+            cursor.execute(f"ALTER TABLE {table_name} DROP COLUMN {column_name}")
+        except Exception:
+            # If the column can't be dropped for some reason, don't fail the migration
+            pass
+
+
 class Migration(migrations.Migration):
 
     dependencies = [
@@ -28,9 +65,9 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.RemoveField(
-            model_name='user',
-            name='profile_picture',
+        migrations.RunPython(
+            remove_profile_picture_if_exists,
+            reverse_code=migrations.RunPython.noop,
         ),
         migrations.RunPython(
             add_school_field_if_not_exists,
