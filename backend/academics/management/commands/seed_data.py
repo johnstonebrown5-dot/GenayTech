@@ -289,7 +289,7 @@ class Command(BaseCommand):
                     first_name=first_name,
                     last_name=last_name,
                     role='teacher',
-                    phone=fake.phone_number(),
+                    phone=kenyan_phone(),
                     school=school
                 )
 
