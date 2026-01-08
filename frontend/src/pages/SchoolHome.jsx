@@ -1150,30 +1150,70 @@ export default function SchoolHome() {
               <p className="text-sm text-gray-600 leading-relaxed">
                 {school.homepage?.about?.text || `We are a caring, high‑achieving school focused on academics, character and service.`}
               </p>
-              <div className="flex gap-3">
+              <div className="flex gap-3 mt-2">
                 {school?.social_links?.facebook && (
-                  <a aria-label="Facebook" href={school.social_links.facebook} target="_blank" rel="noreferrer" className="p-2 rounded-md border border-gray-200 text-gray-600 hover:text-indigo-700 hover:border-indigo-300">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4"><path d="M13.5 9H15V6h-1.5C11.57 6 10 7.57 10 9.5V11H8v3h2v7h3v-7h2.06l.44-3H13v-1.5c0-.28.22-.5.5-.5Z"/></svg>
+                  <a
+                    aria-label="Facebook"
+                    href={school.social_links.facebook}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-white shadow-sm hover:shadow-md transition-transform hover:scale-110"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="h-5 w-5" fill="#1877F2">
+                      <path d="M13.5 9H15V6h-1.5C11.57 6 10 7.57 10 9.5V11H8v3h2v7h3v-7h2.06l.44-3H13v-1.5c0-.28.22-.5.5-.5Z"/>
+                    </svg>
                   </a>
                 )}
                 {school?.social_links?.twitter && (
-                  <a aria-label="Twitter" href={school.social_links.twitter} target="_blank" rel="noreferrer" className="p-2 rounded-md border border-gray-200 text-gray-600 hover:text-indigo-700 hover:border-indigo-300">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4"><path d="M22 5.8c-.7.3-1.4.5-2.2.6.8-.5 1.3-1.1 1.6-2-.8.5-1.7.9-2.6 1.1C18 4.7 17 4.2 15.9 4.2c-2.1 0-3.8 1.8-3.8 3.9 0 .3 0 .6.1.9-3.2-.2-6-1.8-7.9-4.2-.3.6-.5 1.2-.5 1.9 0 1.3.6 2.4 1.6 3.1-.6 0-1.1-.2-1.6-.4 0 2 1.4 3.6 3.2 4-.3.1-.7.1-1 .1-.2 0-.5 0-.7-.1.5 1.6 2 2.8 3.8 2.9-1.4 1.1-3.2 1.7-5.1 1.7H2c1.8 1.2 4 1.9 6.3 1.9 7.5 0 11.7-6.4 11.7-12 0-.2 0-.4 0-.6.8-.6 1.4-1.2 2-2Z"/></svg>
+                  <a
+                    aria-label="Twitter"
+                    href={school.social_links.twitter}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-white shadow-sm hover:shadow-md transition-transform hover:scale-110"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="h-5 w-5" fill="#1DA1F2">
+                      <path d="M22 5.8c-.7.3-1.4.5-2.2.6.8-.5 1.3-1.1 1.6-2-.8.5-1.7.9-2.6 1.1C18 4.7 17 4.2 15.9 4.2c-2.1 0-3.8 1.8-3.8 3.9 0 .3 0 .6.1.9-3.2-.2-6-1.8-7.9-4.2-.3.6-.5 1.2-.5 1.9 0 1.3.6 2.4 1.6 3.1-.6 0-1.1-.2-1.6-.4 0 2 1.4 3.6 3.2 4-.3.1-.7.1-1 .1-.2 0-.5 0-.7-.1.5 1.6 2 2.8 3.8 2.9-1.4 1.1-3.2 1.7-5.1 1.7H2c1.8 1.2 4 1.9 6.3 1.9 7.5 0 11.7-6.4 11.7-12 0-.2 0-.4 0-.6.8-.6 1.4-1.2 2-2Z"/>
+                    </svg>
                   </a>
                 )}
                 {school?.social_links?.instagram && (
-                  <a aria-label="Instagram" href={school.social_links.instagram} target="_blank" rel="noreferrer" className="p-2 rounded-md border border-gray-200 text-gray-600 hover:text-indigo-700 hover:border-indigo-300">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4"><path d="M7 2h10a5 5 0 0 1 5 5v10a5 5 0 0 1-5 5H7a5 5 0 0 1-5-5V7a5 5 0 0 1 5-5Zm5 5a5 5 0 1 0 .001 10.001A5 5 0 0 0 12 7Zm0 2.5a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5ZM18 6.5a1 1 0 1 0 0 2 1 1 0 0 0 0-2Z"/></svg>
+                  <a
+                    aria-label="Instagram"
+                    href={school.social_links.instagram}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-white shadow-sm hover:shadow-md transition-transform hover:scale-110"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="h-5 w-5" fill="#E1306C">
+                      <path d="M7 2h10a5 5 0 0 1 5 5v10a5 5 0 0 1-5 5H7a5 5 0 0 1-5-5V7a5 5 0 0 1 5-5Zm5 5a5 5 0 1 0 .001 10.001A5 5 0 0 0 12 7Zm0 2.5a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5ZM18 6.5a1 1 0 1 0 0 2 1 1 0 0 0 0-2Z"/>
+                    </svg>
                   </a>
                 )}
                 {school?.social_links?.youtube && (
-                  <a aria-label="YouTube" href={school.social_links.youtube} target="_blank" rel="noreferrer" className="p-2 rounded-md border border-gray-200 text-gray-600 hover:text-indigo-700 hover:border-indigo-300">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4"><path d="M23 8.2a4 4 0 0 0-2.8-2.9C18.3 5 12 5 12 5s-6.3 0-8.2.3A4 4 0 0 0 1 8.2 41.3 41.3 0 0 0 1 12c0 3.8.3 3.8.8 5.8A4 4 0 0 0 4.6 20C6.5 20.3 12 20.3 12 20.3s6.3 0 8.2-.3a4 4 0 0 0 2.8-2.9c.5-2 .8-2 .8-5.8s-.3-3.8-.8-5.8ZM9.8 15.5V8.5l6 3.5-6 3.5Z"/></svg>
+                  <a
+                    aria-label="YouTube"
+                    href={school.social_links.youtube}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-white shadow-sm hover:shadow-md transition-transform hover:scale-110"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="h-5 w-5" fill="#FF0000">
+                      <path d="M23 8.2a4 4 0 0 0-2.8-2.9C18.3 5 12 5 12 5s-6.3 0-8.2.3A4 4 0 0 0 1 8.2 41.3 41.3 0 0 0 1 12c0 3.8.3 3.8.8 5.8A4 4 0 0 0 4.6 20C6.5 20.3 12 20.3 12 20.3s6.3 0 8.2-.3a4 4 0 0 0 2.8-2.9c.5-2 .8-2 .8-5.8s-.3-3.8-.8-5.8ZM9.8 15.5V8.5l6 3.5-6 3.5Z"/>
+                    </svg>
                   </a>
                 )}
                 {school?.social_links?.website && (
-                  <a aria-label="Website" href={school.social_links.website} target="_blank" rel="noreferrer" className="p-2 rounded-md border border-gray-200 text-gray-600 hover:text-indigo-700 hover:border-indigo-300">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4"><path d="M12 2a10 10 0 1 0 10 10A10.011 10.011 0 0 0 12 2Zm6.93 9h-3.09a14.59 14.59 0 0 0-1.17-5 8.022 8.022 0 0 1 4.26 5ZM12 4a12.86 12.86 0 0 1 1.79 7H10.2A12.86 12.86 0 0 1 12 4ZM4.81 16A8.027 8.027 0 0 1 4 12a8.027 8.027 0 0 1 .81-4h3.09a14.59 14.59 0 0 0-1.17 4 14.59 14.59 0 0 0 1.17 4H4.81ZM12 20a12.86 12.86 0 0 1-1.79-7h3.58A12.86 12.86 0 0 1 12 20Zm3.35-4a14.59 14.59 0 0 0 1.17-4 14.59 14.59 0 0 0-1.17-4h3.09a8.027 8.027 0 0 1 .81 4 8.027 8.027 0 0 1-.81 4Z"/></svg>
+                  <a
+                    aria-label="Website"
+                    href={school.social_links.website}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-white shadow-sm hover:shadow-md transition-transform hover:scale-110"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="h-5 w-5" fill="#2563EB">
+                      <path d="M12 2a10 10 0 1 0 10 10A10.011 10.011 0 0 0 12 2Zm6.93 9h-3.09a14.59 14.59 0 0 0-1.17-5 8.022 8.022 0 0 1 4.26 5ZM12 4a12.86 12.86 0 0 1 1.79 7H10.2A12.86 12.86 0 0 1 12 4ZM4.81 16A8.027 8.027 0 0 1 4 12a8.027 8.027 0 0 1 .81-4h3.09a14.59 14.59 0 0 0-1.17 4 14.59 14.59 0 0 0 1.17 4H4.81ZM12 20a12.86 12.86 0 0 1-1.79-7h3.58A12.86 12.86 0 0 1 12 20Zm3.35-4a14.59 14.59 0 0 0 1.17-4 14.59 14.59 0 0 0-1.17-4h3.09a8.027 8.027 0 0 1 .81 4 8.027 8.027 0 0 1-.81 4Z"/>
+                    </svg>
                   </a>
                 )}
               </div>
