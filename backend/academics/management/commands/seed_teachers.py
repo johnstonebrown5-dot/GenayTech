@@ -9,6 +9,9 @@ from accounts.models import School
 
 User = get_user_model()
 
+def kenyan_phone():
+    return '07' + ''.join(str(random.randint(0, 9)) for _ in range(8))
+
 class Command(BaseCommand):
     help = "Seed only teachers for existing schools. Optionally assign class teachers and subject teachers."
 
@@ -57,7 +60,7 @@ class Command(BaseCommand):
                     first_name=first_name,
                     last_name=last_name,
                     role='teacher',
-                    phone=fake.phone_number(),
+                    phone=kenyan_phone(),
                     school=school,
                 )
                 # random subject expertise (2-5)
