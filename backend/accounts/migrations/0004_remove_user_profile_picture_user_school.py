@@ -6,6 +6,11 @@ from django.db import migrations, models, connection
 
 def add_school_field_if_not_exists(apps, schema_editor):
     """Add school field only if it doesn't already exist"""
+    # This Raw SQL is SQLite-specific. Skip when running on other backends
+    # such as MySQL.
+    if connection.vendor != "sqlite":
+        return
+
     with connection.cursor() as cursor:
         # Check if school_id column exists
         cursor.execute("PRAGMA table_info(accounts_user)")
