@@ -223,7 +223,7 @@ function DutiesPanel({ duties=[], onChanged }){
   }, [nextClass?.start])
 
   return (
-    <div className="p-3 md:p-4 space-y-4 md:space-y-5 max-w-7xl mx-auto bg-gradient-to-b from-slate-50 to-white">
+    <div className="teacher-dashboard-page p-3 md:p-4 space-y-4 md:space-y-5 max-w-7xl mx-auto bg-gradient-to-b from-slate-50 to-white">
       {/* Header - elevated gradient card */}
       <div className="relative overflow-hidden rounded-2xl border border-gray-200 bg-white/80 backdrop-blur supports-[backdrop-filter]:bg-white/60 shadow-[0_8px_24px_rgba(2,6,23,0.05)]">
         <div className="pointer-events-none absolute -top-10 right-0 h-44 w-44 rounded-full bg-indigo-500/15 blur-2" />

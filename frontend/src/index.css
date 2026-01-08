@@ -417,3 +417,20 @@ select { appearance: none; -webkit-appearance: none; -moz-appearance: none; back
   border-radius: 9999px;
   background-color: #1d4ed8; /* blue-700 underline */
 }
+
+/* Teacher Dashboard main layout */
+.teacher-theme-dark .teacher-dashboard-page {
+  background-color: #020617;
+  background-image: none !important;
+}
+
+/* Map additional semi-white overlays to dark for dashboard/header cards */
+.teacher-theme-dark .bg-white\/60,
+.teacher-theme-dark .bg-white\/50 {
+  background-color: #020617 !important;
+}
+
+/* Tailwind supports-[] variant used on header: supports-[backdrop-filter]:bg-white/60 */
+.teacher-theme-dark .supports-\[backdrop-filter\]\:bg-white\/60 {
+  background-color: #020617 !important;
+}
