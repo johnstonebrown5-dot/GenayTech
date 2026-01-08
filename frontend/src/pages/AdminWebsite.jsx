@@ -159,36 +159,164 @@ export default function AdminWebsite(){
           <div className="h-40 mx-6 mt-4 rounded-xl border border-gray-200 bg-gray-50 animate-pulse" />
         ) : (
           <div className="mx-6 my-6 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-            {/* Hero */}
-            <section className="grid lg:grid-cols-2 gap-6 lg:gap-10 items-start">
-              <div>
-                <div className="inline-flex items-center gap-2 rounded-full bg-indigo-50 px-3 py-1 text-xs font-medium text-indigo-700 w-full sm:w-auto">
-                  <input className="bg-transparent outline-none w-full sm:w-64 min-w-0" value={hero.badge || ''} onChange={e=>setForm(f=>({ ...f, homepage:{ ...f.homepage, hero:{ ...hero, badge:e.target.value } } }))} placeholder="Hero badge" />
+            {/* Hero Preview (mirrors public site hero) */}
+            <section className="relative overflow-hidden rounded-2xl bg-slate-900 text-white">
+              {(() => {
+                const imgs = hero.images || []
+                const main = imgs[0] ? toAbsoluteUrl(imgs[0]) : ''
+                const heroBg = main || ''
+                const heroColor = 'rgba(79,70,229,0.55)'
+                return (
+                  <div
+                    className="absolute inset-0 bg-cover bg-center"
+                    style={{
+                      backgroundImage: `linear-gradient(to bottom, rgba(30,64,175,0.38), rgba(15,23,42,0.8)), radial-gradient(1100px 520px at -10% -20%, ${heroColor}, transparent 65%), radial-gradient(900px 520px at 110% 10%, rgba(129,140,248,0.18), transparent 65%), url(${heroBg})`,
+                    }}
+                  />
+                )
+              })()}
+              <div className="relative mx-auto max-w-5xl px-4 md:px-8 pt-10 md:pt-12 pb-12 md:pb-16 text-center">
+                <div className="inline-flex items-center gap-2 rounded-full bg-white/80 px-3 py-1 text-[11px] font-semibold text-indigo-700 shadow-sm ring-1 ring-indigo-100">
+                  <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-indigo-600 text-[10px] text-white">★</span>
+                  <span>{hero.badge || form.motto || 'A place to thrive'}</span>
                 </div>
-                <div className="mt-4">
-                  <input className="w-full text-4xl md:text-5xl font-extrabold tracking-tight text-gray-900 bg-transparent outline-none" value={hero.title || `Welcome to ${form.name}`} onChange={e=>setForm(f=>({ ...f, homepage:{ ...f.homepage, hero:{ ...hero, title:e.target.value } } }))} />
-                  <textarea rows={3} className="w-full mt-3 text-gray-600 bg-transparent outline-none" value={hero.subtitle || 'A nurturing, diverse and high-achieving community empowering students to thrive in academics, character, and service.'} onChange={e=>setForm(f=>({ ...f, homepage:{ ...f.homepage, hero:{ ...hero, subtitle:e.target.value } } }))} />
+                <h2 className="mt-4 text-3xl sm:text-4xl md:text-5xl font-extrabold leading-tight tracking-tight text-white">
+                  {hero.title || (
+                    <>
+                      <span className="block text-slate-100">Welcome to</span>
+                      <span className="bg-gradient-to-r from-indigo-400 via-purple-400 to-sky-300 bg-clip-text text-transparent">
+                        {form.name || 'Your School'}
+                      </span>
+                    </>
+                  )}
+                </h2>
+                <p className="mt-4 text-base sm:text-lg text-slate-100 max-w-xl mx-auto">
+                  {hero.subtitle || 'A nurturing, diverse and high-achieving community empowering students to thrive in academics, character, and service.'}
+                </p>
+                <div className="mt-7 flex flex-wrap gap-3 justify-center">
+                  <button
+                    type="button"
+                    className="inline-flex items-center justify-center gap-2 rounded-full bg-indigo-600 px-6 py-2.5 text-sm font-semibold text-white shadow-sm"
+                  >
+                    {hero.ctaPrimaryText || 'Start Your Application'}
+                  </button>
+                  <button
+                    type="button"
+                    className="inline-flex items-center justify-center gap-2 rounded-full border border-slate-200 bg-white/90 px-6 py-2.5 text-sm font-medium text-slate-700"
+                  >
+                    {hero.ctaSecondaryText || 'Learn More'}
+                  </button>
                 </div>
-                <div className="mt-6 flex flex-wrap gap-3">
-                  <input className="px-5 py-3 rounded-lg border bg-indigo-600/10 text-indigo-800 font-medium outline-none min-w-[160px] flex-1" value={hero.ctaPrimaryText || 'Start Your Application'} onChange={e=>setForm(f=>({ ...f, homepage:{ ...f.homepage, hero:{ ...hero, ctaPrimaryText:e.target.value } } }))} />
-                  <input className="px-5 py-3 rounded-lg border text-gray-700 font-medium outline-none min-w-[160px] flex-1" value={hero.ctaSecondaryText || 'Learn More'} onChange={e=>setForm(f=>({ ...f, homepage:{ ...f.homepage, hero:{ ...hero, ctaSecondaryText:e.target.value } } }))} />
+                <div className="mt-6 flex flex-wrap gap-2 justify-center text-[11px] text-slate-200">
+                  <span className="inline-flex items-center gap-2 rounded-full border border-slate-300/60 bg-white/10 px-3 py-1">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                    Safe environment
+                  </span>
+                  <span className="inline-flex items-center gap-2 rounded-full border border-slate-300/60 bg-white/10 px-3 py-1">
+                    <span className="h-1.5 w-1.5 rounded-full bg-indigo-400" />
+                    Dedicated staff
+                  </span>
+                  <span className="inline-flex items-center gap-2 rounded-full border border-slate-300/60 bg-white/10 px-3 py-1">
+                    <span className="h-1.5 w-1.5 rounded-full bg-purple-400" />
+                    Holistic learning
+                  </span>
                 </div>
               </div>
-              <div className="relative">
-                <div className="rounded-2xl border border-gray-200 overflow-hidden bg-white ring-1 ring-gray-100">
+            </section>
+
+            {/* Hero configuration panel */}
+            <section className="mt-8 grid lg:grid-cols-2 gap-6 lg:gap-10 items-start">
+              <div>
+                <h3 className="text-sm font-semibold text-gray-900 mb-3">Hero Text</h3>
+                <div className="space-y-4">
+                  <label className="block text-xs font-medium text-gray-700">
+                    <span className="block mb-1">Badge</span>
+                    <input
+                      className="w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                      value={hero.badge || ''}
+                      onChange={e=>setForm(f=>({ ...f, homepage:{ ...f.homepage, hero:{ ...hero, badge:e.target.value } } }))}
+                      placeholder="Hero badge (e.g. High performing CBC school)"
+                    />
+                  </label>
+                  <label className="block text-xs font-medium text-gray-700">
+                    <span className="block mb-1">Title</span>
+                    <input
+                      className="w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                      value={hero.title || `Welcome to ${form.name}`}
+                      onChange={e=>setForm(f=>({ ...f, homepage:{ ...f.homepage, hero:{ ...hero, title:e.target.value } } }))}
+                    />
+                  </label>
+                  <label className="block text-xs font-medium text-gray-700">
+                    <span className="block mb-1">Subtitle</span>
+                    <textarea
+                      rows={3}
+                      className="w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                      value={hero.subtitle || 'A nurturing, diverse and high-achieving community empowering students to thrive in academics, character, and service.'}
+                      onChange={e=>setForm(f=>({ ...f, homepage:{ ...f.homepage, hero:{ ...hero, subtitle:e.target.value } } }))}
+                    />
+                  </label>
+                  <div className="grid md:grid-cols-2 gap-3">
+                    <label className="block text-xs font-medium text-gray-700">
+                      <span className="block mb-1">Primary CTA Text</span>
+                      <input
+                        className="w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                        value={hero.ctaPrimaryText || 'Start Your Application'}
+                        onChange={e=>setForm(f=>({ ...f, homepage:{ ...f.homepage, hero:{ ...hero, ctaPrimaryText:e.target.value } } }))}
+                      />
+                    </label>
+                    <label className="block text-xs font-medium text-gray-700">
+                      <span className="block mb-1">Primary CTA Link</span>
+                      <input
+                        className="w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                        value={hero.ctaPrimaryLink || '#admissions'}
+                        onChange={e=>setForm(f=>({ ...f, homepage:{ ...f.homepage, hero:{ ...hero, ctaPrimaryLink:e.target.value } } }))}
+                        placeholder="e.g. #admissions or /admissions"
+                      />
+                    </label>
+                    <label className="block text-xs font-medium text-gray-700">
+                      <span className="block mb-1">Secondary CTA Text</span>
+                      <input
+                        className="w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                        value={hero.ctaSecondaryText || 'Learn More'}
+                        onChange={e=>setForm(f=>({ ...f, homepage:{ ...f.homepage, hero:{ ...hero, ctaSecondaryText:e.target.value } } }))}
+                      />
+                    </label>
+                    <label className="block text-xs font-medium text-gray-700">
+                      <span className="block mb-1">Secondary CTA Link</span>
+                      <input
+                        className="w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                        value={hero.ctaSecondaryLink || '#about'}
+                        onChange={e=>setForm(f=>({ ...f, homepage:{ ...f.homepage, hero:{ ...hero, ctaSecondaryLink:e.target.value } } }))}
+                        placeholder="e.g. #about or /about"
+                      />
+                    </label>
+                  </div>
+                </div>
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold text-gray-900 mb-3">Hero Images</h3>
+                <div className="rounded-2xl border border-gray-200 bg-white p-4 ring-1 ring-gray-100">
                   {(() => {
                     const imgs = hero.images || []
                     const main = imgs[0] ? toAbsoluteUrl(imgs[0]) : ''
                     return (
-                      <div>
-                        <div className="relative">
-                          <div className="absolute top-3 left-3 right-3 sm:left-auto sm:right-3 z-10 bg-white/90 rounded shadow p-2 grid gap-2 max-w-full">
-                            {Array.from({length:4}).map((_,idx)=> (
-                              <div key={idx} className="flex items-center gap-2">
-                                <input className="border p-1 rounded text-xs w-full sm:w-56" placeholder={idx===0?'Main image URL':'Thumbnail URL'} value={(imgs[idx]||'')} onChange={e=>setForm(f=>{ const arr=[...(f.homepage?.hero?.images||[])]; arr[idx]=e.target.value; return { ...f, homepage:{ ...f.homepage, hero:{ ...hero, images:arr } } } })} />
-                                <label className={`text-xs px-2 py-1 rounded ${uploadingHero[idx] ? 'bg-gray-200' : 'bg-gray-100 hover:bg-gray-200'} cursor-pointer`}>
-                                  {uploadingHero[idx] ? 'Uploading…' : 'Upload'}
-                                  <input type="file" accept="image/*" className="hidden" onChange={async ev=>{
+                      <div className="space-y-3">
+                        <div className="grid gap-2">
+                          {Array.from({ length: 4 }).map((_, idx) => (
+                            <div key={idx} className="flex items-center gap-2">
+                              <input
+                                className="border p-2 rounded text-xs w-full"
+                                placeholder={idx === 0 ? 'Main image URL' : 'Thumbnail URL'}
+                                value={imgs[idx] || ''}
+                                onChange={e=>setForm(f=>{ const arr=[...(f.homepage?.hero?.images||[])]; arr[idx]=e.target.value; return { ...f, homepage:{ ...f.homepage, hero:{ ...hero, images:arr } } } })}
+                              />
+                              <label className={`text-xs px-2 py-1 rounded ${uploadingHero[idx] ? 'bg-gray-200' : 'bg-gray-100 hover:bg-gray-200'} cursor-pointer`}>
+                                {uploadingHero[idx] ? 'Uploading…' : 'Upload'}
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  className="hidden"
+                                  onChange={async ev=>{
                                     const file = ev.target.files?.[0]
                                     if(!file) return
                                     try{
@@ -196,21 +324,34 @@ export default function AdminWebsite(){
                                       const { url } = await uploadToCloudinary(file, { folder: 'edu-track/site' })
                                       setForm(f=>{ const arr=[...(f.homepage?.hero?.images||[])]; arr[idx]=url; return { ...f, homepage:{ ...f.homepage, hero:{ ...hero, images:arr } } } })
                                     }catch(e){ toast(e?.message || 'Failed to upload to Cloudinary', 'error') }
-                                    finally{ setUploadingHero(arr=>{ const a=[...arr]; a[idx]=false; return a }); ev.target.value = '' }
-                                  }} />
-                                </label>
-                              </div>
-                            ))}
-                          </div>
-                          <div className="w-full h-60 sm:h-80 bg-gray-100 grid place-items-center text-gray-400 text-sm">
-                            {main ? (<img src={main} alt="Hero" className="w-full h-60 sm:h-80 object-cover" />) : 'Main image preview'}
-                          </div>
+                                    finally{
+                                      setUploadingHero(arr=>{ const a=[...arr]; a[idx]=false; return a })
+                                      ev.target.value = ''
+                                    }
+                                  }}
+                                />
+                              </label>
+                            </div>
+                          ))}
                         </div>
-                        <div className="grid grid-cols-3 divide-x divide-gray-100">
-                          {Array.from({length:3}).map((_,i)=>{
-                            const src = imgs[i+1] ? toAbsoluteUrl(imgs[i+1]) : ''
-                            return <div key={i} className="h-20 sm:h-28 w-full bg-gray-100">{src ? <img src={src} className="h-20 sm:h-28 w-full object-cover"/> : null}</div>
-                          })}
+                        <div>
+                          <div className="w-full h-44 sm:h-56 bg-gray-100 grid place-items-center text-gray-400 text-xs rounded-lg overflow-hidden">
+                            {main ? (
+                              <img src={main} alt="Hero" className="w-full h-44 sm:h-56 object-cover" />
+                            ) : (
+                              'Main image preview'
+                            )}
+                          </div>
+                          <div className="mt-2 grid grid-cols-3 gap-1">
+                            {Array.from({ length: 3 }).map((_, i) => {
+                              const src = imgs[i + 1] ? toAbsoluteUrl(imgs[i + 1]) : ''
+                              return (
+                                <div key={i} className="h-14 sm:h-20 w-full bg-gray-100 rounded overflow-hidden">
+                                  {src ? <img src={src} className="h-full w-full object-cover" alt="Thumbnail" /> : null}
+                                </div>
+                              )
+                            })}
+                          </div>
                         </div>
                       </div>
                     )
