@@ -374,30 +374,18 @@ export default function LoginPage() {
                       <p className="mt-3 text-sm lg:text-[15px] text-white/85 max-w-sm">
                         Sign in to access attendance, results, finance and messaging in one simple dashboard.
                       </p>
-                    </div>
-                    <div className="mt-6 flex flex-col gap-2 text-xs text-white/80">
-                      <div className="flex items-center gap-4">
-                        <div className="flex items-center gap-2">
-                          <span className="h-2 w-2 rounded-full bg-emerald-400" />
-                          <span>Secure connection</span>
-                        </div>
-                        <div className="hidden md:flex items-center gap-2">
-                          <span className="h-2 w-2 rounded-full bg-sky-300" />
-                          <span>Powered by EduTrack</span>
-                        </div>
-                      </div>
 
                       {(school?.social_links?.facebook || school?.social_links?.twitter || school?.social_links?.instagram || school?.social_links?.youtube || school?.social_links?.website) && (
-                        <div className="flex items-center gap-2 pt-1">
+                        <div className="mt-6 flex items-center gap-3">
                           {school?.social_links?.facebook && (
                             <a
                               aria-label="Facebook"
                               href={school.social_links.facebook}
                               target="_blank"
                               rel="noreferrer"
-                              className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-white/10 text-white/90 hover:bg-white/20 hover:text-white transition"
+                              className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-transparent transition-transform hover:scale-110"
                             >
-                              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-3.5 w-3.5">
+                              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="h-5 w-5" fill="#1877F2">
                                 <path d="M13.5 9H15V6h-1.5C11.57 6 10 7.57 10 9.5V11H8v3h2v7h3v-7h2.06l.44-3H13v-1.5c0-.28.22-.5.5-.5Z" />
                               </svg>
                             </a>
@@ -408,9 +396,9 @@ export default function LoginPage() {
                               href={school.social_links.twitter}
                               target="_blank"
                               rel="noreferrer"
-                              className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-white/10 text-white/90 hover:bg-white/20 hover:text-white transition"
+                              className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-transparent transition-transform hover:scale-110"
                             >
-                              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-3.5 w-3.5">
+                              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="h-5 w-5" fill="#1DA1F2">
                                 <path d="M22 5.8c-.7.3-1.4.5-2.2.6.8-.5 1.3-1.1 1.6-2-.8.5-1.7.9-2.6 1.1C18 4.7 17 4.2 15.9 4.2c-2.1 0-3.8 1.8-3.8 3.9 0 .3 0 .6.1.9-3.2-.2-6-1.8-7.9-4.2-.3.6-.5 1.2-.5 1.9 0 1.3.6 2.4 1.6 3.1-.6 0-1.1-.2-1.6-.4 0 2 1.4 3.6 3.2 4-.3.1-.7.1-1 .1-.2 0-.5 0-.7-.1.5 1.6 2 2.8 3.8 2.9-1.4 1.1-3.2 1.7-5.1 1.7H2c1.8 1.2 4 1.9 6.3 1.9 7.5 0 11.7-6.4 11.7-12 0-.2 0-.4 0-.6.8-.6 1.4-1.2 2-2Z" />
                               </svg>
                             </a>
@@ -421,9 +409,9 @@ export default function LoginPage() {
                               href={school.social_links.instagram}
                               target="_blank"
                               rel="noreferrer"
-                              className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-white/10 text-white/90 hover:bg-white/20 hover:text-white transition"
+                              className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-transparent transition-transform hover:scale-110"
                             >
-                              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-3.5 w-3.5">
+                              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="h-5 w-5" fill="#E1306C">
                                 <path d="M7 2h10a5 5 0 0 1 5 5v10a5 5 0 0 1-5 5H7a5 5 0 0 1-5-5V7a5 5 0 0 1 5-5Zm5 5a5 5 0 1 0 .001 10.001A5 5 0 0 0 12 7Zm0 2.5a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5ZM18 6.5a1 1 0 1 0 0 2 1 1 0 0 0 0-2Z" />
                               </svg>
                             </a>
@@ -434,9 +422,9 @@ export default function LoginPage() {
                               href={school.social_links.youtube}
                               target="_blank"
                               rel="noreferrer"
-                              className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-white/10 text-white/90 hover:bg-white/20 hover:text-white transition"
+                              className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-transparent transition-transform hover:scale-110"
                             >
-                              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-3.5 w-3.5">
+                              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="h-5 w-5" fill="#FF0000">
                                 <path d="M23 8.2a4 4 0 0 0-2.8-2.9C18.3 5 12 5 12 5s-6.3 0-8.2.3A4 4 0 0 0 1 8.2 41.3 41.3 0 0 0 1 12c0 3.8.3 3.8.8 5.8A4 4 0 0 0 4.6 20C6.5 20.3 12 20.3 12 20.3s6.3 0 8.2-.3a4 4 0 0 0 2.8-2.9c.5-2 .8-2 .8-5.8s-.3-3.8-.8-5.8ZM9.8 15.5V8.5l6 3.5-6 3.5Z" />
                               </svg>
                             </a>
@@ -447,15 +435,27 @@ export default function LoginPage() {
                               href={school.social_links.website}
                               target="_blank"
                               rel="noreferrer"
-                              className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-white/10 text-white/90 hover:bg-white/20 hover:text-white transition"
+                              className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-transparent transition-transform hover:scale-110"
                             >
-                              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-3.5 w-3.5">
+                              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="h-5 w-5" fill="#FFFFFF">
                                 <path d="M12 2a10 10 0 1 0 10 10A10.011 10.011 0 0 0 12 2Zm6.93 9h-2.4a15.78 15.78 0 0 0-1.15-5.01A8.019 8.019 0 0 1 18.93 11ZM9.39 11a13.319 13.319 0 0 1 1.11-4.64A13.507 13.507 0 0 1 12 4.06a13.507 13.507 0 0 1 1.5 2.3A13.319 13.319 0 0 1 14.61 11ZM8.53 5.99A15.78 15.78 0 0 0 7.47 11h-2.4A8.019 8.019 0 0 1 8.53 5.99ZM5.07 13h2.4a15.78 15.78 0 0 0 1.15 5.01A8.019 8.019 0 0 1 5.07 13Zm3.32 0h3.22v4.94A11.48 11.48 0 0 1 10 16.7a11.48 11.48 0 0 1-1.61-3.7Zm4.24 4.94V13h3.22a11.48 11.48 0 0 1-1.61 3.7 11.48 11.48 0 0 1-1.61 1.24ZM15.53 13h2.4a8.019 8.019 0 0 1-3.46 5.01A15.78 15.78 0 0 0 15.53 13Z" />
                               </svg>
                             </a>
                           )}
                         </div>
                       )}
+                    </div>
+                    <div className="mt-4 flex flex-col gap-2 text-xs text-white/80">
+                      <div className="flex items-center gap-4">
+                        <div className="flex items-center gap-2">
+                          <span className="h-2 w-2 rounded-full bg-emerald-400" />
+                          <span>Secure connection</span>
+                        </div>
+                        <div className="hidden md:flex items-center gap-2">
+                          <span className="h-2 w-2 rounded-full bg-sky-300" />
+                          <span>Powered by EduTrack</span>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
