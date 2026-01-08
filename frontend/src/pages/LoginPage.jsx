@@ -3,7 +3,7 @@ import AppLogo from '../components/AppLogo'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth'
 import { useNotification } from '../components/NotificationContext'
-import api from '../api'
+import api, { toAbsoluteUrl } from '../api'
  
 
 export default function LoginPage() {
@@ -16,16 +16,18 @@ export default function LoginPage() {
   const [role, setRole] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
-  const [formStep, setFormStep] = useState('role') // 'role' | 'credentials' | 'verifying'
+  const [formStep, setFormStep] = useState('role') // 'role' | 'credentials' | 'verifying' | 'reset'
   const [rolling, setRolling] = useState(false) // circle roll animation
   const [capsLockOn, setCapsLockOn] = useState(false)
   const [remember, setRemember] = useState(true)
   const [mounted, setMounted] = useState(false)
   const [installReady, setInstallReady] = useState(false)
+  const [isStandaloneApp, setIsStandaloneApp] = useState(false)
   const [tilt, setTilt] = useState({ x: 0, y: 0 })
   const [showAppIntro, setShowAppIntro] = useState(false)
+  const [school, setSchool] = useState({ homepage: { hero: {} } })
   const [resetOpen, setResetOpen] = useState(false)
-  const [resetStep, setResetStep] = useState('request') // 'request' | 'verify'
+  const [resetStep, setResetStep] = useState('request') // 'request' | 'verify' | 'confirm'
   const [resetEmail, setResetEmail] = useState('')
   const [resetCode, setResetCode] = useState('')
   const [resetNewPassword, setResetNewPassword] = useState('')
@@ -45,6 +47,7 @@ export default function LoginPage() {
   }
 
   const openReset = () => {
+    setFormStep('reset')
     setResetOpen(true)
     setResetStep('request')
     setResetMessage('')
@@ -59,6 +62,7 @@ export default function LoginPage() {
   const closeReset = () => {
     if (resetLoading) return
     setResetOpen(false)
+    setFormStep('credentials')
   }
 
   const submitResetRequest = async (e) => {
@@ -94,8 +98,7 @@ export default function LoginPage() {
       code: codeToUse,
     }).then(() => {
       setResetCodeConfirmed(true)
-      setResetPasswordModalOpen(true)
-      setResetOpen(false)
+      setResetStep('confirm')
     }).catch((err) => {
       const msg = err?.response?.data?.detail || 'Invalid code or email. Please check and try again.'
       setResetError(msg)
@@ -147,10 +150,34 @@ export default function LoginPage() {
   }
   
 
+  const heroImages = (() => {
+    const imgs = school?.homepage?.hero?.images || []
+    const fallbacks = [
+      new URL('../../images/pexels-kwakugriffn-14554003.jpg', import.meta.url).href,
+      new URL('../../images/pexels-gabby-k-6289065.jpg', import.meta.url).href,
+      new URL('../../images/pexels-akelaphotography-448877.jpg', import.meta.url).href,
+    ]
+    return (imgs.length ? imgs.map(toAbsoluteUrl) : fallbacks).slice(0, 5)
+  })()
+
   useEffect(() => {
     // trigger entrance animation once mounted
     const t = setTimeout(() => setMounted(true), 50)
     return () => clearTimeout(t)
+  }, [])
+
+  useEffect(() => {
+    let mounted = true
+    ;(async () => {
+      try {
+        const { data } = await api.get('/auth/school/public/?code=sfk')
+        if (!mounted) return
+        setSchool(data || {})
+      } catch {
+        // Ignore – fallback hero images will be used
+      }
+    })()
+    return () => { mounted = false }
   }, [])
 
   useEffect(() => {
@@ -159,6 +186,9 @@ export default function LoginPage() {
       const dismissed = typeof window !== 'undefined' && window.localStorage && window.localStorage.getItem('eduTrackAppIntroDismissed') === '1'
       if (isStandalone && !dismissed) {
         setShowAppIntro(true)
+      }
+      if (isStandalone) {
+        setIsStandaloneApp(true)
       }
     } catch {}
   }, [])
@@ -294,207 +324,377 @@ export default function LoginPage() {
   return (
     <div
       className="relative min-h-screen w-full overflow-hidden bg-black"
-      style={{
-        backgroundImage: "url('/images/Login Background.jpg')",
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
-        backgroundRepeat: 'no-repeat',
-      }}
+      style={heroImages[0]
+        ? {
+            backgroundImage:
+              `linear-gradient(to bottom, rgba(30,64,175,0.5), rgba(15,23,42,0.85)), ` +
+              `radial-gradient(1100px 520px at -10% -20%, rgba(79,70,229,0.45), transparent 65%), ` +
+              `radial-gradient(900px 520px at 110% 10%, rgba(129,140,248,0.25), transparent 65%), ` +
+              `url(${heroImages[0]})`,
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            backgroundRepeat: 'no-repeat',
+          }
+        : undefined}
     >
       {/* Dark / blur overlay to keep content readable */}
-      <div className="absolute inset-0 -z-10 bg-slate-950/60 backdrop-blur-[2px]" />
-      {/* Header */}
-      <header className="hidden sm:flex relative z-10 items-center justify-between px-6 md:px-10 py-5 text-slate-700">
-        <div className="flex items-center gap-3">
-          <AppLogo size={36} className="w-9 h-9 rounded-lg bg-white shadow-soft border border-slate-100 p-1" />
-          <a href="/" className="hidden sm:block text-sm text-slate-700 hover:text-slate-900 hover:underline">Home</a>
-        </div>
-        <div className="text-center font-semibold tracking-widest text-slate-800">EDU-TRACK</div>
-        <div className="flex items-center gap-3">
-          {installReady && (
-            <button
-              onClick={onInstallClick}
-              className="text-sm px-3 py-1.5 rounded-md bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-100 shadow-sm"
-            >
-              Install App
-            </button>
-          )}
-          <a href="mailto:EduTrack46@gmail.com" className="text-sm text-slate-700 hover:text-slate-900 hover:underline">Contact Us</a>
-        </div>
-      </header>
+      <div className="absolute inset-0 -z-10 bg-slate-950/60 backdrop-blur-[3px]" />
+      {/* Header (hidden in standalone app for full-window login) */}
+      {!isStandaloneApp && (
+        <header className="hidden sm:flex relative z-10 items-center justify-between px-6 md:px-10 py-5 text-slate-700">
+          <div className="flex items-center gap-3">
+            <AppLogo size={36} className="w-9 h-9 rounded-lg bg-white shadow-soft border border-slate-100 p-1" />
+            <a href="/" className="hidden sm:block text-sm text-slate-700 hover:text-slate-900 hover:underline">Home</a>
+          </div>
+          <div className="text-center font-semibold tracking-widest text-slate-800">EDU-TRACK</div>
+          <div className="flex items-center gap-3">
+            {installReady && (
+              <button
+                onClick={onInstallClick}
+                className="text-sm px-3 py-1.5 rounded-md bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-100 shadow-sm"
+              >
+                Install App
+              </button>
+            )}
+            <a href="mailto:EduTrack46@gmail.com" className="text-sm text-slate-700 hover:text-slate-900 hover:underline">Contact Us</a>
+          </div>
+        </header>
+      )}
 
       {/* Desktop/Tablet Content */}
-      <main className="hidden sm:flex relative z-10 min-h-[calc(100vh-96px)] items-center justify-center">
-        <div className="mx-auto w-full px-6 py-10">
-          <div className="mx-auto w-full max-w-[980px]">
-            <div className="relative overflow-hidden rounded-[28px] bg-white/55 backdrop-blur-2xl shadow-elevated border border-white/60 ring-1 ring-black/10 px-10 py-10 md:px-12 md:py-12">
-              <div className="absolute inset-x-16 -top-24 h-40 bg-gradient-to-r from-sky-500/30 via-indigo-500/25 to-sky-400/30 blur-3xl pointer-events-none" />
-              <div className="relative z-10 grid gap-10 md:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] items-center">
-                {/* Intro copy (minimal) */}
-                <div className={`transition-all duration-500 ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'}`}>
-                  <div className="flex items-center gap-3">
-                    <AppLogo size={40} className="h-10 w-10 rounded-2xl bg-white/20 p-1.5 shadow-soft" />
+      <main className={isStandaloneApp ? 'hidden sm:flex relative z-10 min-h-screen items-center justify-center' : 'hidden sm:flex relative z-10 min-h-[calc(100vh-80px)] items-center justify-center'}>
+        <div className={isStandaloneApp ? 'w-full h-full' : 'mx-auto w-full px-4 md:px-8 py-6 md:py-8'}>
+          <div className={isStandaloneApp ? 'w-full h-full' : 'mx-auto w-full max-w-[1180px]'}>
+            <div className={isStandaloneApp ? 'relative overflow-hidden bg-white/95 h-screen' : 'relative overflow-hidden rounded-[36px] bg-white/95 shadow-elevated border border-slate-200'}>
+              <div className={isStandaloneApp ? 'grid md:grid-cols-[1.08fr_1fr] h-full' : 'grid md:grid-cols-[1.08fr_1fr] min-h-[520px] md:min-h-[560px]'}>
+                {/* Left hero panel */}
+                <div className="relative overflow-hidden">
+                  <div
+                    className="absolute inset-0 bg-cover bg-center"
+                    style={heroImages[0]
+                      ? {
+                          backgroundImage:
+                            // Match app header purple with a softer, more transparent overlay
+                            `linear-gradient(to bottom right, rgba(79,70,229,0.60), rgba(96,165,250,0.45)), ` +
+                            // Subtle white glow towards the right for smoother blend into the form side
+                            `linear-gradient(to right, rgba(255,255,255,0.08), rgba(255,255,255,0.22)), ` +
+                            `url(${heroImages[0]})`,
+                        }
+                      : undefined}
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/35 via-indigo-600/28 to-sky-500/30" />
+                  {/* Curved divider edge */}
+                  <div className="hidden md:block absolute -right-24 top-0 h-full w-56 bg-white/95 rounded-full shadow-[0_0_40px_rgba(15,23,42,0.35)]" />
+                  <div className={`relative z-10 h-full px-10 lg:px-12 py-10 flex flex-col justify-between text-white transition-all duration-500 ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
                     <div>
-                      <div className="text-[11px] uppercase tracking-[0.28em] text-sky-600">EduTrack</div>
-                      <h1 className="mt-1 text-2xl md:text-3xl font-extrabold tracking-tight text-slate-900">Sign in</h1>
+                      <div className="flex items-center gap-3">
+                        <AppLogo size={44} className="h-11 w-11 rounded-2xl bg-white/10 p-1.5 shadow-soft" />
+                        <div className="text-sm font-semibold tracking-[0.28em] uppercase text-white/80">EduTrack</div>
+                      </div>
+                      <h1 className="mt-6 text-3xl lg:text-4xl font-extrabold tracking-tight leading-tight">Welcome back</h1>
+                      <p className="mt-3 text-sm lg:text-[15px] text-white/85 max-w-sm">
+                        Sign in to access attendance, results, finance and messaging in one simple dashboard.
+                      </p>
                     </div>
-                  </div>
-                  <p className="mt-3 text-sm text-slate-600 max-w-sm">
-                    Access your school dashboard in one place.
-                  </p>
-                  <div className="mt-5 flex items-center gap-2 text-[11px] text-slate-400">
-                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-[pulse_1.6s_ease-in-out_infinite]" />
-                    <span>Secure connection enabled.</span>
+                    <div className="mt-6 flex items-center gap-4 text-xs text-white/80">
+                      <div className="flex items-center gap-2">
+                        <span className="h-2 w-2 rounded-full bg-emerald-400" />
+                        <span>Secure connection</span>
+                      </div>
+                      <div className="hidden md:flex items-center gap-2">
+                        <span className="h-2 w-2 rounded-full bg-sky-300" />
+                        <span>Powered by EduTrack</span>
+                      </div>
+                    </div>
                   </div>
                 </div>
 
-                {/* Form area */}
-                <div className="relative rounded-2xl border border-slate-100/80 bg-white/70 backdrop-blur-xl shadow-soft px-6 py-7">
-                  <div className="flex items-center justify-center">
-                    <h2 className="text-xl font-semibold text-slate-900 text-center">{formStep === 'role' ? 'Select your role' : 'Log in'}</h2>
-                  </div>
-                  {formStep === 'role' && (
-                    <p className="mt-1 text-center text-sm text-slate-500">Choose where you need to go today.</p>
-                  )}
-                  {formStep === 'credentials' && (
-                    <div className="mt-1 text-center">
-                      <button onClick={handleBackToRole} className="text-sm text-sky-700 hover:underline">Change role</button>
-                    </div>
-                  )}
-
-                  {formStep === 'role' && (
-                    <div className="mt-6">
-                      <div className="grid grid-cols-2 gap-4" role="radiogroup" aria-label="Select role">
-                        {roles.map((r) => {
-                          const selected = role === r.key
-                          return (
-                            <button
-                              key={r.key}
-                              type="button"
-                              onClick={() => handleRoleSelect(r.key)}
-                              role="radio"
-                              aria-checked={selected}
-                              aria-label={r.label}
-                              className={`group relative rounded-2xl ring-1 px-0 py-0 h-28 w-full overflow-hidden transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 ${selected ? 'bg-gradient-to-br from-sky-50 to-indigo-50 ring-sky-300 shadow-[0_10px_30px_rgba(2,132,199,0.18)]' : 'bg-white ring-slate-200 hover:bg-slate-50 hover:ring-sky-200 hover:shadow-md'}`}
-                            >
-                              <div className="flex h-full w-full items-center justify-center flex-col gap-2 px-5">
-                                <span className={`inline-flex items-center justify-center h-9 w-9 rounded-full shadow-inner ${selected ? 'bg-sky-600 text-white' : 'bg-sky-100 text-sky-600'}`}>{r.icon}</span>
-                                <span className={`${selected ? 'text-sky-800' : 'text-slate-700'} text-sm font-semibold`}>{r.label}</span>
-                              </div>
-                              <span className={`pointer-events-none absolute top-2 right-2 inline-flex h-5 w-5 items-center justify-center rounded-full border ${selected ? 'bg-sky-600 text-white border-sky-600' : 'bg-white text-transparent border-slate-300'} transition`}>✓</span>
-                            </button>
-                          )
-                        })}
-                      </div>
-                      <div className="mt-6">
-                        <button
-                          onClick={() => { if(!role) return; setFormStep('credentials') }}
-                          disabled={!role}
-                          className="w-full py-3 rounded-full bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-600 text-white font-semibold disabled:opacity-60 transition-transform hover:translate-y-[-1px] shadow-md"
-                        >Proceed</button>
-                        <div className="mt-2 flex items-center justify-between text-xs text-slate-500">
-                          <span>{role ? `Selected: ${role}` : ''}</span>
-                          <span>Choose a role</span>
-                        </div>
-                      </div>
-                      <div className="mt-4 text-xs text-slate-600 text-center">Not sure of your role? Contact your school admin.</div>
-                    </div>
-                  )}
-
-                  {formStep === 'credentials' && (
-                    <div className="mt-8 space-y-4">
-                      <div className={`flex items-center justify-center ${error ? 'animate-shake' : ''}`}>
-                        <div className={`inline-flex items-center justify-center h-10 w-10 rounded-full border text-sky-700 bg-sky-50/70 border-sky-100 shadow-soft ${isLoading ? 'animate-pulse' : ''}`} aria-hidden>
-                          <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            className="w-5 h-5"
-                          >
-                            <path
-                              d="M8.5 10V8.75a3.5 3.5 0 1 1 7 0V10"
-                              className="stroke-current"
-                              strokeWidth="1.6"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                            />
-                            <rect
-                              x="6.75"
-                              y="10"
-                              width="10.5"
-                              height="8"
-                              rx="2"
-                              className="stroke-current"
-                              strokeWidth="1.6"
-                            />
-                            <circle cx="12" cy="14" r="1" className="fill-current" />
-                          </svg>
-                        </div>
-                      </div>
-                      {error && (
-                        <div className="text-center text-[11px] text-red-700">Check your email and password, then try again.</div>
+                {/* Right login form column */}
+                <div className="relative flex items-center justify-center bg-slate-50/70 px-8 lg:px-12 py-10">
+                  <div className="w-full max-w-md">
+                    <div className="mb-4">
+                      <h2 className="text-xl font-semibold text-slate-900 tracking-wide">Sign in</h2>
+                      {formStep === 'role' && (
+                        <p className="mt-1 text-sm text-slate-500">Choose your account type to continue.</p>
                       )}
-                      <form onSubmit={submit} className="space-y-5">
-                        <div className="relative">
-                          <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5"><path d="M12 12c2.761 0 5-2.239 5-5s-2.239-5-5-5-5 2.239-5 5 2.239 5 5 5zm0 2c-3.866 0-7 3.134-7 7h14c0-3.866-3.134-7-7-7z"/></svg>
-                          </span>
-                          <input
-                            id="login-username"
-                            type="text"
-                            value={username}
-                            onChange={(e)=>setUsername(e.target.value)}
-                            autoComplete="username"
-                            inputMode="email"
-                            autoCapitalize="none"
-                            autoCorrect="off"
-                            aria-label="Email (username)"
-                            placeholder="Email (username)"
-                            className="w-full rounded-xl border border-gray-300 bg-white px-10 py-3.5 text-[15px] shadow-inner focus:outline-none focus:ring-2 focus:ring-sky-300 focus:border-sky-500 transition"
-                            required
-                          />
-                          <div className="mt-1 text-[11px] text-slate-500">Admins: use the email you signed up with.</div>
+                      {formStep === 'credentials' && (
+                        <div className="mt-1 text-xs text-slate-500 flex items-center justify-between">
+                          <span>Enter your school email and password.</span>
+                          <button onClick={handleBackToRole} className="text-[11px] text-sky-700 hover:underline">Change role</button>
                         </div>
-                        <div className="relative">
-                          <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5"><path d="M17 8V7a5 5 0 10-10 0v1H5v12h14V8h-2zm-8 0V7a3 3 0 016 0v1H9z"/></svg>
-                          </span>
-                          <input
-                            id="login-password"
-                            type={showPassword ? 'text' : 'password'}
-                            value={password}
-                            onChange={(e)=>setPassword(e.target.value)}
-                            onKeyUp={(e)=> setCapsLockOn(e.getModifierState && e.getModifierState('CapsLock'))}
-                            autoComplete="current-password"
-                            aria-label="Password"
-                            placeholder="Password"
-                            className="w-full rounded-xl border border-gray-200 bg-white px-10 py-3.5 pr-16 text-[15px] shadow-inner focus:outline-none focus:ring-2 focus:ring-sky-300 focus:border-sky-500 transition"
-                            required
-                          />
+                      )}
+                    </div>
+
+                    {formStep === 'role' && (
+                      <div className="space-y-5">
+                        <div className="grid grid-cols-2 gap-4" role="radiogroup" aria-label="Select role">
+                          {roles.map((r) => {
+                            const selected = role === r.key
+                            return (
+                              <button
+                                key={r.key}
+                                type="button"
+                                onClick={() => handleRoleSelect(r.key)}
+                                role="radio"
+                                aria-checked={selected}
+                                aria-label={r.label}
+                                className={`flex flex-col items-center justify-center gap-2 rounded-xl border py-3 text-sm font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-300 ${selected ? 'bg-gradient-to-r from-fuchsia-500 to-indigo-500 text-white border-transparent shadow-md' : 'bg-white text-slate-700 border-slate-200 hover:border-sky-300 hover:bg-slate-50'}`}
+                              >
+                                <span className="text-lg">{r.icon}</span>
+                                <span>{r.label}</span>
+                              </button>
+                            )
+                          })}
+                        </div>
+                        <button
+                          onClick={() => { if (!role) return; setFormStep('credentials') }}
+                          disabled={!role}
+                          className="w-full rounded-full bg-gradient-to-r from-indigo-500 via-indigo-500 to-sky-500 py-3 text-white text-sm font-semibold shadow-md disabled:opacity-60 disabled:shadow-none transition-transform hover:translate-y-[-1px]"
+                        >
+                          Continue
+                        </button>
+                        <div className="text-[11px] text-slate-500 text-center">
+                          Not sure which to pick? Ask your school administrator.
+                        </div>
+                      </div>
+                    )}
+
+                    {formStep === 'credentials' && (
+                      <div className="mt-4 space-y-4">
+                        <div className={`flex items-center justify-center ${error ? 'animate-shake' : ''}`}>
+                          <div className={`inline-flex items-center justify-center h-10 w-10 rounded-full border text-rose-600 bg-rose-50/80 border-rose-100 shadow-soft ${isLoading ? 'animate-pulse' : ''}`} aria-hidden>
+                            <svg
+                              xmlns="http://www.w3.org/2000/svg"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              className="w-5 h-5"
+                            >
+                              <path
+                                d="M8.5 10V8.75a3.5 3.5 0 1 1 7 0V10"
+                                className="stroke-current"
+                                strokeWidth="1.6"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              />
+                              <rect
+                                x="6.75"
+                                y="10"
+                                width="10.5"
+                                height="8"
+                                rx="2"
+                                className="stroke-current"
+                                strokeWidth="1.6"
+                              />
+                              <circle cx="12" cy="14" r="1" className="fill-current" />
+                            </svg>
+                          </div>
+                        </div>
+                        {error && (
+                          <div className="text-center text-[11px] text-red-700">Check your email and password, then try again.</div>
+                        )}
+                        <form onSubmit={submit} className="space-y-4">
+                          <div className="space-y-1">
+                            <label htmlFor="login-username" className="block text-[11px] font-medium text-slate-700 uppercase tracking-[0.18em]">Username</label>
+                            <div className="relative">
+                              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5"><path d="M12 12c2.761 0 5-2.239 5-5s-2.239-5-5-5-5 2.239-5 5 2.239 5 5 5zm0 2c-3.866 0-7 3.134-7 7h14c0-3.866-3.134-7-7-7z"/></svg>
+                              </span>
+                              <input
+                                id="login-username"
+                                type="text"
+                                value={username}
+                                onChange={(e)=>setUsername(e.target.value)}
+                                autoComplete="username"
+                                inputMode="email"
+                                autoCapitalize="none"
+                                autoCorrect="off"
+                                aria-label="Email (username)"
+                                placeholder="Email (username)"
+                                className="w-full rounded-md border border-slate-200 bg-white px-10 py-3 text-[15px] shadow-sm focus:outline-none focus:ring-2 focus:ring-rose-300 focus:border-rose-400 transition"
+                                required
+                              />
+                            </div>
+                            <div className="mt-1 text-[11px] text-slate-500">Admins: use the email you signed up with.</div>
+                          </div>
+                          <div className="space-y-1">
+                            <label htmlFor="login-password" className="block text-[11px] font-medium text-slate-700 uppercase tracking-[0.18em]">Password</label>
+                            <div className="relative">
+                              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5"><path d="M17 8V7a5 5 0 10-10 0v1H5v12h14V8h-2zm-8 0V7a3 3 0 016 0v1H9z"/></svg>
+                              </span>
+                              <input
+                                id="login-password"
+                                type={showPassword ? 'text' : 'password'}
+                                value={password}
+                                onChange={(e)=>setPassword(e.target.value)}
+                                onKeyUp={(e)=> setCapsLockOn(e.getModifierState && e.getModifierState('CapsLock'))}
+                                autoComplete="current-password"
+                                aria-label="Password"
+                                placeholder="Password"
+                                className="w-full rounded-md border border-slate-200 bg-white px-10 py-3 pr-16 text-[15px] shadow-sm focus:outline-none focus:ring-2 focus:ring-rose-300 focus:border-rose-400 transition"
+                                required
+                              />
+                              <button
+                                type="button"
+                                aria-pressed={showPassword}
+                                aria-label={showPassword ? 'Hide password' : 'Show password'}
+                                onClick={()=>setShowPassword(v=>!v)}
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] font-semibold text-rose-600 hover:text-rose-700"
+                              >
+                                {showPassword ? 'Hide' : 'Show'}
+                              </button>
+                            </div>
+                            {capsLockOn && (
+                              <div className="mt-1 text-[11px] text-amber-700">Caps Lock is ON</div>
+                            )}
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <label className="inline-flex items-center gap-2 text-[11px] text-slate-700 select-none">
+                              <input type="checkbox" className="accent-rose-500" checked={remember} onChange={(e)=>setRemember(e.target.checked)} />
+                              Remember me
+                            </label>
+                            <button type="button" onClick={openReset} className="text-[11px] text-rose-600 hover:underline">Forgot password?</button>
+                          </div>
+                          <button
+                            type="submit"
+                            disabled={isLoading}
+                            className="w-full rounded-full bg-gradient-to-r from-indigo-500 via-indigo-500 to-sky-500 text-white font-semibold py-3 disabled:opacity-60 shadow-md transition-transform active:scale-[.99]"
+                          >
+                            {isLoading ? 'Signing In…' : 'Login'}
+                          </button>
+                        </form>
+                      </div>
+                    )}
+
+                    {formStep === 'reset' && (
+                      <div className="mt-4 space-y-4">
+                        <div className="flex items-center justify-between">
+                          <h2 className="text-sm font-semibold text-slate-900">Reset password</h2>
                           <button
                             type="button"
-                            aria-pressed={showPassword}
-                            aria-label={showPassword ? 'Hide password' : 'Show password'}
-                            onClick={()=>setShowPassword(v=>!v)}
-                            className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-sky-700 hover:text-sky-900"
+                            onClick={closeReset}
+                            className="text-[11px] text-slate-500 hover:text-slate-700"
                           >
-                            {showPassword ? 'Hide' : 'Show'}
+                            Back to login
                           </button>
-                          {capsLockOn && (
-                            <div className="mt-1 text-[11px] text-amber-700">Caps Lock is ON</div>
-                          )}
                         </div>
-                        <div className="flex items-center justify-between">
-                          <label className="inline-flex items-center gap-2 text-xs text-slate-700 select-none">
-                            <input type="checkbox" className="accent-sky-600" checked={remember} onChange={(e)=>setRemember(e.target.checked)} />
-                            Remember me
-                          </label>
-                          <button type="button" onClick={openReset} className="text-xs text-sky-700 hover:underline">Forgot password?</button>
-                        </div>
-                        <button type="submit" disabled={isLoading} className="w-full rounded-full bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-600 text-white font-semibold py-3 disabled:opacity-60 shadow-md transition-transform active:scale-[.99]">{isLoading?'Signing In…':'Sign In'}</button>
-                      </form>
-                    </div>
-                  )}
+                        <p className="text-xs text-slate-500">
+                          {resetStep === 'confirm'
+                            ? <>Enter a new password for <span className="font-medium">{resetEmail}</span>.</>
+                            : 'Enter your email and we will send you a 6 digit code to create a new password.'}
+                        </p>
+
+                        {resetStep !== 'confirm' && (
+                          <form
+                            onSubmit={resetStep === 'request'
+                              ? submitResetRequest
+                              : (e) => {
+                                  e.preventDefault()
+                                  handleConfirmResetCode()
+                                }
+                            }
+                            className="space-y-3"
+                          >
+                            <div className="space-y-1">
+                              <label className="block text-[11px] font-medium text-slate-700">Email</label>
+                              <input
+                                type="email"
+                                value={resetEmail}
+                                onChange={(e)=>setResetEmail(e.target.value)}
+                                required
+                                className={`w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 ${resetError && resetStep === 'request' ? 'border-red-300 bg-red-50/60' : 'border-slate-200'}`}
+                              />
+                            </div>
+                            {resetStep === 'verify' && (
+                              <>
+                                <div className="space-y-1">
+                                  <label className="block text-[11px] font-medium text-slate-700">6 digit code</label>
+                                  <input
+                                    type="text"
+                                    inputMode="numeric"
+                                    maxLength={6}
+                                    value={resetCode}
+                                    onChange={(e)=>{
+                                      const value = e.target.value.replace(/[^0-9]/g,'')
+                                      setResetCode(value)
+                                      setResetCodeConfirmed(false)
+                                      if (value.length === 6) {
+                                        handleConfirmResetCode(value)
+                                      }
+                                    }}
+                                    required
+                                    className={`w-full rounded-md border px-3 py-2 text-sm tracking-[0.4em] text-center focus:outline-none focus:ring-2 focus:ring-indigo-300 ${resetError ? 'border-red-300 bg-red-50/60' : 'border-slate-200'}`}
+                                  />
+                                  <div className="mt-1 flex items-center justify-end text-[11px] text-slate-500">
+                                    <button
+                                      type="button"
+                                      onClick={handleResendCode}
+                                      disabled={resetResendIn > 0 || resetResending}
+                                      className="text-[11px] font-medium text-indigo-600 disabled:text-slate-400 disabled:cursor-not-allowed hover:underline tabular-nums"
+                                    >
+                                      {resetResendIn > 0
+                                        ? `Resend in ${Math.floor(resetResendIn / 60)}:${(resetResendIn % 60).toString().padStart(2,'0')}`
+                                        : (resetResending ? 'Resending…' : 'Resend code')}
+                                    </button>
+                                  </div>
+                                </div>
+                              </>
+                            )}
+                            {resetError && (
+                              <div className="flex items-start gap-2 text-[11px] text-red-700 bg-red-50 border border-red-200 rounded-md px-2.5 py-1.5">
+                                <span className="mt-[2px] h-3 w-3 rounded-full border border-red-400 flex items-center justify-center text-[9px] font-bold">!</span>
+                                <span>{resetError}</span>
+                              </div>
+                            )}
+                            {resetMessage && (
+                              <div className="text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-md px-2 py-1.5">{resetMessage}</div>
+                            )}
+                            <button
+                              type="submit"
+                              disabled={resetLoading}
+                              className="w-full mt-1 rounded-full bg-gradient-to-r from-indigo-500 via-indigo-500 to-sky-500 text-white text-sm font-semibold py-2.5 disabled:opacity-60"
+                            >
+                              {resetStep === 'request'
+                                ? (resetLoading ? 'Sending code…' : 'Send code')
+                                : (resetLoading ? 'Checking…' : 'Check code')}
+                            </button>
+                          </form>
+                        )}
+
+                        {resetStep === 'confirm' && (
+                          <form onSubmit={submitResetConfirm} className="space-y-3">
+                            <div className="space-y-1">
+                              <label className="block text-[11px] font-medium text-slate-700">New password</label>
+                              <input
+                                type="password"
+                                value={resetNewPassword}
+                                onChange={(e)=>setResetNewPassword(e.target.value)}
+                                minLength={6}
+                                required
+                                className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                              />
+                            </div>
+                            {resetError && (
+                              <div className="flex items-start gap-2 text-[11px] text-red-700 bg-red-50 border border-red-200 rounded-md px-2.5 py-1.5">
+                                <span className="mt-[2px] h-3 w-3 rounded-full border border-red-400 flex items-center justify-center text-[9px] font-bold">!</span>
+                                <span>{resetError}</span>
+                              </div>
+                            )}
+                            {resetMessage && (
+                              <div className="text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-md px-2 py-1.5">{resetMessage}</div>
+                            )}
+                            <button
+                              type="submit"
+                              disabled={resetLoading}
+                              className="w-full mt-1 rounded-full bg-gradient-to-r from-indigo-500 via-indigo-500 to-sky-500 text-white text-sm font-semibold py-2.5 disabled:opacity-60"
+                            >
+                              {resetLoading ? 'Updating…' : 'Save new password'}
+                            </button>
+                          </form>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
@@ -760,6 +960,135 @@ export default function LoginPage() {
                     </button>
                   </div>
                 )}
+
+                {formStep === 'reset' && (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h2 className="text-sm font-semibold text-slate-900">Reset password</h2>
+                      <button
+                        type="button"
+                        onClick={closeReset}
+                        className="text-[11px] text-slate-500 hover:text-slate-700"
+                      >
+                        Back to login
+                      </button>
+                    </div>
+                    <p className="text-xs text-slate-500">
+                      {resetStep === 'confirm'
+                        ? <>Enter a new password for <span className="font-medium">{resetEmail}</span>.</>
+                        : 'Enter your email and we will send you a 6 digit code to create a new password.'}
+                    </p>
+
+                    {resetStep !== 'confirm' && (
+                      <form
+                        onSubmit={resetStep === 'request'
+                          ? submitResetRequest
+                          : (e) => {
+                              e.preventDefault()
+                              handleConfirmResetCode()
+                            }
+                        }
+                        className="space-y-3"
+                      >
+                        <div className="space-y-1">
+                          <label className="block text-[11px] font-medium text-slate-700">Email</label>
+                          <input
+                            type="email"
+                            value={resetEmail}
+                            onChange={(e)=>setResetEmail(e.target.value)}
+                            required
+                            className={`w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 ${resetError && resetStep === 'request' ? 'border-red-300 bg-red-50/60' : 'border-slate-200'}`}
+                          />
+                        </div>
+                        {resetStep === 'verify' && (
+                          <>
+                            <div className="space-y-1">
+                              <label className="block text-[11px] font-medium text-slate-700">6 digit code</label>
+                              <input
+                                type="text"
+                                inputMode="numeric"
+                                maxLength={6}
+                                value={resetCode}
+                                onChange={(e)=>{
+                                  const value = e.target.value.replace(/[^0-9]/g,'')
+                                  setResetCode(value)
+                                  setResetCodeConfirmed(false)
+                                  if (value.length === 6) {
+                                    handleConfirmResetCode(value)
+                                  }
+                                }}
+                                required
+                                className={`w-full rounded-md border px-3 py-2 text-sm tracking-[0.4em] text-center focus:outline-none focus:ring-2 focus:ring-indigo-300 ${resetError ? 'border-red-300 bg-red-50/60' : 'border-slate-200'}`}
+                              />
+                              <div className="mt-1 flex items-center justify-end text-[11px] text-slate-500">
+                                <button
+                                  type="button"
+                                  onClick={handleResendCode}
+                                  disabled={resetResendIn > 0 || resetResending}
+                                  className="text-[11px] font-medium text-indigo-600 disabled:text-slate-400 disabled:cursor-not-allowed hover:underline tabular-nums"
+                                >
+                                  {resetResendIn > 0
+                                    ? `Resend in ${Math.floor(resetResendIn / 60)}:${(resetResendIn % 60).toString().padStart(2,'0')}`
+                                    : (resetResending ? 'Resending…' : 'Resend code')}
+                                </button>
+                              </div>
+                            </div>
+                          </>
+                        )}
+                        {resetError && (
+                          <div className="flex items-start gap-2 text-[11px] text-red-700 bg-red-50 border border-red-200 rounded-md px-2.5 py-1.5">
+                            <span className="mt-[2px] h-3 w-3 rounded-full border border-red-400 flex items-center justify-center text-[9px] font-bold">!</span>
+                            <span>{resetError}</span>
+                          </div>
+                        )}
+                        {resetMessage && (
+                          <div className="text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-md px-2 py-1.5">{resetMessage}</div>
+                        )}
+                        <button
+                          type="submit"
+                          disabled={resetLoading}
+                          className="w-full mt-1 rounded-full bg-gradient-to-r from-indigo-500 via-indigo-500 to-sky-500 text-white text-sm font-semibold py-2.5 disabled:opacity-60"
+                        >
+                          {resetStep === 'request'
+                            ? (resetLoading ? 'Sending code…' : 'Send code')
+                            : (resetLoading ? 'Checking…' : 'Check code')}
+                        </button>
+                      </form>
+                    )}
+
+                    {resetStep === 'confirm' && (
+                      <form onSubmit={submitResetConfirm} className="space-y-3">
+                        <div className="space-y-1">
+                          <label className="block text-[11px] font-medium text-slate-700">New password</label>
+                          <input
+                            type="password"
+                            value={resetNewPassword}
+                            onChange={(e)=>setResetNewPassword(e.target.value)}
+                            minLength={6}
+                            required
+                            className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                          />
+                        </div>
+                        {resetError && (
+                          <div className="flex items-start gap-2 text-[11px] text-red-700 bg-red-50 border border-red-200 rounded-md px-2.5 py-1.5">
+                            <span className="mt-[2px] h-3 w-3 rounded-full border border-red-400 flex items-center justify-center text-[9px] font-bold">!</span>
+                            <span>{resetError}</span>
+                          </div>
+                        )}
+                        {resetMessage && (
+                          <div className="text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-md px-2 py-1.5">{resetMessage}</div>
+                        )}
+                        <button
+                          type="submit"
+                          disabled={resetLoading}
+                          className="w-full mt-1 rounded-full bg-gradient-to-r from-indigo-500 via-indigo-500 to-sky-500 text-white text-sm font-semibold py-2.5 disabled:opacity-60"
+                        >
+                          {resetLoading ? 'Updating…' : 'Save new password'}
+                        </button>
+                      </form>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -797,148 +1126,7 @@ export default function LoginPage() {
         )}
       </div>
 
-      {/* Password reset dialog - step 1: email + code */}
-      {resetOpen && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 backdrop-blur-sm px-4 sm:px-0">
-          <div className={`w-full max-w-md rounded-2xl bg-white/95 shadow-elevated border border-slate-200 p-6 sm:p-7 space-y-4 ${resetError ? 'animate-shake' : ''}`}>
-            <div className="flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-slate-900">Reset password</h2>
-              <button
-                type="button"
-                onClick={closeReset}
-                className="text-xs text-slate-500 hover:text-slate-700"
-              >
-                Close
-              </button>
-            </div>
-            <p className="text-xs text-slate-500">
-              Enter your email and we will send you a 6 digit code to create a new password.
-            </p>
-            <form
-              onSubmit={resetStep === 'request'
-                ? submitResetRequest
-                : (e) => {
-                    e.preventDefault()
-                    handleConfirmResetCode()
-                  }
-              }
-              className="space-y-3"
-            >
-              <div className="space-y-1">
-                <label className="block text-[12px] text-slate-700">Email</label>
-                <input
-                  type="email"
-                  value={resetEmail}
-                  onChange={(e)=>setResetEmail(e.target.value)}
-                  required
-                  className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-300 ${resetError && resetStep === 'request' ? 'border-red-300 bg-red-50/60' : 'border-slate-200'}`}
-                />
-              </div>
-              {resetStep === 'verify' && (
-                <>
-                  <div className="space-y-1">
-                    <label className="block text-[12px] text-slate-700">6 digit code</label>
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      maxLength={6}
-                      value={resetCode}
-                      onChange={(e)=>{
-                        const value = e.target.value.replace(/[^0-9]/g,'')
-                        setResetCode(value)
-                        setResetCodeConfirmed(false)
-                        if (value.length === 6) {
-                          handleConfirmResetCode(value)
-                        }
-                      }}
-                      required
-                      className={`w-full rounded-lg border px-3 py-2 text-sm tracking-[0.4em] text-center focus:outline-none focus:ring-2 focus:ring-sky-300 ${resetError ? 'border-red-300 bg-red-50/60' : 'border-slate-200'}`}
-                    />
-                    <div className="mt-1 flex items-center justify-end text-[11px] text-slate-500">
-                      <button
-                        type="button"
-                        onClick={handleResendCode}
-                        disabled={resetResendIn > 0 || resetResending}
-                        className="text-[11px] font-medium text-sky-700 disabled:text-slate-400 disabled:cursor-not-allowed hover:underline tabular-nums"
-                      >
-                        {resetResendIn > 0
-                          ? `Resend in ${Math.floor(resetResendIn / 60)}:${(resetResendIn % 60).toString().padStart(2,'0')}`
-                          : (resetResending ? 'Resending…' : 'Resend code')}
-                      </button>
-                    </div>
-                  </div>
-                </>
-              )}
-              {resetError && (
-                <div className="flex items-start gap-2 text-[11px] text-red-700 bg-red-50 border border-red-200 rounded-md px-2.5 py-1.5">
-                  <span className="mt-[2px] h-3 w-3 rounded-full border border-red-400 flex items-center justify-center text-[9px] font-bold">!</span>
-                  <span>{resetError}</span>
-                </div>
-              )}
-              {resetMessage && (
-                <div className="text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-md px-2 py-1.5">{resetMessage}</div>
-              )}
-              <button
-                type="submit"
-                disabled={resetLoading}
-                className="w-full mt-1 rounded-full bg-gradient-to-r from-sky-600 to-indigo-600 text-white text-sm font-semibold py-2.5 disabled:opacity-60"
-              >
-                {resetStep === 'request' ? (resetLoading ? 'Sending code…' : 'Send code') : (resetLoading ? 'Checking…' : 'Check code')}
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Password reset dialog - step 2: new password only, after code verified */}
-      {resetPasswordModalOpen && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 backdrop-blur-sm px-4 sm:px-0">
-          <div className="w-full max-w-md rounded-2xl bg-white/95 shadow-elevated border border-slate-200 p-6 sm:p-7 space-y-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-slate-900">Set new password</h2>
-              <button
-                type="button"
-                onClick={() => setResetPasswordModalOpen(false)}
-                className="text-xs text-slate-500 hover:text-slate-700"
-              >
-                Close
-              </button>
-            </div>
-            <p className="text-xs text-slate-500">
-              Enter a new password for <span className="font-medium">{resetEmail}</span>.
-            </p>
-            <form onSubmit={submitResetConfirm} className="space-y-3">
-              <div className="space-y-1">
-                <label className="block text-[12px] text-slate-700">New password</label>
-                <input
-                  type="password"
-                  value={resetNewPassword}
-                  onChange={(e)=>setResetNewPassword(e.target.value)}
-                  minLength={6}
-                  required
-                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-300"
-                />
-              </div>
-              {resetError && (
-                <div className="flex items-start gap-2 text-[11px] text-red-700 bg-red-50 border border-red-200 rounded-md px-2.5 py-1.5">
-                  <span className="mt-[2px] h-3 w-3 rounded-full border border-red-400 flex items-center justify-center text-[9px] font-bold">!</span>
-                  <span>{resetError}</span>
-                </div>
-              )}
-              {resetMessage && (
-                <div className="text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-md px-2 py-1.5">{resetMessage}</div>
-              )}
-              <button
-                type="submit"
-                disabled={resetLoading}
-                className="w-full mt-1 rounded-full bg-gradient-to-r from-sky-600 to-indigo-600 text-white text-sm font-semibold py-2.5 disabled:opacity-60"
-              >
-                {resetLoading ? 'Updating…' : 'Save new password'}
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
+      {/* Inline reset flow now handled in main layout; overlay dialogs removed */}
     </div>
   )
 }
