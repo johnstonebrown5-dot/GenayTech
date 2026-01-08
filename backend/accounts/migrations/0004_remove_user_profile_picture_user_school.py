@@ -6,19 +6,47 @@ from django.db import migrations, models, connection
 
 def add_school_field_if_not_exists(apps, schema_editor):
     """Add school field only if it doesn't already exist"""
-    # This Raw SQL is SQLite-specific. Skip when running on other backends
-    # such as MySQL.
-    if connection.vendor != "sqlite":
-        return
+    table_name = 'accounts_user'
+    column_name = 'school_id'
 
     with connection.cursor() as cursor:
-        # Check if school_id column exists
-        cursor.execute("PRAGMA table_info(accounts_user)")
-        columns = [column[1] for column in cursor.fetchall()]
+        if connection.vendor == "sqlite":
+            # Original SQLite-specific logic
+            cursor.execute("PRAGMA table_info(accounts_user)")
+            columns = [column[1] for column in cursor.fetchall()]
+            exists = column_name in columns
+        elif connection.vendor == "mysql":
+            # MySQL-compatible check using INFORMATION_SCHEMA
+            cursor.execute(
+                """
+                SELECT COLUMN_NAME
+                FROM INFORMATION_SCHEMA.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE()
+                  AND TABLE_NAME = %s
+                  AND COLUMN_NAME = %s
+                """,
+                [table_name, column_name],
+            )
+            exists = cursor.fetchone() is not None
+        else:
+            # For other backends, assume it exists to avoid breaking migrations
+            exists = True
 
-        if 'school_id' not in columns:
-            # Add the school field if it doesn't exist
-            cursor.execute('ALTER TABLE accounts_user ADD COLUMN school_id BIGINT NULL REFERENCES accounts_school(id) DEFERRABLE INITIALLY DEFERRED')
+        if exists:
+            return
+
+        # Add the school field if it doesn't exist
+        if connection.vendor == "sqlite":
+            cursor.execute(
+                'ALTER TABLE accounts_user ADD COLUMN school_id BIGINT NULL '
+                'REFERENCES accounts_school(id) DEFERRABLE INITIALLY DEFERRED'
+            )
+        elif connection.vendor == "mysql":
+            # Basic BIGINT NULL column; FK constraints can be managed separately
+            cursor.execute(
+                'ALTER TABLE accounts_user '
+                'ADD COLUMN school_id BIGINT NULL'
+            )
 
 
 def remove_profile_picture_if_exists(apps, schema_editor):
