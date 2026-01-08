@@ -383,7 +383,7 @@ export default function TeacherAnalytics(){
   }
 
   return (
-    <div className="max-w-5xl mx-auto px-3 md:px-4 space-y-5 md:space-y-6">
+    <div className="teacher-analytics-page max-w-6xl mx-auto px-3 md:px-4 space-y-5 md:space-y-6">
       {/* Header */}
       <div className="relative overflow-hidden rounded-2xl border border-gray-200 bg-gradient-to-r from-indigo-500 via-indigo-600 to-sky-500 shadow-md">
         <div className="pointer-events-none absolute -right-16 -top-16 h-32 w-32 rounded-full bg-white/15 blur-2" />
@@ -416,14 +416,14 @@ export default function TeacherAnalytics(){
           <button
             type="button"
             onClick={()=>setMode('exam')}
-            className={`px-3 py-1.5 text-[11px] md:text-xs rounded-full transition-colors ${mode==='exam' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+            className={`analytics-mode-toggle px-3 py-1.5 text-[11px] md:text-xs rounded-full transition-colors ${mode==='exam' ? 'analytics-mode-toggle--active bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
           >
             Exam vs Exam
           </button>
           <button
             type="button"
             onClick={()=>setMode('subject')}
-            className={`px-3 py-1.5 text-[11px] md:text-xs rounded-full transition-colors ${mode==='subject' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+            className={`analytics-mode-toggle px-3 py-1.5 text-[11px] md:text-xs rounded-full transition-colors ${mode==='subject' ? 'analytics-mode-toggle--active bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
           >
             Subject vs Subject
           </button>
@@ -467,20 +467,24 @@ export default function TeacherAnalytics(){
             <div className="space-y-4">
               <div className="text-xs md:text-sm">Class Mean Δ: <b>{examCompare?.deltas?.class_mean_delta ?? '-'}</b></div>
               {examCompareBarData && (
-                <div className="bg-white rounded-xl border border-gray-100 p-2 md:p-3">
-                  <Bar data={examCompareBarData} options={examCompareBarOpts} />
+                <div className="bg-white rounded-xl border border-gray-100 p-2 md:p-3 overflow-x-auto">
+                  <div className="min-w-[520px]">
+                    <Bar data={examCompareBarData} options={examCompareBarOpts} />
+                  </div>
                 </div>
               )}
               {trendChartData && (
-                <div className="bg-white rounded-xl border border-gray-100 p-2 md:p-3">
+                <div className="bg-white rounded-xl border border-gray-100 p-2 md:p-3 overflow-x-auto">
                   <div className="flex items-center justify-between mb-2">
                     <div className="text-xs md:text-sm font-medium">Class Mean Over Time</div>
                     <button onClick={exportTrendPNG} className="px-2 py-1 text-[11px] rounded-full bg-gray-800 text-white hover:bg-gray-700">Export PNG</button>
                   </div>
-                  <Line ref={trendLineRef} data={trendChartData} options={trendChartOpts} />
+                  <div className="min-w-[520px]">
+                    <Line ref={trendLineRef} data={trendChartData} options={trendChartOpts} />
+                  </div>
                 </div>
               )}
-              <div className="overflow-auto rounded-xl border border-gray-100 bg-white">
+              <div className="teacher-analytics-table overflow-auto rounded-xl border border-gray-100 bg-white">
                 <table className="min-w-full text-xs md:text-sm">
                   <thead>
                     <tr className="bg-gray-50 text-xs text-gray-600">
@@ -533,9 +537,11 @@ export default function TeacherAnalytics(){
             </label>
           </div>
           {subjectTrendChartData && (
-            <div className="bg-white rounded-xl border border-gray-100 p-2 md:p-3 mb-2">
+            <div className="bg-white rounded-xl border border-gray-100 p-2 md:p-3 mb-2 overflow-x-auto">
               <div className="text-xs md:text-sm font-medium mb-2">Subject Mean Over Time</div>
-              <Line data={subjectTrendChartData} options={subjectTrendChartOpts} />
+              <div className="min-w-[520px]">
+                <Line data={subjectTrendChartData} options={subjectTrendChartOpts} />
+              </div>
             </div>
           )}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-2">
@@ -566,11 +572,13 @@ export default function TeacherAnalytics(){
               <div className="text-xs md:text-sm">Mean % {subjectName(subjectB)}: <b>{subjectCompare?.subject_b?.mean_percentage ?? '-'}</b></div>
               <div className="text-xs md:text-sm">Mean % Δ (B - A): <b>{subjectCompare?.deltas?.mean_percentage_delta ?? '-'}</b></div>
               {subjectMeansBarData && (
-                <div className="bg-white rounded-xl border border-gray-100 p-2 md:p-3">
-                  <Bar data={subjectMeansBarData} options={subjectMeansBarOpts} />
+                <div className="bg-white rounded-xl border border-gray-100 p-2 md:p-3 overflow-x-auto">
+                  <div className="min-w-[520px]">
+                    <Bar data={subjectMeansBarData} options={subjectMeansBarOpts} />
+                  </div>
                 </div>
               )}
-              <div className="overflow-auto rounded-xl border border-gray-100 bg-white">
+              <div className="teacher-analytics-table overflow-auto rounded-xl border border-gray-100 bg-white">
                 <table className="min-w-full text-xs md:text-sm">
                   <thead>
                     <tr className="bg-gray-50 text-xs text-gray-600">
@@ -593,8 +601,10 @@ export default function TeacherAnalytics(){
                 </table>
               </div>
               {perStudentDeltaBarData && (
-                <div className="bg-white rounded-xl border border-gray-100 p-2 md:p-3">
-                  <Bar data={perStudentDeltaBarData} options={perStudentDeltaBarOpts} />
+                <div className="bg-white rounded-xl border border-gray-100 p-2 md:p-3 overflow-x-auto">
+                  <div className="min-w-[520px]">
+                    <Bar data={perStudentDeltaBarData} options={perStudentDeltaBarOpts} />
+                  </div>
                 </div>
               )}
             </div>

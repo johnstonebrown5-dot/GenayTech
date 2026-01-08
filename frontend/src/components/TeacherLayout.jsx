@@ -39,6 +39,17 @@ export default function TeacherLayout({ children }){
   const [dismissedIds, setDismissedIds] = useState(() => {
     try { return JSON.parse(localStorage.getItem('dismissed_broadcast_ids') || '[]') } catch { return [] }
   })
+  const [darkMode, setDarkMode] = useState(() => {
+    if (typeof window === 'undefined') return false
+    try {
+      const stored = window.localStorage.getItem('teacher_dark_mode')
+      if (stored === '1') return true
+      if (stored === '0') return false
+      return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
+    } catch {
+      return false
+    }
+  })
 
   const dismissBanner = (id) => {
     if (!id) return
@@ -49,6 +60,10 @@ export default function TeacherLayout({ children }){
   }
 
   useEffect(() => { setIsMobileOpen(false) }, [pathname])
+
+  useEffect(() => {
+    try { window.localStorage.setItem('teacher_dark_mode', darkMode ? '1' : '0') } catch {}
+  }, [darkMode])
 
   // Load school info for header
   useEffect(() => {
@@ -198,8 +213,28 @@ export default function TeacherLayout({ children }){
     return value || 'U'
   })()
 
+  // Build navigation items, placing Attendance just after Messages when available
+  const navItems = (() => {
+    const items = [...baseNavItems]
+    if (!hasAttendanceAccess) return items
+    const attendanceItem = {
+      to: classTeacherClassId
+        ? `/teacher/attendance?class=${classTeacherClassId}`
+        : '/teacher/attendance',
+      label: 'Attendance',
+      icon: '🗓️',
+    }
+    const msgIndex = items.findIndex(i => i.label === 'Messages')
+    if (msgIndex === -1) {
+      items.unshift(attendanceItem)
+    } else {
+      items.splice(msgIndex + 1, 0, attendanceItem)
+    }
+    return items
+  })()
+
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className={`min-h-screen bg-gray-50 teacher-theme ${darkMode ? 'teacher-theme-dark' : ''}`}>
       {broadcastBanner && (
         <div className="sticky top-0 z-40 w-full bg-red-600 text-white">
           <div className="px-3 md:px-4 py-2 flex items-start gap-2">
@@ -282,6 +317,15 @@ export default function TeacherLayout({ children }){
               <span className="text-[10px] text-gray-500">View profile</span>
             </div>
           </Link>
+          <button
+            type="button"
+            onClick={() => setDarkMode(v => !v)}
+            className="hidden md:inline-flex px-2.5 py-1.5 rounded-full border border-gray-200 bg-gray-50 hover:bg-gray-100 text-xs items-center gap-1"
+            aria-label="Toggle dark mode"
+          >
+            <span>{darkMode ? '☀️' : '🌙'}</span>
+            <span className="hidden lg:inline">{darkMode ? 'Light' : 'Dark'}</span>
+          </button>
           {/* Hide header logout on mobile; show only on md+ */}
           <button onClick={lock} className="hidden md:inline-flex px-3 py-1.5 rounded text-sm bg-gray-800 text-white hover:bg-gray-900 transition-colors shadow-soft">Lock</button>
           <button onClick={logout} className="hidden md:inline-flex px-3 py-1.5 rounded text-sm bg-gray-900 text-white hover:bg-gray-800 transition-colors shadow-soft">Logout</button>
@@ -301,7 +345,7 @@ export default function TeacherLayout({ children }){
           style={{ top: broadcastBanner ? 'calc(3.5rem + 40px)' : '3.5rem' }}
         > 
           <nav className="p-2 space-y-1 overflow-y-auto">
-            {([ ...(hasAttendanceAccess? [{ to: '/teacher/attendance', label: 'Attendance', icon: '🗓️' }] : []), ...baseNavItems ]).map(i => {
+            {navItems.map(i => {
               const active = pathname === i.to
               return (
                 <Link key={i.to} to={i.to}
@@ -354,7 +398,7 @@ export default function TeacherLayout({ children }){
             </button>
           </div>
           <nav className="space-y-1 overflow-y-auto">
-            {([ ...(hasAttendanceAccess? [{ to: '/teacher/attendance', label: 'Attendance', icon: '🗓️' }] : []), ...baseNavItems ]).map(i => {
+            {navItems.map(i => {
               const active = pathname === i.to
               return (
                 <Link key={i.to} to={i.to}
@@ -386,6 +430,13 @@ export default function TeacherLayout({ children }){
             </button>
             <button
               type="button"
+              onClick={() => setDarkMode(v => !v)}
+              className="flex-1 px-3 py-2 rounded-lg text-sm font-medium bg-white/5 text-white border border-white/30 hover:bg-white/15 transition-colors"
+            >
+              {darkMode ? 'Light mode' : 'Dark mode'}
+            </button>
+            <button
+              type="button"
               onClick={()=> setShowLogoutConfirm(true)}
               className="flex-1 px-3 py-2 rounded-lg text-sm font-semibold bg-red-500 text-white hover:bg-red-600 transition-colors"
             >
@@ -412,7 +463,6 @@ export default function TeacherLayout({ children }){
       <nav className="sm:hidden fixed bottom-0 inset-x-0 z-30 border-t border-slate-200 bg-white/95 backdrop-blur-xl">
         <div className="max-w-xl mx-auto flex items-stretch justify-around py-1.5">
           {([
-            ...(hasAttendanceAccess ? [{ to: `/teacher/attendance${classTeacherClassId ? `?class=${classTeacherClassId}` : ''}`, label: 'Attendance', icon: '🗓️' }] : []),
             { to: '/teacher', label: 'Dashboard', icon: '📊' },
             { to: '/teacher/classes', label: 'Classes', icon: '📚' },
             { to: '/teacher/grades', label: 'Grades', icon: '📝' },

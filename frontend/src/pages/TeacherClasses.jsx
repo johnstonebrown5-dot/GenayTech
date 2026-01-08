@@ -55,6 +55,19 @@ export default function TeacherClasses(){
 
   const currentClass = useMemo(()=> classes.find(c=> String(c.id)===String(selected)) || null, [classes, selected])
 
+  // Only the actual class teacher should be able to use the class messaging feature
+  const isClassTeacher = useMemo(() => {
+    if (!currentClass || !me) return false
+    const meId = String(me.id || '')
+    if (!meId) return false
+    const ids = [
+      currentClass.teacher,
+      currentClass.teacher_detail?.id,
+      currentClass.teacher_detail?.user?.id,
+    ].map(v => (v == null ? '' : String(v)))
+    return ids.includes(meId)
+  }, [currentClass, me])
+
   // Extract subject names taught by this teacher in the selected class
   const mySubjects = useMemo(()=>{
     const c = currentClass
@@ -247,8 +260,8 @@ export default function TeacherClasses(){
           </div>
         </div>
 
-        {/* Message this class */}
-        {currentClass && (
+        {/* Message this class – only for the class teacher */}
+        {currentClass && isClassTeacher && (
           <div className="bg-white rounded-2xl shadow-md p-3 md:p-4 space-y-2 border border-indigo-100">
             <div className="flex items-center justify-between gap-2">
               <div>

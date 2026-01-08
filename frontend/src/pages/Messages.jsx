@@ -553,17 +553,23 @@ export default function Messages(){
   }, [conversation.length])
 
   return (
-    <div className="mx-auto max-w-6xl w-full min-h-[calc(100vh-5rem)] md:h-[calc(100vh-5rem)] bg-white border rounded-xl overflow-hidden flex shadow-card">
+    <div className="messages-page mx-auto max-w-6xl w-full h-[calc(100vh-5rem)] bg-[#0b141a] md:bg-white md:border md:rounded-xl overflow-hidden flex md:shadow-card">
       {/* Left: Users list */}
       <aside className="hidden sm:flex w-80 border-r flex-col">
-        <div className="flex border-b">
-          <button onClick={()=>setViewTab('chats')} className={`flex-1 px-3 py-2 text-sm flex items-center justify-center gap-2 ${viewTab==='chats'?'border-b-2 border-blue-600 font-medium':''}`}>
+        <div className="flex border-b messages-tabs">
+          <button
+            onClick={()=>setViewTab('chats')}
+            className={`messages-tab flex-1 px-3 py-2 text-sm flex items-center justify-center gap-2 ${viewTab==='chats'?'messages-tab--active':''}`}
+          >
             <span>Chats</span>
             {chatsUnread>0 && (
               <span className="text-[10px] bg-blue-600 text-white rounded-full px-2 py-0.5">{chatsUnread>99?'99+':chatsUnread}</span>
             )}
           </button>
-          <button onClick={()=>setViewTab('system')} className={`flex-1 px-3 py-2 text-sm flex items-center justify-center gap-2 ${viewTab==='system'?'border-b-2 border-blue-600 font-medium':''}`}>
+          <button
+            onClick={()=>setViewTab('system')}
+            className={`messages-tab flex-1 px-3 py-2 text-sm flex items-center justify-center gap-2 ${viewTab==='system'?'messages-tab--active':''}`}
+          >
             <span>System</span>
             {systemUnread>0 && (
               <span className="text-[10px] bg-blue-600 text-white rounded-full px-2 py-0.5">{systemUnread>99?'99+':systemUnread}</span>
@@ -610,7 +616,7 @@ export default function Messages(){
                 <button
                   key={u.id}
                   onClick={()=>{ setActiveUser(u); setViewTab('chats') }}
-                  className={`w-full text-left px-3 py-2 border-b hover:bg-gray-50 ${isActive? 'bg-blue-50':''}`}
+                  className={`messages-user-row w-full text-left px-3 py-2 border-b hover:bg-gray-50 ${isActive? 'messages-user-row--active bg-blue-50':''}`}
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
@@ -685,7 +691,7 @@ export default function Messages(){
               const unread = meta?.unread || 0
               const online = presenceMap.get(u.id)
               return (
-                <button key={u.id} onClick={()=>{ setActiveUser(u) }} className="w-full text-left px-3 py-2 border-b hover:bg-gray-50">
+                <button key={u.id} onClick={()=>{ setActiveUser(u) }} className="messages-user-row w-full text-left px-3 py-2 border-b hover:bg-gray-50">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <div className="w-8 h-8 rounded-full overflow-hidden bg-gray-100 flex items-center justify-center text-xs text-gray-600">
@@ -715,8 +721,9 @@ export default function Messages(){
       )}
 
       {/* Chat section */}
-      <section className={`relative flex-1 flex flex-col overflow-y-auto ${!activeUser && viewTab!=='system' ? 'hidden sm:flex' : ''}`}>
-        <div className="h-14 border-b px-2 sm:px-4 flex items-center justify-between sticky top-0 bg-white z-10">
+      <section className={`relative flex-1 flex flex-col overflow-hidden ${!activeUser && viewTab!=='system' ? 'hidden sm:flex' : ''}`}>
+        {/* WhatsApp-style chat header */}
+        <div className="h-14 px-2 sm:px-4 flex items-center justify-between sticky top-0 z-10 bg-[#202c33] text-slate-50 border-b border-black/20">
           <div className="font-medium">
             <div className="flex items-center gap-2">
               {activeUser && (
@@ -745,7 +752,7 @@ export default function Messages(){
               )}
             </div>
           </div>
-          <div className="flex items-center gap-2 text-xs text-gray-500">
+          <div className="flex items-center gap-2 text-xs text-slate-300">
             {isSyncing && (
               <span className="inline-flex items-center gap-1">
                 <svg className="animate-spin h-4 w-4 text-gray-400" viewBox="0 0 24 24">
@@ -757,12 +764,13 @@ export default function Messages(){
             )}
           </div>
         </div>
-        <div ref={chatRef} className="flex-1 px-2 sm:px-4 py-3 space-y-2 bg-gray-50 pb-28 sm:pb-4">
-          {loading && viewTab!=='system' && <div className="text-sm text-gray-500">Loading...</div>}
+        {/* Chat body */}
+        <div ref={chatRef} className="flex-1 px-2 sm:px-4 py-3 space-y-2 bg-[#0b141a] pb-28 sm:pb-4">
+          {loading && viewTab!=='system' && <div className="text-sm text-slate-300">Loading...</div>}
           {viewTab==='system' ? (
             <div className="space-y-2">
               {systemMessages.length === 0 && (
-                <div className="text-sm text-gray-500">No system messages.</div>
+                <div className="text-sm text-slate-300">No system messages.</div>
               )}
               {systemMessages.map(m => (
                 <div key={m.id} className="flex justify-start">
@@ -777,13 +785,16 @@ export default function Messages(){
           ) : (
             <>
               {!loading && activeUser && conversation.length === 0 && (
-                <div className="text-sm text-gray-500">No messages yet. Say hi!</div>
+                <div className="text-sm text-slate-300">No messages yet. Say hi!</div>
               )}
               {!loading && conversation.map(m => {
                 const mine = m.sender === user?.id
                 return (
                   <div key={m.id} className={`flex ${mine? 'justify-end':'justify-start'}`}>
-                    <div className={`group relative max-w-[85%] sm:max-w-[70%] px-3 py-2 rounded-lg shadow-sm text-sm whitespace-pre-wrap ${mine? 'bg-blue-600 text-white':'bg-white border'}`}>
+                    <div className={`group relative max-w-[85%] sm:max-w-[70%] px-3 py-2 rounded-2xl shadow-sm text-sm whitespace-pre-wrap ${mine
+                      ? 'bg-[#005c4b] text-white rounded-br-sm'
+                      : 'bg-white text-gray-900 rounded-bl-sm border border-gray-200'}
+                    `}>
                       {(() => {
                         const url = getAttachmentUrl(m)
                         if (url) {
@@ -803,7 +814,7 @@ export default function Messages(){
                         return null
                       })()}
                       {m.body}
-                      <div className={`mt-1 text-[10px] ${mine? 'text-white/80':'text-gray-500'}`}>{new Date(m.created_at).toLocaleString()}</div>
+                      <div className={`mt-1 text-[10px] ${mine? 'text-emerald-100/80':'text-gray-500'}`}>{new Date(m.created_at).toLocaleString()}</div>
                       {isAdmin && (
                         <button
                           type="button"
@@ -821,12 +832,14 @@ export default function Messages(){
             </>
           )}
         </div>
-        <div className="border-t px-2 py-1 text-xs text-gray-500 flex items-center justify-between">
+        <div className="border-t border-black/20 px-2 py-1 text-xs text-slate-400 flex items-center justify-between bg-[#202c33] sm:bg-transparent">
           <button type="button" disabled className="px-2 py-1 rounded border opacity-60 cursor-not-allowed" title="Pagination not enabled yet">Load older</button>
           <span />
         </div>
         {viewTab!=='system' && (
-        <form onSubmit={sendToActive} className="min-h-16 p-2 flex items-center gap-2 fixed inset-x-0 bottom-[4.5rem] z-20 bg-white border-t sm:sticky sm:bottom-0">
+        <>
+        {/* WhatsApp-style composer bar */}
+        <form onSubmit={sendToActive} className="min-h-16 p-2 flex items-center gap-2 fixed inset-x-0 bottom-[4.5rem] z-20 bg-[#202c33] border-t border-black/30 sm:sticky sm:bottom-0 sm:inset-x-auto sm:rounded-b-xl">
           {/* Forward banner */}
           {isAdmin && forwardSource && (
             <div className="absolute -top-8 left-0 right-0 px-2">
@@ -878,12 +891,12 @@ export default function Messages(){
               const t = e.currentTarget; t.style.height='auto'; t.style.height=Math.min(t.scrollHeight,136)+'px'
             }}
             placeholder={activeUser? 'Type a message':'Select a user to start chatting'}
-            className={`flex-1 resize-none rounded-2xl px-4 py-2.5 bg-gray-50 border ${activeUser? 'border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500':'border-gray-200'} shadow-inner text-[15px] placeholder:text-gray-400`}
+            className={`flex-1 resize-none rounded-2xl px-4 py-2.5 bg-[#2a3942] border border-transparent ${activeUser? 'focus:border-[#00a884] focus:ring-2 focus:ring-[#00a884]/60':'opacity-60'} shadow-inner text-[15px] text-slate-50 placeholder:text-slate-400`}
             style={{ overflowY: message.length > 120 ? 'auto' : 'hidden' }}
             disabled={!activeUser}
           />
-          {/* Attach */}
-          <label className={`flex items-center justify-center rounded-full w-11 h-11 shrink-0 cursor-pointer border ${!activeUser? 'opacity-50 cursor-not-allowed':''}`} title="Attach image">
+          {/* Attach icon */}
+          <label className={`flex items-center justify-center rounded-full w-11 h-11 shrink-0 cursor-pointer border border-transparent bg-[#202c33] text-slate-200 hover:text-white hover:bg-[#26323a] ${!activeUser? 'opacity-40 cursor-not-allowed':''}`} title="Attach image">
             <input
               type="file"
               className="hidden"
@@ -902,7 +915,7 @@ export default function Messages(){
                 try{ e.target.value = '' }catch{}
               }}
             />
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 text-gray-600">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
               <path d="M16.5 6.75v7.5a4.5 4.5 0 11-9 0V5.25a3 3 0 116 0v8.25a1.5 1.5 0 11-3 0V6.75" stroke="currentColor" strokeWidth="1.5" fill="none"/>
             </svg>
           </label>
@@ -921,7 +934,9 @@ export default function Messages(){
           <button
             disabled={(forwardRecipients.length===0 && !activeUser) || sending || (!message.trim() && !fileToSend)}
             aria-label="Send message"
-            className={`flex items-center justify-center rounded-full w-11 h-11 shrink-0 transition ${((forwardRecipients.length===0 && !activeUser) || (!message.trim() && !fileToSend))? 'bg-gray-300 text-white cursor-not-allowed':'bg-blue-600 hover:bg-blue-700 text-white'} ${sending? 'opacity-70':''}`}
+            className={`flex items-center justify-center rounded-full w-11 h-11 shrink-0 transition ${((forwardRecipients.length===0 && !activeUser) || (!message.trim() && !fileToSend))
+              ? 'bg-gray-500 text-white/80 cursor-not-allowed'
+              : 'bg-[#00a884] hover:bg-[#029a74] text-white'} ${sending? 'opacity-70':''}`}
           >
             {sending ? (
               <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
@@ -935,6 +950,7 @@ export default function Messages(){
             )}
           </button>
         </form>
+        </>
         )}
       </section>
 

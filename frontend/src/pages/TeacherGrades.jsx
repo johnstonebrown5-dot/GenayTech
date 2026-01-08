@@ -935,7 +935,7 @@ export default function TeacherGrades(){
   }, [selectedClass, selectedSubject, selectedExamId, students, marks, invalid])
 
   return (
-    <div className="p-3 md:p-4 space-y-3 md:space-y-4 max-w-4xl mx-auto pb-24 md:pb-0 min-h-screen">
+    <div className="teacher-grades-page px-2 md:px-4 lg:px-6 py-3 md:py-4 space-y-3 md:space-y-4 max-w-6xl mx-auto pb-24 md:pb-0 min-h-screen">
       {/* Header */}
       <div className="relative overflow-hidden rounded-2xl border border-gray-200 bg-gradient-to-r from-indigo-500 via-indigo-600 to-sky-500 shadow-md">
         <div className="pointer-events-none absolute -right-16 -top-16 h-40 w-40 rounded-full bg-white/15 blur-2" />
@@ -946,9 +946,9 @@ export default function TeacherGrades(){
           </div>
           <div className="hidden md:flex items-center gap-2">
             <button
-              onClick={()=>setUnitModal(true)}
+              onClick={()=>setInputAs(prev => prev === 'percent' ? 'marks' : 'percent')}
               type="button"
-              className="text-xs px-3 py-1.5 rounded-full bg-white/90 text-indigo-700 border border-white/70 hover:bg-white shadow-sm"
+              className={`input-unit-toggle text-xs px-3 py-1.5 rounded-full border hover:bg-white shadow-sm ${inputAs==='percent' ? 'input-unit-toggle--percent bg-white/90 text-indigo-700 border-white/70' : 'bg-white/90 text-indigo-700 border-white/70'}`}
             >
               Input: {inputAs==='percent' ? 'Percentage (%)' : 'Marks'}
             </button>
@@ -961,9 +961,9 @@ export default function TeacherGrades(){
           </div>
           <div className="md:hidden flex items-center gap-1.5">
             <button
-              onClick={()=>setUnitModal(true)}
+              onClick={()=>setInputAs(prev => prev === 'percent' ? 'marks' : 'percent')}
               type="button"
-              className="text-[11px] px-2.5 py-1 rounded-full bg-white/90 text-indigo-700 border border-white/80"
+              className={`input-unit-toggle text-[11px] px-2.5 py-1 rounded-full border ${inputAs==='percent' ? 'input-unit-toggle--percent bg-white/90 text-indigo-700 border-white/80' : 'bg-white/90 text-indigo-700 border-white/80'}`}
             >
               {inputAs==='percent' ? '% Input' : 'Marks'}
             </button>
@@ -1047,8 +1047,8 @@ export default function TeacherGrades(){
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={()=>setUnitModal(true)}
-                className="inline-flex items-center rounded-full border border-gray-200 px-3 py-1 text-[11px] bg-white hover:bg-gray-50"
+                onClick={()=>setInputAs(prev => prev === 'percent' ? 'marks' : 'percent')}
+                className={`input-unit-toggle inline-flex items-center rounded-full border px-3 py-1 text-[11px] bg-white hover:bg-gray-50 ${inputAs==='percent' ? 'input-unit-toggle--percent border-gray-200' : 'border-gray-200'}`}
               >
                 {inputAs==='percent' ? 'Percentage (%)' : 'Marks'}
               </button>
@@ -1186,7 +1186,7 @@ export default function TeacherGrades(){
 
         <div className="hidden md:block">
           <table className="w-full text-left text-sm">
-            <thead className="bg-gradient-to-r from-indigo-50 to-fuchsia-50">
+            <thead className="teacher-grades-table-head bg-gradient-to-r from-indigo-50 to-fuchsia-50">
               <tr className="text-gray-700">
                 <th className="py-2">Student</th>
                 <th className="py-2">Admission</th>

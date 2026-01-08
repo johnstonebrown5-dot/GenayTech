@@ -269,9 +269,9 @@ export default function TeacherResults(){
   }
 
   return (
-    <div className="px-0 md:px-6 py-4 md:py-6 space-y-4 max-w-7xl mx-auto min-h-[80vh]">
+    <div className="teacher-results-page px-0 md:px-6 py-4 md:py-6 space-y-4 max-w-7xl mx-auto min-h-[80vh]">
       {/* Header */}
-      <div className="relative overflow-hidden rounded-2xl border border-gray-200 bg-gradient-to-r from-sky-50 via-white to-indigo-50 shadow-sm">
+      <div className="teacher-results-header relative overflow-hidden rounded-2xl border border-gray-200 bg-gradient-to-r from-sky-50 via-white to-indigo-50 shadow-sm">
         <div className="pointer-events-none absolute -right-12 -top-10 h-24 w-24 rounded-full bg-indigo-200/40 blur-2" />
         <div className="p-4 md:p-5 flex items-start justify-between gap-4">
           <div>
@@ -282,13 +282,13 @@ export default function TeacherResults(){
             <div className="flex items-center justify-end gap-2">
               <div className="inline-flex items-center rounded-full bg-white/70 border border-gray-200 p-0.5 shadow-sm">
                 <button
-                  className={`px-3 py-1.5 text-[11px] rounded-full transition ${viewMode==='class' ? 'bg-gray-900 text-white shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
+                  className={`teacher-results-toggle px-3 py-1.5 text-[11px] rounded-full transition ${viewMode==='class' ? 'teacher-results-toggle--active' : ''}`}
                   onClick={()=>setViewMode('class')}
                 >
                   Class
                 </button>
                 <button
-                  className={`px-3 py-1.5 text-[11px] rounded-full transition ${viewMode==='grade' ? 'bg-gray-900 text-white shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
+                  className={`teacher-results-toggle px-3 py-1.5 text-[11px] rounded-full transition ${viewMode==='grade' ? 'teacher-results-toggle--active' : ''}`}
                   onClick={()=>setViewMode('grade')}
                 >
                   Grade
@@ -375,8 +375,8 @@ export default function TeacherResults(){
               {summary?.class_mean != null && (
                 <div className="text-xs md:text-sm mr-2 text-gray-600">Class Mean: <b className="text-gray-900">{summary.class_mean}</b></div>
               )}
-              <button onClick={handleClassCSV} className="px-3 py-1.5 text-[11px] rounded-full border border-gray-200 bg-white hover:bg-gray-50">Download CSV</button>
-              <button onClick={handleClassPrint} className="px-3 py-1.5 text-[11px] rounded-full border border-gray-200 bg-white hover:bg-gray-50">Print</button>
+              <button onClick={handleClassCSV} className="teacher-results-action px-3 py-1.5 text-[11px] rounded-full border border-gray-200 bg-white hover:bg-gray-50">Download CSV</button>
+              <button onClick={handleClassPrint} className="teacher-results-action px-3 py-1.5 text-[11px] rounded-full border border-gray-200 bg-white hover:bg-gray-50">Print</button>
             </div>
           </div>
           <div className="overflow-auto -mx-2 md:mx-0">
@@ -418,8 +418,8 @@ export default function TeacherResults(){
               {gradeSummaries.length>0 && (
                 <div className="text-xs md:text-sm text-gray-600 mr-2">Classes: <b className="text-gray-900">{gradeSummaries.length}</b></div>
               )}
-              <button onClick={handleGradeCSV} className="px-3 py-1.5 text-[11px] rounded-full border border-gray-200 bg-white hover:bg-gray-50">Download CSV</button>
-              <button onClick={handleGradePrint} className="px-3 py-1.5 text-[11px] rounded-full border border-gray-200 bg-white hover:bg-gray-50">Print</button>
+              <button onClick={handleGradeCSV} className="teacher-results-action px-3 py-1.5 text-[11px] rounded-full border border-gray-200 bg-white hover:bg-gray-50">Download CSV</button>
+              <button onClick={handleGradePrint} className="teacher-results-action px-3 py-1.5 text-[11px] rounded-full border border-gray-200 bg-white hover:bg-gray-50">Print</button>
             </div>
           </div>
           <div className="overflow-auto">

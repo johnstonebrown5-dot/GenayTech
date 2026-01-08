@@ -153,3 +153,267 @@ input::-ms-input-placeholder, textarea::-ms-input-placeholder { color: #9ca3af !
 input::-webkit-input-placeholder, textarea::-webkit-input-placeholder { color: #9ca3af !important; }
 /* Improve select consistency */
 select { appearance: none; -webkit-appearance: none; -moz-appearance: none; background-color: #ffffff !important; }
+
+.teacher-theme-dark {
+  background-color: #030712;
+  color: #e5e7eb;
+}
+
+/* Background remaps for common card / surface colors within teacher area */
+.teacher-theme-dark .bg-white,
+.teacher-theme-dark .bg-gray-50,
+.teacher-theme-dark .bg-slate-50,
+.teacher-theme-dark .bg-gray-100,
+.teacher-theme-dark .bg-slate-100 {
+  background-color: #020617 !important; /* near slate-950 */
+}
+
+/* Opacity variants commonly used on teacher pages */
+.teacher-theme-dark .bg-white\/95,
+.teacher-theme-dark .bg-white\/90,
+.teacher-theme-dark .bg-white\/80,
+.teacher-theme-dark .bg-white\/70 {
+  background-color: #020617 !important;
+}
+
+.teacher-theme-dark .bg-gray-50\/50 {
+  background-color: #020617 !important;
+}
+
+.teacher-theme-dark .bg-gray-200,
+.teacher-theme-dark .bg-slate-200 {
+  background-color: #0b1120 !important;
+}
+
+/* Text color remaps */
+.teacher-theme-dark .text-gray-900,
+.teacher-theme-dark .text-slate-900,
+.teacher-theme-dark .text-gray-800,
+.teacher-theme-dark .text-slate-800 {
+  color: #f9fafb !important;
+}
+
+.teacher-theme-dark .text-gray-700,
+.teacher-theme-dark .text-slate-700,
+.teacher-theme-dark .text-gray-600,
+.teacher-theme-dark .text-slate-600 {
+  color: #d1d5db !important;
+}
+
+.teacher-theme-dark .text-gray-500,
+.teacher-theme-dark .text-slate-500 {
+  color: #9ca3af !important;
+}
+
+/* Border remaps so cards still have subtle separation on dark */
+.teacher-theme-dark .border-gray-100,
+.teacher-theme-dark .border-slate-100,
+.teacher-theme-dark .border-gray-200,
+.teacher-theme-dark .border-slate-200 {
+  border-color: #1f2937 !important;
+}
+
+.teacher-theme-dark .border-gray-300,
+.teacher-theme-dark .border-slate-300 {
+  border-color: #374151 !important;
+}
+
+/* Inputs and form controls inside teacher area */
+.teacher-theme-dark input,
+.teacher-theme-dark textarea,
+.teacher-theme-dark select {
+  background-color: #020617 !important;
+  color: #e5e7eb !important;
+  border-color: #4b5563 !important;
+}
+
+.teacher-theme-dark input::placeholder,
+.teacher-theme-dark textarea::placeholder {
+  color: #6b7280 !important;
+}
+
+.teacher-theme-dark input:focus,
+.teacher-theme-dark textarea:focus,
+.teacher-theme-dark select:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(129, 140, 248, 0.35);
+  border-color: #818cf8 !important;
+  background-color: #020617 !important;
+}
+
+/* Teacher results page specific tweaks */
+.teacher-theme-dark .teacher-results-page {
+  background-color: #020617;
+}
+
+.teacher-theme-dark .teacher-results-header {
+  border-color: #111827 !important;
+  background-image: linear-gradient(to right, #020617, #020617, #0b1120) !important;
+}
+
+.teacher-theme-dark .teacher-results-header h1,
+.teacher-theme-dark .teacher-results-header .text-gray-600 {
+  color: #e5e7eb !important;
+}
+
+/* Results page action pills (Download / Print) */
+.teacher-theme-dark .teacher-results-action {
+  background-color: #1d4ed8 !important; /* blue-700 */
+  color: #e5e7eb !important;
+  border-color: #60a5fa !important;    /* blue-400 */
+}
+
+.teacher-theme-dark .teacher-results-action:hover {
+  background-color: #2563eb !important; /* blue-600 */
+}
+
+/* Class / Grade toggle pills */
+.teacher-results-toggle {
+  color: #4b5563;
+}
+
+.teacher-results-toggle:hover {
+  color: #111827;
+}
+
+.teacher-theme-dark .teacher-results-toggle {
+  color: #9ca3af;
+}
+
+.teacher-theme-dark .teacher-results-toggle--active {
+  background-color: #1d4ed8 !important; /* blue-700 */
+  color: #e5e7eb !important;
+  box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.9);
+}
+
+/* Teacher grades page specific tweaks */
+.teacher-theme-dark .teacher-grades-page {
+  background-color: #020617;
+}
+
+.teacher-theme-dark .teacher-grades-table-head {
+  background-image: linear-gradient(to right, #020617, #020617, #0b1120) !important;
+}
+
+/* Grades page: input unit (Marks / Percentage) toggle */
+.teacher-theme-dark .input-unit-toggle {
+  background-color: #0f172a !important; /* slate-900 */
+  color: #e5e7eb !important;
+  border-color: #38bdf8 !important;    /* sky-400 */
+}
+
+.teacher-theme-dark .input-unit-toggle--percent {
+  background-color: #22c55e !important; /* green-500 when in % mode */
+  color: #022c22 !important;
+  border-color: #4ade80 !important;
+}
+
+/* Teacher analytics page specific tweaks */
+.teacher-theme-dark .teacher-analytics-page {
+  background-color: #020617;
+}
+
+.teacher-theme-dark .teacher-analytics-table {
+  background-color: #020617 !important;
+  border-color: #1f2937 !important;
+}
+
+.teacher-theme-dark .teacher-analytics-table table {
+  color: #e5e7eb;
+}
+
+.teacher-theme-dark .teacher-analytics-table thead tr {
+  background-color: #0b1120 !important;
+  color: #e5e7eb !important;
+}
+
+.teacher-theme-dark .teacher-analytics-table th,
+.teacher-theme-dark .teacher-analytics-table td {
+  border-color: #374151 !important;
+}
+
+.teacher-theme-dark .teacher-analytics-table tbody tr:nth-child(odd),
+.teacher-theme-dark .teacher-analytics-table tbody tr:nth-child(even) {
+  background-color: #020617;
+}
+
+/* Analytics page: Exam vs Exam / Subject vs Subject toggle */
+.teacher-theme-dark .analytics-mode-toggle {
+  color: #9ca3af;
+}
+
+.teacher-theme-dark .analytics-mode-toggle--active {
+  background-color: #1d4ed8 !important; /* blue-700 */
+  color: #e5e7eb !important;
+  box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.9);
+}
+
+/* Messages page container in dark mode */
+.teacher-theme-dark .messages-page {
+  background-color: #020617;
+}
+
+.teacher-theme-dark .messages-page aside {
+  background-color: #020617;
+  border-color: #1f2937;
+}
+
+.teacher-theme-dark .messages-page aside input {
+  background-color: #020617 !important;
+  color: #e5e7eb !important;
+  border-color: #374151 !important;
+}
+
+.teacher-theme-dark .messages-page aside button {
+  color: #e5e7eb;
+}
+
+.teacher-theme-dark .messages-page aside button.bg-blue-50,
+.teacher-theme-dark .messages-page aside button:hover {
+  background-color: #111827 !important;
+}
+
+.teacher-theme-dark .messages-user-row {
+  background-color: #020617;
+  border-color: #1f2937;
+}
+
+.teacher-theme-dark .messages-user-row--active {
+  background-color: #111827 !important;
+}
+
+.teacher-theme-dark .messages-user-row .font-medium,
+.teacher-theme-dark .messages-user-row .text-sm {
+  color: #e5e7eb !important;
+}
+
+.teacher-theme-dark .messages-user-row .text-gray-500,
+.teacher-theme-dark .messages-user-row .text-gray-400 {
+  color: #9ca3af !important;
+}
+
+/* Messages page: Chats / System tabs */
+.teacher-theme-dark .messages-tabs {
+  background-color: #020617;
+  border-color: #1f2937;
+}
+
+.teacher-theme-dark .messages-tab {
+  color: #9ca3af;
+}
+
+.teacher-theme-dark .messages-tab--active {
+  position: relative;
+  color: #e5e7eb !important;
+}
+
+.teacher-theme-dark .messages-tab--active::after {
+  content: '';
+  position: absolute;
+  left: 20%;
+  right: 20%;
+  bottom: 0;
+  height: 3px;
+  border-radius: 9999px;
+  background-color: #1d4ed8; /* blue-700 underline */
+}

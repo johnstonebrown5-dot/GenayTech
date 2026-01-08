@@ -781,9 +781,9 @@ export default function LoginPage() {
       </main>
 
       {/* Mobile-only content */}
-      <div className="sm:hidden relative z-10 flex min-h-screen flex-col items-stretch bg-sky-50">
+      <div className="sm:hidden relative z-10 flex min-h-screen flex-col items-stretch bg-indigo-950/5">
         <div className="pointer-events-none absolute inset-0 -z-10">
-          <div className="absolute inset-x-0 top-0 h-40 bg-gradient-to-r from-sky-600 via-sky-500 to-sky-600 opacity-90" />
+          <div className="absolute inset-x-0 top-0 h-40 bg-gradient-to-r from-indigo-600 via-indigo-500 to-sky-500 opacity-95" />
         </div>
         {/* Global floating balloons background */}
         <div className="pointer-events-none absolute inset-x-6 top-16 bottom-8 z-0">
@@ -800,7 +800,7 @@ export default function LoginPage() {
 
         {showAppIntro ? (
           <div className="relative z-10 flex-1 flex flex-col items-center justify-center px-8 pb-12 text-center text-slate-800">
-            <h2 className="text-base font-semibold tracking-wide text-sky-700 uppercase mb-2">Welcome to EduTrack</h2>
+            <h2 className="text-base font-semibold tracking-wide text-indigo-700 uppercase mb-2">Welcome to EduTrack</h2>
             <p className="text-sm text-slate-600 max-w-xs mb-4">Keep your school attendance, results, finance and messaging in one lightweight app.</p>
             <ul className="text-[11px] text-slate-500 space-y-1 mb-6 max-w-xs text-left">
               <li>• Fast access to your dashboards from this device.</li>
@@ -813,7 +813,7 @@ export default function LoginPage() {
                 try { window.localStorage && window.localStorage.setItem('eduTrackAppIntroDismissed', '1') } catch {}
                 setShowAppIntro(false)
               }}
-              className="mt-2 inline-flex items-center justify-center rounded-full bg-gradient-to-r from-sky-600 to-sky-500 px-6 py-2.5 text-white text-sm font-semibold shadow-md"
+              className="mt-2 inline-flex items-center justify-center rounded-full bg-gradient-to-r from-indigo-500 via-indigo-500 to-sky-500 px-6 py-2.5 text-white text-sm font-semibold shadow-md"
             >
               Get started
             </button>
@@ -829,10 +829,10 @@ export default function LoginPage() {
               onTouchEnd={resetTilt}
             >
               <div
-                className="relative w-full overflow-hidden rounded-[32px] bg-white shadow-[0_20px_40px_rgba(15,23,42,0.25)] border border-sky-100 transition-all duration-500 ease-out will-change-transform"
+                className="relative w-full overflow-hidden rounded-[32px] bg-white shadow-[0_20px_40px_rgba(15,23,42,0.25)] border border-indigo-100 transition-all duration-500 ease-out will-change-transform"
                 style={{ transform: mobileTiltTransform, opacity: mounted ? 1 : 0 }}
               >
-              <div className="h-16 bg-gradient-to-r from-sky-600 to-sky-500 flex items-center justify-between px-5 text-white">
+              <div className="h-16 bg-gradient-to-r from-indigo-600 via-indigo-500 to-sky-500 flex items-center justify-between px-5 text-white">
                 <span className="text-sm font-semibold">Login</span>
                 <div className="flex items-center gap-3">
                   <span className="text-[11px] opacity-80">{role ? role.charAt(0).toUpperCase() + role.slice(1) : 'Select role'}</span>
@@ -850,7 +850,7 @@ export default function LoginPage() {
               <div className="px-5 pt-4 pb-6 space-y-4">
                 {formStep === 'role' && (
                   <div className="space-y-4">
-                    <div className="text-xs text-sky-600 font-semibold tracking-wide text-left">Choose your role</div>
+                    <div className="text-xs text-indigo-600 font-semibold tracking-wide text-left">Choose your role</div>
                     <div className="grid grid-cols-2 gap-3" role="radiogroup" aria-label="Select role">
                       {roles.map(r => {
                         const selected = role === r.key;
@@ -861,10 +861,10 @@ export default function LoginPage() {
                             role="radio"
                             aria-checked={selected}
                             aria-label={r.label}
-                            className={`flex flex-col items-center justify-center gap-1 rounded-xl border text-xs font-semibold py-2.5 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-300 ${
+                            className={`flex flex-col items-center justify-center gap-1 rounded-xl border text-xs font-semibold py-2.5 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300 ${
                               selected
-                                ? 'bg-sky-50 border-sky-300 text-sky-700 shadow-sm'
-                                : 'bg-white border-sky-100 text-gray-700 hover:bg-sky-50/60 hover:border-sky-200'
+                                ? 'bg-indigo-50 border-indigo-300 text-indigo-700 shadow-sm'
+                                : 'bg-white border-indigo-100 text-gray-700 hover:bg-indigo-50/60 hover:border-indigo-200'
                             }`}
                           >
                             <span className="text-lg">{r.icon}</span>
@@ -879,14 +879,14 @@ export default function LoginPage() {
                         setFormStep('credentials');
                       }}
                       disabled={!role}
-                      className="w-full rounded-full bg-gradient-to-r from-sky-600 to-sky-500 py-3 text-white text-sm font-semibold tracking-wide shadow-md disabled:opacity-60 disabled:shadow-none transition-all"
+                      className="w-full rounded-full bg-gradient-to-r from-indigo-500 via-indigo-500 to-indigo-600 py-3 text-white text-sm font-semibold tracking-wide shadow-md disabled:opacity-60 disabled:shadow-none transition-all"
                     >
                       Continue
                     </button>
                     {installReady && (
                       <button
                         onClick={onInstallClick}
-                        className="w-full rounded-full border border-sky-100 bg-sky-50 text-sky-700 text-xs font-medium py-2.5 mt-1"
+                        className="w-full rounded-full border border-indigo-100 bg-indigo-50 text-indigo-700 text-xs font-medium py-2.5 mt-1"
                       >
                         Install App
                       </button>
@@ -900,11 +900,11 @@ export default function LoginPage() {
                     {role && (
                       <div className="text-[11px] text-gray-500">
                         Signing in as{' '}
-                        <span className="px-2 py-0.5 rounded-full bg-sky-50 text-sky-700 border border-sky-200">{role}</span>
+                        <span className="px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">{role}</span>
                       </div>
                     )}
                     <div className="flex items-center justify-center">
-                      <div className={`inline-flex items-center justify-center h-9 w-9 rounded-full border text-sky-700 bg-sky-50/80 border-sky-100 shadow-soft ${isLoading ? 'animate-pulse' : ''} ${error ? 'animate-shake' : ''}`} aria-hidden>
+                      <div className={`inline-flex items-center justify-center h-9 w-9 rounded-full border text-indigo-700 bg-indigo-50/80 border-indigo-100 shadow-soft ${isLoading ? 'animate-pulse' : ''} ${error ? 'animate-shake' : ''}`} aria-hidden>
                         <svg
                           xmlns="http://www.w3.org/2000/svg"
                           viewBox="0 0 24 24"
@@ -949,7 +949,7 @@ export default function LoginPage() {
                           autoCapitalize="none"
                           autoCorrect="off"
                           aria-label="Email (username)"
-                          className="w-full rounded-lg border border-sky-100 bg-white px-3 py-2 text-sm shadow-inner focus:outline-none focus:ring-2 focus:ring-sky-200"
+                          className="w-full rounded-lg border border-indigo-100 bg-white px-3 py-2 text-sm shadow-inner focus:outline-none focus:ring-2 focus:ring-indigo-200"
                           required
                         />
                       </div>
@@ -966,7 +966,7 @@ export default function LoginPage() {
                             onKeyUp={e => setCapsLockOn(e.getModifierState && e.getModifierState('CapsLock'))}
                             autoComplete="current-password"
                             aria-label="Password"
-                            className="w-full rounded-lg border border-sky-100 bg-white px-3 py-2 text-sm pr-16 shadow-inner focus:outline-none focus:ring-2 focus:ring-sky-200"
+                            className="w-full rounded-lg border border-indigo-100 bg-white px-3 py-2 text-sm pr-16 shadow-inner focus:outline-none focus:ring-2 focus:ring-indigo-200"
                             required
                           />
                           <button
@@ -974,7 +974,7 @@ export default function LoginPage() {
                             aria-pressed={showPassword}
                             aria-label={showPassword ? 'Hide password' : 'Show password'}
                             onClick={() => setShowPassword(v => !v)}
-                            className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-sky-700 font-semibold"
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-indigo-700 font-semibold"
                           >
                             {showPassword ? 'Hide' : 'Show'}
                           </button>
@@ -983,13 +983,13 @@ export default function LoginPage() {
                       </div>
                       <div className="flex items-center justify-between">
                         <label className="inline-flex items-center gap-2 text-[11px] text-gray-700 select-none">
-                          <input type="checkbox" className="accent-sky-600" checked={remember} onChange={e => setRemember(e.target.checked)} />
+                          <input type="checkbox" className="accent-indigo-600" checked={remember} onChange={e => setRemember(e.target.checked)} />
                           Remember me
                         </label>
                         <button
                           type="button"
                           onClick={openReset}
-                          className="text-[11px] text-sky-700 underline"
+                          className="text-[11px] text-indigo-700 underline"
                         >
                           Forgot password?
                         </button>
@@ -997,7 +997,7 @@ export default function LoginPage() {
                       <button
                         type="submit"
                         disabled={isLoading}
-                        className="w-full rounded-full bg-gradient-to-r from-sky-600 to-sky-500 text-white font-semibold py-2.5 disabled:opacity-60 disabled:shadow-none shadow-md mt-1"
+                        className="w-full rounded-full bg-gradient-to-r from-indigo-500 via-indigo-500 to-sky-500 text-white font-semibold py-2.5 disabled:opacity-60 disabled:shadow-none shadow-md mt-1"
                       >
                         {isLoading ? 'Signing In…' : 'Login'}
                       </button>
