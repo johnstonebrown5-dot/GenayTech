@@ -34,6 +34,19 @@ urlpatterns = [
     # Health check endpoint
     path('health/', health, name='health'),
 
+    # Compatibility redirects for older/incorrect frontend paths hitting /api/invoices/... directly
+    # Redirect to the correct finance endpoints to avoid 404s when 'finance' segment is missing.
+    re_path(r'^api/invoices/(?P<pk>\d+)/stk_push(?:\.html)?/?$',
+            lambda request, pk: HttpResponseRedirect(f"/api/finance/invoices/{pk}/stk_push/")),
+    re_path(r'^api/invoices/(?P<pk>\d+)/coop_stk(?:\.html)?/?$',
+            lambda request, pk: HttpResponseRedirect(f"/api/finance/invoices/{pk}/coop_stk/")),
+
+    # Also normalize accidental .html and missing slash for already-correct finance paths
+    re_path(r'^api/finance/invoices/(?P<pk>\d+)/stk_push(?:\.html)?$',
+            lambda request, pk: HttpResponseRedirect(f"/api/finance/invoices/{pk}/stk_push/")),
+    re_path(r'^api/finance/invoices/(?P<pk>\d+)/coop_stk(?:\.html)?$',
+            lambda request, pk: HttpResponseRedirect(f"/api/finance/invoices/{pk}/coop_stk/")),
+
     # Django admin available at the standard /admin/ path
     path('admin/', admin.site.urls),
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),

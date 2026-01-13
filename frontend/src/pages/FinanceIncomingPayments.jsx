@@ -72,9 +72,21 @@ export default function FinanceIncomingPayments(){
     try{
       const fd = new FormData()
       fd.append('file', file)
-      fd.append('auto_match', String(!!autoMatchOnImport))
-      await api.post('/finance/incoming-payments/import-csv/', fd, { headers: { 'Content-Type': 'multipart/form-data' }})
+      // Default source to bank; Co-op specific uploads can be added later via a dropdown
+      fd.append('source', 'bank')
+      await api.post('/finance/incoming-payments/import_statement/', fd, { headers: { 'Content-Type': 'multipart/form-data' }})
+      // Reload list after import
       await load()
+      // Optionally auto-match immediately
+      if (autoMatchOnImport){
+        try{
+          await api.post('/finance/incoming-payments/auto_match/', { status: 'pending' })
+          await load()
+        }catch(err){
+          // Surface but do not block the import flow
+          alert(err?.response?.data?.detail || err?.message || 'Auto-match after import failed')
+        }
+      }
     }catch(err){
       alert(err?.response?.data?.detail || err?.message || 'Import failed')
     }finally{

@@ -28,6 +28,11 @@ export default function FinancePayments(){
   const [studentResults, setStudentResults] = useState([])
   const [searchingStudents, setSearchingStudents] = useState(false)
   const [enabledMethods, setEnabledMethods] = useState(['cash','mpesa','bank','cheque'])
+  const [reconFile, setReconFile] = useState(null)
+  const [reconSource, setReconSource] = useState('coop')
+  const [reconBusy, setReconBusy] = useState(false)
+  const [reconMessage, setReconMessage] = useState('')
+  const [reconError, setReconError] = useState('')
 
   useEffect(()=>{ load() }, [tab])
 
@@ -108,6 +113,65 @@ export default function FinancePayments(){
       setSubmitError(msg)
     }finally{
       setSubmitting(false)
+    }
+  }
+
+  async function uploadStatement(e){
+    e?.preventDefault?.()
+    setReconError('')
+    setReconMessage('')
+    if (!reconFile){
+      setReconError('Choose a CSV statement file to upload.')
+      return
+    }
+    setReconBusy(true)
+    try {
+      const form = new FormData()
+      form.append('file', reconFile)
+      form.append('source', reconSource)
+      const { data } = await api.post('/finance/incoming-payments/import_statement/', form, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      })
+      setReconMessage(`Imported ${data.imported || 0} record(s), skipped ${data.skipped || 0}.`)
+      setReconFile(null)
+      if (e?.target?.reset) e.target.reset()
+    } catch(err){
+      const msg = err?.response?.data?.detail || err?.message || 'Failed to upload statement'
+      setReconError(msg)
+    } finally {
+      setReconBusy(false)
+    }
+  }
+
+  async function runAutoMatch(){
+    setReconError('')
+    setReconMessage('')
+    setReconBusy(true)
+    try{
+      const { data } = await api.post('/finance/incoming-payments/auto_match/', { status: 'pending' })
+      setReconMessage(`Auto-matched ${data.matched || 0} incoming payment(s).`)
+    }catch(err){
+      const msg = err?.response?.data?.detail || err?.message || 'Failed to auto-match payments'
+      setReconError(msg)
+    }finally{
+      setReconBusy(false)
+    }
+  }
+
+  async function runAutoReconcile(){
+    setReconError('')
+    setReconMessage('')
+    setReconBusy(true)
+    try{
+      const payload = { limit: 200, min_confidence: 0.95, method: 'bank' }
+      if (reconSource) payload.source = reconSource
+      const { data } = await api.post('/finance/incoming-payments/auto_reconcile/', payload)
+      setReconMessage(`Reconciled ${data.reconciled || 0} incoming payment(s). Allocated total ${Number(data.total_allocated || 0).toLocaleString()}.`)
+    }catch(err){
+      const msg = err?.response?.data?.detail || err?.message || 'Failed to auto-reconcile payments'
+      setReconError(msg)
+    }finally{
+      setReconBusy(false)
     }
   }
 
@@ -283,16 +347,58 @@ export default function FinancePayments(){
             </table>
           </div>
         </div>
-        <div className="bg-white rounded-xl border shadow-md p-4">
-          <div className="text-sm font-medium text-gray-700 mb-2">Method contribution</div>
-          <div className="flex flex-col sm:flex-row items-center gap-4">
-            <div className="w-32 h-32 sm:w-40 sm:h-40"><Doughnut data={doughnutData} options={{ plugins:{ legend:{ display:false }}}} /></div>
-            <div className="text-sm space-y-2 text-center sm:text-left">
-              <div className="flex items-center gap-2"><span className="inline-block w-3 h-3 rounded bg-yellow-400" /> Cash <span className="ml-2 font-semibold tabular-nums">{totalsByMethod.CASH.toLocaleString()}</span></div>
-              <div className="flex items-center gap-2"><span className="inline-block w-3 h-3 rounded bg-green-400" /> Mpesa <span className="ml-2 font-semibold tabular-nums">{totalsByMethod.MPESA.toLocaleString()}</span></div>
-              <div className="flex items-center gap-2"><span className="inline-block w-3 h-3 rounded bg-blue-400" /> Bank <span className="ml-2 font-semibold tabular-nums">{totalsByMethod.BANK.toLocaleString()}</span></div>
-              <div className="pt-2 text-xs text-gray-500">Based on current filter</div>
+        <div className="space-y-4">
+          <div className="bg-white rounded-xl border shadow-md p-4">
+            <div className="text-sm font-medium text-gray-700 mb-2">Method contribution</div>
+            <div className="flex flex-col sm:flex-row items-center gap-4">
+              <div className="w-32 h-32 sm:w-40 sm:h-40"><Doughnut data={doughnutData} options={{ plugins:{ legend:{ display:false }}}} /></div>
+              <div className="text-sm space-y-2 text-center sm:text-left">
+                <div className="flex items-center gap-2"><span className="inline-block w-3 h-3 rounded bg-yellow-400" /> Cash <span className="ml-2 font-semibold tabular-nums">{totalsByMethod.CASH.toLocaleString()}</span></div>
+                <div className="flex items-center gap-2"><span className="inline-block w-3 h-3 rounded bg-green-400" /> Mpesa <span className="ml-2 font-semibold tabular-nums">{totalsByMethod.MPESA.toLocaleString()}</span></div>
+                <div className="flex items-center gap-2"><span className="inline-block w-3 h-3 rounded bg-blue-400" /> Bank <span className="ml-2 font-semibold tabular-nums">{totalsByMethod.BANK.toLocaleString()}</span></div>
+                <div className="pt-2 text-xs text-gray-500">Based on current filter</div>
+              </div>
             </div>
+          </div>
+
+          <div className="bg-white rounded-xl border shadow-md p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="text-sm font-medium text-gray-800">Bank / Co-op Reconciliation</div>
+              <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold bg-sky-50 text-sky-700 border border-sky-100">Beta</span>
+            </div>
+            {reconError && (
+              <div className="text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded px-3 py-2">{reconError}</div>
+            )}
+            {reconMessage && (
+              <div className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-3 py-2">{reconMessage}</div>
+            )}
+            <form onSubmit={uploadStatement} className="space-y-2 text-xs">
+              <div className="flex flex-col gap-2">
+                <label className="text-gray-600">Statement file (CSV)</label>
+                <input type="file" accept=".csv" onChange={e=>setReconFile(e.target.files?.[0] || null)} className="block w-full text-xs text-gray-700 file:mr-2 file:py-1.5 file:px-3 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-gray-900 file:text-white hover:file:bg-gray-800" />
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-gray-600">Source</span>
+                <select value={reconSource} onChange={e=>setReconSource(e.target.value)} className="px-2 py-1 border rounded text-xs">
+                  <option value="coop">Co-op</option>
+                  <option value="bank">Other bank</option>
+                </select>
+              </div>
+              <div className="flex flex-wrap gap-2 pt-1">
+                <button type="submit" disabled={reconBusy} className={`px-3 py-1.5 rounded-lg text-xs font-medium text-white ${reconBusy ? 'bg-gray-400' : 'bg-gray-900 hover:bg-gray-800'}`}>
+                  {reconBusy ? 'Uploading...' : 'Upload statement'}
+                </button>
+                <button type="button" disabled={reconBusy} onClick={runAutoMatch} className="px-3 py-1.5 rounded-lg text-xs font-medium border bg-white hover:bg-gray-50">
+                  Auto-match
+                </button>
+                <button type="button" disabled={reconBusy} onClick={runAutoReconcile} className="px-3 py-1.5 rounded-lg text-xs font-medium text-white bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400">
+                  Auto-reconcile
+                </button>
+              </div>
+              <p className="text-[11px] text-gray-500 leading-snug">
+                Deposits using <span className="font-mono">Account#Admission</span> will be matched to students. High-confidence matches are allocated to invoices and SMS is sent automatically.
+              </p>
+            </form>
           </div>
         </div>
       </div>

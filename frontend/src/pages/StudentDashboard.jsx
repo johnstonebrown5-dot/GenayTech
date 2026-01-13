@@ -18,6 +18,7 @@ export default function StudentDashboard(){
   const [showPay, setShowPay] = useState(false)
   const [selectedInvoice, setSelectedInvoice] = useState(null)
   const [payForm, setPayForm] = useState({ amount: '', method: 'mpesa', reference: '', phone: '' })
+  const [paySimulate, setPaySimulate] = useState(true)
   const [payError, setPayError] = useState('')
   const [paySubmitting, setPaySubmitting] = useState(false)
   const [stkStatus, setStkStatus] = useState('idle') // idle | initiating | sent | polling | fetching | success | failed
@@ -118,6 +119,53 @@ export default function StudentDashboard(){
     return Array.from(buckets.entries())
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([label, total]) => ({ label, avg: total }))
+  }, [invoices])
+
+  // Build fee statement rows from invoices and their embedded payments
+  const feeStatement = useMemo(() => {
+    try {
+      const rows = []
+      const list = Array.isArray(invoices) ? invoices : (invoices?.results || [])
+      for (const inv of list) {
+        const invDate = inv.created_at || inv.due_date || inv.date || inv.updated_at
+        rows.push({
+          type: 'invoice',
+          date: invDate,
+          ref: inv.reference || `Invoice #${inv.id}`,
+          description: inv.description || inv.term_label || (inv.category_detail?.name || 'Tuition'),
+          debit: Number(inv.amount || 0),
+          credit: 0,
+          status: inv.status || 'unpaid',
+        })
+        const pays = Array.isArray(inv.payments) ? inv.payments : []
+        for (const p of pays) {
+          rows.push({
+            type: 'payment',
+            date: p.created_at,
+            ref: p.reference || `PAY-${p.id}`,
+            description: `Payment (${String(p.method || '').toUpperCase()})`,
+            debit: 0,
+            credit: Number(p.amount || 0),
+            status: 'payment',
+          })
+        }
+      }
+      // Sort by date ascending
+      rows.sort((a,b)=>{
+        const da = new Date(a.date||0).getTime() || 0
+        const db = new Date(b.date||0).getTime() || 0
+        if (da !== db) return da - db
+        // Ensure payments come after invoice on same timestamp
+        if (a.type !== b.type) return a.type === 'invoice' ? -1 : 1
+        return 0
+      })
+      // Running balance: debit increases, credit decreases
+      let balance = 0
+      return rows.map(r => {
+        balance = balance + (Number(r.debit||0)) - (Number(r.credit||0))
+        return { ...r, balance }
+      })
+    } catch { return [] }
   }, [invoices])
 
   const groupedExamResults = useMemo(() => {
@@ -228,12 +276,12 @@ export default function StudentDashboard(){
     setSelectedInvoice(invoice)
     setPayForm({ amount: '', method: 'mpesa', reference: '' })
     setPayError('')
+    setPaySimulate(true)
     setShowPay(true)
   }
 
   const submitPay = async (e) => {
     e.preventDefault()
-    if (!selectedInvoice) return
     setPaySubmitting(true)
     setPayError('')
     try {
@@ -243,36 +291,39 @@ export default function StudentDashboard(){
         setPaySubmitting(false)
         return
       }
-      // If M-Pesa, run STK via Co-op instead of manual recording
+      // If M-Pesa, run STK via Co-op instead of manual recording.
+      // Now support paying overall balance (no specific invoice) using pay_balance_stk.
       if (String(payForm.method).toLowerCase()==='mpesa'){
         if (!payForm.phone) { setPayError('Phone number required for STK'); setPaySubmitting(false); return }
         setStkStatus('initiating')
-        // Baseline: current invoice status from my_invoices (students have access)
-        const beforeInv = await api.get('/finance/invoices/my/')
-        const beforeList = Array.isArray(beforeInv.data) ? beforeInv.data : (beforeInv.data?.results || [])
-        const beforeItem = beforeList.find(x => Number(x.id) === Number(selectedInvoice.id))
-        const beforeStatus = beforeItem?.status || 'unpaid'
-        await api.post(`/finance/invoices/${selectedInvoice.id}/coop_stk/`, {
-          phone: String(payForm.phone).trim(),
+        // Baseline: overall summary before push
+        const beforeSumRes = await api.get('/finance/invoices/my-summary/')
+        const beforeBalance = Number(beforeSumRes?.data?.balance || 0)
+        // Normalize phone: 07XXXXXXXX -> 2547XXXXXXXX; accept +2547XXXXXXXX
+        let phone = String(payForm.phone).trim()
+        if (phone.startsWith('+')) phone = phone.slice(1)
+        if (phone.startsWith('0') && phone.length === 10) phone = '254' + phone.slice(1)
+        // Use balance STK endpoint (no invoice required)
+        await api.post('/finance/invoices/pay_balance_stk/', {
+          phone,
           amount: payload.amount,
-          simulate: false,
+          simulate: paySimulate,
         })
         setStkStatus('sent')
-        // Poll up to 60s for invoice status change (unpaid -> partial/paid)
+        // Poll up to 60s for balance change
         setStkStatus('polling')
         const started = Date.now()
         let updated = false
         while (Date.now() - started < 60000) {
           await new Promise(r=>setTimeout(r, 3000))
-          const pollInv = await api.get('/finance/invoices/my/')
-          const list = Array.isArray(pollInv.data) ? pollInv.data : (pollInv.data?.results || [])
-          const item = list.find(x => Number(x.id) === Number(selectedInvoice.id))
-          const nowStatus = item?.status || beforeStatus
-          if (nowStatus !== beforeStatus && (nowStatus === 'partial' || nowStatus === 'paid')) { updated = true; break }
+          const pollSum = await api.get('/finance/invoices/my-summary/')
+          const nowBal = Number(pollSum?.data?.balance || beforeBalance)
+          if (nowBal !== beforeBalance) { updated = true; break }
         }
         if (!updated){ setPayError('STK sent, but no confirmation yet. It may complete later.'); setStkStatus('failed') }
         else { setStkStatus('success') }
       } else {
+        if (!selectedInvoice) { setPayError('Please select an invoice'); setPaySubmitting(false); return }
         await api.post(`/finance/invoices/${selectedInvoice.id}/pay/`, payload)
       }
       // Refresh
@@ -284,7 +335,13 @@ export default function StudentDashboard(){
       setSummary(sumRes.data)
       setShowPay(false)
     } catch (err) {
-      setPayError(err?.response?.data ? (err.response.data.detail || JSON.stringify(err.response.data)) : (err?.message || 'Payment failed'))
+      try{
+        const raw = err?.response?.data
+        const msg = typeof raw === 'string' ? raw.replace(/<[^>]+>/g,'').slice(0,300) : (raw?.detail || err?.message)
+        setPayError(msg || 'Payment failed')
+      }catch{
+        setPayError(err?.message || 'Payment failed')
+      }
     } finally {
       setPaySubmitting(false)
     }
@@ -297,211 +354,156 @@ export default function StudentDashboard(){
       {error && <div className="-mx-3 sm:mx-0 bg-red-50 text-red-700 p-3 sm:p-3 rounded-none sm:rounded">{error}</div>}
 
   {currentTab === 'dashboard' && (
-    <div className="-mx-3 sm:mx-0 bg-white/95 backdrop-blur-xl border border-slate-200/70 shadow-[0_18px_45px_rgba(15,23,42,0.08)] rounded-none sm:rounded-3xl pt-4 pb-6 px-4 sm:p-6">
-      <h2 className="text-xs font-semibold tracking-[0.18em] text-slate-500 uppercase mb-1">Overview</h2>
-      <p className="text-base sm:text-lg font-semibold text-slate-900 mb-4">Dashboard</p>
+    <div className="space-y-6">
+      {/* Welcome banner */}
+      <div className="bg-green-600 text-white rounded shadow p-3 flex items-center justify-between">
+        <div className="font-medium">Welcome {student?.name ? String(student.name).toUpperCase() : ''}</div>
+        <div className="text-xs opacity-90">Dashboard</div>
+      </div>
 
-      <div className="mt-1 grid gap-4 lg:gap-5 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,2fr)_minmax(260px,1fr)]">
-        {/* Column 1: Fees summary */}
-        <div className="space-y-4 order-1">
-          {/* Fees / balance summary */}
-          <div className="space-y-2.5">
-            {/* Balance - primary card (compact) */}
-            <div className="flex items-center gap-2.5 rounded-2xl bg-gradient-to-r from-emerald-600 to-emerald-500 text-white shadow-md px-3 py-2.5 active:scale-[0.99] transition-transform">
-              <div className="flex items-center justify-center w-8 h-8 rounded-full bg-white/15 text-white text-lg">
-                💰
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="text-[10px] font-medium uppercase tracking-[0.18em] text-white/80">Balance</div>
-                <div className="text-xl font-semibold tracking-tight truncate">{money(Number(summary.balance || 0))}</div>
-              </div>
-            </div>
+      {/* Quick actions removed as per request */}
 
-            {/* Total Billed */}
-            <div className="flex items-center gap-2.5 rounded-2xl bg-white shadow-sm border border-slate-200 px-3 py-2.5 active:scale-[0.99] transition-transform">
-              <div className="flex items-center justify-center w-8 h-8 rounded-full bg-amber-100 text-amber-700 text-lg">
-                🧾
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="text-[11px] font-medium text-slate-500 uppercase tracking-wide">Total Billed</div>
-                <div className="text-base font-semibold text-slate-900 truncate">{money(Number(summary.total_billed || 0))}</div>
-              </div>
-            </div>
-
-            {/* Total Paid */}
-            <div className="flex items-center gap-2.5 rounded-2xl bg-white shadow-sm border border-slate-200 px-3 py-2.5 active:scale-[0.99] transition-transform">
-              <div className="flex items-center justify-center w-8 h-8 rounded-full bg-emerald-100 text-emerald-700 text-lg">
-                💳
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="text-[11px] font-medium text-slate-500 uppercase tracking-wide">Total Paid</div>
-                <div className="text-base font-semibold text-slate-900 truncate">{money(Number(summary.total_paid || 0))}</div>
-              </div>
-              {summary.total_paid && summary.total_billed ? (
-                <span className="text-xs font-semibold px-2 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                  {Math.round((summary.total_paid / Math.max(1, summary.total_billed)) * 100)}%
-                </span>
-              ) : null}
-            </div>
-          </div>
+      {/* Summary cards */}
+      <div className="grid md:grid-cols-3 gap-3 sm:gap-4">
+        <div className="bg-amber-500 text-white rounded shadow p-3 sm:p-4">
+          <div className="text-xs sm:text-sm opacity-90">Total Billed</div>
+          <div className="text-xl sm:text-2xl font-semibold">{money(summary.total_billed)}</div>
+          <div className="text-[10px] sm:text-xs mt-1 opacity-90">All time invoiced</div>
         </div>
-
-        {/* Column 2: Personal details + performance graph + latest exam summary */}
-        <div className="space-y-4 order-3 lg:order-2">
-          {student && (
-            <div className="bg-white/80 backdrop-blur border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
-              <div className="px-4 sm:px-5 py-3 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-slate-50/70">
-                <div>
-                  <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Profile</div>
-                  <h2 className="text-base sm:text-lg font-semibold text-slate-900">Personal details</h2>
-                </div>
-                <button
-                  className="self-start sm:self-auto text-sm px-3 py-1.5 rounded-full bg-slate-900 text-white hover:bg-slate-700 transition"
-                  onClick={() => {
-                    setEditError('');
-                    setEditForm({ email: student.email || '', phone: student.guardian_id || '', address: student.address || '' });
-                    setShowEdit(true);
-                  }}
-                >Edit</button>
-              </div>
-              <div className="px-4 sm:px-5 py-4 sm:py-5 space-y-5">
-                <section className="space-y-3">
-                  <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 sm:gap-x-8 gap-y-3 text-sm">
-                    <div>
-                      <dt className="text-slate-500">Full Name</dt>
-                      <dd className="font-semibold text-slate-900 uppercase">{student.name}</dd>
-                    </div>
-                    <div>
-                      <dt className="text-slate-500">Gender</dt>
-                      <dd className="font-medium text-slate-900">{student.gender || '-'}</dd>
-                    </div>
-                    <div>
-                      <dt className="text-slate-500">Date of Birth</dt>
-                      <dd className="font-medium text-slate-900">{student.dob || '-'}</dd>
-                    </div>
-                    <div>
-                      <dt className="text-slate-500">Passport No</dt>
-                      <dd className="font-medium text-slate-900">{student.passport_no || '-'}</dd>
-                    </div>
-                    <div>
-                      <dt className="text-slate-500">Class</dt>
-                      <dd className="font-medium text-slate-900">{classLabel || '-'}</dd>
-                    </div>
-                  </dl>
-                </section>
-                <section className="space-y-3">
-                  <h3 className="text-xs font-semibold text-slate-500 tracking-[0.18em] uppercase">Contact & guardian</h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-                    <div className="p-3 sm:p-3.5 rounded-xl border border-slate-200 bg-slate-50/80">
-                      <div className="text-slate-500">Email</div>
-                      <div className="font-medium text-slate-900 break-words">{student.email || '-'}</div>
-                    </div>
-                    <div className="p-3 sm:p-3.5 rounded-xl border border-slate-200 bg-slate-50/80">
-                      <div className="text-slate-500">Parent/Guardian Phone</div>
-                      <div className="font-medium text-slate-900">{student.guardian_id || '-'}</div>
-                    </div>
-                    <div className="sm:col-span-2 p-3 sm:p-3.5 rounded-xl border border-slate-200 bg-slate-50/80">
-                      <div className="text-slate-500">Postal Address</div>
-                      <div className="font-medium text-slate-900">{student.address || '-'}</div>
-                    </div>
-                  </div>
-                </section>
-              </div>
-            </div>
-          )}
-
-          {/* Performance graph */}
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-5">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-semibold text-slate-900">Performance graph</h3>
-              {latestExamLabel && (
-                <span className="text-xs text-slate-500">Latest: {latestExamLabel}</span>
-              )}
-            </div>
-            {Array.isArray(performance) && performance.length > 0 ? (
-              <ResponsiveLine data={performance} />
-            ) : (
-              <div className="text-sm text-slate-500">No exam performance data yet.</div>
-            )}
-          </div>
-
-          {/* Latest exam summary */}
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-5">
-            <h3 className="text-sm font-semibold text-slate-900 mb-1">Latest exam summary</h3>
-            <p className="text-xs text-slate-500 mb-3">Quick snapshot of your most recent published exam.</p>
-            {latestExamLabel ? (
-              <div className="space-y-2 text-sm">
-                <div className="flex items-center justify-between">
-                  <span className="text-slate-500">Exam</span>
-                  <span className="font-medium text-slate-900">{latestExamLabel}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-slate-500">Average mark</span>
-                  <span className="font-semibold text-emerald-600">{reportTotals.average.toFixed(1)}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-slate-500">Subjects</span>
-                  <span className="font-medium text-slate-900">{reportRows.length}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-slate-500">Position (latest exam)</span>
-                  <span className="font-medium text-slate-900">-</span>
-                </div>
-              </div>
-            ) : (
-              <div className="text-sm text-slate-500">Your latest exam summary will appear here once results are published.</div>
-            )}
-          </div>
+        <div className="bg-green-600 text-white rounded shadow p-3 sm:p-4">
+          <div className="text-xs sm:text-sm opacity-90">Total Paid</div>
+          <div className="text-xl sm:text-2xl font-semibold">{money(summary.total_paid)}</div>
+          <div className="text-[10px] sm:text-xs mt-1 opacity-90">All time payments</div>
         </div>
+        <div className="bg-sky-600 text-white rounded shadow p-3 sm:p-4">
+          <div className="text-xs sm:text-sm opacity-90">Balance</div>
+          <div className="text-xl sm:text-2xl font-semibold">{money(summary.balance)}</div>
+          <div className="text-[10px] sm:text-xs mt-1 opacity-90">Outstanding</div>
+        </div>
+      </div>
 
-        {/* Column 3: Photo + calendar */}
-        <div className="space-y-4 order-2 lg:order-3">
-          {student && (
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-5 flex flex-col items-center text-center gap-3">
-              <div className="relative w-28 h-28 sm:w-32 sm:h-32 rounded-2xl overflow-hidden border border-slate-200 shadow-inner bg-white/60 flex items-center justify-center">
+      {/* User Profile */}
+      {student && (
+        <div className="bg-white rounded shadow p-0 overflow-hidden">
+          <div className="border-b px-4 py-2 font-medium flex items-center justify-between">
+            <span>User Profile</span>
+            <button
+              onClick={() => { setEditError(''); setEditForm({ email: student.email || '', phone: student.guardian_id || '', address: student.address || '' }); setShowEdit(true) }}
+              className="inline-flex items-center gap-1 px-2 py-1 rounded bg-indigo-600 text-white hover:bg-indigo-700 text-xs"
+              title="Edit Details"
+            >
+              <span>✏️</span>
+              <span className="hidden sm:inline">Edit</span>
+            </button>
+          </div>
+          <div className="grid md:grid-cols-3 gap-0">
+            <div className="p-4 border-r">
+              <div className="w-40 h-40 bg-gray-100 rounded overflow-hidden flex items-center justify-center">
                 {student.photo_url ? (
                   <img src={student.photo_url} alt="Student" className="w-full h-full object-cover" />
                 ) : (
-                  <div className="text-slate-300 text-5xl">👤</div>
+                  <div className="text-gray-400 text-6xl">👤</div>
                 )}
               </div>
               {student.admission_no && (
-                <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-50 text-slate-700 text-xs font-medium border border-slate-200">
-                  <span className="text-base" aria-hidden>🆔</span>
-                  {student.admission_no}
-                </span>
-              )}
-              {classLabel && (
-                <div className="text-xs text-slate-600 font-medium">{classLabel}</div>
+                <div className="mt-3 text-sm text-gray-600">{student.admission_no}</div>
               )}
             </div>
-          )}
-
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-5">
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="text-sm font-semibold text-slate-900">Calendar</h3>
-              <span className="text-xs text-slate-500">{calendarDays.monthLabel}</span>
-            </div>
-            <div className="grid grid-cols-7 gap-1 text-[11px] text-slate-500 mb-1">
-              {['S','M','T','W','T','F','S'].map(d => (
-                <div key={d} className="text-center font-medium">{d}</div>
-              ))}
-            </div>
-            <div className="grid grid-cols-7 gap-1 text-xs">
-              {calendarDays.days.map(day => (
-                <div
-                  key={day.key}
-                  className={`h-7 flex items-center justify-center rounded-full ${day.label
-                    ? day.isToday
-                      ? 'bg-violet-600 text-white font-semibold'
-                      : 'text-slate-700 hover:bg-slate-100'
-                    : ''}`}
-                >
-                  {day.label}
+            <div className="md:col-span-2 p-4">
+              <div className="text-gray-700 font-medium mb-3">Personal Information</div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-y-3 gap-x-6 text-sm">
+                <div>
+                  <div className="text-gray-500">Full Name</div>
+                  <div className="font-medium uppercase">{student.name}</div>
                 </div>
-              ))}
+                <div>
+                  <div className="text-gray-500">Phone Number</div>
+                  <div className="font-medium">{student.guardian_id || '-'}</div>
+                </div>
+                <div>
+                  <div className="text-gray-500">Gender</div>
+                  <div className="font-medium">{student.gender || '-'}</div>
+                </div>
+                <div>
+                  <div className="text-gray-500">Boarding Status</div>
+                  <div className="font-medium capitalize">{student.boarding_status || 'day'}</div>
+                </div>
+                <div>
+                  <div className="text-gray-500">Date of Birth</div>
+                  <div className="font-medium">{student.dob || '-'}</div>
+                </div>
+                <div>
+                  <div className="text-gray-500">Class</div>
+                  <div className="font-medium">{classLabel}</div>
+                </div>
+                <div>
+                  <div className="text-gray-500">Passport No</div>
+                  <div className="font-medium">{student.passport_no || '-'}</div>
+                </div>
+                <div>
+                  <div className="text-gray-500">Email</div>
+                  <div className="font-medium">{student.email || '-'}</div>
+                </div>
+                <div className="md:col-span-2">
+                  <div className="text-gray-500">Postal Address</div>
+                  <div className="font-medium">{student.address || '-'}</div>
+                </div>
+              </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Assessments & Attendance */}
+      <div className="grid md:grid-cols-2 gap-6">
+        <div className="bg-white rounded shadow p-4">
+          <h2 className="font-medium mb-2">Assessments</h2>
+          {!Array.isArray(assessments) || assessments.length === 0 ? (
+            <div className="text-sm text-gray-500">No assessments yet.</div>
+          ) : (
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr>
+                  <th>Competency</th>
+                  <th>Level</th>
+                  <th>Date</th>
+                </tr>
+              </thead>
+              <tbody>
+                {assessments.map(a => (
+                  <tr key={a.id} className="border-top border-t">
+                    <td>{a.competency}</td>
+                    <td>{a.level}</td>
+                    <td>{a.date}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        <div className="bg-white rounded shadow p-4">
+          <h2 className="font-medium mb-2">Attendance</h2>
+          {!Array.isArray(attendance) || attendance.length === 0 ? (
+            <div className="text-sm text-gray-500">No attendance records yet.</div>
+          ) : (
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {attendance.map(at => (
+                  <tr key={at.id} className="border-t">
+                    <td>{at.date}</td>
+                    <td className="capitalize">{at.status}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
       </div>
     </div>
@@ -512,48 +514,68 @@ export default function StudentDashboard(){
       <h2 className="text-xs font-semibold tracking-[0.18em] text-slate-500 uppercase mb-1">Finance</h2>
       <p className="text-base sm:text-lg font-semibold text-slate-900 mb-4">Fees & payments</p>
 
-      {/* Summary row */}
-      <div className="grid md:grid-cols-3 gap-3 mb-5">
-        <div className="rounded-2xl bg-gradient-to-r from-emerald-600 to-emerald-500 text-white shadow-md px-3 py-3 flex flex-col justify-center">
-          <span className="text-[10px] font-medium uppercase tracking-[0.18em] text-white/80">Balance</span>
-          <span className="text-xl font-semibold tracking-tight">{money(Number(summary.balance || 0))}</span>
-        </div>
-        <div className="rounded-2xl bg-white border border-slate-200 px-3 py-3 flex flex-col justify-center">
-          <span className="text-[11px] font-medium text-slate-500 uppercase tracking-wide">Total billed</span>
-          <span className="text-base font-semibold text-slate-900">{money(Number(summary.total_billed || 0))}</span>
-        </div>
-        <div className="rounded-2xl bg-white border border-slate-200 px-3 py-3 flex flex-col justify-center">
-          <span className="text-[11px] font-medium text-slate-500 uppercase tracking-wide">Total paid</span>
-          <span className="text-base font-semibold text-slate-900">{money(Number(summary.total_paid || 0))}</span>
-        </div>
-      </div>
-
-      {/* Invoices list */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-5">
+      {/* Printable Fee Statement */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-5 mb-5" id="fee-statement">
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-semibold text-slate-900">Invoices</h3>
-          <span className="text-xs text-slate-500">{Array.isArray(invoices) ? invoices.length : 0} record(s)</span>
+          <h3 className="text-sm font-semibold text-slate-900">Fee Statement</h3>
+          <div className="flex items-center gap-2">
+            <button
+              className="text-xs px-3 py-1.5 rounded bg-emerald-600 text-white hover:bg-emerald-700 print:hidden"
+              onClick={() => {
+                try{
+                  const list = Array.isArray(invoices) ? invoices : (invoices?.results || [])
+                  const unpaid = list.find(inv => String(inv.status||'').toLowerCase() !== 'paid') || list[0]
+                  if (unpaid) setSelectedInvoice(unpaid)
+                }catch{}
+                setPayForm({ amount: '', method: 'mpesa', reference: '', phone: '' })
+                setPayError('')
+                setShowPay(true)
+              }}
+            >Pay Fees</button>
+            <button
+              className="text-xs px-3 py-1.5 rounded border border-slate-300 hover:bg-slate-50 print:hidden"
+              onClick={() => { try { window.print() } catch {} }}
+            >
+              Print
+            </button>
+          </div>
         </div>
-        {Array.isArray(invoices) && invoices.length > 0 ? (
-          <div className="space-y-2 text-sm max-h-72 overflow-y-auto">
-            {invoices.map(inv => (
-              <div key={inv.id} className="flex items-center justify-between rounded-xl border border-slate-200 px-3 py-2 bg-slate-50/80">
-                <div className="min-w-0">
-                  <div className="font-medium text-slate-900 truncate">{inv.reference || `Invoice #${inv.id}`}</div>
-                  <div className="text-xs text-slate-500 truncate">{inv.description || inv.term_label || ''}</div>
-                </div>
-                <div className="text-right ml-3">
-                  <div className="text-sm font-semibold text-slate-900">{money(inv.balance || inv.amount || 0)}</div>
-                  <div className="text-[11px] uppercase tracking-wide text-slate-500">{inv.status || 'unpaid'}</div>
-                </div>
-              </div>
-            ))}
+        {Array.isArray(feeStatement) && feeStatement.length > 0 ? (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-slate-50 text-slate-600">
+                <tr>
+                  <th className="px-2 py-2">Date</th>
+                  <th className="px-2 py-2">Reference</th>
+                  <th className="px-2 py-2">Description</th>
+                  <th className="px-2 py-2 text-right">Debit</th>
+                  <th className="px-2 py-2 text-right">Credit</th>
+                  <th className="px-2 py-2 text-right">Balance</th>
+                </tr>
+              </thead>
+              <tbody>
+                {feeStatement.map((r, idx) => (
+                  <tr key={idx} className="border-t">
+                    <td className="px-2 py-2 whitespace-nowrap">{r.date ? String(r.date).slice(0,10) : '-'}</td>
+                    <td className="px-2 py-2 whitespace-nowrap">{r.ref}</td>
+                    <td className="px-2 py-2">{r.description}</td>
+                    <td className="px-2 py-2 text-right">{r.debit ? money(r.debit) : ''}</td>
+                    <td className="px-2 py-2 text-right">{r.credit ? money(r.credit) : ''}</td>
+                    <td className="px-2 py-2 text-right font-medium {r.type==='payment' ? 'text-emerald-700' : 'text-slate-900'}">{money(r.balance)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         ) : (
-          <div className="text-sm text-slate-500">You have no invoices yet. New invoices will appear here.</div>
+          <div className="text-sm text-slate-500">No transactions yet. Your detailed statement will appear here.</div>
         )}
+        {/* Minimal print styles to focus on statement */}
+        <style>{`@media print{ body *{ visibility:hidden } #fee-statement, #fee-statement *{ visibility:visible } #fee-statement{ position:absolute; left:0; top:0; width:100% } }`}</style>
       </div>
 
+      
+      
       {/* Payments over time graph */}
       <div className="mt-5 bg-white rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-5">
         <div className="flex items-center justify-between mb-3">
@@ -570,80 +592,100 @@ export default function StudentDashboard(){
 
   {currentTab === 'academics' && (
     <div className="-mx-3 sm:mx-0 bg-white/95 backdrop-blur-xl border border-slate-200/70 shadow-[0_18px_45px_rgba(15,23,42,0.08)] rounded-none sm:rounded-3xl pt-4 pb-6 px-4 sm:p-6">
-      <h2 className="text-xs font-semibold tracking-[0.18em] text-slate-500 uppercase mb-1">Performance</h2>
-      <p className="text-base sm:text-lg font-semibold text-slate-900 mb-3">Academics</p>
-      <div className="grid md:grid-cols-2 gap-6">
-        <div className="bg-white rounded shadow p-4">
-          <div className="flex items-center justify-between mb-1">
-            <h2 className="font-medium">Report Card</h2>
-            <button
-              className="text-sm px-3 py-1.5 rounded bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-60"
-              onClick={() => latestExamLabel ? navigate('/student/report-card') : null}
-              disabled={!latestExamLabel}
-            >{latestExamLabel ? 'View' : 'No Exam Yet'}</button>
-          </div>
-          <p className="text-sm text-gray-600">{latestExamLabel ? `Latest exam: ${latestExamLabel}` : 'Your report card will appear here after the first exam is published.'}</p>
-        </div>
-        <div className="bg-white rounded shadow p-4 border border-dashed border-indigo-200 text-sm text-indigo-700 flex items-center justify-center">
-          <button className="px-3 py-1.5 rounded-full border border-indigo-300 bg-indigo-50 hover:bg-indigo-100" onClick={() => setShowReport(true)} disabled={!latestExamLabel}>
-            View quick report
-          </button>
-        </div>
+      <h2 className="text-[11px] font-semibold tracking-[0.18em] text-slate-500 uppercase mb-1">Performance</h2>
+      <div className="flex items-center justify-between mb-4">
+        <p className="text-lg sm:text-xl font-semibold text-slate-900">Academics</p>
+        <button
+          className="text-xs sm:text-sm px-3 py-1.5 rounded bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-60"
+          onClick={() => latestExamLabel ? navigate('/student/report-card') : null}
+          disabled={!latestExamLabel}
+        >{latestExamLabel ? 'Open Report Card' : 'No Exam Yet'}</button>
       </div>
 
-      <div className="grid md:grid-cols-2 gap-6">
-        <div className="bg-white rounded-xl border border-gray-200 p-4">
-          <h2 className="font-medium mb-2">Assessments</h2>
-          {!Array.isArray(assessments) || assessments.length === 0 ? (
-            <div className="text-sm text-gray-500">No assessments yet.</div>
-          ) : (
-            <table className="w-full text-left text-sm">
-              <thead className="bg-gray-50 text-gray-600">
-                <tr>
-                  <th className="py-2 px-2">Competency</th>
-                  <th className="py-2 px-2">Level</th>
-                  <th className="py-2 px-2">Date</th>
-                </tr>
-              </thead>
-              <tbody>
-                {assessments.map(a => (
-                  <tr key={a.id} className="border-t hover:bg-gray-50">
-                    <td className="py-2 px-2">{a.competency}</td>
-                    <td className="py-2 px-2">{a.level}</td>
-                    <td className="py-2 px-2">{a.date}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
+      {/* Exams list */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-5 mb-6">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="font-medium">Exams</h2>
+          {latestExamLabel && <span className="text-xs text-slate-500">Latest: {latestExamLabel}</span>}
         </div>
-
-        <div className="bg-white rounded-xl border border-gray-200 p-4">
-          <h2 className="font-medium mb-2">Attendance</h2>
-          {!Array.isArray(attendance) || attendance.length === 0 ? (
-            <div className="text-sm text-gray-500">No attendance records yet.</div>
-          ) : (
-            <table className="w-full text-left text-sm">
-              <thead className="bg-gray-50 text-gray-600">
-                <tr>
-                  <th className="py-2 px-2">Date</th>
-                  <th className="py-2 px-2">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {attendance.map(at => (
-                  <tr key={at.id} className="border-t hover:bg-gray-50">
-                    <td className="py-2 px-2">{at.date}</td>
-                    <td className="py-2 px-2 capitalize">{at.status}</td>
+        {Array.isArray(groupedExamResults) && groupedExamResults.length > 0 ? (
+          <>
+            {/* Mobile cards */}
+            <div className="grid gap-2 sm:hidden">
+              {groupedExamResults.map(([name, rows]) => {
+                const total = rows.reduce((s,r)=> s + Number(r.marks||0), 0)
+                const avg = rows.length ? (total / rows.length) : 0
+                const badge = avg >= 75 ? 'bg-emerald-100 text-emerald-700' : avg >= 50 ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700'
+                return (
+                  <div key={name} className="rounded-xl border border-slate-200 p-3 flex items-center justify-between">
+                    <div className="min-w-0">
+                      <div className="font-medium text-slate-900 truncate">{name}</div>
+                      <div className="text-xs text-slate-500">Subjects • {rows.length}</div>
+                    </div>
+                    <span className={`ml-3 text-xs px-2 py-1 rounded-full ${badge}`}>{avg.toFixed(1)}%</span>
+                  </div>
+                )
+              })}
+            </div>
+            {/* Desktop table */}
+            <div className="hidden sm:block overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead className="bg-slate-50 text-slate-600">
+                  <tr>
+                    <th className="py-2 px-3">Exam</th>
+                    <th className="py-2 px-3">Subjects</th>
+                    <th className="py-2 px-3">Average</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
+                </thead>
+                <tbody>
+                  {groupedExamResults.map(([name, rows]) => {
+                    const total = rows.reduce((s,r)=> s + Number(r.marks||0), 0)
+                    const avg = rows.length ? (total / rows.length) : 0
+                    const badge = avg >= 75 ? 'bg-emerald-100 text-emerald-700' : avg >= 50 ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700'
+                    return (
+                      <tr key={name} className="border-t hover:bg-slate-50">
+                        <td className="py-2 px-3 whitespace-nowrap">{name}</td>
+                        <td className="py-2 px-3">{rows.length}</td>
+                        <td className="py-2 px-3"><span className={`px-2 py-0.5 rounded-full text-xs ${badge}`}>{avg.toFixed(1)}%</span></td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </>
+        ) : (
+          <div className="text-sm text-slate-500">No exams yet.</div>
+        )}
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-200 p-4">
+      {/* Attendance */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-5 mb-6">
+        <h2 className="font-medium mb-2">Attendance</h2>
+        {!Array.isArray(attendance) || attendance.length === 0 ? (
+          <div className="text-sm text-gray-500">No attendance records yet.</div>
+        ) : (
+          <table className="w-full text-left text-sm">
+            <thead className="bg-gray-50 text-gray-600">
+              <tr>
+                <th className="py-2 px-2">Date</th>
+                <th className="py-2 px-2">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {attendance.map(at => (
+                <tr key={at.id} className="border-t hover:bg-gray-50">
+                  <td className="py-2 px-2">{at.date}</td>
+                  <td className="py-2 px-2 capitalize">{at.status}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      {/* Performance chart */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-5">
         <h2 className="font-medium mb-3">Performance Over Time</h2>
         {Array.isArray(performance) && performance.length > 0 ? (
           <ResponsiveLine data={performance} />
@@ -701,6 +743,46 @@ export default function StudentDashboard(){
         >
           {editSubmitting ? 'Saving…' : 'Save changes'}
         </button>
+      </div>
+    </form>
+  </Modal>
+
+  <Modal open={showPay} onClose={() => (!paySubmitting && setShowPay(false))} title="Pay Fees" size="sm">
+    <form onSubmit={submitPay} className="space-y-3">
+      {payError && (
+        <div className="bg-red-50 border border-red-200 rounded p-2 text-sm text-red-700">{payError}</div>
+      )}
+      <div className="space-y-1">
+        <label className="block text-sm font-medium text-slate-700">Amount</label>
+        <input
+          type="number"
+          step="0.01"
+          className="w-full border border-slate-300 rounded px-3 py-2 text-sm"
+          value={payForm.amount}
+          onChange={e => setPayForm({ ...payForm, amount: e.target.value })}
+          placeholder="Enter amount"
+        />
+      </div>
+      <div className="space-y-1">
+        <label className="block text-sm font-medium text-slate-700">Phone (M-Pesa)</label>
+        <input
+          type="tel"
+          className="w-full border border-slate-300 rounded px-3 py-2 text-sm"
+          value={payForm.phone}
+          onChange={e => setPayForm({ ...payForm, phone: e.target.value })}
+          placeholder="07XXXXXXXX"
+          maxLength={10}
+          pattern="0\\d{9}"
+          title="Enter a 10-digit phone starting with 0"
+        />
+      </div>
+      <div className="flex items-center justify-between pt-1 text-xs text-slate-500">
+        <span>Method: M-Pesa STK</span>
+        {stkStatus !== 'idle' && <span>Status: {stkStatus}</span>}
+      </div>
+      <div className="flex justify-end gap-2">
+        <button type="button" className="px-4 py-1.5 rounded border text-sm" onClick={() => !paySubmitting && setShowPay(false)} disabled={paySubmitting}>Cancel</button>
+        <button type="submit" className="px-4 py-1.5 rounded bg-emerald-600 text-white text-sm disabled:opacity-60" disabled={paySubmitting || !(Number(payForm.amount) > 0 && /^0\d{9}$/.test(String(payForm.phone||'').trim()))}>{paySubmitting ? 'Processing…' : 'Pay Now'}</button>
       </div>
     </form>
   </Modal>

@@ -15,6 +15,7 @@ import logging
 from communications.utils import notify_payment_received
 from .mpesa import MpesaClient
 from .coop_stk import CoopStkClient
+from .coop_api import CoopApiClient
 from .models import Invoice, Payment, FeeCategory, ClassFee, MpesaConfig, ExpenseCategory, Expense, PocketMoneyWallet, PocketMoneyTransaction, PaymentMethod, IncomingPayment, StudentFee, StaffPayroll, StaffPayslip
 from .serializers import InvoiceSerializer, PaymentSerializer, FeeCategorySerializer, ClassFeeSerializer, MpesaConfigSerializer, ExpenseCategorySerializer, ExpenseSerializer, PocketMoneyWalletSerializer, PocketMoneyTransactionSerializer, PaymentMethodSerializer, IncomingPaymentSerializer, StudentFeeSerializer, StaffPayrollSerializer, StaffPayslipSerializer
 from academics.models import Student
@@ -627,6 +628,271 @@ class IncomingPaymentViewSet(viewsets.ModelViewSet):
             remaining -= alloc
         return created_ids, remaining
 
+    @action(detail=False, methods=['post'], url_path='ingest', parser_classes=[JSONParser])
+    def ingest(self, request):
+        data = request.data or {}
+        source = str(data.get('source') or 'coop').lower()
+        if source not in ('coop', 'bank', 'mpesa'):
+            source = 'coop'
+        amt_raw = data.get('amount') or data.get('transaction_amount') or data.get('TransactionAmount')
+        try:
+            amount = float(amt_raw or 0)
+        except Exception:
+            return Response({'detail': 'Invalid amount'}, status=400)
+        if not amount:
+            return Response({'detail': 'Amount must be greater than 0'}, status=400)
+        external_id = str(data.get('external_id') or data.get('transaction_id') or data.get('TransactionID') or '')[:100]
+        reference = str(data.get('reference') or data.get('transaction_reference') or external_id)[:100]
+        account_ref = str(data.get('account_ref') or data.get('AccountNumber') or data.get('account_number') or '')[:100]
+        narration = str(data.get('narration') or data.get('description') or '')
+        phone = str(data.get('phone') or data.get('MSISDN') or '')[:50]
+        payer_name = str(data.get('payer_name') or data.get('CustomerName') or '')[:255]
+        value_date = data.get('value_date') or data.get('transaction_date') or ''
+        from django.utils.dateparse import parse_datetime, parse_date
+        val_dt = None
+        if value_date:
+            val_dt = parse_datetime(value_date) or None
+            if not val_dt:
+                d = parse_date(value_date)
+                if d is not None:
+                    from datetime import datetime as _dt
+                    val_dt = _dt.combine(d, _dt.min.time())
+        obj, created_flag = IncomingPayment.objects.get_or_create(
+            source=source,
+            external_id=external_id,
+            amount=amount,
+            currency='KES',
+            reference=reference,
+            account_ref=account_ref,
+            defaults={
+                'narration': narration,
+                'phone': phone,
+                'payer_name': payer_name,
+            },
+        )
+        if not created_flag:
+            return Response({'detail': 'Duplicate or existing transaction', 'id': obj.id}, status=200)
+        if val_dt is not None:
+            obj.value_date = val_dt
+            obj.save(update_fields=['value_date'])
+
+        combined = ' '.join(filter(None, [obj.reference, obj.narration, obj.account_ref]))
+        stu, conf = self._find_student_by_any(combined)
+        auto_conf = 0.99
+        if stu:
+            obj.matched_student = stu
+            obj.match_confidence = conf
+            if conf >= auto_conf:
+                method = 'bank'
+                reference_str = obj.reference or obj.external_id or ''
+                created_ids, remaining = self._allocate_fifo(stu, float(obj.amount), method, reference_str, request.user)
+                if created_ids:
+                    obj.status = 'reconciled'
+                    obj.matched_invoice = Invoice.objects.filter(student=stu).order_by('-created_at', '-id').first()
+                else:
+                    obj.status = 'matched'
+            else:
+                obj.status = 'matched'
+            obj.save(update_fields=['matched_student','match_confidence','status','matched_invoice'])
+        return Response({'id': obj.id, 'status': obj.status, 'matched_student': getattr(obj.matched_student, 'id', None), 'match_confidence': obj.match_confidence}, status=201)
+
+    @action(detail=False, methods=['post'], url_path='import_statement', parser_classes=[MultiPartParser, FormParser])
+    def import_statement(self, request):
+        file_obj = request.FILES.get('file') or request.FILES.get('statement')
+        if not file_obj:
+            return Response({'detail': 'Statement file is required (field name "file" or "statement")'}, status=400)
+
+        source = str(request.data.get('source') or 'bank').lower()
+        if source not in ('coop', 'bank'):
+            source = 'bank'
+
+        import csv
+        from io import TextIOWrapper, StringIO
+
+        # Read the uploaded file into text safely. Support generic text-based tables
+        # (CSV, TSV, semicolon separated). If we cannot decode as text, return 400
+        # instead of 500 so the user knows to upload a text export.
+        try:
+            raw = file_obj.read()
+            if not raw:
+                return Response({'detail': 'Uploaded file is empty.'}, status=400)
+            try:
+                text = raw.decode('utf-8')
+            except Exception:
+                try:
+                    text = raw.decode('latin-1')
+                except Exception:
+                    return Response({'detail': 'Unsupported file encoding. Please upload a text-based export (CSV/TSV).'}, status=400)
+        except Exception:
+            return Response({'detail': 'Could not read uploaded file. Please try again or export as CSV.'}, status=400)
+
+        # Try to sniff the delimiter (comma, semicolon, tab, etc.)
+        try:
+            sample = text[:4096]
+            sniffer = csv.Sniffer()
+            dialect = sniffer.sniff(sample)
+            delimiter = dialect.delimiter
+        except Exception:
+            # Fallback to comma
+            delimiter = ','
+
+        reader = csv.DictReader(StringIO(text), delimiter=delimiter)
+        if not reader.fieldnames:
+            return Response({'detail': 'Could not detect columns in the file. Ensure the first row contains headers (e.g., Amount, Reference, AccountNumber).'}, status=400)
+
+        created = 0
+        skipped = 0
+
+        for row in reader:
+            if not row:
+                continue
+            # Normalise keys and values
+            clean_row = { (k or '').strip(): (v.strip() if isinstance(v, str) else v) for k, v in row.items() if k is not None }
+            lower = {k.lower(): v for k, v in clean_row.items()}
+
+            amt_raw = lower.get('amount') or lower.get('amt') or lower.get('transactionamount')
+            ref = lower.get('reference') or lower.get('ref') or lower.get('transactionid') or ''
+            acc_ref = lower.get('account_ref') or lower.get('accountref') or lower.get('account') or lower.get('accountnumber') or ''
+            narr = lower.get('narration') or lower.get('details') or lower.get('description') or ''
+            val_date = lower.get('valuedate') or lower.get('date') or ''
+
+            try:
+                amount = float(amt_raw or 0)
+            except Exception:
+                skipped += 1
+                continue
+            if not amount:
+                skipped += 1
+                continue
+
+            try:
+                obj, created_flag = IncomingPayment.objects.get_or_create(
+                    source=source,
+                    external_id=str(ref or '')[:100],
+                    amount=amount,
+                    currency='KES',
+                    reference=str(ref or '')[:100],
+                    account_ref=str(acc_ref or '')[:100],
+                    defaults={
+                        'narration': narr or '',
+                    },
+                )
+                if not created_flag:
+                    skipped += 1
+                    continue
+                if val_date:
+                    from django.utils.dateparse import parse_datetime, parse_date
+                    dt = parse_datetime(val_date) or None
+                    if not dt:
+                        d = parse_date(val_date)
+                        if d is not None:
+                            from datetime import datetime as _dt
+                            dt = _dt.combine(d, _dt.min.time())
+                    if dt is not None:
+                        obj.value_date = dt
+                        obj.save(update_fields=['value_date'])
+                created += 1
+            except Exception:
+                skipped += 1
+
+        if created == 0 and skipped > 0:
+            # All rows failed; guide the user
+            return Response({'detail': 'No rows could be imported. Ensure the file has columns like Amount, Reference, and AccountNumber or AccountRef.', 'imported': created, 'skipped': skipped}, status=400)
+
+        return Response({'imported': created, 'skipped': skipped}, status=201 if created else 200)
+
+    @action(detail=False, methods=['post'], url_path='fetch_coop')
+    def fetch_coop(self, request):
+        """Fetch transactions from Co-op OpenAPI and ingest as IncomingPayment.
+        Body: {
+          account_number: string (required),
+          date_from: 'YYYY-MM-DD' (required),
+          date_to: 'YYYY-MM-DD' (required),
+          auto_match: bool (optional)
+        }
+        Requires COOP_* env vars to be configured. Uses admission/account refs for matching.
+        """
+        acct = request.data.get('account_number') or request.data.get('account')
+        dfrom = request.data.get('date_from') or request.data.get('from')
+        dto = request.data.get('date_to') or request.data.get('to')
+        if not acct or not dfrom or not dto:
+            return Response({'detail': 'account_number, date_from and date_to are required'}, status=400)
+        try:
+            client = CoopApiClient()
+            items = client.get_transactions(str(acct), str(dfrom), str(dto))
+        except Exception as e:
+            return Response({'detail': f'Co-op API error: {e}'}, status=502)
+
+        created = 0
+        skipped = 0
+        for it in items or []:
+            # Normalize keys to lower-case for safety
+            if isinstance(it, dict):
+                lower = {str(k).lower(): v for k, v in it.items()}
+            else:
+                skipped += 1
+                continue
+            amt_raw = lower.get('amount') or lower.get('transactionamount') or lower.get('creditamount') or lower.get('debitamount')
+            try:
+                amount = float(amt_raw or 0)
+            except Exception:
+                skipped += 1
+                continue
+            if not amount:
+                skipped += 1
+                continue
+            ref = lower.get('reference') or lower.get('ref') or lower.get('transactionid') or lower.get('transactionreference') or ''
+            acc_ref = lower.get('accountref') or lower.get('account_reference') or lower.get('accountnumber') or ''
+            narr = lower.get('narration') or lower.get('description') or lower.get('details') or ''
+            val_date = lower.get('valuedate') or lower.get('transactiondate') or lower.get('date') or ''
+
+            try:
+                obj, created_flag = IncomingPayment.objects.get_or_create(
+                    source='coop',
+                    external_id=str(ref or '')[:100],
+                    amount=amount,
+                    currency='KES',
+                    reference=str(ref or '')[:100],
+                    account_ref=str(acc_ref or '')[:100],
+                    defaults={
+                        'narration': narr or '',
+                    },
+                )
+                if not created_flag:
+                    skipped += 1
+                    continue
+                if val_date:
+                    from django.utils.dateparse import parse_datetime, parse_date
+                    dt = parse_datetime(val_date) or None
+                    if not dt:
+                        d = parse_date(val_date)
+                        if d is not None:
+                            from datetime import datetime as _dt
+                            dt = _dt.combine(d, _dt.min.time())
+                    if dt is not None:
+                        obj.value_date = dt
+                        obj.save(update_fields=['value_date'])
+                created += 1
+            except Exception:
+                skipped += 1
+
+        # Optional auto-match pass after ingestion
+        auto_match = str(request.data.get('auto_match', 'true')).lower() in ('1','true','yes')
+        matched = 0
+        if auto_match and created:
+            qs = self.get_queryset().filter(status='pending', source='coop')[:500]
+            for item in qs:
+                combined = ' '.join(filter(None, [item.reference, item.narration, item.account_ref]))
+                stu, conf = self._find_student_by_any(combined)
+                if stu:
+                    item.matched_student = stu
+                    item.status = 'matched'
+                    item.match_confidence = conf
+                    item.save(update_fields=['matched_student','status','match_confidence'])
+                    matched += 1
+
+        return Response({'imported': created, 'skipped': skipped, 'auto_matched': matched}, status=201 if created else 200)
+
     @action(detail=False, methods=['post'], url_path='auto_match')
     def auto_match(self, request):
         """Try to match pending incoming payments to students by admission number.
@@ -654,6 +920,47 @@ class IncomingPaymentViewSet(viewsets.ModelViewSet):
                 updated += 1
                 results.append({'id': item.id, 'student_id': stu.id, 'admission_no': stu.admission_no, 'confidence': conf})
         return Response({'matched': updated, 'samples': results[:20]})
+
+    @action(detail=False, methods=['post'], url_path='auto_reconcile')
+    def auto_reconcile(self, request):
+        try:
+            limit = int(request.data.get('limit', 200))
+        except Exception:
+            limit = 200
+        if limit <= 0:
+            limit = 200
+        try:
+            min_conf = float(request.data.get('min_confidence', 0.9))
+        except Exception:
+            min_conf = 0.9
+        method = str(request.data.get('method') or 'bank').lower()
+        if method not in ('bank', 'mpesa', 'cash', 'cheque'):
+            method = 'bank'
+        source = request.data.get('source')
+        qs = self.get_queryset().filter(status='matched')
+        if source:
+            qs = qs.filter(source=str(source).lower())
+        qs = qs.filter(match_confidence__gte=min_conf)[:limit]
+        reconciled = 0
+        total_allocated = 0.0
+        items = list(qs)
+        for inc in items:
+            if not inc.matched_student_id:
+                continue
+            student = inc.matched_student
+            if not student:
+                continue
+            reference = inc.reference or inc.external_id or ''
+            amount = float(inc.amount)
+            created_ids, remaining = self._allocate_fifo(student, amount, method, reference, request.user)
+            if created_ids:
+                reconciled += 1
+                total_allocated += (amount - remaining)
+                inc.status = 'reconciled'
+                inc.matched_invoice = Invoice.objects.filter(student=student).order_by('-created_at', '-id').first()
+                inc.notes = (inc.notes or '')
+                inc.save(update_fields=['status','matched_invoice','notes'])
+        return Response({'reconciled': reconciled, 'total_allocated': total_allocated})
 
     @action(detail=True, methods=['post'], url_path='reconcile')
     def reconcile(self, request, pk=None):
@@ -863,43 +1170,46 @@ class IncomingPaymentViewSet(viewsets.ModelViewSet):
         Body: { phone: string, amount?: number, simulate?: bool }
         For demo, if simulate is true (default), record payment immediately.
         """
-        try:
-            invoice = self.get_queryset().get(pk=pk)
-        except Invoice.DoesNotExist:
+        # Fetch by primary key directly; enforce authorization checks below
+        invoice = Invoice.objects.select_related('student', 'student__klass').filter(pk=pk).first()
+        if not invoice:
             return Response({'detail': 'Invoice not found'}, status=404)
 
-        logger = logging.getLogger(__name__)
-        # Students can only initiate STK for their own invoice
-        user = request.user
-        if getattr(user, 'role', None) not in ('admin','finance'):
-            from academics.models import Student as _Student
-            stu_id = _Student.objects.filter(user=user).values_list('id', flat=True).first()
-            if not stu_id or invoice.student_id != stu_id:
-                return Response({'detail': 'Forbidden'}, status=403)
-        phone = (request.data.get('phone') or '').strip()
-        # Normalize phone to 2547XXXXXXXX format required by Daraja
-        if phone.startswith('+'):
-            phone = phone[1:]
-        if phone.startswith('0') and len(phone) == 10:
-            phone = '254' + phone[1:]
-        if not phone:
-            return Response({'detail': 'phone is required'}, status=400)
         try:
-            amount = float(request.data.get('amount') or invoice.amount)
-        except (TypeError, ValueError):
-            return Response({'detail': 'Invalid amount'}, status=400)
-        # Determine credentials: prefer per-school config; fallback to env vars
-        school = getattr(getattr(invoice.student.klass, 'school', None), 'id', None)
-        config = None
-        if school:
-            config = MpesaConfig.objects.filter(school_id=invoice.student.klass.school_id).first()
-        if config:
-            have_creds = all([config.consumer_key, config.consumer_secret, config.short_code, config.passkey])
-        else:
-            required = ('MPESA_CONSUMER_KEY','MPESA_CONSUMER_SECRET','MPESA_SHORT_CODE','MPESA_PASSKEY')
-            have_creds = all(os.getenv(k) for k in required)
-        default_sim = 'false' if have_creds else 'true'
-        simulate = str(request.data.get('simulate', default_sim)).lower() in ('1','true','yes')
+            logger = logging.getLogger(__name__)
+            # Students can only initiate STK for their own invoice
+            user = request.user
+            if getattr(user, 'role', None) not in ('admin','finance'):
+                from academics.models import Student as _Student
+                stu_id = _Student.objects.filter(user=user).values_list('id', flat=True).first()
+                if not stu_id or invoice.student_id != stu_id:
+                    return Response({'detail': 'Forbidden'}, status=403)
+            phone = (request.data.get('phone') or '').strip()
+            # Normalize phone to 2547XXXXXXXX format required by Daraja
+            if phone.startswith('+'):
+                phone = phone[1:]
+            if phone.startswith('0') and len(phone) == 10:
+                phone = '254' + phone[1:]
+            if not phone:
+                return Response({'detail': 'phone is required'}, status=400)
+            try:
+                amount = float(request.data.get('amount') or invoice.amount)
+            except (TypeError, ValueError):
+                return Response({'detail': 'Invalid amount'}, status=400)
+            # Determine credentials: prefer per-school config; fallback to env vars
+            school = getattr(getattr(invoice.student.klass, 'school', None), 'id', None)
+            config = None
+            if school:
+                config = MpesaConfig.objects.filter(school_id=invoice.student.klass.school_id).first()
+            if config:
+                have_creds = all([config.consumer_key, config.consumer_secret, config.short_code, config.passkey])
+            else:
+                required = ('MPESA_CONSUMER_KEY','MPESA_CONSUMER_SECRET','MPESA_SHORT_CODE','MPESA_PASSKEY')
+                have_creds = all(os.getenv(k) for k in required)
+            default_sim = 'false' if have_creds else 'true'
+            simulate = str(request.data.get('simulate', default_sim)).lower() in ('1','true','yes')
+        except Exception as e:
+            return Response({'detail': f'Invalid request: {e}'}, status=400)
 
         # Validate Mpesa method is enabled
         sch = getattr(invoice.student.klass, 'school', None)
@@ -955,40 +1265,94 @@ class IncomingPaymentViewSet(viewsets.ModelViewSet):
         # Fallback mocked when credentials missing
         return Response({'status':'pending','message':'STK credentials not configured; set MPESA_* env vars or use simulate=true.'}, status=202)
 
+    @action(detail=False, methods=['post'], url_path='pay_balance_stk', permission_classes=[permissions.IsAuthenticated])
+    def pay_balance_stk(self, request):
+        """Initiate a Co-op STK push to pay against overall balance (no specific invoice).
+        Body: { phone: string, amount: number, simulate?: bool }
+        Uses AccountReference = student's admission number so callback can auto-allocate FIFO.
+        """
+        # Resolve current student
+        user = request.user
+        stu = Student.objects.filter(user=user).first()
+        if not stu and getattr(user, 'role', None) not in ('admin','finance'):
+            return Response({'detail': 'Not a student account'}, status=403)
+        try:
+            phone = (str(request.data.get('phone') or '').strip())
+            if phone.startswith('+'):
+                phone = phone[1:]
+            if phone.startswith('0') and len(phone) == 10:
+                phone = '254' + phone[1:]
+            if not phone:
+                return Response({'detail': 'phone is required'}, status=400)
+            amount = float(request.data.get('amount') or 0)
+            if amount <= 0:
+                return Response({'detail': 'Amount must be greater than 0'}, status=400)
+        except Exception as e:
+            return Response({'detail': f'Invalid request: {e}'}, status=400)
+
+        # Determine credentials for Co-op
+        have_creds = all(os.getenv(k) for k in ('COOP_CLIENT_ID','COOP_CLIENT_SECRET','COOP_BASE_URL','COOP_TOKEN_URL','COOP_SHORT_CODE','COOP_PASSKEY'))
+        default_sim = 'false' if have_creds else 'true'
+        simulate = str(request.data.get('simulate', default_sim)).lower() in ('1','true','yes')
+
+        # Ensure Mpesa method is enabled for the school if a student is provided
+        sch = getattr(getattr(stu, 'klass', None), 'school', None) if stu else None
+        enabled = self._enabled_methods_for_school(sch)
+        if 'mpesa' not in enabled:
+            return Response({'detail': 'Mpesa payments are disabled by admin'}, status=400)
+
+        if simulate:
+            return Response({'status': 'pending', 'message': 'Balance STK simulated. Configure COOP_* env vars or set simulate=false.'}, status=202)
+
+        if not have_creds:
+            return Response({'status': 'pending', 'message': 'Co-op credentials not configured; set COOP_* env vars or use simulate=true.'}, status=202)
+
+        try:
+            client = CoopStkClient()
+            account_ref = (getattr(stu, 'admission_no', None) or f"STU{getattr(stu, 'id', '0')}")
+            resp = client.stk_push(phone=str(phone), amount=amount, account_ref=account_ref)
+            return Response({'status': 'pending', 'message': 'STK initiated', 'coop': resp}, status=202)
+        except Exception as e:
+            logging.getLogger(__name__).exception('Balance STK initiation failed')
+            return Response({'detail': f'Co-op STK error: {e}'}, status=500)
+
     @action(detail=True, methods=['post'], url_path='coop_stk', permission_classes=[permissions.IsAuthenticated])
     def coop_stk(self, request, pk=None):
         """Initiate a Co-op Bank gateway STK push for this invoice.
         Body: { phone: string, amount?: number, simulate?: bool }
         Uses env vars COOP_* set in backend or server env.
         """
-        try:
-            invoice = self.get_queryset().get(pk=pk)
-        except Invoice.DoesNotExist:
+        # Fetch by primary key directly; enforce authorization checks below
+        invoice = Invoice.objects.select_related('student', 'student__klass').filter(pk=pk).first()
+        if not invoice:
             return Response({'detail': 'Invoice not found'}, status=404)
 
-        logger = logging.getLogger(__name__)
-        phone = (request.data.get('phone') or '').strip()
-        if phone.startswith('+'):
-            phone = phone[1:]
-        if phone.startswith('0') and len(phone) == 10:
-            phone = '254' + phone[1:]
-        if not phone:
-            return Response({'detail': 'phone is required'}, status=400)
         try:
-            amount = float(request.data.get('amount') or invoice.amount)
-        except (TypeError, ValueError):
-            return Response({'detail': 'Invalid amount'}, status=400)
+            logger = logging.getLogger(__name__)
+            phone = (request.data.get('phone') or '').strip()
+            if phone.startswith('+'):
+                phone = phone[1:]
+            if phone.startswith('0') and len(phone) == 10:
+                phone = '254' + phone[1:]
+            if not phone:
+                return Response({'detail': 'phone is required'}, status=400)
+            try:
+                amount = float(request.data.get('amount') or invoice.amount)
+            except (TypeError, ValueError):
+                return Response({'detail': 'Invalid amount'}, status=400)
 
-        # Validate Mpesa method is enabled for the school
-        sch = getattr(invoice.student.klass, 'school', None)
-        enabled = self._enabled_methods_for_school(sch)
-        if 'mpesa' not in enabled:
-            return Response({'detail': 'Mpesa payments are disabled by admin'}, status=400)
+            # Validate Mpesa method is enabled for the school
+            sch = getattr(invoice.student.klass, 'school', None)
+            enabled = self._enabled_methods_for_school(sch)
+            if 'mpesa' not in enabled:
+                return Response({'detail': 'Mpesa payments are disabled by admin'}, status=400)
 
-        # Determine if credentials exist for Co-op client
-        have_creds = all(os.getenv(k) for k in ('COOP_CLIENT_ID','COOP_CLIENT_SECRET','COOP_BASE_URL','COOP_TOKEN_URL','COOP_SHORT_CODE','COOP_PASSKEY'))
-        default_sim = 'false' if have_creds else 'true'
-        simulate = str(request.data.get('simulate', default_sim)).lower() in ('1','true','yes')
+            # Determine if credentials exist for Co-op client
+            have_creds = all(os.getenv(k) for k in ('COOP_CLIENT_ID','COOP_CLIENT_SECRET','COOP_BASE_URL','COOP_TOKEN_URL','COOP_SHORT_CODE','COOP_PASSKEY'))
+            default_sim = 'false' if have_creds else 'true'
+            simulate = str(request.data.get('simulate', default_sim)).lower() in ('1','true','yes')
+        except Exception as e:
+            return Response({'detail': f'Invalid request: {e}'}, status=400)
 
         logger.info("Co-op STK request init", extra={
             'invoice_id': invoice.id,
@@ -1518,22 +1882,109 @@ def mpesa_callback(request):
         invoice.save(update_fields=['status'])
 
     elif result_code == 0 and amount and not invoice:
-        # Create an IncomingPayment for later reconciliation if invoice unknown
-        try:
-            IncomingPayment.objects.create(
-                source='mpesa',
-                external_id=str(checkout_id or ''),
-                amount=float(amount),
-                currency='KES',
-                reference=str(receipt or ''),
-                narration='STK Callback',
-                account_ref=str(account_ref or ''),
-                phone=str(phone or ''),
-                status='pending',
-            )
-        except Exception:
-            pass
+        # Attempt to auto-allocate FIFO by student admission number in account_ref; fallback to inbox
+        allocated = False
+        stu = None
+        if account_ref:
+            stu = Student.objects.filter(admission_no__iexact=str(account_ref).strip()).first()
+        if stu:
+            remaining = float(amount)
+            inv_qs = Invoice.objects.filter(student=stu).order_by('due_date', 'created_at', 'id')
+            for inv in inv_qs:
+                if remaining <= 0:
+                    break
+                paid_so_far = float(inv.payments.aggregate(s=Sum('amount'))['s'] or 0)
+                inv_balance = float(inv.amount) - paid_so_far
+                if inv_balance <= 0:
+                    continue
+                alloc = min(remaining, inv_balance)
+                pay = Payment.objects.create(
+                    invoice=inv,
+                    amount=float(alloc),
+                    method='mpesa',
+                    reference=receipt or (checkout_id or ''),
+                    recorded_by=None,
+                )
+                remaining -= alloc
+                # update invoice status
+                new_paid = paid_so_far + float(alloc)
+                if new_paid >= float(inv.amount):
+                    inv.status = 'paid'
+                elif new_paid > 0:
+                    inv.status = 'partial'
+                else:
+                    inv.status = 'unpaid'
+                inv.save(update_fields=['status'])
+                allocated = True
+        if not allocated:
+            try:
+                IncomingPayment.objects.create(
+                    source='mpesa',
+                    external_id=str(checkout_id or ''),
+                    amount=float(amount),
+                    currency='KES',
+                    reference=str(receipt or ''),
+                    narration='STK Callback',
+                    account_ref=str(account_ref or ''),
+                    phone=str(phone or ''),
+                    status='pending',
+                )
+            except Exception:
+                pass
     # Respond to Daraja per spec
+    # If no invoice was tied to the CheckoutRequestID, try auto-allocate FIFO by account reference
+    if result_code == 0 and not invoice and amount is not None:
+        account_ref = None
+        try:
+            meta_items = stk_cb.get('CallbackMetadata', {}).get('Item', []) if isinstance(stk_cb.get('CallbackMetadata', {}), dict) else []
+            meta = {item.get('Name'): item.get('Value') for item in meta_items if isinstance(item, dict)}
+            account_ref = meta.get('AccountReference') or meta.get('BillRefNumber')
+        except Exception:
+            account_ref = None
+        stu = None
+        if account_ref:
+            stu = Student.objects.filter(admission_no__iexact=str(account_ref).strip()).first()
+        if stu:
+            remaining = float(amount)
+            inv_qs = Invoice.objects.filter(student=stu).order_by('due_date', 'created_at', 'id')
+            for inv in inv_qs:
+                if remaining <= 0:
+                    break
+                paid_so_far = float(inv.payments.aggregate(s=Sum('amount'))['s'] or 0)
+                inv_balance = float(inv.amount) - paid_so_far
+                if inv_balance <= 0:
+                    continue
+                alloc = min(remaining, inv_balance)
+                Payment.objects.create(
+                    invoice=inv,
+                    amount=float(alloc),
+                    method='mpesa',
+                    reference=receipt or (checkout_id or ''),
+                    recorded_by=None,
+                )
+                remaining -= alloc
+                new_paid = paid_so_far + float(alloc)
+                if new_paid >= float(inv.amount):
+                    inv.status = 'paid'
+                elif new_paid > 0:
+                    inv.status = 'partial'
+                else:
+                    inv.status = 'unpaid'
+                inv.save(update_fields=['status'])
+        else:
+            # Fallback to inbox for manual reconciliation
+            try:
+                IncomingPayment.objects.create(
+                    source='mpesa',
+                    external_id=str(checkout_id or ''),
+                    amount=float(amount),
+                    currency='KES',
+                    reference=str(receipt or ''),
+                    narration='Co-op STK Callback',
+                    status='pending',
+                )
+            except Exception:
+                pass
     return JsonResponse({'ResultCode': 0, 'ResultDesc': 'Accepted'})
 
 
