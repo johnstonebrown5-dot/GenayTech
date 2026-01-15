@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import api from '../api'
 import { useAuth } from '../auth'
@@ -351,8 +351,28 @@ function FeesNotifyPanel({ classId }){
                   <td className="px-4 py-2 text-sm">{Number(row.total_paid||0).toFixed(2)}</td>
                   <td className="px-4 py-2 text-sm font-semibold text-rose-700">{Number(row.balance||0).toFixed(2)}</td>
                   <td className="px-4 py-2 text-sm">{row.guardian_phone || '-'}</td>
-                  <td className="px-4 py-2 text-sm">{renderStatus(statuses[String(row.student?.id)]?.sms)}</td>
-                  <td className="px-4 py-2 text-sm">{renderStatus(statuses[String(row.student?.id)]?.email)}</td>
+                  <td className="px-4 py-2 text-sm">{
+                    renderStatusCell({
+                      status: statuses[String(row.student?.id)]?.sms,
+                      onResend: async () => {
+                        try{
+                          await api.post(`/academics/classes/${classId}/fees-resend/`, { student_id: row.student?.id, channel: 'sms' })
+                        }catch{}
+                        setTimeout(() => { /* refresh statuses after log write */ loadStatuses() }, 500)
+                      }
+                    })
+                  }</td>
+                  <td className="px-4 py-2 text-sm">{
+                    renderStatusCell({
+                      status: statuses[String(row.student?.id)]?.email,
+                      onResend: async () => {
+                        try{
+                          await api.post(`/academics/classes/${classId}/fees-resend/`, { student_id: row.student?.id, channel: 'email' })
+                        }catch{}
+                        setTimeout(() => { loadStatuses() }, 500)
+                      }
+                    })
+                  }</td>
                 </tr>
               ))}
             </tbody>
@@ -395,14 +415,19 @@ function Checkbox({ label, checked, onChange }){
   )
 }
 
-function renderStatus(s){
-  if (!s) return <span className="text-slate-400">-</span>
-  const ok = !!s.ok
-  const dt = s.created_at ? new Date(s.created_at) : null
+function renderStatusCell({ status, onResend }){
+  if (!status) return <span className="text-slate-400">-</span>
+  const ok = !!status.ok
+  const dt = status.created_at ? new Date(status.created_at) : null
   const time = dt? dt.toLocaleString() : ''
   return (
     <span className={ok? 'text-emerald-700' : 'text-rose-700'}>
       {ok? 'Sent' : 'Failed'}{time? ` · ${time}` : ''}
+      {!ok && (
+        <button onClick={onResend} className="ml-2 inline-flex items-center px-2 py-0.5 text-xs rounded border border-rose-300 text-rose-700 hover:bg-rose-50">
+          Resend
+        </button>
+      )}
     </span>
   )
 }
@@ -432,6 +457,13 @@ function ClassInfoPanel({ classId }){
   const [compareExam, setCompareExam] = useState(null)
   const [compareSummary, setCompareSummary] = useState({ subjects: [], students: [] })
   const [loadingCompare, setLoadingCompare] = useState(false)
+  const resultsTableRef = useRef(null)
+  const [shareChannel, setShareChannel] = useState('sms')
+  const [sharing, setSharing] = useState(false)
+  const [shareMsg, setShareMsg] = useState('')
+  const [resultsTotals, setResultsTotals] = useState({ sms:{sent:0,failed:0}, email:{sent:0,failed:0} })
+  const [resultsStatusItems, setResultsStatusItems] = useState([])
+  const [showResultsLog, setShowResultsLog] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -503,6 +535,25 @@ function ClassInfoPanel({ classId }){
     })()
     return ()=>{ cancelled = true }
   }, [recentExam])
+
+  // Load results delivery status (sent vs failed) for current exam
+  const loadResultsStatus = async () => {
+    if (!recentExam?.id) { setResultsTotals({ sms:{sent:0,failed:0}, email:{sent:0,failed:0} }); setResultsStatusItems([]); return }
+    try{
+      const { data } = await api.get(`/academics/classes/${classId}/results-status/`, { params: { exam: recentExam.id } })
+      const totals = data?.totals || { sms:{sent:0,failed:0}, email:{sent:0,failed:0} }
+      setResultsTotals({
+        sms: { sent: Number(totals?.sms?.sent||0), failed: Number(totals?.sms?.failed||0) },
+        email: { sent: Number(totals?.email?.sent||0), failed: Number(totals?.email?.failed||0) },
+      })
+      setResultsStatusItems(Array.isArray(data?.items)? data.items : [])
+    }catch{
+      setResultsTotals({ sms:{sent:0,failed:0}, email:{sent:0,failed:0} })
+      setResultsStatusItems([])
+    }
+  }
+
+  useEffect(() => { if (innerTab==='results') loadResultsStatus() }, [innerTab, recentExam?.id])
 
   // Load classes in same grade for compare (when toggled open)
   useEffect(() => {
@@ -700,6 +751,55 @@ function ClassInfoPanel({ classId }){
                 <div className="px-2.5 py-1 rounded border bg-gray-50">Date: <span className="font-medium ml-1">{recentExam.date || '-'}</span></div>
                 <button
                   type="button"
+                  onClick={() => {
+                    try{
+                      const html = resultsTableRef.current?.outerHTML || ''
+                      const w = window.open('', '_blank')
+                      if (w){
+                        w.document.write(`<!doctype html><html><head><title>Results - ${klass?.name||''}</title><style>table{border-collapse:collapse;width:100%}th,td{border:1px solid #ccc;padding:6px;font-size:12px}th{background:#f8fafc;text-align:left}</style></head><body>${html}</body></html>`)
+                        w.document.close()
+                        w.focus()
+                        w.print()
+                        w.close()
+                      }
+                    }catch{}
+                  }}
+                  className="ml-2 px-2.5 py-1 rounded border text-xs bg-white hover:bg-gray-50"
+                >Print Results</button>
+                <select
+                  className="border rounded px-2 py-1 text-xs bg-white"
+                  value={shareChannel}
+                  onChange={e=>setShareChannel(e.target.value)}
+                >
+                  <option value="sms">Share: SMS only</option>
+                  <option value="both">Share: SMS + Email</option>
+                </select>
+                <button
+                  type="button"
+                  disabled={sharing}
+                  onClick={async () => {
+                    setSharing(true); setShareMsg('')
+                    try{
+                      const { data } = await api.post(`/academics/classes/${classId}/share-results/`, { exam_id: recentExam?.id, channel: shareChannel })
+                      setShareMsg(`Queued: SMS ${data?.sms_sent_attempts||0}, Email ${data?.email_sent_attempts||0}`)
+                      // Refresh delivery status shortly after queueing
+                      setTimeout(() => { loadResultsStatus() }, 700)
+                    }catch(err){ setShareMsg(err?.response?.data?.detail || 'Failed to share') }
+                    finally{ setSharing(false) }
+                  }}
+                  className={`px-2.5 py-1 rounded text-xs ${sharing? 'bg-gray-100 border' : 'bg-blue-600 text-white'}`}
+                >{sharing? 'Sharing…' : 'Share Results'}</button>
+                {shareMsg && <span className="text-xs text-slate-600">{shareMsg}</span>}
+                <span className="ml-2 text-xs text-slate-700 border rounded px-2 py-1 bg-white">
+                  SMS: <span className="text-emerald-700">Sent {resultsTotals.sms.sent}</span> · <span className="text-rose-700">Failed {resultsTotals.sms.failed}</span>
+                </span>
+                <span className="text-xs text-slate-700 border rounded px-2 py-1 bg-white">
+                  Email: <span className="text-emerald-700">Sent {resultsTotals.email.sent}</span> · <span className="text-rose-700">Failed {resultsTotals.email.failed}</span>
+                </span>
+                <button type="button" onClick={() => loadResultsStatus()} className="text-xs underline">Refresh</button>
+                <button type="button" onClick={()=> setShowResultsLog(v=>!v)} className="text-xs underline">{showResultsLog? 'Hide Logs' : 'View Logs'}</button>
+                <button
+                  type="button"
                   onClick={()=>setShowCompare(v=>!v)}
                   className="ml-2 px-2.5 py-1 rounded border text-xs bg-white hover:bg-gray-50"
                 >{showCompare? 'Hide Compare' : 'Compare Other Stream'}</button>
@@ -712,7 +812,7 @@ function ClassInfoPanel({ classId }){
             <div className="text-sm text-gray-500">Loading results...</div>
           ) : recentExam && !showCompare && (
             <div className="overflow-x-auto rounded-lg border border-gray-200">
-              <table className="min-w-full text-xs md:text-sm">
+              <table ref={resultsTableRef} className="min-w-full text-xs md:text-sm">
                 <thead className="sticky top-0 bg-gray-50 z-10">
                   <tr>
                     <th className="border px-2 py-1 text-left whitespace-nowrap sticky left-0 bg-gray-50">Student</th>
@@ -744,6 +844,40 @@ function ClassInfoPanel({ classId }){
                   )}
                 </tbody>
               </table>
+              {showResultsLog && (
+                <div className="p-3 border-t bg-gray-50">
+                  <div className="text-xs font-medium text-gray-700 mb-2">Delivery Logs (latest status per student)</div>
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full text-xs">
+                      <thead>
+                        <tr>
+                          <th className="border px-2 py-1 text-left">Student</th>
+                          <th className="border px-2 py-1 text-left">SMS</th>
+                          <th className="border px-2 py-1 text-left">Email</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(resultsStatusItems||[]).length === 0 ? (
+                          <tr><td className="px-2 py-2 text-gray-500" colSpan={3}>No delivery entries yet.</td></tr>
+                        ) : (
+                          (resultsStatusItems||[]).map((it,i) => {
+                            const st = (recentSummary?.students||[]).find(s => String(s.id)===String(it.student_id))
+                            const label = st?.name || `#${it.student_id}`
+                            const cell = (obj) => (!obj ? '-' : (obj.ok ? `Sent · ${new Date(obj.created_at).toLocaleString()}` : `Failed · ${new Date(obj.created_at).toLocaleString()}`))
+                            return (
+                              <tr key={`${it.student_id}-${i}`} className={i%2===0? 'bg-white' : 'bg-gray-50'}>
+                                <td className="border px-2 py-1">{label}</td>
+                                <td className="border px-2 py-1"><span className={it.sms?.ok? 'text-emerald-700' : 'text-rose-700'}>{cell(it.sms)}</span></td>
+                                <td className="border px-2 py-1"><span className={it.email?.ok? 'text-emerald-700' : 'text-rose-700'}>{cell(it.email)}</span></td>
+                              </tr>
+                            )
+                          })
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
             </div>
           )}
           {showCompare && (

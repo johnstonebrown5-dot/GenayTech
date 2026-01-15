@@ -555,6 +555,92 @@ class ClassViewSet(viewsets.ModelViewSet):
             'items': items,
         })
 
+    @action(detail=True, methods=['post'], permission_classes=[IsTeacherOrAdmin], url_path='fees-resend')
+    def fees_resend(self, request, pk=None):
+        """Resend a single fees notification (SMS or Email) for a student in this class.
+        Body: { student_id: <id>, channel: 'sms' | 'email' }
+        Access: class teacher of this class or admin/staff.
+        """
+        klass = self.get_object()
+        user = getattr(request, 'user', None)
+        is_admin = bool(user and (getattr(user, 'role', None) == 'admin' or user.is_staff or user.is_superuser))
+        if not is_admin:
+            if not (getattr(user, 'role', None) == 'teacher' and getattr(klass, 'teacher_id', None) == getattr(user, 'id', None)):
+                return Response({'detail': 'Only the class teacher can resend for this class'}, status=status.HTTP_403_FORBIDDEN)
+
+        # Validate inputs
+        try:
+            student_id = int(request.data.get('student_id'))
+        except Exception:
+            return Response({'detail': 'student_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+        channel = str(request.data.get('channel') or '').lower()
+        if channel not in ('sms', 'email'):
+            return Response({'detail': 'channel must be sms or email'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Ensure student belongs to this class
+        try:
+            stu = Student.objects.select_related('klass').get(id=student_id, klass=klass)
+        except Student.DoesNotExist:
+            return Response({'detail': 'Student not found in this class'}, status=status.HTTP_404_NOT_FOUND)
+
+        # Compose latest balance message
+        inv_qs = Invoice.objects.filter(student=stu)
+        pay_qs = Payment.objects.filter(invoice__student=stu)
+        total_billed = float(inv_qs.aggregate(s=Sum('amount'))['s'] or 0)
+        total_paid = float(pay_qs.aggregate(s=Sum('amount'))['s'] or 0)
+        balance = round(total_billed - total_paid, 2)
+        name = getattr(stu, 'name', '') or getattr(stu, 'admission_no', '') or f"Student {stu.id}"
+        adm = getattr(stu, 'admission_no', '') or ''
+        class_name = getattr(klass, 'name', '') or getattr(klass, 'grade_level', '') or 'Class'
+        body = (
+            f"Fees update: {name}" + (f" (ADM {adm})" if adm else '') +
+            f" - {class_name}. Total billed: {total_billed:.2f}, Paid: {total_paid:.2f}, Balance: {balance:.2f}."
+        )
+
+        school_id = getattr(getattr(klass, 'school', None), 'id', None)
+        ok = False
+        if channel == 'sms':
+            phone = getattr(stu, 'guardian_id', None)
+            if not phone:
+                return Response({'detail': 'No guardian phone on record'}, status=status.HTTP_400_BAD_REQUEST)
+            try:
+                ok = send_sms(phone, body)
+            except Exception:
+                ok = False
+            try:
+                log_delivery(
+                    school_id=school_id,
+                    channel='sms',
+                    recipient=str(phone),
+                    ok=bool(ok),
+                    message=body,
+                    context=f"fees:class:{klass.id};student:{stu.id}",
+                )
+            except Exception:
+                pass
+        else:
+            email = getattr(stu, 'email', None) or getattr(getattr(stu, 'user', None), 'email', None)
+            if not email:
+                return Response({'detail': 'No email on record'}, status=status.HTTP_400_BAD_REQUEST)
+            try:
+                subj = f"Fees balance update - {class_name}"
+                ok = send_email_safe(subj, body, email)
+            except Exception:
+                ok = False
+            try:
+                log_delivery(
+                    school_id=school_id,
+                    channel='email',
+                    recipient=str(email),
+                    ok=bool(ok),
+                    message=body,
+                    context=f"fees:class:{klass.id};student:{stu.id}",
+                )
+            except Exception:
+                pass
+
+        return Response({'ok': bool(ok)})
+
     @action(detail=False, methods=['get'], permission_classes=[IsTeacherOrAdmin], url_path='mine')
     def mine(self, request):
         """Return classes relevant to the authenticated teacher.
@@ -682,7 +768,7 @@ class ClassViewSet(viewsets.ModelViewSet):
         }
         return Response(payload)
 
-    @action(detail=True, methods=['post'], permission_classes=[IsAdmin], url_path='share-results')
+    @action(detail=True, methods=['post'], permission_classes=[IsTeacherOrAdmin], url_path='share-results')
     def share_results(self, request, pk=None):
         """Send concise exam results summaries to parents/guardians for this class.
         Body: { exam_id: <optional exam id>, channel: 'sms' | 'both' }
@@ -691,6 +777,12 @@ class ClassViewSet(viewsets.ModelViewSet):
         Summaries include total marks, average and class position.
         """
         klass = self.get_object()
+        # Restrict teachers to their own class
+        user = getattr(request, 'user', None)
+        is_admin = bool(user and (getattr(user, 'role', None) == 'admin' or user.is_staff or user.is_superuser))
+        if not is_admin:
+            if not (getattr(user, 'role', None) == 'teacher' and getattr(klass, 'teacher_id', None) == getattr(user, 'id', None)):
+                return Response({'detail': 'Only the class teacher can share results for this class'}, status=status.HTTP_403_FORBIDDEN)
         school_id = getattr(klass, 'school_id', None)
         exam_id = request.data.get('exam_id') or None
         channel = (str(request.data.get('channel') or 'sms') or 'sms').lower()
@@ -903,6 +995,95 @@ class ClassViewSet(viewsets.ModelViewSet):
             'students': len(ordered),
             'sms_sent_attempts': sent_sms,
             'email_sent_attempts': sent_email,
+        })
+
+    @action(detail=True, methods=['get'], permission_classes=[IsTeacherOrAdmin], url_path='results-status')
+    def results_status(self, request, pk=None):
+        """Return latest delivery status (SMS/Email) per student for a given exam in this class.
+        Query: ?exam=<exam_id>. If absent, use the latest exam for the class.
+        Access: class teacher of this class or admin/staff.
+        Response: { exam_id, class_id, items: [ {student_id, sms:{ok,created_at}|null, email:{ok,created_at}|null} ],
+                    totals: { sms: {sent, failed}, email: {sent, failed} } }
+        """
+        klass = self.get_object()
+        user = getattr(request, 'user', None)
+        is_admin = bool(user and (getattr(user, 'role', None) == 'admin' or user.is_staff or user.is_superuser))
+        if not is_admin:
+            if not (getattr(user, 'role', None) == 'teacher' and getattr(klass, 'teacher_id', None) == getattr(user, 'id', None)):
+                return Response({'detail': 'Only the class teacher can view delivery status for this class'}, status=status.HTTP_403_FORBIDDEN)
+
+        # Resolve exam
+        exam_id = request.query_params.get('exam')
+        if exam_id:
+            try:
+                exam = Exam.objects.get(id=int(exam_id), klass=klass)
+            except (Exam.DoesNotExist, ValueError, TypeError):
+                return Response({'detail': 'Exam not found for this class'}, status=status.HTTP_404_NOT_FOUND)
+        else:
+            exam = (
+                Exam.objects
+                .filter(klass=klass)
+                .order_by('-date', '-id')
+                .first()
+            )
+            if not exam:
+                return Response({'detail': 'No exams found for this class'}, status=status.HTTP_400_BAD_REQUEST)
+
+        school_id = getattr(getattr(klass, 'school', None), 'id', None)
+        status_map = {}
+        sms_sent = sms_failed = email_sent = email_failed = 0
+        try:
+            logs = (
+                DeliveryLog.objects
+                .filter(school_id=school_id, context__contains=f"results:exam:{exam.id};", channel__in=['sms','email'])
+                .only('id','channel','ok','created_at','context')
+                .order_by('-created_at','-id')
+            )
+            for rec in logs:
+                # Count totals by channel
+                if rec.channel == 'sms':
+                    if rec.ok:
+                        sms_sent += 1
+                    else:
+                        sms_failed += 1
+                elif rec.channel == 'email':
+                    if rec.ok:
+                        email_sent += 1
+                    else:
+                        email_failed += 1
+
+                ctx = getattr(rec, 'context', '') or ''
+                sid = None
+                for part in ctx.split(';'):
+                    part = part.strip()
+                    if part.startswith('student:'):
+                        try:
+                            sid = int(part.split(':', 1)[1])
+                        except Exception:
+                            sid = None
+                        break
+                if not sid:
+                    continue
+                entry = status_map.setdefault(sid, {'sms': None, 'email': None})
+                ch = getattr(rec, 'channel', '')
+                if ch in ('sms','email') and entry[ch] is None:
+                    entry[ch] = {'ok': bool(getattr(rec,'ok',False)), 'created_at': getattr(rec,'created_at',None)}
+        except Exception:
+            status_map = {}
+
+        items = []
+        for stu in Student.objects.filter(klass=klass, is_active=True).only('id'):
+            s = status_map.get(getattr(stu, 'id', None)) or {'sms': None, 'email': None}
+            items.append({'student_id': getattr(stu, 'id', None), 'sms': s.get('sms'), 'email': s.get('email')})
+
+        return Response({
+            'exam_id': exam.id,
+            'class_id': klass.id,
+            'items': items,
+            'totals': {
+                'sms': {'sent': sms_sent, 'failed': sms_failed},
+                'email': {'sent': email_sent, 'failed': email_failed},
+            }
         })
 
     @action(detail=True, methods=['post'], permission_classes=[IsAdmin], url_path='promote')
@@ -3406,6 +3587,9 @@ class StudentViewSet(viewsets.ModelViewSet):
         act = getattr(self, 'action', None)
         if act in ('my', 'my_update'):
             return [permissions.IsAuthenticated()]
+        # Allow the specialized teacher_update action for class teachers (enforced inside the action)
+        if act in ('teacher_update',):
+            return [IsTeacherOrAdmin()]
         if act in ('list', 'retrieve') or self.request.method in permissions.SAFE_METHODS:
             return [IsTeacherOrAdmin()]
         return [IsAdmin()]
