@@ -224,11 +224,18 @@ export default function TeacherLayout({ children }){
       label: 'Attendance',
       icon: '🗓️',
     }
+    const manageClassItem = { to: '/teacher/manage-class', label: 'Manage My Class', icon: '🛠️' }
     const msgIndex = items.findIndex(i => i.label === 'Messages')
     if (msgIndex === -1) {
       items.unshift(attendanceItem)
     } else {
       items.splice(msgIndex + 1, 0, attendanceItem)
+    }
+    const classesIndex = items.findIndex(i => i.label === 'Classes')
+    if (classesIndex !== -1) {
+      items.splice(classesIndex + 1, 0, manageClassItem)
+    } else {
+      items.push(manageClassItem)
     }
     return items
   })()

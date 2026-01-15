@@ -29,6 +29,8 @@ except Exception:
 import csv, io
 from django_filters.rest_framework import DjangoFilterBackend
 from communications.utils import send_sms, send_email_safe, log_delivery, create_messages_for_users, resolve_default_sender_id
+from communications.models import DeliveryLog
+from finance.models import Invoice, Payment
 from .models import (
     Class, Student, Competency, Assessment, Attendance, TeacherProfile, Subject, SubjectComponent,
     Exam, ExamResult, AcademicYear, Term, Stream, LessonPlan, ClassSubjectTeacher, SubjectGradingBand,
@@ -244,6 +246,314 @@ class ClassViewSet(viewsets.ModelViewSet):
         if getattr(self, 'action', None) == 'list':
             return ClassLiteSerializer
         return ClassDetailSerializer
+
+    @action(detail=True, methods=['post'], permission_classes=[IsTeacherOrAdmin], url_path='add-student')
+    def add_student(self, request, pk=None):
+        """Allow only the class teacher (or admin/staff) to add a student to this class.
+        Teachers cannot remove students; Student mutations remain admin-only in StudentViewSet.
+        Expected body minimally includes: admission_no, name, dob (YYYY-MM-DD), gender.
+        Optional guardian/contact fields supported.
+        """
+        klass = self.get_object()
+        user = getattr(request, 'user', None)
+        is_admin = bool(user and (getattr(user, 'role', None) == 'admin' or user.is_staff or user.is_superuser))
+
+        # Only the class teacher of this class (or admin/staff) can add
+        if not is_admin:
+            if not (getattr(user, 'role', None) == 'teacher' and getattr(klass, 'teacher_id', None) == getattr(user, 'id', None)):
+                return Response({'detail': 'Only the class teacher can add students to this class'}, status=status.HTTP_403_FORBIDDEN)
+
+        # Collect and validate payload
+        data = getattr(request, 'data', {}) or {}
+        required = ['admission_no', 'name', 'dob', 'gender']
+        missing = [k for k in required if not str(data.get(k, '')).strip()]
+        if missing:
+            return Response({'detail': 'Missing required fields', 'missing': missing}, status=status.HTTP_400_BAD_REQUEST)
+
+        payload = {
+            'admission_no': str(data.get('admission_no')).strip(),
+            'name': str(data.get('name')).strip(),
+            'dob': data.get('dob'),
+            'gender': str(data.get('gender')).strip(),
+            'upi_number': str(data.get('upi_number') or '').strip(),
+            'guardian_id': str(data.get('guardian_id') or '').strip(),
+            'guardian_name': str(data.get('guardian_name') or '').strip(),
+            'guardian_passport_no': str(data.get('guardian_passport_no') or '').strip(),
+            'birth_certificate_no': str(data.get('birth_certificate_no') or '').strip(),
+            'phone': str(data.get('phone') or '').strip(),
+            'email': str(data.get('email') or '').strip(),
+            'address': str(data.get('address') or '').strip(),
+            'klass': klass,
+            'school': getattr(klass, 'school', None),
+        }
+
+        # Create student; enforce unique admission_no within the model uniqueness
+        try:
+            with transaction.atomic():
+                stu = Student.objects.create(**payload)
+        except IntegrityError:
+            return Response({'detail': 'Admission number already exists'}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({'detail': 'Failed to create student', 'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+        ser = StudentSerializer(stu, context={'request': request})
+        return Response(ser.data, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=['post'], permission_classes=[IsTeacherOrAdmin], url_path='share-fees')
+    def share_fees(self, request, pk=None):
+        """Send fee balance notifications to guardians/students in this class.
+        Access: Only class teacher of this class, or admin/staff.
+        Body: { channel?: 'sms' | 'both', min_balance?: number, include_zero?: bool }
+        """
+        klass = self.get_object()
+        user = getattr(request, 'user', None)
+        is_admin = bool(user and (getattr(user, 'role', None) == 'admin' or user.is_staff or user.is_superuser))
+        if not is_admin:
+            if not (getattr(user, 'role', None) == 'teacher' and getattr(klass, 'teacher_id', None) == getattr(user, 'id', None)):
+                return Response({'detail': 'Only the class teacher can send fees notifications for this class'}, status=status.HTTP_403_FORBIDDEN)
+
+        channel = (str(request.data.get('channel') or 'sms') or 'sms').lower()
+        include_zero = str(request.data.get('include_zero', 'false')).lower() in ('1','true','yes','on')
+        try:
+            min_balance = float(request.data.get('min_balance', 0) or 0)
+        except Exception:
+            min_balance = 0.0
+
+        students = Student.objects.filter(klass=klass, is_active=True).select_related('klass').order_by('name')
+        if not students.exists():
+            return Response({'detail': 'No active students found in this class'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Prepare messaging context
+        school = getattr(klass, 'school', None)
+        school_id = getattr(school, 'id', None)
+        sender_id = resolve_default_sender_id(school_id) if school_id else None
+
+        notified = 0
+        sms_attempts = 0
+        email_attempts = 0
+        recipients_in_app = []
+        items = []
+
+        for stu in students:
+            inv_qs = Invoice.objects.filter(student=stu)
+            pay_qs = Payment.objects.filter(invoice__student=stu)
+            total_billed = float(inv_qs.aggregate(s=Sum('amount'))['s'] or 0)
+            total_paid = float(pay_qs.aggregate(s=Sum('amount'))['s'] or 0)
+            balance = round(total_billed - total_paid, 2)
+
+            if not include_zero and balance <= 0:
+                continue
+            if balance < min_balance:
+                continue
+
+            name = getattr(stu, 'name', '') or getattr(stu, 'admission_no', '') or f"Student {stu.id}"
+            adm = getattr(stu, 'admission_no', '') or ''
+            class_name = getattr(klass, 'name', '') or getattr(klass, 'grade_level', '') or 'Class'
+            body = (
+                f"Fees update: {name}" + (f" (ADM {adm})" if adm else '') +
+                f" - {class_name}. Total billed: {total_billed:.2f}, Paid: {total_paid:.2f}, Balance: {balance:.2f}."
+            )
+
+            # Queue in-app message if student has linked user
+            if sender_id and getattr(stu, 'user_id', None):
+                recipients_in_app.append(stu.user_id)
+
+            # SMS to guardian
+            phone = getattr(stu, 'guardian_id', None)
+            if phone:
+                try:
+                    ok_sms = send_sms(phone, body)
+                except Exception:
+                    ok_sms = False
+                try:
+                    log_delivery(
+                        school_id=school_id,
+                        channel='sms',
+                        recipient=str(phone),
+                        ok=bool(ok_sms),
+                        message=body,
+                        context=f"fees:class:{klass.id};student:{stu.id}",
+                    )
+                except Exception:
+                    pass
+                if ok_sms:
+                    sms_attempts += 1
+
+            # Optional email
+            if channel == 'both':
+                email = getattr(stu, 'email', None) or getattr(getattr(stu, 'user', None), 'email', None)
+                if email:
+                    try:
+                        subj = f"Fees balance update - {class_name}"
+                        ok_email = send_email_safe(subj, body, email)
+                    except Exception:
+                        ok_email = False
+                    try:
+                        log_delivery(
+                            school_id=school_id,
+                            channel='email',
+                            recipient=str(email),
+                            ok=bool(ok_email),
+                            message=body,
+                            context=f"fees:class:{klass.id};student:{stu.id}",
+                        )
+                    except Exception:
+                        pass
+                    if ok_email:
+                        email_attempts += 1
+
+            items.append({'student_id': stu.id, 'balance': balance})
+            notified += 1
+
+        # Mirror to chat/messages in bulk
+        if sender_id and recipients_in_app:
+            try:
+                create_messages_for_users(
+                    school_id=school_id,
+                    sender_id=sender_id,
+                    body=f"Fees balances have been updated for your account. Please check portal/SMS.",
+                    recipient_user_ids=list(set(recipients_in_app)),
+                    system_tag='fees_notice',
+                )
+            except Exception:
+                pass
+
+        return Response({
+            'detail': 'fees_notifications_queued',
+            'class_id': klass.id,
+            'students_notified': notified,
+            'sms_sent_attempts': sms_attempts,
+            'email_sent_attempts': email_attempts,
+            'items': items,
+        })
+
+    @action(detail=True, methods=['get'], permission_classes=[IsTeacherOrAdmin], url_path='fees-balances')
+    def fees_balances(self, request, pk=None):
+        """List students in this class with their fee balances.
+        Query params: min_balance (number, default 0), include_zero (bool), only_positive (alias).
+        Access: class teacher of this class or admin/staff.
+        """
+        klass = self.get_object()
+        user = getattr(request, 'user', None)
+        is_admin = bool(user and (getattr(user, 'role', None) == 'admin' or user.is_staff or user.is_superuser))
+        if not is_admin:
+            if not (getattr(user, 'role', None) == 'teacher' and getattr(klass, 'teacher_id', None) == getattr(user, 'id', None)):
+                return Response({'detail': 'Only the class teacher can view balances for this class'}, status=status.HTTP_403_FORBIDDEN)
+
+        try:
+            min_balance = float(request.query_params.get('min_balance', 0) or 0)
+        except Exception:
+            min_balance = 0.0
+        include_zero = str(request.query_params.get('include_zero', request.query_params.get('only_positive') and 'false') or 'false').lower() in ('1','true','yes','on')
+
+        students = Student.objects.filter(klass=klass, is_active=True).select_related('klass').order_by('name')
+        school = getattr(klass, 'school', None)
+        school_id = getattr(school, 'id', None)
+
+        items = []
+        total_balance = 0.0
+        for stu in students:
+            inv_qs = Invoice.objects.filter(student=stu)
+            pay_qs = Payment.objects.filter(invoice__student=stu)
+            total_billed = float(inv_qs.aggregate(s=Sum('amount'))['s'] or 0)
+            total_paid = float(pay_qs.aggregate(s=Sum('amount'))['s'] or 0)
+            balance = round(total_billed - total_paid, 2)
+
+            if not include_zero and balance <= 0:
+                continue
+            if balance < min_balance:
+                continue
+
+            items.append({
+                'student': {
+                    'id': getattr(stu, 'id', None),
+                    'name': getattr(stu, 'name', None),
+                    'admission_no': getattr(stu, 'admission_no', None),
+                },
+                'total_billed': round(total_billed, 2),
+                'total_paid': round(total_paid, 2),
+                'balance': balance,
+                'guardian_phone': getattr(stu, 'guardian_id', None),
+                'email': getattr(stu, 'email', None) or getattr(getattr(stu, 'user', None), 'email', None),
+            })
+            total_balance += balance if balance > 0 else 0.0
+
+        return Response({
+            'class_id': klass.id,
+            'count': len(items),
+            'total_balance': round(total_balance, 2),
+            'items': items,
+        })
+
+    @action(detail=True, methods=['get'], permission_classes=[IsTeacherOrAdmin], url_path='fees-status')
+    def fees_status(self, request, pk=None):
+        """Return latest delivery status (SMS/Email) per student for this class' fees notifications.
+        Access: class teacher of this class or admin/staff.
+        Response: {
+          class_id, items: [
+            { student_id, sms: {ok, created_at} | null, email: {ok, created_at} | null }
+          ]
+        }
+        Matches DeliveryLog.context pattern: 'fees:class:{klass.id};student:{stu.id}'.
+        """
+        klass = self.get_object()
+        user = getattr(request, 'user', None)
+        is_admin = bool(user and (getattr(user, 'role', None) == 'admin' or user.is_staff or user.is_superuser))
+        if not is_admin:
+            if not (getattr(user, 'role', None) == 'teacher' and getattr(klass, 'teacher_id', None) == getattr(user, 'id', None)):
+                return Response({'detail': 'Only the class teacher can view delivery status for this class'}, status=status.HTTP_403_FORBIDDEN)
+
+        school_id = getattr(getattr(klass, 'school', None), 'id', None)
+        # Build a map of latest statuses per student per channel from DeliveryLog
+        status_map = {}
+        try:
+            logs = (
+                DeliveryLog.objects
+                .filter(school_id=school_id, context__contains=f"fees:class:{klass.id};", channel__in=['sms', 'email'])
+                .only('id', 'channel', 'ok', 'created_at', 'context')
+                .order_by('-created_at', '-id')
+            )
+            for rec in logs:
+                ctx = getattr(rec, 'context', '') or ''
+                sid = None
+                for part in ctx.split(';'):
+                    part = part.strip()
+                    if part.startswith('student:'):
+                        try:
+                            sid = int(part.split(':', 1)[1])
+                        except Exception:
+                            sid = None
+                        break
+                if not sid:
+                    continue
+                entry = status_map.setdefault(sid, {'sms': None, 'email': None})
+                ch = getattr(rec, 'channel', '')
+                if ch in ('sms', 'email') and entry[ch] is None:
+                    entry[ch] = {
+                        'ok': bool(getattr(rec, 'ok', False)),
+                        'created_at': getattr(rec, 'created_at', None),
+                    }
+                # Early stop if both channels captured for this student
+                if entry.get('sms') is not None and entry.get('email') is not None:
+                    # continue scanning for others; no break because we need other students
+                    pass
+        except Exception:
+            status_map = {}
+
+        # Ensure we include all active students in class in the response
+        items = []
+        for stu in Student.objects.filter(klass=klass, is_active=True).only('id'):
+            s = status_map.get(getattr(stu, 'id', None)) or {'sms': None, 'email': None}
+            items.append({
+                'student_id': getattr(stu, 'id', None),
+                'sms': s.get('sms'),
+                'email': s.get('email'),
+            })
+
+        return Response({
+            'class_id': klass.id,
+            'items': items,
+        })
 
     @action(detail=False, methods=['get'], permission_classes=[IsTeacherOrAdmin], url_path='mine')
     def mine(self, request):
@@ -3209,6 +3519,57 @@ class StudentViewSet(viewsets.ModelViewSet):
         except Exception:
             return None
 
+    @action(detail=True, methods=['patch'], permission_classes=[IsTeacherOrAdmin], url_path='teacher-update')
+    def teacher_update(self, request, pk=None):
+        """Allow the class teacher to update limited student fields.
+        Restrictions:
+        - Cannot change admission_no, name, or klass (prevents moves/removals).
+        - Requester must be the class teacher of this student.
+        Admin/staff may still use normal update endpoints.
+        """
+        student = self.get_object()
+
+        user = getattr(request, 'user', None)
+        is_admin = bool(user and (getattr(user, 'role', None) == 'admin' or user.is_staff or user.is_superuser))
+        if not is_admin:
+            # Must be teacher and the assigned class teacher of this student's class
+            if getattr(user, 'role', None) != 'teacher':
+                return Response({'detail': 'Not allowed'}, status=status.HTTP_403_FORBIDDEN)
+            klass_id = getattr(getattr(student, 'klass', None), 'id', None)
+            teacher_id = getattr(getattr(student, 'klass', None), 'teacher_id', None)
+            if not (klass_id and teacher_id == getattr(user, 'id', None)):
+                return Response({'detail': 'Only the class teacher can edit this student'}, status=status.HTTP_403_FORBIDDEN)
+
+        # Build data allowing only specific fields
+        incoming = dict(getattr(request, 'data', {}) or {})
+        # Blocked keys regardless
+        blocked = {'admission_no', 'name', 'klass'}
+        # Allowed editable keys for teachers
+        allowed = {
+            'dob','gender','upi_number','guardian_id','guardian_name','guardian_passport_no','birth_certificate_no',
+            'phone','email','address','photo','boarding_status','is_active'
+        }
+        # Remove any blocked or non-allowed keys when not admin
+        if not is_admin:
+            cleaned = {k: v for k, v in incoming.items() if k in allowed}
+        else:
+            # Admins can use this action too, but still respect blocked keys
+            cleaned = {k: v for k, v in incoming.items() if k not in blocked}
+
+        # If nothing to update
+        if not cleaned:
+            return Response({'detail': 'No editable fields provided'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Support remote photo url if provided
+        if 'photo_url' in incoming and 'photo' not in cleaned:
+            remote = self._download_remote_photo(incoming.get('photo_url'), instance=student)
+            if remote:
+                cleaned['photo'] = remote
+
+        serializer = self.get_serializer(student, data=cleaned, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
     @action(detail=True, methods=['get'], permission_classes=[permissions.IsAuthenticated], url_path='history')
     def history(self, request, pk=None):
         """Return student's academic and finance history in one payload.

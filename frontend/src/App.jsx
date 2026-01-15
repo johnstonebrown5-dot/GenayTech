@@ -18,6 +18,7 @@ import TeacherGrades from './pages/TeacherGrades'
 import TeacherResults from './pages/TeacherResults'
 import TeacherAnalytics from './pages/TeacherAnalytics'
 import TeacherProfile from './pages/TeacherProfile'
+import TeacherManageClass from './pages/TeacherManageClass'
 import TeacherLayout from './components/TeacherLayout'
 import StudentDashboard from './pages/StudentDashboard'
 import StudentReportCard from './pages/StudentReportCard'
@@ -248,6 +249,8 @@ export default function App() {
               <Route path="results" element={<TeacherResults/>} />
               <Route path="analytics" element={<TeacherAnalytics/>} />
               <Route path="profile" element={<TeacherProfile/>} />
+              <Route path="manage-class" element={<TeacherManageClass/>} />
+              <Route path="students/:id" element={<AdminStudentDashboard/>} />
               <Route path="timetable" element={<TeacherTimetable/>} />
               <Route path="block-timetable" element={<TeacherBlockTimetable/>} />
               <Route path="events" element={<TeacherEvents/>} />
