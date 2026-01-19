@@ -199,7 +199,7 @@ class StaffPayrollSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = StaffPayroll
-        fields = ['id','staff','school','base_salary','allowances','deductions','is_active','updated_at','staff_name']
+        fields = ['id','staff','school','base_salary','allowances','deductions','is_active','payout_day','updated_at','staff_name']
         read_only_fields = ['school','updated_at']
 
     def get_staff_name(self, obj):

@@ -220,26 +220,7 @@ export default function SchoolHome() {
     }
   }, [navigate])
 
-  const onOpenApp = async (e) => {
-    const isStandalone = window.matchMedia && window.matchMedia('(display-mode: standalone)').matches
-    const isiOSStandalone = typeof window !== 'undefined' && 'standalone' in window.navigator && window.navigator.standalone
-    if (isStandalone || isiOSStandalone) {
-      return
-    }
-    if (installPrompt) {
-      try {
-        e?.preventDefault && e.preventDefault()
-      } catch {}
-      try {
-        await installPrompt.prompt()
-        const choice = await installPrompt.userChoice
-        setInstallPrompt(null)
-        if (choice && choice.outcome === 'accepted') {
-          try { navigate('/app') } catch {}
-          return
-        }
-      } catch {}
-    }
+  const onOpenApp = async () => {
     try { navigate('/app') } catch {}
   }
 

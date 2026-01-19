@@ -273,6 +273,8 @@ class StaffPayroll(models.Model):
     allowances = models.JSONField(default=list, blank=True)
     deductions = models.JSONField(default=list, blank=True)
     is_active = models.BooleanField(default=True)
+    # Day of month (1-31) when payslip should be auto-generated for the active payroll
+    payout_day = models.IntegerField(null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
 
 
@@ -290,4 +292,9 @@ class StaffPayslip(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        unique_together = ("staff", "year", "month")
+        constraints = [
+            models.UniqueConstraint(fields=['school','staff','year','month'], name='uniq_staff_month_school')
+        ]
+        indexes = [
+            models.Index(fields=['school','staff','year','month'])
+        ]
