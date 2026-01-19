@@ -608,11 +608,11 @@ function ClassInfoPanel({ classId }){
     <div className="rounded-xl border border-gray-200 bg-white p-4 shadow">
       <div className="flex items-center gap-2 mb-3">
         <button
-          className={`px-3 py-1.5 rounded ${innerTab==='info' ? 'bg-blue-600 text-white' : 'bg-white border'} text-sm`}
+          className={`px-3 py-1.5 rounded ${innerTab==='info' ? 'bg-blue-600 text-white' : 'bg-white border manage-toggle'} text-sm`}
           onClick={()=>setInnerTab('info')}
         >Class Information</button>
         <button
-          className={`px-3 py-1.5 rounded ${innerTab==='results' ? 'bg-blue-600 text-white' : 'bg-white border'} text-sm`}
+          className={`px-3 py-1.5 rounded ${innerTab==='results' ? 'bg-blue-600 text-white' : 'bg-white border manage-toggle'} text-sm`}
           onClick={()=>setInnerTab('results')}
         >Results</button>
       </div>
@@ -1073,7 +1073,7 @@ function InfoCard({ label, value, color='indigo' }){
   const pal = palettes[color] || palettes.indigo
   return (
     <div className={`p-4 rounded-xl border shadow-sm ${pal.wrap}`}>
-      <div className="text-[11px] uppercase tracking-wide ${pal.title}">{label}</div>
+      <div className={`text-[11px] uppercase tracking-wide ${pal.title}`}>{label}</div>
       <div className={`mt-1 text-lg font-semibold ${pal.val}`}>{value}</div>
     </div>
   )

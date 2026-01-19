@@ -1582,7 +1582,22 @@ class FeeCategoryViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         school = getattr(getattr(self.request, 'user', None), 'school', None)
-        serializer.save(school=school)
+        instance = serializer.save(school=school)
+        # Ensure only one active payroll per staff
+        try:
+            if getattr(instance, 'is_active', False):
+                StaffPayroll.objects.filter(staff=instance.staff).exclude(id=instance.id).update(is_active=False)
+        except Exception:
+            pass
+
+    def perform_update(self, serializer):
+        instance = serializer.save()
+        # If this payroll is (or was just set) active, deactivate others for the same staff
+        try:
+            if getattr(instance, 'is_active', False):
+                StaffPayroll.objects.filter(staff=instance.staff).exclude(id=instance.id).update(is_active=False)
+        except Exception:
+            pass
 
 
 class PaymentMethodViewSet(viewsets.ModelViewSet):

@@ -180,6 +180,11 @@ select { appearance: none; -webkit-appearance: none; -moz-appearance: none; back
   background-color: #020617 !important;
 }
 
+/* Additional semi-white overlays */
+.teacher-theme-dark .bg-gray-50\/80 {
+  background-color: #0b1120 !important;
+}
+
 .teacher-theme-dark .bg-gray-200,
 .teacher-theme-dark .bg-slate-200 {
   background-color: #0b1120 !important;
@@ -216,6 +221,44 @@ select { appearance: none; -webkit-appearance: none; -moz-appearance: none; back
 .teacher-theme-dark .border-gray-300,
 .teacher-theme-dark .border-slate-300 {
   border-color: #374151 !important;
+}
+
+/* Manage Class and similar pages sometimes use divide utilities */
+.teacher-theme-dark .divide-gray-100 > :not([hidden]) ~ :not([hidden]),
+.teacher-theme-dark .divide-gray-200 > :not([hidden]) ~ :not([hidden]) {
+  border-color: #1f2937 !important;
+}
+
+/* Hover backgrounds used in tables */
+.teacher-theme-dark .hover\:bg-gray-50:hover {
+  background-color: #0b1120 !important;
+}
+
+/* Pastel info/success/warn/error backgrounds used by alerts */
+.teacher-theme-dark .bg-amber-50,
+.teacher-theme-dark .bg-yellow-50,
+.teacher-theme-dark .bg-emerald-50,
+.teacher-theme-dark .bg-green-50,
+.teacher-theme-dark .bg-red-50,
+.teacher-theme-dark .bg-rose-50,
+.teacher-theme-dark .bg-fuchsia-50,
+.teacher-theme-dark .bg-blue-50,
+.teacher-theme-dark .bg-indigo-50,
+.teacher-theme-dark .bg-purple-50,
+.teacher-theme-dark .bg-pink-50 {
+  background-color: #0b1120 !important;
+}
+
+/* Corresponding text colors for alerts to maintain contrast */
+.teacher-theme-dark .text-amber-800 { color: #fbbf24 !important; }
+.teacher-theme-dark .text-emerald-700 { color: #34d399 !important; }
+.teacher-theme-dark .text-red-700, .teacher-theme-dark .text-rose-700 { color: #f87171 !important; }
+
+/* InfoCard pastel border remaps */
+.teacher-theme-dark .border-indigo-100,
+.teacher-theme-dark .border-emerald-100,
+.teacher-theme-dark .border-fuchsia-100 {
+  border-color: #1f2937 !important;
 }
 
 /* Inputs and form controls inside teacher area */
@@ -416,6 +459,18 @@ select { appearance: none; -webkit-appearance: none; -moz-appearance: none; back
   height: 3px;
   border-radius: 9999px;
   background-color: #1d4ed8; /* blue-700 underline */
+}
+
+/* Manage My Class: inactive inner tab buttons visibility on dark */
+.teacher-theme-dark .manage-toggle {
+  background-color: #0b1120 !important;
+  color: #cbd5e1 !important; /* slate-300 */
+  border-color: #1f2937 !important; /* gray-800 */
+}
+
+.teacher-theme-dark .manage-toggle:hover {
+  background-color: #111827 !important; /* gray-900 */
+  color: #e5e7eb !important;
 }
 
 /* Teacher Dashboard main layout */

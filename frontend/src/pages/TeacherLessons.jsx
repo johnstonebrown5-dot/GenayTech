@@ -1,8 +1,18 @@
 import React, { useEffect, useMemo, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import api from '../api'
 import { Editor } from '@tinymce/tinymce-react'
+import FeatureUnavailable from '../components/FeatureUnavailable'
+import { disabledPaths, disabledMessages, helpCenterPath } from '../featureFlags'
 
 export default function TeacherLessons(){
+  const { pathname } = useLocation()
+  const isDisabled = (() => {
+    try { return disabledPaths.some(p => pathname === p || (p.endsWith('*') && pathname.startsWith(p.slice(0, -1)))) } catch { return false }
+  })()
+  if (isDisabled) {
+    return <FeatureUnavailable inline message={disabledMessages[pathname] || disabledMessages['*']} helpPath={helpCenterPath} />
+  }
   const [classes, setClasses] = useState([])
   const [selected, setSelected] = useState('')
   const [plans, setPlans] = useState([])

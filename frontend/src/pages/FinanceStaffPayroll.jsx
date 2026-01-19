@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { useLocation } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import api from '../api'
 import Modal from '../components/Modal'
 import { useNotification } from '../components/NotificationContext'
@@ -9,7 +9,9 @@ export function FinanceStaffPayrollContent(){
   const [payrolls, setPayrolls] = useState([])
   const [payslips, setPayslips] = useState([])
   const [loading, setLoading] = useState(true)
-  const { search } = useLocation()
+  const location = useLocation()
+  const { search } = location
+  const navigate = useNavigate()
   const staffParam = useMemo(()=>{
     try { return new URLSearchParams(search).get('staff') || '' } catch { return '' }
   },[search])
@@ -19,7 +21,7 @@ export function FinanceStaffPayrollContent(){
   const [savingCP, setSavingCP] = useState(false)
 
   const [showCreatePayslip, setShowCreatePayslip] = useState(false)
-  const [slipForm, setSlipForm] = useState({ staff:'', year:'', month:'', basic:'', allowances:'[]', deductions:'[]', notes:'' })
+  const [slipForm, setSlipForm] = useState({ staff:'', year:'', month:'', basic:'', allowancesText:'', deductionsText:'', notes:'' })
   const [savingSlip, setSavingSlip] = useState(false)
 
   const { showSuccess, showError } = useNotification()
@@ -43,6 +45,13 @@ export function FinanceStaffPayrollContent(){
     }finally{
       setLoading(false)
     }
+
+  const onRowClick = (p) => {
+    try{
+      const base = location.pathname.startsWith('/finance') ? '/finance' : '/admin'
+      navigate(`${base}/staff-payroll/${p.id}`)
+    }catch{}
+  }
   }
   useEffect(()=>{ load() },[])
 
@@ -84,14 +93,36 @@ export function FinanceStaffPayrollContent(){
     }
   }
 
+  const activatePayroll = async (payrollId) => {
+    try{
+      await api.patch(`/finance/staff-payroll/${payrollId}/`, { is_active: true })
+      await load()
+      showSuccess('Updated', 'Payroll activated')
+    }catch(err){
+      showError('Failed', err?.response?.data?.detail || 'Could not activate payroll')
+    }
+  }
+
   const createPayslip = async (e) => {
     e.preventDefault()
     try{
       setSavingSlip(true)
-      let allowances = []
-      let deductions = []
-      try{ allowances = JSON.parse(slipForm.allowances||'[]') }catch{}
-      try{ deductions = JSON.parse(slipForm.deductions||'[]') }catch{}
+      // Parse simple "Name:Amount" comma-separated lists into objects
+      const parseList = (text) => {
+        return String(text||'')
+          .split(',')
+          .map(s => s.trim())
+          .filter(Boolean)
+          .map(item => {
+            const [namePart, amountPart] = item.split(/[:\-]/)
+            const name = String(namePart||'').trim()
+            const amount = Number(String(amountPart||'').replace(/[,\s]/g,'').trim()||0)
+            return name ? { name, amount:isNaN(amount)?0:amount } : null
+          })
+          .filter(Boolean)
+      }
+      const allowances = parseList(slipForm.allowancesText)
+      const deductions = parseList(slipForm.deductionsText)
       await api.post('/finance/staff-payslips/', {
         staff: Number(slipForm.staff),
         year: Number(slipForm.year),
@@ -102,7 +133,7 @@ export function FinanceStaffPayrollContent(){
         notes: slipForm.notes||''
       })
       setShowCreatePayslip(false)
-      setSlipForm({ staff:'', year:'', month:'', basic:'', allowances:'[]', deductions:'[]', notes:'' })
+      setSlipForm({ staff:'', year:'', month:'', basic:'', allowancesText:'', deductionsText:'', notes:'' })
       await load()
       showSuccess('Saved', 'Payslip created')
     }catch(err){
@@ -135,19 +166,27 @@ export function FinanceStaffPayrollContent(){
                     <th className="py-2 px-3">Staff</th>
                     <th className="py-2 px-3">Base Salary</th>
                     <th className="py-2 px-3">Active</th>
+                    <th className="py-2 px-3">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {loading ? (
-                    <tr><td colSpan={3} className="py-6 text-center text-gray-500">Loading...</td></tr>
+                    <tr><td colSpan={4} className="py-6 text-center text-gray-500">Loading...</td></tr>
                   ) : (Array.isArray(filteredPayrolls)?filteredPayrolls:[]).length===0 ? (
-                    <tr><td colSpan={3} className="py-6 text-center text-gray-500">No payroll configs.</td></tr>
+                    <tr><td colSpan={4} className="py-6 text-center text-gray-500">No payroll configs.</td></tr>
                   ) : (
                     (filteredPayrolls||[]).map(p => (
-                      <tr key={p.id} className="border-t">
+                      <tr key={p.id} className="border-t hover:bg-gray-50 cursor-pointer" onClick={()=>onRowClick(p)}>
                         <td className="py-2 px-3">{staffLabel(p.staff)}</td>
                         <td className="py-2 px-3">{Number(p.base_salary||0).toLocaleString()}</td>
                         <td className="py-2 px-3">{p.is_active? 'Yes':'No'}</td>
+                        <td className="py-2 px-3">
+                          {p.is_active ? (
+                            <span className="text-xs px-2 py-1 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">Current</span>
+                          ) : (
+                            <button onClick={(e) => { e.stopPropagation(); activatePayroll(p.id) }} className="text-sm px-2 py-1 rounded bg-gray-100 hover:bg-gray-200">Activate</button>
+                          )}
+                        </td>
                       </tr>
                     ))
                   )}
@@ -207,15 +246,15 @@ export function FinanceStaffPayrollContent(){
         <Modal open={showCreatePayslip} onClose={()=>!savingSlip && setShowCreatePayslip(false)} title="New Payslip" size="lg">
           <form onSubmit={createPayslip} className="grid gap-3 md:grid-cols-2">
             <select className="border p-2 rounded" value={slipForm.staff} onChange={e=>setSlipForm({...slipForm, staff:e.target.value})}>
-              <option value="">Select Staff</option>
+              <option value="">Choose Staff</option>
               {staffOptions.map(o=> <option key={o.id} value={o.id}>{o.label}</option>)}
             </select>
-            <input className="border p-2 rounded" placeholder="Year (e.g., 2025)" type="number" value={slipForm.year} onChange={e=>setSlipForm({...slipForm, year:e.target.value})} />
+            <input className="border p-2 rounded" placeholder="Year" type="number" value={slipForm.year} onChange={e=>setSlipForm({...slipForm, year:e.target.value})} />
             <input className="border p-2 rounded" placeholder="Month (1-12)" type="number" value={slipForm.month} onChange={e=>setSlipForm({...slipForm, month:e.target.value})} />
-            <input className="border p-2 rounded" placeholder="Basic" type="number" value={slipForm.basic} onChange={e=>setSlipForm({...slipForm, basic:e.target.value})} />
-            <textarea className="border p-2 rounded md:col-span-2" rows={3} placeholder='Allowances JSON array, e.g., [{"name":"Transport","amount":2000}]' value={slipForm.allowances} onChange={e=>setSlipForm({...slipForm, allowances:e.target.value})} />
-            <textarea className="border p-2 rounded md:col-span-2" rows={3} placeholder='Deductions JSON array, e.g., [{"name":"NHIF","amount":500}]' value={slipForm.deductions} onChange={e=>setSlipForm({...slipForm, deductions:e.target.value})} />
-            <input className="border p-2 rounded md:col-span-2" placeholder="Notes" value={slipForm.notes} onChange={e=>setSlipForm({...slipForm, notes:e.target.value})} />
+            <input className="border p-2 rounded" placeholder="Basic Salary" type="number" value={slipForm.basic} onChange={e=>setSlipForm({...slipForm, basic:e.target.value})} />
+            <textarea className="border p-2 rounded md:col-span-2" rows={2} placeholder="Allowances (e.g., Transport:2000, Airtime:500)" value={slipForm.allowancesText} onChange={e=>setSlipForm({...slipForm, allowancesText:e.target.value})} />
+            <textarea className="border p-2 rounded md:col-span-2" rows={2} placeholder="Deductions (e.g., NHIF:500, Loan:1200)" value={slipForm.deductionsText} onChange={e=>setSlipForm({...slipForm, deductionsText:e.target.value})} />
+            <input className="border p-2 rounded md:col-span-2" placeholder="Notes (optional)" value={slipForm.notes} onChange={e=>setSlipForm({...slipForm, notes:e.target.value})} />
             <div className="md:col-span-2 flex justify-end">
               <button type="submit" className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded shadow" disabled={savingSlip || !slipForm.staff || !slipForm.year || !slipForm.month}>
                 {savingSlip? 'Saving...' : 'Save'}

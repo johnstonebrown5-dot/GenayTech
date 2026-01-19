@@ -7,6 +7,14 @@ export default function StudentReportCardViewer({ embedded=false, hideControls=f
   const { id } = useParams()
   const studentId = Number(id)
   const { user } = useAuth()
+
+  const toId = (v) => {
+    if (v == null) return null
+    if (typeof v === 'object') {
+      return v.id ?? v.pk ?? v.value ?? null
+    }
+    return v
+  }
   const [student, setStudent] = useState(null)
   const [examResults, setExamResults] = useState([])
   const [loading, setLoading] = useState(true)
@@ -44,7 +52,8 @@ export default function StudentReportCardViewer({ embedded=false, hideControls=f
   const [selectedTermYear, setSelectedTermYear] = useState(null)
 
   useEffect(()=>{
-    if (!selectedTermYear && examResults.length){
+    const current = controlledTermYear || selectedTermYear
+    if (!current && examResults.length){
       for (let i = examResults.length - 1; i >= 0; i--) {
         const ed = examResults[i]?.exam_detail
         const requirePublished = !(
@@ -54,12 +63,13 @@ export default function StudentReportCardViewer({ embedded=false, hideControls=f
         const term = ed?.term || ed?.inferred_term?.number
         if ((!requirePublished || ed?.published) && hasYear && term){
           const year = ed?.year || new Date(ed.date).getFullYear()
-          setSelectedTermYear(`${year}-T${term}`)
+          const key = `${year}-T${term}`
+          if (onSelectedTermYearChange){ onSelectedTermYearChange(key) } else { setSelectedTermYear(key) }
           break
         }
       }
     }
-  }, [examResults, selectedTermYear])
+  }, [examResults, controlledTermYear, selectedTermYear, onSelectedTermYearChange])
 
   const effectiveTermYear = controlledTermYear || selectedTermYear
 
@@ -73,7 +83,6 @@ export default function StudentReportCardViewer({ embedded=false, hideControls=f
   }, [effectiveTermYear])
 
   const termExams = useMemo(()=>{
-    if (!parsedTermYear) return []
     const seen = new Set()
     const list = []
     const requirePublished = !(
@@ -81,27 +90,70 @@ export default function StudentReportCardViewer({ embedded=false, hideControls=f
     )
     for (const r of examResults){
       const ed = r.exam_detail || {}
-      const id = ed.id || r.exam
+      const id = toId(ed.id) || toId(r.exam) || toId(r.exam_id)
       if (!id || seen.has(String(id))) continue
       if (requirePublished && !ed?.published) continue
       const year = ed.year || (ed?.date ? (isNaN(new Date(ed.date)) ? null : new Date(ed.date).getFullYear()) : null)
       const term = ed.term || ed?.inferred_term?.number || null
-      if (year === parsedTermYear.year && term === parsedTermYear.term){
-        seen.add(String(id))
-        list.push({ id, name: ed.name || String(r.exam || ''), total_marks: ed.total_marks, term, year, grade: ed.grade_level_tag, klass: ed.klass })
+      if (parsedTermYear){
+        if (year !== parsedTermYear.year || term !== parsedTermYear.term) continue
       }
+      seen.add(String(id))
+      const baseName = ed.name || (typeof r.exam === 'object' ? (r.exam?.name || r.exam?.title || '') : '') || String(r.exam || '')
+      const label = `${baseName}${year ? ` • ${year}` : ''}${term ? ` • T${term}` : ''}`
+      list.push({ id, name: label, total_marks: ed.total_marks, term, year, grade: ed.grade_level_tag, klass: ed.klass })
     }
+    // Sort newest first when not filtered by term
+    list.sort((a,b)=>{
+      const ya = Number(a.year||0), yb = Number(b.year||0)
+      if (yb !== ya) return yb - ya
+      const ta = Number(a.term||0), tb = Number(b.term||0)
+      if (tb !== ta) return tb - ta
+      return Number(b.id||0) - Number(a.id||0)
+    })
     return list
-  }, [examResults, parsedTermYear])
+  }, [examResults, parsedTermYear, user?.role, user?.is_staff, user?.is_superuser])
 
   const [selectedExamId, setSelectedExamId] = useState(null)
 
   const effectiveExamId = controlledExamId || selectedExamId
 
+  const selectedExamFromResults = useMemo(()=>{
+    if (!effectiveExamId) return null
+    const want = String(toId(effectiveExamId))
+    for (const r of examResults){
+      const ed = r.exam_detail || {}
+      const id = String(toId(ed.id) || toId(r.exam) || toId(r.exam_id) || '')
+      if (!id || id !== want) continue
+      const year = ed.year || (ed?.date ? (isNaN(new Date(ed.date)) ? null : new Date(ed.date).getFullYear()) : null)
+      const term = ed.term || ed?.inferred_term?.number || null
+      const name = ed.name || (typeof r.exam === 'object' ? (r.exam?.name || r.exam?.title || '') : '') || String(r.exam || '')
+      return { id: toId(effectiveExamId), name, year, term, grade: ed.grade_level_tag, klass: ed.klass, total_marks: ed.total_marks }
+    }
+    return null
+  }, [effectiveExamId, examResults])
+
   const selectedExam = useMemo(()=>{
     if (!effectiveExamId) return null
-    return termExams.find(e => String(e.id) === String(effectiveExamId)) || null
-  }, [termExams, effectiveExamId])
+    return termExams.find(e => String(e.id) === String(effectiveExamId)) || selectedExamFromResults || null
+  }, [termExams, effectiveExamId, selectedExamFromResults])
+
+  const headerExamName = useMemo(()=>{
+    if (selectedExam?.name) return selectedExam.name
+    // fallback: use first in termExams
+    if (termExams.length) return termExams[0].name
+    // final fallback: derive from latest examResults entry
+    let best = null
+    for (const r of examResults){
+      const ed = r.exam_detail || {}
+      const year = ed.year || (ed?.date ? (isNaN(new Date(ed.date)) ? null : new Date(ed.date).getFullYear()) : null)
+      const term = ed.term || ed?.inferred_term?.number || null
+      const baseName = ed.name || (typeof r.exam === 'object' ? (r.exam?.name || r.exam?.title || '') : '') || String(r.exam || '')
+      const label = `${baseName}${year ? ` • ${year}` : ''}${term ? ` • T${term}` : ''}`
+      best = label
+    }
+    return best || 'EXAM NAME'
+  }, [selectedExam, termExams, examResults])
 
   useEffect(()=>{
     const exists = effectiveExamId ? termExams.some(e => String(e.id) === String(effectiveExamId)) : false
@@ -110,6 +162,19 @@ export default function StudentReportCardViewer({ embedded=false, hideControls=f
       if (onSelectedExamIdChange){ onSelectedExamIdChange(fallback) } else { setSelectedExamId(fallback) }
     }
   }, [termExams, effectiveExamId, onSelectedExamIdChange])
+
+  // Ensure the term-year matches the selected exam so filtering returns marks
+  useEffect(()=>{
+    if (!selectedExam) return
+    const year = selectedExam.year || null
+    const term = selectedExam.term || null
+    if (!year || !term) return
+    const key = `${year}-T${term}`
+    const current = (controlledTermYear || selectedTermYear) || null
+    if (current !== key){
+      if (onSelectedTermYearChange){ onSelectedTermYearChange(key) } else { setSelectedTermYear(key) }
+    }
+  }, [selectedExam, controlledTermYear, selectedTermYear, onSelectedTermYearChange])
 
   // Load the class associated with the selected exam so we can show
   // the historical class name/grade at the time of the exam.
@@ -259,15 +324,23 @@ export default function StudentReportCardViewer({ embedded=false, hideControls=f
       if (requirePublished && !ed?.published) continue
       const year = ed.year || (ed?.date ? (isNaN(new Date(ed.date)) ? null : new Date(ed.date).getFullYear()) : null)
       const term = ed.term || ed?.inferred_term?.number || null
-      if (!parsedTermYear || year !== parsedTermYear.year || term !== parsedTermYear.term) continue
-      const exId = ed.id || r.exam
-      const sid = r.subject_detail?.id || r.subject
+      const exId = toId(ed.id) || toId(r.exam) || toId(r.exam_id)
+      // If a specific exam is selected, only include rows for that exam id.
+      if (effectiveExamId){
+        if (String(exId) !== String(toId(effectiveExamId))) continue
+      } else if (parsedTermYear){
+        if (year !== parsedTermYear.year || term !== parsedTermYear.term) continue
+      }
+      const sid = toId(r.subject_detail?.id) || toId(r.subject) || toId(r.subject_id)
       if (!exId || !sid) continue
       out[String(exId)] = out[String(exId)] || {}
-      out[String(exId)][String(sid)] = Number(r.marks || 0)
+      const candidates = [r.marks, r.score, r.mark, r.value]
+      let val = 0
+      for (const c of candidates){ const n = Number(c); if (Number.isFinite(n)) { val = n; break } }
+      out[String(exId)][String(sid)] = val
     }
     return out
-  }, [examResults, parsedTermYear])
+  }, [examResults, parsedTermYear, effectiveExamId, user?.role, user?.is_staff, user?.is_superuser])
 
   const subjects = useMemo(()=>{
     // Prefer subjects that have marks for the selected exam
@@ -277,11 +350,13 @@ export default function StudentReportCardViewer({ embedded=false, hideControls=f
     if (exId && byExam[exId]){
       for (const r of examResults){
         const ed = r.exam_detail || {}
-        if (!ed?.published) continue
+        if (!ed?.published && !(user?.role==='admin'||user?.role==='teacher'||user?.is_staff||user?.is_superuser)) continue
         const year = ed.year || (ed?.date ? (isNaN(new Date(ed.date)) ? null : new Date(ed.date).getFullYear()) : null)
         const term = ed.term || ed?.inferred_term?.number || null
-        if (!parsedTermYear || year !== parsedTermYear.year || term !== parsedTermYear.term) continue
-        const sid = r.subject_detail?.id || r.subject
+        if (parsedTermYear){
+          if (year !== parsedTermYear.year || term !== parsedTermYear.term) continue
+        }
+        const sid = toId(r.subject_detail?.id) || toId(r.subject) || toId(r.subject_id)
         if (!sid) continue
         if (byExam[exId][String(sid)] === undefined) continue
         if (!map.has(String(sid))){
@@ -300,8 +375,10 @@ export default function StudentReportCardViewer({ embedded=false, hideControls=f
         if (requirePublished && !ed?.published) continue
         const year = ed.year || (ed?.date ? (isNaN(new Date(ed.date)) ? null : new Date(ed.date).getFullYear()) : null)
         const term = ed.term || ed?.inferred_term?.number || null
-        if (!parsedTermYear || year !== parsedTermYear.year || term !== parsedTermYear.term) continue
-        const sid = r.subject_detail?.id || r.subject
+        if (parsedTermYear){
+          if (year !== parsedTermYear.year || term !== parsedTermYear.term) continue
+        }
+        const sid = toId(r.subject_detail?.id) || toId(r.subject) || toId(r.subject_id)
         if (!sid) continue
         if (!map.has(String(sid))){
           const label = r.subject_detail ? `${r.subject_detail.code ? r.subject_detail.code + ' — ' : ''}${r.subject_detail.name || ''}` : String(r.subject || '')
@@ -310,7 +387,7 @@ export default function StudentReportCardViewer({ embedded=false, hideControls=f
       }
     }
     return Array.from(map.values())
-  }, [examResults, parsedTermYear, selectedExam, marksByExamAndSubject])
+  }, [examResults, parsedTermYear, selectedExam, marksByExamAndSubject, user?.role, user?.is_staff, user?.is_superuser])
 
   
 
@@ -463,7 +540,7 @@ export default function StudentReportCardViewer({ embedded=false, hideControls=f
 
               <div className="border-t border-gray-300 my-4" />
 
-              <div className="text-center text-sm font-semibold tracking-wide mb-3">{selectedExam?.name || 'EXAM NAME'}</div>
+              <div className="text-center text-sm font-semibold tracking-wide mb-3">{headerExamName}</div>
 
               <div className="overflow-hidden">
                 <table className="w-full text-sm">

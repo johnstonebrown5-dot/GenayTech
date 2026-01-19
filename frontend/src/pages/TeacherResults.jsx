@@ -238,7 +238,7 @@ export default function TeacherResults(){
   }
   const handleClassPrint = () => {
     if (!summary) return
-    const cols = [ 'Position','Student', ...summary.subjects.map(s=> s.name || s.code), 'Total','Grade' ]
+    const cols = [ 'Position','Student', ...summary.subjects.map(s=> s.code || s.name), 'Total','Grade' ]
     const rows = summary.students.map(st=> [ st.position, st.name, ...summary.subjects.map(s=> st.marks?.[String(s.id)] ?? ''), st.total, toGrade(st.average) ])
     const thead = `<tr>${cols.map(c=>`<th>${c}</th>`).join('')}</tr>`
     const tbody = rows.map(r=> `<tr>${r.map(c=>`<td>${c}</td>`).join('')}</tr>`).join('')
@@ -247,7 +247,7 @@ export default function TeacherResults(){
   }
   const handleClassCSV = () => {
     if (!summary) return
-    const header = [ 'Position','Student', ...summary.subjects.map(s=> s.name || s.code), 'Total','Grade' ]
+    const header = [ 'Position','Student', ...summary.subjects.map(s=> s.code || s.name), 'Total','Grade' ]
     const data = summary.students.map(st=> [ st.position, st.name, ...summary.subjects.map(s=> s.marks?.[String(s.id)] ?? ''), st.total, toGrade(st.average) ])
     downloadCSV(`${(summary?.exam?.name||'exam').replaceAll(' ','_')}_class_results.csv`, [header, ...data])
   }
@@ -387,7 +387,7 @@ export default function TeacherResults(){
                     <th className="border border-gray-200 px-2 py-2 text-left w-20">Position</th>
                     <th className="border border-gray-200 px-2 py-2 text-left w-56">Student</th>
                     {summary.subjects.map(s => (
-                      <th key={s.id} className="border border-gray-200 px-2 py-2 text-left">{s.name || s.code}</th>
+                      <th key={s.id} className="border border-gray-200 px-2 py-2 text-left">{s.code || s.name}</th>
                     ))}
                     <th className="border border-gray-200 px-2 py-2 text-left">Total</th>
                     <th className="border border-gray-200 px-2 py-2 text-left">Grade</th>
@@ -457,7 +457,7 @@ export default function TeacherResults(){
                     <th className="border border-gray-200 px-2 py-2 text-left w-56">Student</th>
                     <th className="border border-gray-200 px-2 py-2 text-left w-48">Class</th>
                     {gradeSubjects.map(sub => (
-                      <th key={sub.id} className="border border-gray-200 px-2 py-2 text-left">{sub.name || sub.code}</th>
+                      <th key={sub.id} className="border border-gray-200 px-2 py-2 text-left">{sub.code || sub.name}</th>
                     ))}
                     <th className="border border-gray-200 px-2 py-2 text-left">Total</th>
                     <th className="border border-gray-200 px-2 py-2 text-left">Grade</th>

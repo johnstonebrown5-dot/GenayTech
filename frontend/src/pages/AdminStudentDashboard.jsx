@@ -9,11 +9,16 @@ import { showLoadingHint, setLoadingProgress, clearLoadingHint } from '../utils/
 
 function Selectors({ examResults, uiSelectedExamId, setUiSelectedExamId }){
   const allExams = React.useMemo(()=>{
+    const toId = (v) => {
+      if (v == null) return null
+      if (typeof v === 'object') return v.id ?? v.pk ?? v.value ?? null
+      return v
+    }
     const seen = new Set()
     const out = []
     for (const r of (examResults||[])){
       const ed = r.exam_detail || {}
-      const id = ed.id || r.exam
+      const id = toId(ed.id) || toId(r.exam) || toId(r.exam_id)
 
       if (!id || seen.has(String(id))) continue
       seen.add(String(id))

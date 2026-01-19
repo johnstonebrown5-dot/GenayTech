@@ -37,6 +37,7 @@ import FinanceClassFees from './pages/FinanceClassFees';
 import FinanceFees from './pages/FinanceFees';
 import FinanceIncomingPayments from './pages/FinanceIncomingPayments';
 import FinanceStaffPayroll from './pages/FinanceStaffPayroll';
+import FinanceStaffPayrollDetail from './pages/FinanceStaffPayrollDetail';
 import FinanceCashbook from './pages/FinanceCashbook';
 import FinanceFeeRegister from './pages/FinanceFeeRegister';
 import AdminStaffPayroll from './pages/AdminStaffPayroll';
@@ -90,6 +91,8 @@ import ReAuth from './pages/ReAuth'
 import HelpCenter from './pages/HelpCenter'
 import FloatingHelpAction from './components/Help/FloatingHelpAction'
 import LockPage from './pages/LockPage'
+import MaintenancePage from './components/MaintenancePage'
+import { maintenanceEnabled, maintenanceMessage, helpCenterPath } from './featureFlags'
 
 function ProtectedRoute({ children, roles, ownerRole }) {
   const { user, loading } = useAuth()
@@ -169,6 +172,10 @@ export default function App() {
       }
     } catch {}
   }, [pathname, nav])
+
+  if (maintenanceEnabled) {
+    return <MaintenancePage message={maintenanceMessage} helpPath={helpCenterPath} />
+  }
   return (
     <NotificationProvider>
       <AssistantProvider>
@@ -215,6 +222,7 @@ export default function App() {
               <Route path="teachers/:id" element={<AdminTeacherProfile/>} />
               <Route path="staff" element={<AdminStaff/>} />
               <Route path="staff-payroll" element={<AdminStaffPayroll/>} />
+              <Route path="staff-payroll/:id" element={<FinanceStaffPayrollDetail/>} />
               <Route path="classes" element={<AdminClasses/>} />
               <Route path="classes/:id" element={<AdminClassProfile/>} />
               <Route path="classes/:id/print-report-cards" element={<AdminClassPrintReportCards/>} />
@@ -279,6 +287,7 @@ export default function App() {
               <Route path="class-fees" element={<FinanceClassFees/>} />
               <Route path="fees" element={<FinanceFees/>} />
               <Route path="staff-payroll" element={<FinanceStaffPayroll/>} />
+              <Route path="staff-payroll/:id" element={<FinanceStaffPayrollDetail/>} />
             </Route>
             <Route path="/unauthorized" element={<Unauthorized/>} />
             {/* Catch-all 404 */}
