@@ -132,8 +132,13 @@ TEMPLATES = [
 WSGI_APPLICATION = 'edutrack.wsgi.application'
 
 # Database configuration – default to SQLite, optionally use MySQL on PythonAnywhere
-USE_MYSQL = os.getenv('USE_MYSQL', 'False') == 'True'
-if USE_MYSQL:
+def _env_bool(name: str, default: str = 'False') -> bool:
+    return str(os.getenv(name, default)).strip().lower() in ('1', 'true', 'yes', 'on')
+
+USE_MYSQL = _env_bool('USE_MYSQL', 'False')
+# Auto-enable MySQL if core creds are present even when USE_MYSQL is omitted
+_has_mysql_creds = bool(os.getenv('MYSQL_DB') and os.getenv('MYSQL_USER') and os.getenv('MYSQL_PASSWORD'))
+if USE_MYSQL or _has_mysql_creds:
     # Expected environment variables on PythonAnywhere:
     #   MYSQL_DB (e.g., 'yourusername$yourdb')
     #   MYSQL_USER (e.g., 'yourusername')
@@ -146,7 +151,7 @@ if USE_MYSQL:
             'NAME': os.getenv('MYSQL_DB', ''),
             'USER': os.getenv('MYSQL_USER', ''),
             'PASSWORD': os.getenv('MYSQL_PASSWORD', ''),
-            'HOST': os.getenv('MYSQL_HOST', 'mysql.server'),
+            'HOST': os.getenv('MYSQL_HOST', os.getenv('PA_MYSQL_HOST', 'mysql.server')),
             'PORT': os.getenv('MYSQL_PORT', '3306'),
             # Keep connections open for reuse; safe on PA shared MySQL
             'CONN_MAX_AGE': int(os.getenv('MYSQL_CONN_MAX_AGE', '60')),
