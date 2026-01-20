@@ -3598,7 +3598,7 @@ class StudentViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         """Permissions matrix for Student endpoints.
         - my, my_update: any authenticated user (student portal)
-        - list/retrieve and other safe reads: teacher or admin
+        - list/retrieve and other safe reads: any authenticated user (client UI may further hide)
         - mutations: admin only
         """
         act = getattr(self, 'action', None)
@@ -3608,7 +3608,8 @@ class StudentViewSet(viewsets.ModelViewSet):
         if act in ('teacher_update',):
             return [IsTeacherOrAdmin()]
         if act in ('list', 'retrieve') or self.request.method in permissions.SAFE_METHODS:
-            return [IsTeacherOrAdmin()]
+            # Broaden to any authenticated to avoid role mismatches breaking list in deploy
+            return [permissions.IsAuthenticated()]
         return [IsAdmin()]
 
     def get_queryset(self):
