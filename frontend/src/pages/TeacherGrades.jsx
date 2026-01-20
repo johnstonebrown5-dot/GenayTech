@@ -29,10 +29,20 @@ export default function TeacherGrades(){
   const { showSuccess, showError } = useNotification()
   const [invalid, setInvalid] = useState({}) // { student_id: true }
   const saveTimersRef = useRef({}) // { student_id: timeoutId }
+  const examsCacheRef = useRef({})
+  const [examsLoading, setExamsLoading] = useState(false)
+  const [studentsLoading, setStudentsLoading] = useState(false)
+  const [examsReloadKey, setExamsReloadKey] = useState(0)
+  const [marksReloadKey, setMarksReloadKey] = useState(0)
 
   // NEW: Allow teachers to input as raw marks or percentages
   const [inputAs, setInputAs] = useState('marks') // 'marks' | 'percent'
   const [unitModal, setUnitModal] = useState(false)
+  const refreshExams = () => {
+    try { delete examsCacheRef.current[String(selectedClass)] } catch {}
+    setExamsReloadKey(v=>v+1)
+  }
+  const reloadSavedMarks = () => setMarksReloadKey(v=>v+1)
 
   // Helper: compute percentage for a raw value given an Out Of
   const toPercent = (raw, out) => {
@@ -328,87 +338,107 @@ export default function TeacherGrades(){
     let mounted = true
     ;(async ()=>{
       try{
-        const res = await api.get(`/academics/students/?klass=${selectedClass}`)
-        if (!mounted) return
-        const arr = Array.isArray(res.data) ? res.data : (Array.isArray(res?.data?.results) ? res.data.results : [])
-        setStudents(arr)
-        const init = {}
-        arr.forEach(s => { init[s.id] = '' })
-        setMarks(init)
-        // set subjects to only those the logged-in teacher teaches in this class
-        const current = classes.find(c => String(c.id)===String(selectedClass))
-        if (current) {
-          const mine = getMySubjectsFromClass(current, me)
-          setSubjects(mine)
-          if (mine.length && !mine.find(s=> String(s.id)===String(selectedSubject))){
-            setSelectedSubject(String(mine[0].id))
+        setStudentsLoading(true)
+        const studentsPromise = api.get(`/academics/students/?klass=${selectedClass}`)
+        const loadExams = async () => {
+          if (examsCacheRef.current[String(selectedClass)]){
+            return examsCacheRef.current[String(selectedClass)]
           }
-        }
-        // Load existing unpublished exams for this class (server-filtered + pagination-aware)
-        try {
+          setExamsLoading(true)
+          const withTimeout = (p, ms) => Promise.race([
+            p,
+            new Promise((_, rej)=> setTimeout(()=>rej(new Error('timeout')), ms))
+          ])
           const fetchAll = async (url) => {
             let out = []
             let next = url
             let guard = 0
-            while (next && guard < 50){
-              const res = await api.get(next)
-              const data = res?.data
-              if (Array.isArray(data)) { out = data; break }
-              if (data && Array.isArray(data.results)) { out = out.concat(data.results); next = data.next; guard++; continue }
+            while (next && guard < 20){
+              const r = await withTimeout(api.get(next), 7000)
+              const d = r?.data
+              if (Array.isArray(d)) { out = d; break }
+              if (d && Array.isArray(d.results)) { out = out.concat(d.results); next = d.next; guard++; continue }
               break
             }
             return out
           }
-          // Try server-side filters if supported (multiple param name variants)
-          const tries = [
-            `/academics/exams/?klass=${encodeURIComponent(selectedClass)}&published=false`,
-            `/academics/exams/?class=${encodeURIComponent(selectedClass)}&published=false`,
-            `/academics/exams/?klass_id=${encodeURIComponent(selectedClass)}&published=false`,
-            `/academics/exams/?class_id=${encodeURIComponent(selectedClass)}&published=false`,
+          const attempts = [
+            `/academics/exams/?published=false&klass=${encodeURIComponent(selectedClass)}&page_size=1000`,
+            `/academics/exams/?klass=${encodeURIComponent(selectedClass)}&page_size=1000`,
+            `/academics/exams/?published=false&page_size=1000`,
+            `/academics/exams/?include_history=true&page_size=1000`,
+            `/academics/exams/?page_size=1000`,
+            `/academics/exams/`,
           ]
-          let combined = []
-          for (const t of tries){
-            try { const arr = await fetchAll(t); if (Array.isArray(arr) && arr.length) combined = combined.concat(arr) } catch {}
+          let list = []
+          for (const url of attempts){
+            try{
+              const arr = await fetchAll(url)
+              if (arr && arr.length){ list = list.concat(arr) }
+            }catch{}
           }
-          // Fallback: fetch all and client-filter if still empty
-          const list = combined.length ? combined : await fetchAll(`/academics/exams/`)
           const getKlassId = (e)=>{
             const k = e?.klass ?? e?.class ?? e?.klass_id ?? e?.class_id
             if (typeof k === 'object' && k) return String(k.id ?? k.klass ?? k.pk ?? k.ID ?? '')
             return String(k ?? '')
           }
           const isUnpublished = (e)=>{
+            // Consider multiple backend conventions
             if (typeof e?.published === 'boolean') return e.published === false
             if (typeof e?.is_published === 'boolean') return e.is_published === false
-            if (typeof e?.status === 'string') return e.status.toLowerCase() !== 'published'
-            return !e?.published
+            const statusStr = String(e?.status || e?.state || '').toLowerCase()
+            if (statusStr) return statusStr !== 'published' && statusStr !== 'complete' && statusStr !== 'final'
+            // If no explicit field, treat as unpublished unless there's a published_at timestamp
+            if (e?.published_at) return false
+            return true
           }
-          // Dedupe by id
           const byId = new Map()
           ;(list||[]).forEach(e=>{ if (e && e.id != null) byId.set(e.id, e) })
           const all = Array.from(byId.values())
-          let filtered = all.filter(e => getKlassId(e) === String(selectedClass) && isUnpublished(e))
-          // Fallback: if none matched by class id, show all unpublished exams (lets teacher proceed)
-          if (filtered.length === 0) {
-            filtered = all.filter(e => isUnpublished(e))
-          }
-          if (mounted) {
-            setExams(filtered)
-            const first = filtered[0]
-            setSelectedExamId(first?.id ? String(first.id) : '')
-            if (first?.total_marks) setExamMeta(m=>({...m, total_marks: Number(first.total_marks)}))
-            if (!filtered.length) {
-              // minimal diagnostics to help spot shape mismatches during dev
-              console.debug('TeacherGrades: no exams matched for class', selectedClass, {
-                fetchedCount: (list||[]).length,
-              })
+          const unpublished = all.filter(isUnpublished)
+          // Prioritize current class but include all unpublished so user can still pick
+          const prioritized = unpublished.sort((a,b)=>{
+            const ak = getKlassId(a) === String(selectedClass) ? 0 : 1
+            const bk = getKlassId(b) === String(selectedClass) ? 0 : 1
+            if (ak !== bk) return ak - bk
+            const ad = String(a.date||'')
+            const bd = String(b.date||'')
+            return bd.localeCompare(ad)
+          })
+          examsCacheRef.current[String(selectedClass)] = prioritized
+          setExamsLoading(false)
+          return prioritized
+        }
+        const [studentsRes, examsList] = await Promise.allSettled([studentsPromise, loadExams()])
+        if (!mounted) return
+        if (studentsRes.status === 'fulfilled'){
+          const res = studentsRes.value
+          const arr = Array.isArray(res.data) ? res.data : (Array.isArray(res?.data?.results) ? res.data.results : [])
+          setStudents(arr)
+          const init = {}
+          arr.forEach(s => { init[s.id] = '' })
+          setMarks(init)
+          const current = classes.find(c => String(c.id)===String(selectedClass))
+          if (current) {
+            const mine = getMySubjectsFromClass(current, me)
+            setSubjects(mine)
+            if (mine.length && !mine.find(s=> String(s.id)===String(selectedSubject))){
+              setSelectedSubject(String(mine[0].id))
             }
           }
-        } catch {}
+        }
+        if (examsList.status === 'fulfilled'){
+          const filtered = examsList.value || []
+          setExams(filtered)
+          const first = filtered[0]
+          setSelectedExamId(first?.id ? String(first.id) : '')
+          if (first?.total_marks) setExamMeta(m=>({...m, total_marks: Number(first.total_marks)}))
+        }
       }catch(e){ setError(e?.response?.data?.detail || e?.message) }
+      finally { if (mounted) setStudentsLoading(false) }
     })()
     return ()=>{ mounted = false }
-  }, [selectedClass])
+  }, [selectedClass, examsReloadKey])
 
   // Load existing results for selected exam and subject; prefill marks (overlay, non-destructive)
   useEffect(()=>{
@@ -505,6 +535,7 @@ export default function TeacherGrades(){
                 })
                 return next
               })
+              try { showSuccess('Loaded saved marks', `Prefilled ${list.length} entries from server.`, 2500) } catch {}
             }
           }
         } else {
@@ -570,7 +601,7 @@ export default function TeacherGrades(){
       }catch(e){ /* silent prefill failure */ }
     })()
     return ()=>{ alive = false }
-  }, [selectedExamId, selectedSubject, selectedComponentId, students, entryMode, components])
+  }, [selectedExamId, selectedSubject, selectedComponentId, students, entryMode, components, marksReloadKey])
 
   // Load subject components (papers) when subject changes
   useEffect(()=>{
@@ -988,7 +1019,10 @@ export default function TeacherGrades(){
             <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">Subject: <strong className="ml-1">{(subjects.find(s=>String(s.id)===String(selectedSubject))||{}).name || selectedSubject}</strong></span>
             <span className="px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">Exam: <strong className="ml-1">{(exams.find(e=>String(e.id)===String(selectedExamId))||{}).name || selectedExamId}</strong></span>
           </div>
-          <button onClick={()=>setControlsOpen(true)} className="text-indigo-600 text-sm">Change</button>
+          <div className="flex items-center gap-3">
+            <button onClick={reloadSavedMarks} className="text-indigo-700 hover:underline">Load Saved</button>
+            <button onClick={()=>setControlsOpen(true)} className="text-indigo-600 text-sm">Change</button>
+          </div>
         </div>
       )}
 
@@ -1091,10 +1125,17 @@ export default function TeacherGrades(){
             </div>
           )}
           <div className="grid gap-1">
-            <label className="text-xs text-gray-600">Exam</label>
+            <div className="flex items-center justify-between">
+              <label className="text-xs text-gray-600">Exam</label>
+              <div className="flex items-center gap-3">
+                <button type="button" onClick={reloadSavedMarks} className="text-[11px] text-indigo-700 hover:underline">Load Saved</button>
+                <button type="button" onClick={refreshExams} className="text-[11px] text-indigo-700 hover:underline disabled:opacity-60" disabled={examsLoading}>Refresh</button>
+              </div>
+            </div>
             <select
               className="border p-2 rounded"
               value={selectedExamId}
+              disabled={examsLoading}
               onChange={e=>{
                 const val = e.target.value
                 setSelectedExamId(val)
@@ -1110,7 +1151,7 @@ export default function TeacherGrades(){
                 }
               }}
             >
-              <option value="">Select Exam</option>
+              <option value="">{examsLoading ? 'Loading exams…' : 'Select Exam'}</option>
               {exams.map(e=> (
                 <option key={e.id} value={e.id}>{e.name} — T{e.term} — {e.year} — {e.date}</option>
               ))}
@@ -1150,6 +1191,10 @@ export default function TeacherGrades(){
         </div>
       </div>
       )}
+
+        {studentsLoading && (
+          <div className="mb-3 p-2 rounded-lg border bg-white shadow-sm text-sm text-gray-600 animate-pulse">Loading students…</div>
+        )}
 
         {/* Students - mobile list */}
         <div className="md:hidden -mx-1">

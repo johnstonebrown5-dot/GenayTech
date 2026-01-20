@@ -66,6 +66,7 @@ import AdminSubjects from './pages/AdminSubjects'
 import AdminSubjectProfile from './pages/AdminSubjectProfile'
 import AdminWebsite from './pages/AdminWebsite'
 import ReportIssue from './pages/ReportIssue'
+import TopProgress from './components/TopProgress'
 import PublicTeachers from './pages/PublicTeachers'
 import PublicTeacherProfile from './pages/PublicTeacherProfile'
 import PublicAdmissions from './pages/PublicAdmissions'
@@ -181,6 +182,7 @@ export default function App() {
       <AssistantProvider>
         <AuthProvider>
           <LockProvider>
+            <TopProgress />
             <MessageNotifier />
             {blockLandscape && (
               <div className="fixed inset-0 z-[60] flex flex-col items-center justify-center bg-slate-900/95 text-white px-8 text-center">

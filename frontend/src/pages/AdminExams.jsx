@@ -524,6 +524,10 @@ export default function AdminExams(){
                 {gradeOptions.map(g => <option key={g} value={g}>{g}</option>)}
               </select>
               <input className="border p-2 rounded bg-white" type="date" value={examForm.date} onChange={e=>setExamForm({...examForm, date:e.target.value})} required />
+              <div className="md:col-span-3 flex items-center gap-2 text-sm">
+                <button type="button" className="px-2 py-1 rounded border" onClick={()=> setExamForm(prev=>({...prev, grades: gradeOptions}))}>Select All Grades</button>
+                <button type="button" className="px-2 py-1 rounded border" onClick={()=> setExamForm(prev=>({...prev, grades: []}))}>Clear</button>
+              </div>
             </div>
           ) : (
             <div className="grid gap-3 md:grid-cols-3">
@@ -534,6 +538,10 @@ export default function AdminExams(){
                 {classes.map(c => <option key={c.id} value={c.id}>{c.name} — {c.grade_level}</option>)}
               </select>
               <input className="border p-2 rounded bg-white" type="date" value={examForm.date} onChange={e=>setExamForm({...examForm, date:e.target.value})} required />
+              <div className="md:col-span-3 flex items-center gap-2 text-sm">
+                <button type="button" className="px-2 py-1 rounded border" onClick={()=> setExamForm(prev=>({...prev, classes: classes.map(c=>String(c.id))}))}>Select All Classes</button>
+                <button type="button" className="px-2 py-1 rounded border" onClick={()=> setExamForm(prev=>({...prev, classes: []}))}>Clear</button>
+              </div>
             </div>
           )}
           <div className="flex justify-end gap-2 mt-1">
