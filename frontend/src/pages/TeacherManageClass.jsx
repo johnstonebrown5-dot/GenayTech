@@ -7,7 +7,10 @@ export default function TeacherManageClass(){
   const { user } = useAuth()
   const [myClass, setMyClass] = useState(null)
   const [classesLoading, setClassesLoading] = useState(true)
-  const [tab, setTab] = useState('add') // info | add | edit | fees
+  const search = (typeof window !== 'undefined') ? new URLSearchParams(window.location.search) : null
+  const initialTab = (search?.get('tab') || 'add')
+  const initialInnerView = (search?.get('view') || '')
+  const [tab, setTab] = useState(initialTab) // info | add | edit | fees
 
   useEffect(() => {
     let mounted = true
@@ -52,7 +55,7 @@ export default function TeacherManageClass(){
         <TabButton active={tab==='edit'} onClick={()=>setTab('edit')}>Edit Students</TabButton>
         <TabButton active={tab==='fees'} onClick={()=>setTab('fees')}>Send Fees Notifications</TabButton>
       </div>
-      {tab === 'info' && <ClassInfoPanel classId={myClass.id} />}
+      {tab === 'info' && <ClassInfoPanel classId={myClass.id} initialInnerTab={initialInnerView} />}
       {tab === 'add' && <AddStudentPanel classId={myClass.id} />}
       {tab === 'edit' && <EditStudentsPanel classId={myClass.id} />}
       {tab === 'fees' && <FeesNotifyPanel classId={myClass.id} />}
@@ -432,7 +435,7 @@ function renderStatusCell({ status, onResend }){
   )
 }
 
-function ClassInfoPanel({ classId }){
+function ClassInfoPanel({ classId, initialInnerTab }){
   const [klass, setKlass] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -445,7 +448,7 @@ function ClassInfoPanel({ classId }){
     }
     return map
   }, [klass])
-  const [innerTab, setInnerTab] = useState('info')
+  const [innerTab, setInnerTab] = useState(initialInnerTab === 'results' ? 'results' : 'info')
   const [exams, setExams] = useState([])
   const [recentExam, setRecentExam] = useState(null)
   const [recentSummary, setRecentSummary] = useState({ subjects: [], students: [] })
@@ -461,9 +464,12 @@ function ClassInfoPanel({ classId }){
   const [shareChannel, setShareChannel] = useState('sms')
   const [sharing, setSharing] = useState(false)
   const [shareMsg, setShareMsg] = useState('')
+  const [includeBreakdown, setIncludeBreakdown] = useState(true)
+  const [includePositions, setIncludePositions] = useState(true)
   const [resultsTotals, setResultsTotals] = useState({ sms:{sent:0,failed:0}, email:{sent:0,failed:0} })
   const [resultsStatusItems, setResultsStatusItems] = useState([])
   const [showResultsLog, setShowResultsLog] = useState(false)
+  const [classExams, setClassExams] = useState([])
 
   useEffect(() => {
     let cancelled = false
@@ -502,14 +508,16 @@ function ClassInfoPanel({ classId }){
         const arr = Array.isArray(data) ? data : (Array.isArray(data?.results) ? data.results : [])
         setExams(arr)
         const cid = Number(classId)
-        const forClass = arr.filter(e => Number(e.klass) === cid)
-        if (!forClass.length) { setRecentExam(null); return }
+        const isPublished = (e) => !!(e?.published || e?.is_published || String(e?.status||'').toLowerCase()==='published')
+        const forClass = arr.filter(e => Number(e.klass) === cid && isPublished(e))
+        if (!forClass.length) { setClassExams([]); setRecentExam(null); return }
         forClass.sort((a,b)=>{
           const da = a.date ? new Date(a.date).getTime() : 0
           const db = b.date ? new Date(b.date).getTime() : 0
           if (db !== da) return db - da
           return (b.id||0) - (a.id||0)
         })
+        setClassExams(forClass)
         setRecentExam(forClass[0])
       } catch {
         if (!cancelled) { setExams([]); setRecentExam(null) }
@@ -745,7 +753,24 @@ function ClassInfoPanel({ classId }){
           <div className="flex flex-wrap items-center gap-2 mb-3 text-sm text-gray-700">
             {recentExam ? (
               <>
-                <div className="px-2.5 py-1 rounded border bg-gray-50">Exam: <span className="font-medium ml-1">{recentExam.name}</span></div>
+                <label className="flex items-center gap-2">
+                  <span className="text-xs text-gray-600">Exam</span>
+                  <select
+                    className="border rounded px-2 py-1 text-xs bg-white"
+                    value={String(recentExam.id)}
+                    onChange={e=>{
+                      const id = e.target.value
+                      const found = classExams.find(ex => String(ex.id)===id)
+                      if (found) setRecentExam(found)
+                    }}
+                  >
+                    {classExams.length === 0 ? (
+                      <option value={String(recentExam.id)}>{recentExam.name}</option>
+                    ) : classExams.map(ex => (
+                      <option key={ex.id} value={ex.id}>{ex.name} — {ex.year} — T{ex.term}</option>
+                    ))}
+                  </select>
+                </label>
                 <div className="px-2.5 py-1 rounded border bg-gray-50">Year: <span className="font-medium ml-1">{recentExam.year}</span></div>
                 <div className="px-2.5 py-1 rounded border bg-gray-50">Term: <span className="font-medium ml-1">T{recentExam.term}</span></div>
                 <div className="px-2.5 py-1 rounded border bg-gray-50">Date: <span className="font-medium ml-1">{recentExam.date || '-'}</span></div>
@@ -774,13 +799,28 @@ function ClassInfoPanel({ classId }){
                   <option value="sms">Share: SMS only</option>
                   <option value="both">Share: SMS + Email</option>
                 </select>
+                <label className="inline-flex items-center gap-1 text-xs ml-1">
+                  <input type="checkbox" checked={includeBreakdown} onChange={e=>setIncludeBreakdown(e.target.checked)} />
+                  <span>Include subject marks</span>
+                </label>
+                <label className="inline-flex items-center gap-1 text-xs">
+                  <input type="checkbox" checked={includePositions} onChange={e=>setIncludePositions(e.target.checked)} />
+                  <span>Include positions</span>
+                </label>
                 <button
                   type="button"
                   disabled={sharing}
                   onClick={async () => {
                     setSharing(true); setShareMsg('')
                     try{
-                      const { data } = await api.post(`/academics/classes/${classId}/share-results/`, { exam_id: recentExam?.id, channel: shareChannel })
+                      const payload = {
+                        exam_id: recentExam?.id,
+                        channel: shareChannel,
+                        // backend may ignore unknown flags safely
+                        include_subject_breakdown: includeBreakdown,
+                        include_positions: includePositions ? 'class_and_grade' : false,
+                      }
+                      const { data } = await api.post(`/academics/classes/${classId}/share-results/`, payload)
                       setShareMsg(`Queued: SMS ${data?.sms_sent_attempts||0}, Email ${data?.email_sent_attempts||0}`)
                       // Refresh delivery status shortly after queueing
                       setTimeout(() => { loadResultsStatus() }, 700)

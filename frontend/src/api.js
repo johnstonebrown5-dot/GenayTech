@@ -5,6 +5,8 @@ import axios from 'axios'
 export const backendBase = (import.meta.env.VITE_API_BASE_URL ?? '')
 const api = axios.create({
   baseURL: backendBase.replace(/\/$/, '') + '/api',
+  // Prevent the UI from hanging indefinitely on slow or unreachable networks
+  timeout: 10000,
 })
 
 api.interceptors.request.use(config => {
