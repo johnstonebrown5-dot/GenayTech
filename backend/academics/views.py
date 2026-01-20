@@ -2746,25 +2746,36 @@ class ExamResultViewSet(viewsets.ModelViewSet):
         school = getattr(getattr(self.request, 'user', None), 'school', None)
         if school:
             qs = qs.filter(exam__klass__school=school)
-        # optional filters
-        exam_id = self.request.query_params.get('exam')
+        # optional filters (accept alternate parameter names for robustness)
+        qp = self.request.query_params
+        exam_id = qp.get('exam') or qp.get('exam_id')
         if exam_id:
             qs = qs.filter(exam_id=exam_id)
-        student_id = self.request.query_params.get('student')
+        student_id = qp.get('student') or qp.get('student_id')
         if student_id:
             qs = qs.filter(student_id=student_id)
-        subject_id = self.request.query_params.get('subject')
+        subject_id = qp.get('subject') or qp.get('subject_id')
         if subject_id:
             qs = qs.filter(subject_id=subject_id)
-        component_id = self.request.query_params.get('component')
+        component_id = qp.get('component') or qp.get('component_id')
         if component_id:
             qs = qs.filter(component_id=component_id)
+        # class/klass filters
+        klass_id = qp.get('klass') or qp.get('class') or qp.get('klass_id') or qp.get('class_id')
+        if klass_id:
+            qs = qs.filter(exam__klass_id=klass_id)
         # Scope for non-admins
         user = getattr(self.request, 'user', None)
         if user and getattr(user, 'role', None) == 'teacher' and not (user.is_staff or user.is_superuser):
-            # Teachers can READ published results school-wide, but WRITE only within their classes (handled in perform_create, bulk, etc.)
+            # Teachers can read:
+            #  - any published results school-wide, and
+            #  - unpublished results only within classes they teach (class teacher or subject teacher mapping)
             if self.request.method in permissions.SAFE_METHODS:
-                qs = qs.filter(exam__published=True)
+                qs = qs.filter(
+                    Q(exam__published=True) |
+                    Q(exam__klass__teacher=user) |
+                    Q(exam__klass__subject_teachers__teacher=user)
+                ).distinct()
             else:
                 qs = qs.filter(Q(exam__klass__teacher=user) | Q(exam__klass__subject_teachers__teacher=user)).distinct()
         # If requester is a student (not staff), only show published exams and their own results
