@@ -38,7 +38,7 @@ from .models import (
     ClassSubjectQuota, TeacherAvailability, TimetableVersion, TeacherDuty, StudentClassHistory
 )
 from .serializers import (
-    ClassSerializer, StudentSerializer, CompetencySerializer, AssessmentSerializer, AttendanceSerializer,
+    ClassSerializer, StudentSerializer, StudentListSerializer, CompetencySerializer, AssessmentSerializer, AttendanceSerializer,
     TeacherProfileSerializer, SubjectSerializer, SubjectComponentSerializer, ExamSerializer,
     ExamResultSerializer, AcademicYearSerializer, TermSerializer, StreamSerializer, LessonPlanSerializer,
     ClassSubjectTeacherSerializer, SubjectGradingBandSerializer, RoomSerializer, TimetableEntrySerializer,
@@ -112,6 +112,12 @@ class TeacherDutyViewSet(viewsets.ModelViewSet):
             except Exception:
                 qs = qs.filter(teacher_id=teacher_param)
         return qs
+
+    def get_serializer_class(self):
+        # Use lightweight serializer for list responses
+        if getattr(self, 'action', None) == 'list':
+            return StudentListSerializer
+        return super().get_serializer_class()
 
     def perform_create(self, serializer):
         user = getattr(self.request, 'user', None)
