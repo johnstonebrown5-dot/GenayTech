@@ -17,6 +17,7 @@ const STUDENTS_CACHE_TTL_MS = 5 * 60 * 1000 // 5 minutes
 export default function AdminStudents(){
   const [students, setStudents] = useState([])
   const [classes, setClasses] = useState([])
+  const [studentsTotal, setStudentsTotal] = useState(0)
   const [studentsNext, setStudentsNext] = useState('') // pagination next URL for students
   const [loadingMore, setLoadingMore] = useState(false)
   const [form, setForm] = useState({ admission_no:'', upi_number:'', name:'', dob:'', gender:'', guardian_id:'', guardian_name:'', guardian_passport_no:'', birth_certificate_no:'', klass:'', boarding_status:'day' })
@@ -71,6 +72,8 @@ export default function AdminStudents(){
       const clData = Array.isArray(cl.data) ? cl.data : (Array.isArray(cl.data?.results) ? cl.data.results : [])
       setStudents(stData)
       setClasses(clData)
+      // Total count: if paginated, use count; if array response, use length
+      setStudentsTotal(stIsArray ? stData.length : (Number(st.data?.count) || stData.length))
       // Save next link for incremental loading (only when paginated)
       setStudentsNext(stIsArray ? '' : (st.data?.next || ''))
       // Update cache for this tab
@@ -378,7 +381,7 @@ export default function AdminStudents(){
             (
               <StatCard
                 title="Students"
-                value={isLoading ? 0 : students.length}
+                value={isLoading ? 0 : studentsTotal}
                 icon="👥"
                 accent="from-brand-500 to-brand-600"
                 animate
@@ -679,7 +682,7 @@ export default function AdminStudents(){
               <div>
                 <h2 className="text-xl font-bold text-gray-900">{tab==='active' ? 'Active Students' : (tab==='inactive' ? 'Inactive Students' : 'Graduated Students')}</h2>
                 <p className="text-sm text-gray-600 mt-1">
-                  {filteredStudents.length} of {students.length} students
+                  {filteredStudents.length} of {studentsTotal} students
                   {searchTerm && ` matching "${searchTerm}"`}
                 </p>
               </div>
