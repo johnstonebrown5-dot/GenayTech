@@ -17,6 +17,8 @@ const STUDENTS_CACHE_TTL_MS = 5 * 60 * 1000 // 5 minutes
 export default function AdminStudents(){
   const [students, setStudents] = useState([])
   const [classes, setClasses] = useState([])
+  const [studentsNext, setStudentsNext] = useState('') // pagination next URL for students
+  const [loadingMore, setLoadingMore] = useState(false)
   const [form, setForm] = useState({ admission_no:'', upi_number:'', name:'', dob:'', gender:'', guardian_id:'', guardian_name:'', guardian_passport_no:'', birth_certificate_no:'', klass:'', boarding_status:'day' })
   const [showAddStudent, setShowAddStudent] = useState(false)
   const [addStatus, setAddStatus] = useState('idle') // idle | adding | completed
@@ -48,26 +50,29 @@ export default function AdminStudents(){
       setIsLoading(true)
       try { showLoadingHint('Loading students…', 8) } catch {}
       // Build students query
-      let studentsUrl = `/academics/students/?page_size=2000`
+      let studentsUrl = `/academics/students/`
       if (tab === 'graduated') {
-        studentsUrl += `&is_graduated=true`
+        studentsUrl += `?is_graduated=true`
       } else if (tab === 'inactive') {
         // Count graduated among inactive: fetch all students with is_active=false (any graduation state)
-        studentsUrl += `&is_active=false`
+        studentsUrl += `?is_active=false`
       } else {
         // active
-        studentsUrl += `&is_graduated=false&is_active=true`
+        studentsUrl += `?is_graduated=false&is_active=true`
       }
       try { setLoadingProgress(25) } catch {}
       const [st, cl] = await Promise.all([
         api.get(studentsUrl),
-        api.get('/academics/classes/?page_size=2000')
+        api.get('/academics/classes/?page_size=200')
       ])
       try { setLoadingProgress(80) } catch {}
-      const stData = Array.isArray(st.data) ? st.data : (Array.isArray(st.data?.results) ? st.data.results : [])
+      const stIsArray = Array.isArray(st.data)
+      const stData = stIsArray ? st.data : (Array.isArray(st.data?.results) ? st.data.results : [])
       const clData = Array.isArray(cl.data) ? cl.data : (Array.isArray(cl.data?.results) ? cl.data.results : [])
       setStudents(stData)
       setClasses(clData)
+      // Save next link for incremental loading (only when paginated)
+      setStudentsNext(stIsArray ? '' : (st.data?.next || ''))
       // Update cache for this tab
       cachedStudents = stData
       cachedClasses = clData
@@ -78,6 +83,24 @@ export default function AdminStudents(){
     } finally {
       setIsLoading(false)
       try { setLoadingProgress(100); clearLoadingHint() } catch {}
+    }
+  }
+
+  // Load next page of students when available
+  const loadMore = async () => {
+    if (!studentsNext) return
+    try{
+      setLoadingMore(true)
+      const res = await api.get(studentsNext)
+      const data = res?.data
+      const arr = Array.isArray(data) ? data : (Array.isArray(data?.results) ? data.results : [])
+      setStudents(prev => prev.concat(arr))
+      setStudentsNext(Array.isArray(data) ? '' : (data?.next || ''))
+    }catch(e){
+      showError('Load Failed', 'Could not load more students.')
+      setStudentsNext('')
+    }finally{
+      setLoadingMore(false)
     }
   }
 
@@ -783,6 +806,18 @@ export default function AdminStudents(){
                 )}
               </tbody>
             </table>
+            {/* Load More row */}
+            {studentsNext && (
+              <div className="px-5 py-3 border-t bg-white flex justify-center">
+                <button
+                  onClick={loadMore}
+                  disabled={loadingMore}
+                  className="px-4 py-2 text-sm rounded-md bg-blue-600 text-white disabled:opacity-60"
+                >
+                  {loadingMore ? 'Loading…' : 'Load More'}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>
