@@ -131,13 +131,39 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'edutrack.wsgi.application'
 
-# Database configuration – force SQLite for local development
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+# Database configuration – default to SQLite, optionally use MySQL on PythonAnywhere
+USE_MYSQL = os.getenv('USE_MYSQL', 'False') == 'True'
+if USE_MYSQL:
+    # Expected environment variables on PythonAnywhere:
+    #   MYSQL_DB (e.g., 'yourusername$yourdb')
+    #   MYSQL_USER (e.g., 'yourusername')
+    #   MYSQL_PASSWORD
+    # Optional overrides:
+    #   MYSQL_HOST (default 'mysql.server'), MYSQL_PORT (default '3306')
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.mysql',
+            'NAME': os.getenv('MYSQL_DB', ''),
+            'USER': os.getenv('MYSQL_USER', ''),
+            'PASSWORD': os.getenv('MYSQL_PASSWORD', ''),
+            'HOST': os.getenv('MYSQL_HOST', 'mysql.server'),
+            'PORT': os.getenv('MYSQL_PORT', '3306'),
+            # Keep connections open for reuse; safe on PA shared MySQL
+            'CONN_MAX_AGE': int(os.getenv('MYSQL_CONN_MAX_AGE', '60')),
+            'OPTIONS': {
+                # Strict mode for better integrity; adjust if needed
+                'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
+                'charset': 'utf8mb4',
+            },
+        }
     }
-}
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
 
 AUTH_USER_MODEL = 'accounts.User'
 
