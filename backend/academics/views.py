@@ -3007,10 +3007,20 @@ class ExamResultViewSet(viewsets.ModelViewSet):
                 # Scale marks to target_max
                 m = (m / oo) * target_max
                 serializer.validated_data['marks'] = m
+                # Persist denominator used for entry so downstream aggregation is accurate
+                try:
+                    serializer.validated_data['out_of'] = float(oo)
+                except Exception:
+                    pass
             else:
                 # If no out_of provided, validate marks directly against target_max
                 if target_max is not None and m > target_max:
                     raise ValidationError({'marks': f'Marks cannot exceed maximum ({target_max})'})
+                # Persist implicit denominator (target_max) for consistency
+                try:
+                    serializer.validated_data['out_of'] = float(target_max or 100.0)
+                except Exception:
+                    pass
         # If teacher, ensure they are allowed to submit for this class/subject
         if user and getattr(user, 'role', None) == 'teacher' and not (user.is_staff or user.is_superuser):
             allowed = False
@@ -3043,7 +3053,7 @@ class ExamResultViewSet(viewsets.ModelViewSet):
                     student=vd['student'],
                     subject=vd['subject'],
                     component=vd.get('component'),
-                    defaults={'marks': vd['marks']},
+                    defaults={'marks': vd['marks'], 'out_of': vd.get('out_of')},
                 )
             serializer.instance = obj
 

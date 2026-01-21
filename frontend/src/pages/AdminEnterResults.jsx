@@ -38,6 +38,7 @@ export default function AdminEnterResults(){
         const subj = Array.isArray(klassRes.data?.subjects) ? klassRes.data.subjects : []
         setSubjects(subj)
         // Load components for each subject (to auto-include when only one exists)
+        let componentsLoadedMap = {}
         try {
           const entries = await Promise.all(subj.map(async (s)=>{
             try{
@@ -51,6 +52,7 @@ export default function AdminEnterResults(){
           if (!alive) return
           const map = {}
           for (const [sid, arr] of entries){ map[sid] = arr }
+          componentsLoadedMap = map
           setComponentsMap(map)
         } catch {
           setComponentsMap({})
@@ -66,7 +68,7 @@ export default function AdminEnterResults(){
           existing = Array.isArray(data) ? data : (Array.isArray(data?.results) ? data.results : [])
         }catch{}
         // Build map of components per subject id
-        const compsBySubject = componentsMap || {}
+        const compsBySubject = componentsLoadedMap && Object.keys(componentsLoadedMap).length ? componentsLoadedMap : (componentsMap || {})
         // Aggregate per student-subject: sum marks and sum denominators
         const agg = new Map()
         existing.forEach(r=>{
