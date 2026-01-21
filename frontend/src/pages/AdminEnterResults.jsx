@@ -18,6 +18,7 @@ export default function AdminEnterResults(){
   const [selectedSubject, setSelectedSubject] = useState('') // '' means All subjects
   const [results, setResults] = useState([]) // rows: {student, subject, marks}
   const [invalid, setInvalid] = useState({}) // { 'studentId-subjectId': true }
+  const [componentsMap, setComponentsMap] = useState({}) // { subjectId: [components] }
   const { showError } = useNotification?.() || { showError: ()=>{} }
 
   useEffect(()=>{
@@ -36,6 +37,24 @@ export default function AdminEnterResults(){
         setKlass(klassRes.data)
         const subj = Array.isArray(klassRes.data?.subjects) ? klassRes.data.subjects : []
         setSubjects(subj)
+        // Load components for each subject (to auto-include when only one exists)
+        try {
+          const entries = await Promise.all(subj.map(async (s)=>{
+            try{
+              const r = await api.get(`/academics/subject_components/?subject=${s.id}`)
+              const arr = Array.isArray(r.data) ? r.data : (Array.isArray(r?.data?.results) ? r.data.results : [])
+              return [s.id, arr]
+            } catch {
+              return [s.id, []]
+            }
+          }))
+          if (!alive) return
+          const map = {}
+          for (const [sid, arr] of entries){ map[sid] = arr }
+          setComponentsMap(map)
+        } catch {
+          setComponentsMap({})
+        }
         const stuRes = await api.get(`/academics/students/?klass=${e.data.klass}`)
         if (!alive) return
         const studentsList = Array.isArray(stuRes.data) ? stuRes.data : (Array.isArray(stuRes.data?.results) ? stuRes.data.results : [])
@@ -82,7 +101,14 @@ export default function AdminEnterResults(){
         .filter(r => visibleSubjectIds.includes(r.subject))
         .map(r => ({ ...r, marks: parseFloat(r.marks) }))
         .filter(r => !isNaN(r.marks))
-        .map(r => ({ ...r, exam: examId }))
+        .map(r => {
+          const comps = componentsMap[r.subject] || []
+          const item = { ...r, exam: examId }
+          if (Array.isArray(comps) && comps.length === 1){
+            item.component = comps[0]?.id
+          }
+          return item
+        })
       if (!payload.length) throw new Error('Enter at least one mark to save')
       const res = await api.post('/academics/exam_results/bulk/', { results: payload })
       const failed = Number(res?.data?.failed || 0)

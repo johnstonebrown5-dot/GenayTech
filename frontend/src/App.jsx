@@ -181,7 +181,7 @@ export default function App() {
     <NotificationProvider>
       <AssistantProvider>
         <AuthProvider>
-          <LockProvider>
+          <LockProvider timeoutMs={5 * 60 * 1000}>
             <TopProgress />
             <MessageNotifier />
             {blockLandscape && (

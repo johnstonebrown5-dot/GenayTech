@@ -2946,11 +2946,27 @@ class ExamResultViewSet(viewsets.ModelViewSet):
         marks = serializer.validated_data.get('marks')
         out_of = serializer.validated_data.get('out_of')
         user = getattr(self.request, 'user', None)
+        # Auto-assign sole component if subject has exactly one and none provided
+        try:
+            if subject is not None and component is None and subject.components.count() == 1:
+                only_comp = subject.components.first()
+                if only_comp:
+                    serializer.validated_data['component'] = only_comp
+                    component = only_comp
+        except Exception:
+            pass
         if school and exam and exam.klass.school_id != school.id:
             raise ValidationError({'exam': 'Exam must belong to your school'})
         # Component belongs to subject
         if component and subject and component.subject_id != subject.id:
             raise ValidationError({'component': 'Component does not belong to the selected subject'})
+        # If the subject has components defined, require a component to be specified
+        if subject is not None:
+            try:
+                if subject.components.exists() and component is None:
+                    raise ValidationError({'component': 'This subject has components. Please select a component/paper to record marks for.'})
+            except Exception:
+                pass
         # Basic marks validation
         if exam and marks is not None:
             try:
@@ -2964,6 +2980,12 @@ class ExamResultViewSet(viewsets.ModelViewSet):
             target_max = None
             if component and getattr(component, 'max_marks', None) is not None:
                 target_max = float(component.max_marks)
+            elif component is not None and out_of is not None:
+                # If component specified but no max_marks set, prefer provided out_of
+                try:
+                    target_max = float(out_of)
+                except Exception:
+                    target_max = None
             elif getattr(exam, 'total_marks', None) is not None:
                 target_max = float(exam.total_marks)
             else:
@@ -3063,6 +3085,13 @@ class ExamResultViewSet(viewsets.ModelViewSet):
                 component = None
                 if component_id is not None:
                     component = SubjectComponent.objects.get(pk=component_id)
+                # Auto-assign sole component if subject has exactly one and none provided
+                if component is None:
+                    try:
+                        if subject.components.count() == 1:
+                            component = subject.components.first()
+                    except Exception:
+                        pass
             except Exam.DoesNotExist:
                 errors.append({'index': idx, 'error': {'exam': 'Not found'}})
                 continue
@@ -3084,6 +3113,13 @@ class ExamResultViewSet(viewsets.ModelViewSet):
             if component and component.subject_id != subject.id:
                 errors.append({'index': idx, 'error': {'component': 'Component does not belong to the selected subject'}})
                 continue
+            # If the subject has components defined, require a component to be specified
+            try:
+                if subject.components.exists() and component is None:
+                    errors.append({'index': idx, 'error': {'component': 'This subject has components. Please provide a component/paper for each mark.'}})
+                    continue
+            except Exception:
+                pass
             # Block non-examinable subjects
             try:
                 if hasattr(subject, 'is_examinable') and not bool(subject.is_examinable):
@@ -3115,6 +3151,8 @@ class ExamResultViewSet(viewsets.ModelViewSet):
                 target_max = None
                 if component and getattr(component, 'max_marks', None) is not None:
                     target_max = float(component.max_marks)
+                elif component is not None and out_of is not None:
+                    target_max = float(out_of)
                 elif getattr(exam, 'total_marks', None) is not None:
                     target_max = float(exam.total_marks)
                 else:
@@ -3219,6 +3257,18 @@ class ExamResultViewSet(viewsets.ModelViewSet):
             return Response({'detail': 'Exam must belong to your school'}, status=403)
         if component and component.subject_id != subject.id:
             return Response({'detail': 'Component does not belong to the selected subject'}, status=400)
+        # Auto-assign sole component if subject has exactly one and none provided
+        try:
+            if subject and not component and subject.components.count() == 1:
+                component = subject.components.first()
+        except Exception:
+            pass
+        # If the subject has components defined, require a component to be specified
+        try:
+            if subject and subject.components.exists() and not component:
+                return Response({'detail': 'This subject has components. Please select a component/paper to upload marks for.'}, status=400)
+        except Exception:
+            pass
         # Block non-examinable subjects
         try:
             if hasattr(subject, 'is_examinable') and not bool(subject.is_examinable):
@@ -3513,6 +3563,12 @@ class ExamResultViewSet(viewsets.ModelViewSet):
         target_max = None
         if component and getattr(component, 'max_marks', None) is not None:
             target_max = float(component.max_marks)
+        elif component is not None and out_of not in (None, ''):
+            # If component specified but has no max_marks, prefer provided out_of to avoid scaling to exam total
+            try:
+                target_max = float(out_of)
+            except Exception:
+                target_max = None
         elif getattr(exam, 'total_marks', None) is not None:
             target_max = float(exam.total_marks)
         else:

@@ -44,6 +44,20 @@ export default function TeacherGrades(){
   }
   const reloadSavedMarks = () => setMarksReloadKey(v=>v+1)
 
+  // Persist teacher Out Of preferences per class/subject/exam
+  const outOfStoreKey = () => [
+    'outofprefs',
+    `c:${selectedClass||''}`,
+    `s:${selectedSubject||''}`,
+    `e:${selectedExamId||''}`,
+  ].join('|')
+  const loadOutOfPrefs = () => {
+    try{ const raw = localStorage.getItem(outOfStoreKey()); return raw ? JSON.parse(raw) : {} }catch{ return {} }
+  }
+  const saveOutOfPrefs = (map) => {
+    try{ localStorage.setItem(outOfStoreKey(), JSON.stringify(map||{})) }catch{}
+  }
+
   // Helper: compute percentage for a raw value given an Out Of
   const toPercent = (raw, out) => {
     const v = Number(raw)
@@ -101,6 +115,28 @@ export default function TeacherGrades(){
     const o = Number(out || examMeta.total_marks || 100)
     if (Number.isNaN(p) || Number.isNaN(o) || o <= 0) return ''
     return String(Math.round((p/100) * o))
+  }
+
+  // Convert stored marks back to percentage string for display when inputAs === 'percent'
+  const marksToPercent = (marksValue, out) => {
+    const v = Number(marksValue)
+    const o = Number(out || examMeta.total_marks || 100)
+    if (Number.isNaN(v) || Number.isNaN(o) || o <= 0) return ''
+    // Return numeric percentage without % sign, rounded to nearest integer for input friendliness
+    return String(Math.round((v / o) * 100))
+  }
+
+  // Normalize values fetched from server that were incorrectly saved as percentages (out of 100)
+  // If a value is far larger than the expected Out Of but <= 100, treat it as a percent and convert back to marks.
+  const normalizeStoredMark = (val, out) => {
+    const raw = Number(val)
+    const o = Number(out || examMeta.total_marks || 100)
+    if (Number.isNaN(raw) || Number.isNaN(o) || o <= 0) return ''
+    // Heuristic: if raw > 1.25 * out but <= 100, interpret as percentage
+    if (raw > (o * 1.25) && raw <= 100){
+      return Math.round((raw / 100) * o)
+    }
+    return Math.round(raw)
   }
 
   // Helper: combined percentage across all selected components for a student
@@ -530,7 +566,7 @@ export default function TeacherGrades(){
                   const sid = r.student ?? r.student_id ?? (r.student_detail?.id)
                   if (sid != null){
                     const val = r.marks ?? r.score ?? r.value
-                    if (val != null) next[sid] = Math.round(Number(val))
+                    if (val != null) next[sid] = normalizeStoredMark(val, outOf)
                   }
                 })
                 return next
@@ -589,7 +625,7 @@ export default function TeacherGrades(){
                 const sid = r.student ?? r.student_id ?? (r.student_detail?.id)
                 if (sid != null){
                   const val = r.marks ?? r.score ?? r.value
-                  if (val != null) map[sid] = Math.round(Number(val))
+                  if (val != null) map[sid] = normalizeStoredMark(val, outOfPerComp[c.id])
                 }
               })
               nextMarksAll[c.id] = map
@@ -617,15 +653,16 @@ export default function TeacherGrades(){
         // default select first component if exists; else clear component selection
         const first = arr[0]
         setSelectedComponentId(first?.id ? String(first.id) : '')
-        // Set default Out Of: prefer component.max_marks if present else exam total
-        const defaultOut = (first && first.max_marks != null) ? Number(first.max_marks) : (Number(examMeta.total_marks) || 100)
-        setOutOf(String(defaultOut))
-        // Initialize all-mode states
-        const nextOutOfPerComp = {}
+        // Build defaults then overlay saved preferences
+        const defaults = {}
         for (const c of arr){
-          nextOutOfPerComp[c.id] = (c.max_marks != null) ? Number(c.max_marks) : (Number(examMeta.total_marks)||100)
+          defaults[c.id] = (c.max_marks != null) ? Number(c.max_marks) : (Number(examMeta.total_marks)||100)
         }
-        setOutOfPerComp(nextOutOfPerComp)
+        const saved = loadOutOfPrefs()
+        const merged = { ...defaults, ...(saved||{}) }
+        setOutOfPerComp(merged)
+        const firstOut = first ? (merged[first.id] ?? defaults[first.id]) : (Number(examMeta.total_marks)||100)
+        setOutOf(String(firstOut))
         const emptyMarksAll = {}
         const emptyInvalidAll = {}
         for (const c of arr){
@@ -651,9 +688,43 @@ export default function TeacherGrades(){
   // Update default outOf when component or exam total changes
   useEffect(()=>{
     const comp = components.find(c => String(c.id)===String(selectedComponentId))
-    const def = (comp && comp.max_marks != null) ? Number(comp.max_marks) : (Number(examMeta.total_marks)||100)
-    setOutOf(String(def))
+    if (!comp){
+      const fallback = Number(examMeta.total_marks)||100
+      setOutOf(String(fallback))
+      return
+    }
+    const saved = loadOutOfPrefs()
+    const val = (saved && saved[comp.id] != null) ? Number(saved[comp.id]) : (comp.max_marks != null ? Number(comp.max_marks) : (Number(examMeta.total_marks)||100))
+    setOutOf(String(val))
   }, [selectedComponentId, examMeta.total_marks])
+
+  // Persist per-component Out Of whenever user edits values in All mode
+  useEffect(()=>{
+    if (!Array.isArray(components) || components.length === 0) return
+    const current = loadOutOfPrefs()
+    let changed = false
+    for (const c of components){
+      const v = outOfPerComp[c.id]
+      if (v != null && v !== '' && String(current[c.id]||'') !== String(v)){
+        current[c.id] = v
+        changed = true
+      }
+    }
+    if (changed) saveOutOfPrefs(current)
+  }, [outOfPerComp, components, selectedClass, selectedSubject, selectedExamId])
+
+  // When editing Out Of in single mode, keep preference in sync
+  useEffect(()=>{
+    const compId = Number(selectedComponentId)
+    if (!compId) return
+    if (outOf == null || outOf === '') return
+    const current = loadOutOfPrefs()
+    const nv = Number(outOf)
+    if (!Number.isNaN(nv) && String(current[compId]||'') !== String(nv)){
+      current[compId] = nv
+      saveOutOfPrefs(current)
+    }
+  }, [outOf, selectedComponentId, selectedClass, selectedSubject, selectedExamId])
 
   // Re-validate all marks when outOf changes and notify immediately if any exceed
   useEffect(()=>{
@@ -929,7 +1000,12 @@ export default function TeacherGrades(){
             const list = await fetchAll(url)
             const map = {}
             students.forEach(s=>{ map[s.id] = '' })
-            list.forEach(r=>{ if (r && r.student != null) map[r.student] = r.marks })
+            list.forEach(r=>{
+              if (r && r.student != null){
+                const raw = r.marks
+                map[r.student] = normalizeStoredMark(raw, outOfPerComp[c.id])
+              }
+            })
             nextMarksAll[c.id] = map
           }
           setMarksAll(nextMarksAll)
@@ -959,11 +1035,32 @@ export default function TeacherGrades(){
   }
 
   const canSubmit = useMemo(()=> {
+    const classOk = Boolean(selectedClass)
+    const subjectOk = Boolean(selectedSubject)
+    const examOk = Boolean(selectedExamId)
     const list = Array.isArray(students) ? students : []
-    const anyValue = list.some(s => !isNaN(parseFloat(marks[s.id])))
-    const hasInvalid = Object.values(invalid).some(Boolean)
-    return selectedClass && selectedSubject && selectedExamId && anyValue && !hasInvalid
-  }, [selectedClass, selectedSubject, selectedExamId, students, marks, invalid])
+    if (!classOk || !subjectOk || !examOk || list.length === 0) return false
+    if (entryMode === 'single'){
+      const anyValue = list.some(s => !isNaN(parseFloat(marks[s.id])))
+      const hasInvalid = Object.values(invalid).some(Boolean)
+      return anyValue && !hasInvalid
+    }
+    // entryMode === 'all': check across all components
+    const comps = Array.isArray(components) ? components : []
+    if (comps.length === 0) return false
+    let anyValue = false
+    for (const c of comps){
+      const col = marksAll?.[c.id] || {}
+      if (list.some(s => !isNaN(parseFloat(col[s.id])))) { anyValue = true; break }
+    }
+    if (!anyValue) return false
+    // any invalid cell?
+    for (const c of comps){
+      const iv = invalidAll?.[c.id] || {}
+      if (Object.values(iv).some(Boolean)) return false
+    }
+    return true
+  }, [selectedClass, selectedSubject, selectedExamId, students, entryMode, marks, invalid, components, marksAll, invalidAll])
 
   return (
     <div className="teacher-grades-page px-2 md:px-4 lg:px-6 py-3 md:py-4 space-y-3 md:space-y-4 max-w-6xl mx-auto pb-24 md:pb-0 min-h-screen">
@@ -1219,7 +1316,7 @@ export default function TeacherGrades(){
                     max={inputAs==='percent' ? 100 : (Number(outOf)||Number(examMeta.total_marks)||100)}
                     step="1"
                     className={`border px-2 py-1.5 rounded-lg w-24 text-right focus:ring-2 focus:ring-indigo-200 ${invalid[st.id] ? 'border-red-500 bg-red-50' : ''}`}
-                    value={marks[st.id] || ''}
+                    value={inputAs==='percent' ? marksToPercent(marks[st.id], outOf) : (marks[st.id] || '')}
                     onChange={e=>handleMarkChange(st.id, e.target.value)}
                   />
                   <span className="text-xs text-gray-500 w-14 text-right">{inputAs==='percent' ? '%' : toPercent(marks[st.id], outOf)}</span>
@@ -1262,7 +1359,7 @@ export default function TeacherGrades(){
                           max={inputAs==='percent' ? 100 : (Number(outOf)||Number(examMeta.total_marks)||100)}
                           step="0.01"
                           className={`border p-2 rounded w-28 text-right focus:ring-2 focus:ring-indigo-200 ${invalid[st.id] ? 'border-red-500 bg-red-50' : ''}`}
-                          value={marks[st.id] || ''}
+                          value={inputAs==='percent' ? marksToPercent(marks[st.id], outOf) : (marks[st.id] || '')}
                           onChange={e=>handleMarkChange(st.id, e.target.value)}
                         />
                         <span className="text-xs text-gray-500 w-16 text-right">{inputAs==='percent' ? '%' : toPercent(marks[st.id], outOf)}</span>
@@ -1279,7 +1376,7 @@ export default function TeacherGrades(){
                             max={inputAs==='percent' ? 100 : (Number(outOfPerComp[c.id])||Number(examMeta.total_marks)||100)}
                             step="0.01"
                             className={`border p-2 rounded w-24 text-right focus:ring-2 focus:ring-indigo-200 ${(invalidAll[c.id]?.[st.id]) ? 'border-red-500 bg-red-50' : ''}`}
-                            value={(marksAll[c.id]?.[st.id]) || ''}
+                            value={inputAs==='percent' ? marksToPercent((marksAll[c.id]?.[st.id]), outOfPerComp[c.id]) : ((marksAll[c.id]?.[st.id]) || '')}
                             onChange={e=>handleMarkChangeAll(c.id, st.id, e.target.value)}
                           />
                           <span className="text-xs text-gray-500 w-16 text-right">{inputAs==='percent' ? '%' : toPercent((marksAll[c.id]?.[st.id]) || '', outOfPerComp[c.id])}</span>
