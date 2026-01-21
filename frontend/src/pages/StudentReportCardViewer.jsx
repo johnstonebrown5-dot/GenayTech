@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useParams, Link, useLocation } from 'react-router-dom'
 import api, { toAbsoluteUrl } from '../api'
 import { useAuth } from '../auth'
 
@@ -7,6 +7,10 @@ export default function StudentReportCardViewer({ embedded=false, hideControls=f
   const { id } = useParams()
   const studentId = Number(id)
   const { user } = useAuth()
+  const { search } = useLocation()
+  const queryExamId = useMemo(()=>{
+    try{ const p = new URLSearchParams(search); return p.get('exam') }catch{ return null }
+  }, [search])
 
   const toId = (v) => {
     if (v == null) return null
@@ -137,6 +141,48 @@ export default function StudentReportCardViewer({ embedded=false, hideControls=f
     if (!effectiveExamId) return null
     return termExams.find(e => String(e.id) === String(effectiveExamId)) || selectedExamFromResults || null
   }, [termExams, effectiveExamId, selectedExamFromResults])
+
+  // If an exam id is present in the query, prefer it as initial selection when results load
+  useEffect(()=>{
+    if (!queryExamId) return
+    const want = String(queryExamId)
+    if (effectiveExamId && String(effectiveExamId) === want) return
+    // Once we have some results/termExams, set it
+    const hasAny = examResults && examResults.length > 0
+    if (hasAny){
+      setSelectedExamId(want)
+    }
+  }, [queryExamId, examResults])
+
+  useEffect(()=>{
+    let active = true
+    ;(async()=>{
+      const exId = queryExamId
+      if (!exId || !studentId) return
+      try{
+        const examRes = await api.get(`/academics/exams/${exId}/`).catch(()=>null)
+        if (active && examRes?.data){
+          const yr = examRes.data.year || (examRes.data.date ? new Date(examRes.data.date).getFullYear() : null)
+          const tr = examRes.data.term || examRes.data?.inferred_term?.number || null
+          if (yr && tr){
+            const key = `${yr}-T${tr}`
+            if (onSelectedTermYearChange){ onSelectedTermYearChange(key) } else { setSelectedTermYear(key) }
+          }
+        }
+        const rowsRes = await api.get(`/academics/exam_results/?student=${studentId}&exam=${exId}`)
+        const rows = Array.isArray(rowsRes?.data) ? rowsRes.data : (Array.isArray(rowsRes?.data?.results) ? rowsRes.data.results : [])
+        if (!active || rows.length===0) return
+        const ed = examRes?.data ? { id: examRes.data.id, name: examRes.data.name, year: examRes.data.year, term: examRes.data.term, date: examRes.data.date, published: examRes.data.published, klass: examRes.data.klass } : null
+        const augmented = rows.map(r => ({ ...r, exam_detail: ed || r.exam_detail || {} }))
+        setExamResults(prev => {
+          const prevArr = Array.isArray(prev) ? prev : []
+          return [...prevArr, ...augmented]
+        })
+        setSelectedExamId(String(exId))
+      }catch{}
+    })()
+    return ()=>{ active = false }
+  }, [queryExamId, studentId])
 
   const headerExamName = useMemo(()=>{
     if (selectedExam?.name) return selectedExam.name

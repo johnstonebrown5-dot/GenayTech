@@ -1,7 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import api from '../api'
 
 export default function TeacherPreviewResults(){
+  const navigate = useNavigate()
   const [classes, setClasses] = useState([])
   const [unpublishedExams, setUnpublishedExams] = useState([])
   const [selectedExam, setSelectedExam] = useState('')
@@ -317,6 +319,7 @@ export default function TeacherPreviewResults(){
                       <th key={s.id} className="border border-gray-200 px-2 py-2 text-left">{s.code || s.name}</th>
                     ))}
                     <th className="border border-gray-200 px-2 py-2 text-left">Total</th>
+                    <th className="border border-gray-200 px-2 py-2 text-left w-28">Slip</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -329,6 +332,12 @@ export default function TeacherPreviewResults(){
                         <td key={s.id} className="border border-gray-200 px-2 py-2">{st.marks?.[String(s.id)] ?? '-'}</td>
                       ))}
                       <td className="border border-gray-200 px-2 py-2 font-medium">{st.total}</td>
+                      <td className="border border-gray-200 px-2 py-2">
+                        <button
+                          onClick={()=> navigate(`/teacher/students/${st.id}/report-card?exam=${encodeURIComponent(String(selectedExam||''))}`)}
+                          className="px-2 py-1 rounded border text-[11px] bg-white hover:bg-gray-50"
+                        >View</button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
