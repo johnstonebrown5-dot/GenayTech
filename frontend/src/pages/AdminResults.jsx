@@ -425,8 +425,8 @@ export default function AdminResults(){
                       <td className="border px-2 py-1">{st.position}</td>
                       <td className="border px-2 py-1">{st.name}</td>
                       {summary.subjects.map(s => {
-                        const raw = st.marks?.[String(s.id)]
-                        const val = Number.isFinite(Number(raw)) ? Number(raw) : 0
+                        const rawPct = st?.subject_percentages?.[String(s.id)]
+                        const val = Number.isFinite(Number(rawPct)) ? Number(rawPct).toFixed(2) : '-'
                         return (
                           <td key={s.id} className="border px-2 py-1">{val}</td>
                         )
@@ -445,8 +445,8 @@ export default function AdminResults(){
             <div className="mt-3 text-sm text-gray-700">
               <div className="font-medium mb-1">Subject Means</div>
               <div className="flex gap-3 flex-wrap">
-                {summary.subject_means.map(sm => (
-                  <span key={sm.subject} className="px-2 py-1 rounded bg-gray-100">{summary.subjects.find(s=>s.id===sm.subject)?.code}: <b>{sm.mean}</b></span>
+                {summary.subject_mean_percentages.map(sm => (
+                  <span key={sm.subject} className="px-2 py-1 rounded bg-gray-100">{summary.subjects.find(s=>s.id===sm.subject)?.code}: <b>{sm.mean_percentage}</b></span>
                 ))}
               </div>
             </div>

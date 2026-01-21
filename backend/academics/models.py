@@ -432,6 +432,8 @@ class ExamResult(models.Model):
     subject = models.ForeignKey(Subject, on_delete=models.CASCADE)
     component = models.ForeignKey('SubjectComponent', on_delete=models.CASCADE, null=True, blank=True, related_name='results')
     marks = models.FloatField()
+    # Denominator to interpret marks (per paper/subject). Optional for backward compatibility.
+    out_of = models.FloatField(null=True, blank=True)
 
     class Meta:
         unique_together = ("exam","student","subject","component")

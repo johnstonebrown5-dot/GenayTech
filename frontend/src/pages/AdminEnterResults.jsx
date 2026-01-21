@@ -16,7 +16,7 @@ export default function AdminEnterResults(){
   const [students, setStudents] = useState([])
   const [subjects, setSubjects] = useState([])
   const [selectedSubject, setSelectedSubject] = useState('') // '' means All subjects
-  const [results, setResults] = useState([]) // rows: {student, subject, marks}
+  const [results, setResults] = useState([]) // rows: {student, subject, component|null, marks}
   const [invalid, setInvalid] = useState({}) // { 'studentId-subjectId': true }
   const [componentsMap, setComponentsMap] = useState({}) // { subjectId: [components] }
   const { showError } = useNotification?.() || { showError: ()=>{} }
@@ -35,7 +35,9 @@ export default function AdminEnterResults(){
         const klassRes = await api.get(`/academics/classes/${e.data.klass}/`)
         if (!alive) return
         setKlass(klassRes.data)
-        const subj = Array.isArray(klassRes.data?.subjects) ? klassRes.data.subjects : []
+        const subjRaw = Array.isArray(klassRes.data?.subjects) ? klassRes.data.subjects : []
+        // Filter out non-examinable subjects from entry grid and dropdown
+        const subj = subjRaw.filter(s => s?.is_examinable !== false)
         setSubjects(subj)
         // Load components for each subject (to auto-include when only one exists)
         let componentsLoadedMap = {}
@@ -61,42 +63,73 @@ export default function AdminEnterResults(){
         if (!alive) return
         const studentsList = Array.isArray(stuRes.data) ? stuRes.data : (Array.isArray(stuRes.data?.results) ? stuRes.data.results : [])
         setStudents(studentsList)
-        // existing results (aggregate to percentage per subject so admin sees percent out of 100)
+        // existing results (raw per-component marks)
         let existing = []
         try{
           const { data } = await api.get(`/academics/exam_results/?exam=${examId}`)
           existing = Array.isArray(data) ? data : (Array.isArray(data?.results) ? data.results : [])
         }catch{}
-        // Build map of components per subject id
-        const compsBySubject = componentsLoadedMap && Object.keys(componentsLoadedMap).length ? componentsLoadedMap : (componentsMap || {})
-        // Aggregate per student-subject: sum marks and sum denominators
-        const agg = new Map()
-        existing.forEach(r=>{
-          const sid = r?.student ?? r?.student_id ?? r?.student_detail?.id
-          const subid = r?.subject ?? r?.subject_id ?? r?.subject_detail?.id
-          if (!sid || !subid) return
-          const key = `${sid}-${subid}`
-          const marks = Number(r?.marks ?? r?.score ?? r?.value)
-          if (Number.isNaN(marks)) return
-          // Determine denominator: prefer explicit out_of, then component.max_marks, else exam total
-          let denom = Number(r?.out_of)
-          if (Number.isNaN(denom) || !denom){
-            const compId = r?.component ?? r?.component_id ?? r?.component_detail?.id
-            const comps = compsBySubject[subid] || []
-            const compObj = Array.isArray(comps) ? comps.find(c=> String(c.id)===String(compId)) : null
-            if (compObj && compObj.max_marks != null) denom = Number(compObj.max_marks)
-          }
-          if (Number.isNaN(denom) || !denom){ denom = Number(e.data?.total_marks) || 100 }
-          const curr = agg.get(key) || { sum:0, out:0 }
-          agg.set(key, { sum: curr.sum + marks, out: curr.out + denom })
-        })
+        // Build per-component rows (carry forward teacher-saved out_of for validation/placeholders)
         const rows = []
+        const compsBySubject = componentsLoadedMap && Object.keys(componentsLoadedMap).length ? componentsLoadedMap : (componentsMap || {})
+        const indexKey = (r)=>`${r?.student ?? r?.student_id}-${r?.subject ?? r?.subject_id}-${r?.component ?? r?.component_id ?? ''}`
+        const existingMap = new Map()
+        for (const r of existing){ existingMap.set(indexKey(r), r) }
+
+        // Preferred out_of per subject/component based on any existing result (teacher-saved)
+        const preferredOut = new Map() // key: `${subjectId}-${componentId||''}` => number
+        for (const r of existing){
+          const sid = r?.subject ?? r?.subject_id
+          const cid = r?.component ?? r?.component_id ?? ''
+          const oo = Number(r?.out_of)
+          const key = `${sid}-${cid}`
+          if (sid && Number.isFinite(oo) && oo > 0 && !preferredOut.has(key)){
+            preferredOut.set(key, oo)
+          }
+        }
+
         for (const s of studentsList){
           for (const sub of subj){
-            const key = `${s.id}-${sub.id}`
-            const a = agg.get(key)
-            const pct = a && a.out>0 ? Math.round((a.sum / a.out) * 100) : ''
-            rows.push({ student: s.id, subject: sub.id, marks: pct })
+            const comps = compsBySubject[sub.id] || []
+            if (Array.isArray(comps) && comps.length>0){
+              for (const c of comps){
+                const key = `${s.id}-${sub.id}-${c.id}`
+                const found = existingMap.get(key)
+                const mk = Number(found?.marks)
+                const outOf = (found && Number(found?.out_of))
+                let marksVal = Number.isFinite(mk) ? mk : NaN
+                // Normalize percent-looking values saved earlier.
+                // Prefer explicit outOf, otherwise fall back to component max_marks when available.
+                {
+                  const denom = Number.isFinite(outOf) && outOf > 0
+                    ? outOf
+                    : Number(c?.max_marks)
+                
+                  if (Number.isFinite(marksVal) && Number.isFinite(denom) && denom > 0 && marksVal <= 100 && marksVal > denom){
+                    marksVal = Math.round((marksVal / 100) * denom)
+                  }
+                }
+                const pref = preferredOut.get(`${sub.id}-${c.id}`)
+                rows.push({ student: s.id, subject: sub.id, component: c.id, marks: Number.isFinite(marksVal) ? marksVal : '', outOf: Number.isFinite(outOf) ? outOf : (Number.isFinite(pref) ? pref : undefined) })
+              }
+            } else {
+              const key = `${s.id}-${sub.id}-`
+              const found = existingMap.get(key)
+              const mk = Number(found?.marks)
+              const outOf = (found && Number(found?.out_of))
+              let marksVal = Number.isFinite(mk) ? mk : NaN
+              // Normalize using explicit outOf or fallback to exam total when only a single component exists
+              {
+                const denom = Number.isFinite(outOf) && outOf > 0
+                  ? outOf
+                  : Number(exam?.total_marks ?? 100)
+                if (Number.isFinite(marksVal) && Number.isFinite(denom) && denom > 0 && marksVal <= 100 && marksVal > denom){
+                  marksVal = Math.round((marksVal / 100) * denom)
+                }
+              }
+              const pref = preferredOut.get(`${sub.id}-`)
+              rows.push({ student: s.id, subject: sub.id, component: null, marks: Number.isFinite(marksVal) ? marksVal : '', outOf: Number.isFinite(outOf) ? outOf : (Number.isFinite(pref) ? pref : undefined) })
+            }
           }
         }
         if (!alive) return
@@ -124,16 +157,9 @@ export default function AdminEnterResults(){
       const visibleSubjectIds = selectedSubject ? [Number(selectedSubject)] : subjects.map(s=>s.id)
       const payload = results
         .filter(r => visibleSubjectIds.includes(r.subject))
-        .map(r => ({ ...r, marks: parseFloat(r.marks) }))
+        .map(r => ({ ...r, marks: Math.round(parseFloat(r.marks)) }))
         .filter(r => !isNaN(r.marks))
-        .map(r => {
-          const comps = componentsMap[r.subject] || []
-          const item = { ...r, exam: examId }
-          if (Array.isArray(comps) && comps.length === 1){
-            item.component = comps[0]?.id
-          }
-          return item
-        })
+        .map(r => ({ exam: examId, student: r.student, subject: r.subject, component: r.component, marks: r.marks, out_of: r.outOf }))
       if (!payload.length) throw new Error('Enter at least one mark to save')
       const res = await api.post('/academics/exam_results/bulk/', { results: payload })
       const failed = Number(res?.data?.failed || 0)
@@ -162,16 +188,83 @@ export default function AdminEnterResults(){
     return selectedSubject ? subjects.filter(s=> String(s.id)===String(selectedSubject)) : subjects
   }, [subjects, selectedSubject])
 
-  // Helper: whether a student's row has any missing marks (blank or zero) among visible subjects
+  // Helper: whether a student's row has any missing marks among visible subjects (per component)
   const isRowMissingMarks = (studentId) => {
     for (const s of visibleSubjects){
-      const idx = results.findIndex(r => r.student===studentId && r.subject===s.id)
-      const val = idx>-1 ? results[idx].marks : ''
-      if (val === '' || val === null || typeof val === 'undefined') return true
-      const num = Number(val)
-      if (!Number.isNaN(num) && num === 0) return true
+      const comps = componentsMap[s.id] || []
+      if (Array.isArray(comps) && comps.length>0){
+        for (const c of comps){
+          const i = results.findIndex(r => r.student===studentId && r.subject===s.id && r.component===c.id)
+          const val = i>-1 ? results[i].marks : ''
+          if (val === '' || val === null || typeof val === 'undefined') return true
+        }
+      } else {
+        const i = results.findIndex(r => r.student===studentId && r.subject===s.id)
+        const val = i>-1 ? results[i].marks : ''
+        if (val === '' || val === null || typeof val === 'undefined') return true
+      }
     }
     return false
+  }
+
+  const subjectTotal = (studentId, subjectId) => {
+    const comps = componentsMap[subjectId] || []
+    if (Array.isArray(comps) && comps.length>0){
+      const sum = comps.reduce((sum, c) => {
+        const i = results.findIndex(r => r.student===studentId && r.subject===subjectId && r.component===c.id)
+        const v = i>-1 ? Number(results[i].marks) : NaN
+        return sum + (Number.isFinite(v) ? v : 0)
+      }, 0)
+      return Math.round(sum)
+    }
+    const i = results.findIndex(r => r.student===studentId && r.subject===subjectId)
+    const v = i>-1 ? Number(results[i].marks) : NaN
+    return Math.round(Number.isFinite(v) ? v : 0)
+  }
+
+  const subjectPercent = (studentId, subjectId) => {
+    const comps = componentsMap[subjectId] || []
+    if (Array.isArray(comps) && comps.length>0){
+      let sumMarks = 0
+      let sumOut = 0
+      for (const c of comps){
+        const i = results.findIndex(r => r.student===studentId && r.subject===subjectId && r.component===c.id)
+        const m = i>-1 ? Number(results[i].marks) : NaN
+        const o = i>-1 ? Number(results[i]?.outOf) : NaN
+        if (Number.isFinite(m)) sumMarks += m
+        if (Number.isFinite(o) && o > 0) sumOut += o
+      }
+      if (sumOut > 0) return Math.round((sumMarks / sumOut) * 100)
+      return 0
+    }
+    const i = results.findIndex(r => r.student===studentId && r.subject===subjectId)
+    const m = i>-1 ? Number(results[i].marks) : NaN
+    const o = i>-1 ? Number(results[i]?.outOf) : NaN
+    const denom = (Number.isFinite(o) && o > 0) ? o : Number(exam?.total_marks ?? 100)
+    if (!Number.isFinite(m) || !denom) return 0
+    return Math.round((m / denom) * 100)
+  }
+
+  const setOutOfFor = (subjectId, componentId, nextOut) => {
+    const outNum = nextOut === '' || nextOut === null || typeof nextOut === 'undefined' ? undefined : Number(nextOut)
+    setResults(prev => prev.map(r => {
+      if (r.subject !== subjectId) return r
+      if ((componentId ?? null) !== (r.component ?? null)) return r
+      return { ...r, outOf: Number.isFinite(outNum) && outNum > 0 ? outNum : undefined }
+    }))
+    setInvalid(prev => {
+      const copy = { ...prev }
+      for (const stu of students){
+        const key = componentId ? `${stu.id}-${subjectId}-${componentId}` : `${stu.id}-${subjectId}`
+        const row = results.find(r => r.student===stu.id && r.subject===subjectId && ((componentId ?? null) === (r.component ?? null)))
+        const val = row ? row.marks : ''
+        const total = Number.isFinite(outNum) && outNum > 0 ? outNum : (componentId ? Number((componentsMap[subjectId]||[]).find(c=>c.id===componentId)?.max_marks ?? exam?.total_marks ?? 100) : Number(exam?.total_marks ?? 100))
+        const num = Number(val)
+        const bad = val!=='' && !Number.isNaN(num) && (num < 0 || num > total)
+        copy[key] = bad
+      }
+      return copy
+    })
   }
 
   return (
@@ -211,10 +304,96 @@ export default function AdminEnterResults(){
             <table className="min-w-full text-sm">
               <thead className="sticky top-0 bg-gray-50 z-10">
                 <tr>
-                  <th className="border px-2 py-1 text-left sticky left-0 bg-gray-50">Student</th>
-                  {visibleSubjects.map(s => (
-                    <th key={s.id} className="border px-2 py-1 text-center whitespace-nowrap">{s.code}</th>
-                  ))}
+                  <th className="border px-2 py-1 text-left sticky left-0 bg-gray-50" rowSpan={2}>Student</th>
+                  {visibleSubjects.map(s => {
+                    const comps = componentsMap[s.id] || []
+                    const count = (Array.isArray(comps) && comps.length>0) ? comps.length + 1 : 1
+                    return (
+                      <th key={`grp-${s.id}`} className="border px-2 py-1 text-center" colSpan={count}>{s.code}</th>
+                    )
+                  })}
+                </tr>
+                <tr>
+                  {visibleSubjects.map(s => {
+                    const comps = componentsMap[s.id] || []
+                    if (Array.isArray(comps) && comps.length>0){
+                      return (
+                        <React.Fragment key={`sub-${s.id}`}>
+                          {comps.map(c => {
+                            // derive a representative outOf for this component from any existing row
+                            let repOut = undefined
+                            try{
+                              const row = results.find(r => r.subject===s.id && r.component===c.id && Number(r.outOf))
+                              if (row && Number(row.outOf)) repOut = Number(row.outOf)
+                            }catch{}
+                            const label = c.code || c.name || 'Paper'
+                            return (
+                              <th key={`c-${s.id}-${c.id}`} className="border px-2 py-1 text-center whitespace-nowrap">
+                                {label}{repOut? ` (out of ${repOut})` : ''}
+                              </th>
+                            )
+                          })}
+                          <th key={`tot-${s.id}`} className="border px-2 py-1 text-center">Total</th>
+                        </React.Fragment>
+                      )
+                    }
+                    return <th key={`single-${s.id}`} className="border px-2 py-1 text-center">Marks</th>
+                  })}
+                </tr>
+                <tr>
+                  <th className="border px-2 py-1 text-left sticky left-0 bg-gray-50">Out Of</th>
+                  {visibleSubjects.map(s => {
+                    const comps = componentsMap[s.id] || []
+                    if (Array.isArray(comps) && comps.length>0){
+                      return (
+                        <React.Fragment key={`out-${s.id}`}>
+                          {comps.map(c => {
+                            let repOut = ''
+                            try{
+                              const row = results.find(r => r.subject===s.id && r.component===c.id && Number(r.outOf))
+                              if (row && Number(row.outOf)) repOut = String(Number(row.outOf))
+                            }catch{}
+                            const placeholder = String(Number(c?.max_marks ?? exam?.total_marks ?? 100))
+                            return (
+                              <th key={`out-${s.id}-${c.id}`} className="border px-2 py-1 text-center">
+                                <input
+                                  type="number"
+                                  inputMode="decimal"
+                                  min={1}
+                                  step="1"
+                                  placeholder={placeholder}
+                                  className="border px-2 py-1 rounded w-16 text-center border-gray-300 bg-white"
+                                  value={repOut}
+                                  onChange={e=>setOutOfFor(s.id, c.id, e.target.value)}
+                                />
+                              </th>
+                            )
+                          })}
+                          <th key={`out-tot-${s.id}`} className="border px-2 py-1 text-center text-gray-400">—</th>
+                        </React.Fragment>
+                      )
+                    }
+                    let repOut = ''
+                    try{
+                      const row = results.find(r => r.subject===s.id && (r.component==null) && Number(r.outOf))
+                      if (row && Number(row.outOf)) repOut = String(Number(row.outOf))
+                    }catch{}
+                    const placeholder = String(Number(exam?.total_marks ?? 100))
+                    return (
+                      <th key={`out-single-${s.id}`} className="border px-2 py-1 text-center">
+                        <input
+                          type="number"
+                          inputMode="decimal"
+                          min={1}
+                          step="1"
+                          placeholder={placeholder}
+                          className="border px-2 py-1 rounded w-16 text-center border-gray-300 bg-white"
+                          value={repOut}
+                          onChange={e=>setOutOfFor(s.id, null, e.target.value)}
+                        />
+                      </th>
+                    )
+                  })}
                 </tr>
               </thead>
               <tbody>
@@ -222,6 +401,61 @@ export default function AdminEnterResults(){
                   <tr key={stu.id} className={`${isRowMissingMarks(stu.id) ? 'bg-amber-50/60' : ''} ${idx % 2 === 1 ? 'bg-gray-50/40' : ''}`}>
                     <td className="border px-2 py-1 sticky left-0 bg-white">{stu.name}</td>
                     {visibleSubjects.map(s => {
+                      const comps = componentsMap[s.id] || []
+                      if (Array.isArray(comps) && comps.length>0){
+                        return (
+                          <React.Fragment key={`row-${stu.id}-${s.id}`}>
+                            {comps.map(c => {
+                              const cellKey = `${stu.id}-${s.id}-${c.id}`
+                              const idx = results.findIndex(r => r.student===stu.id && r.subject===s.id && r.component===c.id)
+                              const val = idx>-1 ? results[idx].marks : ''
+                              const rowOut = idx>-1 ? Number(results[idx]?.outOf) : NaN
+                              const total = Number.isFinite(rowOut) && rowOut > 0 ? rowOut : Number(c?.max_marks ?? exam?.total_marks ?? 100)
+                              const isMissingCell = (val === '' || val === null || typeof val === 'undefined' || Number(val) === 0)
+                              const num = Number(val)
+                              const overTotal = val!=='' && !Number.isNaN(num) && (num < 0 || num > total)
+                              const isInvalid = overTotal || !!invalid[cellKey]
+                              return (
+                                <td key={`c-${s.id}-${c.id}`} className={`border px-1.5 py-1 text-center ${isMissingCell ? 'bg-rose-50' : ''} ${isInvalid ? 'outline outline-1 outline-red-400' : ''}`}>
+                                  <input
+                                    type="number"
+                                    inputMode="decimal"
+                                    min={0}
+                                    max={total}
+                                    step="1"
+                                    placeholder={`${total}`}
+                                    className={`border px-2 py-1 rounded w-16 text-center ${isInvalid ? 'border-red-500 bg-red-50' : 'border-gray-300'}`}
+                                    value={val}
+                                    onChange={e=>{
+                                      const v = e.target.value
+                                      // validate
+                                      let bad = false
+                                      if (v !== '' && v !== null && typeof v !== 'undefined'){
+                                        const n = Number(v)
+                                        if (Number.isNaN(n) || n < 0 || n > total){
+                                          bad = true
+                                          if (!invalid[cellKey]){
+                                            showError('Invalid marks', `Value must be between 0 and ${total}.`, 3000)
+                                          }
+                                        }
+                                      }
+                                      setInvalid(prev => ({ ...prev, [cellKey]: bad }))
+                                      setResults(prev => {
+                                        const copy = [...prev]
+                                        const i = copy.findIndex(r => r.student===stu.id && r.subject===s.id && r.component===c.id)
+                                        if (i>-1) copy[i] = { ...copy[i], marks: v }
+                                        return copy
+                                      })
+                                    }}
+                                  />
+                                </td>
+                              )
+                            })}
+                            <td key={`tot-${stu.id}-${s.id}`} className="border px-1.5 py-1 text-center font-medium">{subjectPercent(stu.id, s.id)}%</td>
+                          </React.Fragment>
+                        )
+                      }
+
                       const idx = results.findIndex(r => r.student===stu.id && r.subject===s.id)
                       const val = idx>-1 ? results[idx].marks : ''
                       const isMissingCell = (val === '' || val === null || typeof val === 'undefined' || Number(val) === 0)
@@ -231,13 +465,13 @@ export default function AdminEnterResults(){
                       const cellKey = `${stu.id}-${s.id}`
                       const isInvalid = overTotal || !!invalid[cellKey]
                       return (
-                        <td key={s.id} className={`border px-1.5 py-1 text-center ${isMissingCell ? 'bg-rose-50' : ''} ${isInvalid ? 'outline outline-1 outline-red-400' : ''}`}>
+                        <td key={`single-${s.id}`} className={`border px-1.5 py-1 text-center ${isMissingCell ? 'bg-rose-50' : ''} ${isInvalid ? 'outline outline-1 outline-red-400' : ''}`}>
                           <input
                             type="number"
                             inputMode="decimal"
                             min={0}
                             max={total}
-                            step="0.01"
+                            step="1"
                             placeholder={`${total}`}
                             className={`border px-2 py-1 rounded w-16 text-center ${isInvalid ? 'border-red-500 bg-red-50' : 'border-gray-300'}`}
                             value={val}

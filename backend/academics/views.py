@@ -1775,17 +1775,30 @@ class ExamViewSet(viewsets.ModelViewSet):
             entry['total'] += float(r.marks)
             entry['count'] += 1
             # Compute component percentage part
-            # Determine denominator: prefer component.max_marks, else exam.total_marks, else 100
+            # Determine denominator: prefer explicit out_of saved with the result,
+            # then component.max_marks, then exam.total_marks, else 100
             denom = None
-            comp = getattr(r, 'component', None)
-            if comp and getattr(comp, 'max_marks', None) is not None:
-                denom = float(comp.max_marks)
-            elif getattr(r.exam, 'total_marks', None) is not None:
-                denom = float(r.exam.total_marks)
-            else:
+            try:
+                if getattr(r, 'out_of', None):
+                    denom = float(r.out_of)
+            except Exception:
+                denom = None
+            if not denom:
+                comp = getattr(r, 'component', None)
+                if comp and getattr(comp, 'max_marks', None) is not None:
+                    denom = float(comp.max_marks)
+            if not denom:
+                if getattr(r.exam, 'total_marks', None) is not None:
+                    denom = float(r.exam.total_marks)
+            if not denom:
                 denom = 100.0
             if denom and denom > 0:
-                part_pct = (float(r.marks) / denom) * 100.0
+                mval = float(r.marks)
+                # Backward-compat: older rows may have stored percent-like marks (0..100) even when denom is smaller
+                if mval <= 100.0 and mval > denom:
+                    part_pct = mval
+                else:
+                    part_pct = (mval / denom) * 100.0
                 parts = entry['subject_percent_parts'].setdefault(sid, [])
                 parts.append(part_pct)
         students = []
@@ -3004,21 +3017,18 @@ class ExamResultViewSet(viewsets.ModelViewSet):
                     raise ValidationError({'out_of': 'out_of must be greater than 0'})
                 if m > oo:
                     raise ValidationError({'marks': f'Marks cannot exceed out_of ({oo})'})
-                # Scale marks to target_max
-                m = (m / oo) * target_max
+                # Store raw marks as entered; persist denominator for accurate percentage computation
                 serializer.validated_data['marks'] = m
-                # Persist denominator used for entry so downstream aggregation is accurate
                 try:
                     serializer.validated_data['out_of'] = float(oo)
                 except Exception:
-                    pass
+                    serializer.validated_data['out_of'] = None
             else:
-                # If no out_of provided, validate marks directly against target_max
                 if target_max is not None and m > target_max:
                     raise ValidationError({'marks': f'Marks cannot exceed maximum ({target_max})'})
-                # Persist implicit denominator (target_max) for consistency
+                # When no explicit out_of is provided, persist the effective denominator
                 try:
-                    serializer.validated_data['out_of'] = float(target_max or 100.0)
+                    serializer.validated_data['out_of'] = float(target_max)
                 except Exception:
                     pass
         # If teacher, ensure they are allowed to submit for this class/subject
@@ -3157,6 +3167,36 @@ class ExamResultViewSet(viewsets.ModelViewSet):
                 if not allowed:
                     errors.append({'index': idx, 'error': {'detail': 'You are not assigned to this class/subject for this exam'}})
                     continue
+            # Allow out_of-only updates (no marks) to persist teacher-set denominators
+            marks_missing = marks in (None, '', [])
+            if marks_missing and out_of is not None:
+                try:
+                    oo = float(out_of)
+                except (TypeError, ValueError):
+                    errors.append({'index': idx, 'error': {'out_of': 'out_of must be a number'}})
+                    continue
+                if oo <= 0:
+                    errors.append({'index': idx, 'error': {'out_of': 'out_of must be greater than 0'}})
+                    continue
+                try:
+                    with transaction.atomic():
+                        obj = ExamResult.objects.filter(
+                            exam=exam,
+                            student=student,
+                            subject=subject,
+                            component=component,
+                        ).first()
+                        if obj is None:
+                            errors.append({'index': idx, 'error': {'detail': 'Cannot update out_of without existing marks for this student/subject/component'}})
+                            continue
+                        obj.out_of = float(oo)
+                        obj.save(update_fields=['out_of'])
+                    successes += 1
+                    out_ids.append(obj.id)
+                except Exception as ex:
+                    errors.append({'index': idx, 'error': str(ex)})
+                continue
+
             try:
                 m = float(marks)
                 if m < 0:
@@ -3181,27 +3221,42 @@ class ExamResultViewSet(viewsets.ModelViewSet):
                         raise ValidationError({'out_of': 'out_of must be greater than 0'})
                     if m > oo:
                         raise ValidationError({'marks': f'Marks cannot exceed out_of ({oo})'})
-                    # Scale to target_max
-                    m = (m / oo) * target_max
+                    # Store raw marks as entered; persist denominator for accurate percentage computation
+                    out_of_to_store = float(oo)
                 else:
                     if target_max is not None and m > target_max:
                         raise ValidationError({'marks': f'Marks cannot exceed maximum ({target_max})'})
+                    out_of_to_store = float(target_max) if target_max is not None else None
             except ValidationError as ve:
                 errors.append({'index': idx, 'error': ve.detail})
                 continue
             except Exception:
                 errors.append({'index': idx, 'error': {'marks': 'Marks must be a number'}})
                 continue
-            # Upsert
+            # Upsert (do not overwrite existing out_of unless explicitly provided)
             try:
                 with transaction.atomic():
-                    obj, _ = ExamResult.objects.update_or_create(
+                    obj = ExamResult.objects.filter(
                         exam=exam,
                         student=student,
                         subject=subject,
                         component=component,
-                        defaults={'marks': m},
-                    )
+                    ).first()
+                    if obj is None:
+                        # Create: persist denominator so downstream aggregation/percentage is correct
+                        obj = ExamResult.objects.create(
+                            exam=exam,
+                            student=student,
+                            subject=subject,
+                            component=component,
+                            marks=m,
+                            out_of=(out_of_to_store if out_of_to_store is not None else float(target_max or 100.0)),
+                        )
+                    else:
+                        obj.marks = m
+                        if out_of_to_store is not None:
+                            obj.out_of = out_of_to_store
+                        obj.save(update_fields=['marks'] + (['out_of'] if out_of_to_store is not None else []))
                 successes += 1
                 out_ids.append(obj.id)
             except Exception as ex:
@@ -3667,7 +3722,8 @@ class ExamResultViewSet(viewsets.ModelViewSet):
                     if raw_marks > out_of_val:
                         error = {'marks': f'Marks cannot exceed out_of ({out_of_val})'}
                     else:
-                        scaled = (raw_marks / out_of_val) * target_max
+                        # Store raw marks as entered; keep out_of for percentage computation
+                        scaled = raw_marks
                 else:
                     if target_max is not None and raw_marks > target_max:
                         error = {'marks': f'Marks cannot exceed maximum ({target_max})'}
@@ -3709,13 +3765,32 @@ class ExamResultViewSet(viewsets.ModelViewSet):
         for idx, (stu, mval) in enumerate(to_save):
             try:
                 with transaction.atomic():
-                    obj, _ = ExamResult.objects.update_or_create(
+                    obj = ExamResult.objects.filter(
                         exam=exam,
                         student=stu,
                         subject=subject,
                         component=component,
-                        defaults={'marks': mval},
-                    )
+                    ).first()
+                    if obj is None:
+                        obj = ExamResult.objects.create(
+                            exam=exam,
+                            student=stu,
+                            subject=subject,
+                            component=component,
+                            marks=mval,
+                            out_of=(float(out_of_val) if out_of_val is not None else float(target_max or 100.0)),
+                        )
+                    else:
+                        obj.marks = mval
+                        # Only overwrite out_of if uploader explicitly supplied it
+                        if out_of_val is not None:
+                            obj.out_of = float(out_of_val)
+                        elif getattr(obj, 'out_of', None) in (None, ''):
+                            try:
+                                obj.out_of = float(target_max or 100.0)
+                            except Exception:
+                                pass
+                        obj.save(update_fields=['marks'] + (['out_of'] if out_of_val is not None else []))
                 successes += 1
                 saved_ids.append(obj.id)
             except Exception as ex:

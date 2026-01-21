@@ -292,7 +292,7 @@ class ExamResultSerializer(serializers.ModelSerializer):
     exam_detail = ExamSerializer(source='exam', read_only=True)
     # Optional: allows teacher to specify the total marks the entered score is out of.
     # Backend will scale the stored marks to the component/exam scale.
-    out_of = serializers.FloatField(write_only=True, required=False, allow_null=True)
+    out_of = serializers.FloatField(required=False, allow_null=True)
     percentage = serializers.SerializerMethodField(read_only=True)
     class Meta:
         model = ExamResult
@@ -331,13 +331,23 @@ class ExamResultSerializer(serializers.ModelSerializer):
         # Compute percentage based on component.max_marks, else exam.total_marks, else 100
         try:
             target_max = None
+            if getattr(obj, 'out_of', None) is not None:
+                try:
+                    target_max = float(obj.out_of)
+                except Exception:
+                    target_max = None
             component = getattr(obj, 'component', None)
-            if component and getattr(component, 'max_marks', None) is not None:
+            if not target_max and component and getattr(component, 'max_marks', None) is not None:
                 target_max = float(component.max_marks)
-            elif getattr(obj, 'exam', None) and getattr(obj.exam, 'total_marks', None) is not None:
+            elif not target_max and getattr(obj, 'exam', None) and getattr(obj.exam, 'total_marks', None) is not None:
                 target_max = float(obj.exam.total_marks)
             if not target_max:
                 target_max = 100.0
-            return round((float(obj.marks) / target_max) * 100.0, 2) if target_max else None
+            marks = float(obj.marks)
+            # Backward-compat: if older data stored percentage-like marks (0..100) while denominator is smaller
+            # (e.g. marks=85 and out_of=20), treat marks as percentage.
+            if target_max and target_max > 0 and marks <= 100.0 and marks > target_max:
+                return round(marks, 2)
+            return round((marks / target_max) * 100.0, 2) if target_max else None
         except Exception:
             return None

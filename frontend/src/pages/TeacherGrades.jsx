@@ -1,9 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import api from '../api'
 import Modal from '../components/Modal'
 import { useNotification } from '../components/NotificationContext'
 
 export default function TeacherGrades(){
+  const navigate = useNavigate()
   const [classes, setClasses] = useState([])
   const [subjects, setSubjects] = useState([])
   const [components, setComponents] = useState([]) // subject components (papers)
@@ -44,6 +46,11 @@ export default function TeacherGrades(){
   }
   const reloadSavedMarks = () => setMarksReloadKey(v=>v+1)
 
+  const [previewOpen, setPreviewOpen] = useState(false)
+  const [previewLoading, setPreviewLoading] = useState(false)
+  const [previewError, setPreviewError] = useState('')
+  const [previewSummary, setPreviewSummary] = useState(null)
+
   // Persist teacher Out Of preferences per class/subject/exam
   const outOfStoreKey = () => [
     'outofprefs',
@@ -70,19 +77,60 @@ export default function TeacherGrades(){
 
   // ---------- Robust save helper ----------
   const saveResults = async (rows) => {
-    if (!Array.isArray(rows) || rows.length === 0) return { ok: true, failed: 0 }
+    if (!Array.isArray(rows) || rows.length === 0) return { ok: true, failed: 0, errors: [] }
     // Try bulk first
     try {
       const res = await api.post('/academics/exam_results/bulk/', { results: rows })
       const failed = Number(res?.data?.failed || 0)
-      if (failed === 0) return { ok: true, failed: 0 }
-      // If everything failed, fall through to fallback
-      if (failed < rows.length) return { ok: true, failed }
+      const bulkErrors = Array.isArray(res?.data?.errors) ? res.data.errors : []
+      if (failed === 0) return { ok: true, failed: 0, errors: [] }
+      // If some failed, retry only failed rows individually
+      if (failed < rows.length){
+        const errors = bulkErrors
+        const failedIdx = new Set(
+          errors
+            .map(e => e?.index)
+            .filter(i => typeof i === 'number' && i >= 0)
+        )
+        const toRetry = failedIdx.size ? rows.filter((_, i) => failedIdx.has(i)) : rows
+        let retryFailed = 0
+        const retryErrors = []
+        for (const r of toRetry){
+          const primary = {
+            exam: r.exam,
+            subject: r.subject,
+            student: r.student,
+            marks: r.marks,
+            ...(r.component ? { component: r.component } : {}),
+            ...(r.out_of ? { out_of: r.out_of } : {}),
+          }
+          const alternate = {
+            exam_id: r.exam,
+            subject_id: r.subject,
+            student_id: r.student,
+            score: r.marks,
+            ...(r.component ? { component_id: r.component } : {}),
+            ...(r.out_of ? { out_of: r.out_of } : {}),
+          }
+          let ok = false
+          try { await api.post('/academics/exam_results/', primary); ok = true } catch {}
+          if (!ok){
+            try { await api.post('/academics/exam_results/', alternate); ok = true } catch {}
+          }
+          if (!ok){
+            retryFailed++
+            retryErrors.push({ error: 'Failed to save one row after retry.' })
+          }
+        }
+        const finalFailed = retryFailed
+        return { ok: finalFailed === 0, failed: finalFailed, errors: finalFailed ? errors.slice(0, 10) : [] }
+      }
     } catch (e) {
       // ignore and try fallback
     }
     // Fallback: send individually to a non-bulk endpoint with alternate field names
     let failed = 0
+    const errors = []
     for (const r of rows){
       const primary = {
         exam: r.exam,
@@ -105,9 +153,12 @@ export default function TeacherGrades(){
       if (!ok){
         try { await api.post('/academics/exam_results/', alternate); ok = true } catch {}
       }
-      if (!ok) failed++
+      if (!ok){
+        failed++
+        errors.push({ error: 'Failed to save one row.' })
+      }
     }
-    return { ok: failed === 0, failed }
+    return { ok: failed === 0, failed, errors }
   }
 
   const percentToMarks = (pct, out) => {
@@ -906,6 +957,14 @@ export default function TeacherGrades(){
     setError('')
     setMessage('')
     try{
+      // Block submit if any invalid values exist
+      if (entryMode === 'single'){
+        const anyBad = Object.values(invalid || {}).some(Boolean)
+        if (anyBad) throw new Error('Fix invalid marks (out of range) before saving.')
+      } else {
+        const anyBad = Object.values(invalidAll || {}).some(map => Object.values(map || {}).some(Boolean))
+        if (anyBad) throw new Error('Fix invalid marks (out of range) before saving.')
+      }
       // require an existing, unpublished exam selected
       const examId = Number(selectedExamId)
       if (!examId) throw new Error('Select an exam to save results to')
@@ -939,15 +998,15 @@ export default function TeacherGrades(){
         }
       }
       if (payload.length === 0) throw new Error('Enter at least one mark to save')
-      const { failed } = await saveResults(payload)
+      const { failed, errors } = await saveResults(payload)
       if (failed === 0){
         setMessage('Grades saved.')
         showSuccess('Grades saved', 'All valid marks were saved.', 4000)
       } else {
-        // Show first few errors
-        const detail = 'Some rows failed to save.'
+        const errs = Array.isArray(errors) ? errors : []
+        const detail = errs.length ? errs.slice(0,3).map(e => typeof e?.error==='string' ? e.error : JSON.stringify(e?.error||'Failed')).join(' | ') : 'Some rows failed to save.'
         setMessage('Some grades could not be saved.')
-        showError('Partial save', `${failed} failed. ${detail}${''}`, 6000)
+        showError('Partial save', `${failed} failed. ${detail}${errs.length>3?' ...':''}`, 6000)
       }
       // Refresh marks from server to reflect canonical values
       try{
@@ -1062,6 +1121,22 @@ export default function TeacherGrades(){
     return true
   }, [selectedClass, selectedSubject, selectedExamId, students, entryMode, marks, invalid, components, marksAll, invalidAll])
 
+  const openPreview = async () => {
+    if (!selectedExamId) return
+    setPreviewOpen(true)
+    setPreviewLoading(true)
+    setPreviewError('')
+    setPreviewSummary(null)
+    try{
+      const { data } = await api.get(`/academics/exams/${selectedExamId}/summary/`)
+      setPreviewSummary(data || null)
+    }catch(e){
+      setPreviewError(e?.response?.data?.detail || e?.message || 'Failed to load preview')
+    }finally{
+      setPreviewLoading(false)
+    }
+  }
+
   return (
     <div className="teacher-grades-page px-2 md:px-4 lg:px-6 py-3 md:py-4 space-y-3 md:space-y-4 max-w-6xl mx-auto pb-24 md:pb-0 min-h-screen">
       {/* Header */}
@@ -1086,6 +1161,13 @@ export default function TeacherGrades(){
             >
               {controlsOpen ? 'Hide Options' : 'Change Selection'}
             </button>
+            <button
+              onClick={()=>navigate('/teacher/preview-results')}
+              disabled={!selectedExamId}
+              className="text-xs md:text-sm px-3 py-1.5 rounded-full bg-white/90 text-indigo-700 border border-white/70 disabled:opacity-60 shadow-sm"
+            >
+              Preview Results
+            </button>
           </div>
           <div className="md:hidden flex items-center gap-1.5">
             <button
@@ -1100,6 +1182,13 @@ export default function TeacherGrades(){
               className="text-[11px] px-2.5 py-1.5 rounded-full bg-indigo-900/90 text-white border border-white/30 shadow-sm"
             >
               {controlsOpen ? 'Hide' : 'Change'}
+            </button>
+            <button
+              onClick={()=>navigate('/teacher/preview-results')}
+              disabled={!selectedExamId}
+              className="text-[11px] px-2.5 py-1.5 rounded-full bg-white text-indigo-700 border border-indigo-200 shadow-sm disabled:opacity-60"
+            >
+              Preview
             </button>
           </div>
         </div>
@@ -1397,7 +1486,10 @@ export default function TeacherGrades(){
 
         {/* Desktop save button */}
         <div className="hidden md:flex justify-end">
-          <button onClick={submit} disabled={saving || !canSubmit} className="px-4 py-2 rounded-lg text-white bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 disabled:opacity-60 shadow-soft">{saving ? 'Saving...' : 'Save Grades'}</button>
+          <div className="flex gap-2">
+            <button onClick={()=>navigate('/teacher/preview-results')} disabled={!selectedExamId} className="px-4 py-2 rounded-lg text-indigo-700 bg-white border border-indigo-200 hover:bg-indigo-50 disabled:opacity-60 shadow-soft">Preview Results</button>
+            <button onClick={submit} disabled={saving || !canSubmit} className="px-4 py-2 rounded-lg text-white bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 disabled:opacity-60 shadow-soft">{saving ? 'Saving...' : 'Save Grades'}</button>
+          </div>
         </div>
       
 
@@ -1406,7 +1498,10 @@ export default function TeacherGrades(){
         <div className="mx-auto max-w-4xl px-4 pb-2">
           <div className="rounded-2xl bg-white shadow-xl border border-gray-200 p-3 flex items-center justify-between">
             <div className="text-xs text-gray-600">Total Students: <span className="font-medium text-gray-800">{students.length}</span></div>
-            <button onClick={submit} disabled={saving || !canSubmit} className="px-4 py-2 rounded-lg text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 shadow-soft">{saving ? 'Saving...' : 'Save Grades'}</button>
+            <div className="flex gap-2">
+              <button onClick={()=>navigate('/teacher/preview-results')} disabled={!selectedExamId} className="px-4 py-2 rounded-lg text-indigo-700 bg-white border border-indigo-200 disabled:opacity-60 shadow-soft">Preview</button>
+              <button onClick={submit} disabled={saving || !canSubmit} className="px-4 py-2 rounded-lg text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 shadow-soft">{saving ? 'Saving...' : 'Save Grades'}</button>
+            </div>
           </div>
         </div>
       </div>
@@ -1427,6 +1522,54 @@ export default function TeacherGrades(){
           </label>
           <div className="flex justify-end gap-2 mt-1">
             <button type="button" className="px-3 py-1.5 rounded border" onClick={()=>setUnitModal(false)}>Close</button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal open={previewOpen} onClose={()=>setPreviewOpen(false)} title="Preview Results" size="lg">
+        <div className="grid gap-3">
+          {!selectedExamId && (
+            <div className="text-sm text-gray-600">Select an exam to preview.</div>
+          )}
+          {previewError && (
+            <div className="bg-red-50 text-red-700 p-2 rounded border border-red-200 text-sm">{previewError}</div>
+          )}
+          {previewLoading && (
+            <div className="text-sm text-gray-600">Loading…</div>
+          )}
+          {(!previewLoading && previewSummary) && (
+            <div className="overflow-auto -mx-1">
+              <div className="min-w-[800px] px-1">
+                <div className="text-sm font-medium text-gray-800 mb-2">{previewSummary?.exam?.name || 'Exam'} • Year {previewSummary?.exam?.year || ''} • T{previewSummary?.exam?.term || ''}</div>
+                <table className="min-w-full text-xs">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="border px-2 py-1 text-left w-20">Position</th>
+                      <th className="border px-2 py-1 text-left w-56">Student</th>
+                      {(previewSummary.subjects||[]).map(s => (
+                        <th key={s.id} className="border px-2 py-1 text-left">{s.code || s.name}</th>
+                      ))}
+                      <th className="border px-2 py-1 text-left">Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(previewSummary.students||[]).map((st,idx)=> (
+                      <tr key={st.id} className={idx%2? 'bg-white' : 'bg-gray-50/50'}>
+                        <td className="border px-2 py-1">{st.position}</td>
+                        <td className="border px-2 py-1">{st.name}</td>
+                        {(previewSummary.subjects||[]).map(s => (
+                          <td key={s.id} className="border px-2 py-1">{st.marks?.[String(s.id)] ?? '-'}</td>
+                        ))}
+                        <td className="border px-2 py-1 font-medium">{st.total}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+          <div className="flex justify-end gap-2">
+            <button type="button" className="px-3 py-1.5 rounded border" onClick={()=>setPreviewOpen(false)}>Close</button>
           </div>
         </div>
       </Modal>

@@ -16,6 +16,7 @@ import TeacherAttendance from './pages/TeacherAttendance'
 import TeacherLessons from './pages/TeacherLessons'
 import TeacherGrades from './pages/TeacherGrades'
 import TeacherResults from './pages/TeacherResults'
+import TeacherPreviewResults from './pages/TeacherPreviewResults'
 import TeacherAnalytics from './pages/TeacherAnalytics'
 import TeacherProfile from './pages/TeacherProfile'
 import TeacherManageClass from './pages/TeacherManageClass'
@@ -256,6 +257,7 @@ export default function App() {
               <Route path="attendance" element={<TeacherAttendance/>} />
               <Route path="lessons" element={<TeacherLessons/>} />
               <Route path="grades" element={<TeacherGrades/>} />
+              <Route path="preview-results" element={<TeacherPreviewResults/>} />
               <Route path="results" element={<TeacherResults/>} />
               <Route path="analytics" element={<TeacherAnalytics/>} />
               <Route path="profile" element={<TeacherProfile/>} />
