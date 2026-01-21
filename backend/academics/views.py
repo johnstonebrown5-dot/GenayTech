@@ -839,7 +839,7 @@ class ClassViewSet(viewsets.ModelViewSet):
                 prev_mark = entry['subjects'].get(sub_code, 0.0)
                 entry['subjects'][sub_code] = prev_mark + float(r.marks)
 
-        # Compute averages and sort by total desc for positions
+        # Compute averages and sort by total desc for positions (class-level)
         ordered = []
         for sid, data in per_student.items():
             total = data['total']
@@ -859,6 +859,46 @@ class ClassViewSet(viewsets.ModelViewSet):
                 position = idx + 1
                 last_total = row['total']
             row['position'] = position
+
+        # Compute grade-level positions across all classes for the same exam cohort
+        grade_positions = {}
+        try:
+            grade_tag = getattr(klass, 'grade_level', None) or getattr(exam, 'grade_level_tag', None)
+            school_id = getattr(klass, 'school_id', None)
+            # Identify exams forming the same cohort (same grade level, term, year, and name) within the school
+            cohort_exams = Exam.objects.filter(
+                klass__school_id=school_id,
+                grade_level_tag=grade_tag,
+                year=getattr(exam, 'year', None),
+                term=getattr(exam, 'term', None),
+                name=getattr(exam, 'name', None),
+            ).only('id')
+            if cohort_exams.exists():
+                cohort_results = (
+                    ExamResult.objects
+                    .filter(exam__in=cohort_exams, student__is_active=True, subject__is_examinable=True)
+                    .select_related('student')
+                )
+                per_student_grade = {}
+                for r in cohort_results:
+                    s = r.student
+                    e = per_student_grade.setdefault(s.id, {'student': s, 'total': 0.0, 'count': 0})
+                    e['total'] += float(r.marks)
+                    e['count'] += 1
+                ordered_grade = []
+                for sid, data in per_student_grade.items():
+                    cnt = data['count'] or 1
+                    ordered_grade.append({'student': data['student'], 'total': round(data['total'], 2), 'avg': round(data['total']/cnt, 2)})
+                ordered_grade.sort(key=lambda x: x['total'], reverse=True)
+                last = None
+                pos = 0
+                for idx, row in enumerate(ordered_grade):
+                    if last is None or row['total'] < last:
+                        pos = idx + 1
+                        last = row['total']
+                    grade_positions[getattr(row['student'], 'id', None)] = {'position': pos, 'out_of': len(ordered_grade)}
+        except Exception:
+            grade_positions = {}
 
         # Prepare optional chat sender for in-app/email/SMS via unified Messages system
         sender_id = resolve_default_sender_id(school_id) if school_id else None
@@ -920,7 +960,15 @@ class ClassViewSet(viewsets.ModelViewSet):
                 base += f" - {grade_label or class_name}"
                 if class_name and class_name != grade_label:
                     base += f" {class_name}"
-            summary = f" Total {total:.0f}, Avg {avg:.1f}, Position {pos}."
+            # Positions
+            cls_total = len(ordered)
+            grade_pos = grade_positions.get(getattr(stu, 'id', None)) or {}
+            pos_grade = grade_pos.get('position')
+            out_grade = grade_pos.get('out_of')
+            pos_text = f"Class Pos {pos}/{cls_total}"
+            if pos_grade and out_grade:
+                pos_text += f"; Grade Pos {pos_grade}/{out_grade}"
+            summary = f" Total {total:.0f}, Avg {avg:.1f}, {pos_text}."
             subjects_clause = f" Subjects: {subjects_str}." if subjects_str else ''
             teacher_clause = ''
             if teacher_name:
@@ -2361,6 +2409,60 @@ class ExamViewSet(viewsets.ModelViewSet):
                 chat_user_ids = []
                 # Collect in-app notifications for bulk insert
                 notifications_bulk = []
+                # Compute class-level positions from totals
+                ordered_local = []
+                for sid, data in by_student.items():
+                    total_val = float(data['total'] or 0)
+                    cnt = int(data['count'] or 1)
+                    ordered_local.append({'student': data['student'], 'total': round(total_val,2), 'average': round(total_val/cnt, 2)})
+                ordered_local.sort(key=lambda x: x['total'], reverse=True)
+                last_total = None
+                pos_counter = 0
+                class_pos_map = {}
+                for idx, row in enumerate(ordered_local):
+                    if last_total is None or row['total'] < last_total:
+                        pos_counter = idx + 1
+                        last_total = row['total']
+                    class_pos_map[getattr(row['student'], 'id', None)] = {'position': pos_counter, 'out_of': len(ordered_local)}
+
+                # Compute grade-level positions across cohort exams (same grade/year/term/name)
+                grade_positions = {}
+                try:
+                    grade_tag = getattr(exam_local, 'grade_level_tag', None) or getattr(exam_local.klass, 'grade_level', None)
+                    cohort_exams = Exam.objects.filter(
+                        klass__school_id=getattr(exam_local.klass, 'school_id', None),
+                        grade_level_tag=grade_tag,
+                        year=getattr(exam_local, 'year', None),
+                        term=getattr(exam_local, 'term', None),
+                        name=getattr(exam_local, 'name', None),
+                    ).only('id')
+                    if cohort_exams.exists():
+                        cohort_results = (
+                            ExamResult.objects
+                            .filter(exam__in=cohort_exams, student__is_active=True, subject__is_examinable=True)
+                            .select_related('student')
+                        )
+                        per_student_grade = {}
+                        for r in cohort_results:
+                            s = r.student
+                            e = per_student_grade.setdefault(s.id, {'student': s, 'total': 0.0, 'count': 0})
+                            e['total'] += float(r.marks)
+                            e['count'] += 1
+                        ordered_grade = []
+                        for sid2, dat2 in per_student_grade.items():
+                            cnt2 = dat2['count'] or 1
+                            ordered_grade.append({'student': dat2['student'], 'total': round(dat2['total'], 2), 'avg': round(dat2['total']/cnt2, 2)})
+                        ordered_grade.sort(key=lambda x: x['total'], reverse=True)
+                        last = None
+                        pos = 0
+                        for idx, row in enumerate(ordered_grade):
+                            if last is None or row['total'] < last:
+                                pos = idx + 1
+                                last = row['total']
+                            grade_positions[getattr(row['student'], 'id', None)] = {'position': pos, 'out_of': len(ordered_grade)}
+                except Exception:
+                    grade_positions = {}
+
                 for sid, data in by_student.items():
                     s = data['student']
                     total = data['total']
@@ -2383,11 +2485,42 @@ class ExamViewSet(viewsets.ModelViewSet):
                     except Exception:
                         subject_parts = []
                     subj_summary = ", ".join(subject_parts) if subject_parts else ""
-                    sms = (
-                        f"Hi {getattr(s,'name','Student')}, {exam_local.name} (Y{exam_local.year} T{exam_local.term}) results. "
-                        + (f"{subj_summary}. " if subj_summary else "")
-                        + f"Total: {round(total,2)}, Avg: {avg}. Login: {dashboard_url}"
-                    )
+                    # Compose richer SMS with student identifiers, class/grade and positions
+                    name = getattr(s, 'name', '') or getattr(s, 'admission_no', '') or f"Student {getattr(s,'id','')}"
+                    adm = getattr(s, 'admission_no', '') or ''
+                    grade_label = getattr(exam_local.klass, 'grade_level', '') or ''
+                    class_name = getattr(exam_local.klass, 'name', '') or grade_label
+                    cls_pos = class_pos_map.get(getattr(s, 'id', None)) or {}
+                    pos_text = ''
+                    try:
+                        cp = cls_pos.get('position')
+                        co = cls_pos.get('out_of')
+                        if cp and co:
+                            pos_text = f" Class Pos {cp}/{co}"
+                    except Exception:
+                        pos_text = ''
+                    try:
+                        gp = (grade_positions.get(getattr(s,'id',None)) or {}).get('position')
+                        go = (grade_positions.get(getattr(s,'id',None)) or {}).get('out_of')
+                        if gp and go:
+                            pos_text = (pos_text + '; ' if pos_text else '') + f"Grade Pos {gp}/{go}"
+                    except Exception:
+                        pass
+                    meta = f"{exam_local.name}: {name}"
+                    if adm:
+                        meta += f" (ADM {adm})"
+                    if grade_label or class_name:
+                        meta += f" - {grade_label or class_name}"
+                        if class_name and class_name != grade_label:
+                            meta += f" {class_name}"
+                    parts = []
+                    if subj_summary:
+                        parts.append(subj_summary)
+                    parts.append(f"Total {round(total,2)}, Avg {avg}")
+                    if pos_text:
+                        parts.append(pos_text)
+                    parts.append(f"Login: {dashboard_url}")
+                    sms = f"{meta}. " + '. '.join(parts)
                     try:
                         phone = getattr(s, 'guardian_id', None)
                         if phone:
@@ -2406,13 +2539,29 @@ class ExamViewSet(viewsets.ModelViewSet):
 
                     # Email with optional PDF attachment
                     recipient = getattr(s, 'email', None) or getattr(getattr(s, 'user', None), 'email', None)
-                    body = (
-                        f"Dear {getattr(s,'name','Student')},\n\n"
-                        f"Your exam results for {exam_local.name} (Year {exam_local.year}, Term {exam_local.term}, Class {exam_local.klass.name}) are now available. "
-                        f"Total: {round(total,2)}  Average: {avg}.\n\n"
-                        f"View your dashboard: {dashboard_url}\n\n"
-                        "Regards, School Administration"
-                    )
+                    # Email body mirrors SMS content with line breaks
+                    body_lines = [
+                        f"Dear {getattr(s,'name','Student')},",
+                        "",
+                        f"{exam_local.name} results:",
+                        f"Student: {getattr(s,'name','')} (ADM {adm or '-'})",
+                        f"Class: {class_name} · Grade: {grade_label}",
+                        f"Subjects: {subj_summary}" if subj_summary else "Subjects: -",
+                        f"Total: {round(total,2)} · Average: {avg}",
+                    ]
+                    cp = class_pos_map.get(getattr(s, 'id', None)) or {}
+                    if cp.get('position') and cp.get('out_of'):
+                        body_lines.append(f"Class Position: {cp['position']}/{cp['out_of']}")
+                    gp = grade_positions.get(getattr(s,'id',None)) or {}
+                    if gp.get('position') and gp.get('out_of'):
+                        body_lines.append(f"Grade Position: {gp['position']}/{gp['out_of']}")
+                    body_lines.extend([
+                        "",
+                        f"View your dashboard: {dashboard_url}",
+                        "",
+                        "Regards, School Administration",
+                    ])
+                    body = "\n".join(body_lines)
 
                     attachment_bytes = None
                     filename = f"results_{exam_local.id}_{s.id}.pdf"
@@ -3617,8 +3766,15 @@ class StudentViewSet(viewsets.ModelViewSet):
         user = getattr(self.request, 'user', None)
         school = getattr(user, 'school', None)
         if school:
-            # Include students in classes of this school OR graduated students scoped by student.school
-            qs = qs.filter(Q(klass__school=school) | Q(school=school))
+            # Include:
+            # - students currently in classes of this school
+            # - students explicitly scoped to this school (e.g., graduated)
+            # - unassigned, not-graduated students with no school set yet (common on import)
+            qs = qs.filter(
+                Q(klass__school=school) |
+                Q(school=school) |
+                Q(klass__isnull=True, school__isnull=True, is_graduated=False)
+            )
         # Support multiple alias query params for filtering by class id
         try:
             qp = self.request.query_params
@@ -4865,6 +5021,48 @@ class TimetableVersionViewSet(viewsets.ModelViewSet):
                 body = f"A new timetable has been published {('for ' + term_text) if term_text else ''}. Please check the Timetable section."
                 if sender_id:
                     create_broadcast_message(school_id=school_id, sender_id=sender_id, body=body)
+        except Exception:
+            pass
+        # Additionally: send personalized teacher messages with direct timetable link
+        try:
+            from django.contrib.auth import get_user_model
+            from communications.utils import resolve_default_sender_id, create_personalized_messages_for_users
+            plan = getattr(version, 'plan', None)
+            school_id = getattr(plan, 'school_id', None)
+            if school_id:
+                User = get_user_model()
+                teacher_users = User.objects.filter(school_id=school_id, role='teacher', is_active=True).only('id','first_name','last_name','username')
+                if teacher_users.exists():
+                    sender_id = resolve_default_sender_id(school_id)
+                    if sender_id:
+                        # Build absolute link to teacher timetable with planId
+                        try:
+                            base_url = request.build_absolute_uri('/')
+                        except Exception:
+                            base_url = '/'
+                        base_url = base_url.rstrip('/')
+                        link = f"{base_url}/teacher/timetable?planId={getattr(plan, 'id', '')}"
+                        term = getattr(plan, 'term', None)
+                        term_label = getattr(term, 'name', None) or (f"T{getattr(term,'number','')}" if getattr(term,'number',None) else '')
+                        pairs = []
+                        for u in teacher_users:
+                            try:
+                                name = (f"{getattr(u,'first_name','')} {getattr(u,'last_name','')}").strip() or getattr(u,'username','Teacher')
+                                msg = (
+                                    f"Hello {name}, a new timetable {('for ' + term_label) if term_label else ''} has been published. "
+                                    f"View your personalized timetable here: {link}"
+                                )
+                                pairs.append((u.id, msg))
+                            except Exception:
+                                continue
+                        if pairs:
+                            create_personalized_messages_for_users(
+                                school_id=school_id,
+                                sender_id=sender_id,
+                                user_body_pairs=pairs,
+                                system_tag='timetable_publish',
+                                queue_delivery=True,
+                            )
         except Exception:
             pass
         return Response({'detail': 'published'})

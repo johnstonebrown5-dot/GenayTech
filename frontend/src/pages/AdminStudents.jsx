@@ -50,17 +50,26 @@ export default function AdminStudents(){
     try {
       setIsLoading(true)
       try { showLoadingHint('Loading students…', 8) } catch {}
-      // Build students query
-      let studentsUrl = `/academics/students/`
-      if (tab === 'graduated') {
-        studentsUrl += `?is_graduated=true`
+      // Build students query with optional tab/search and server-side grade/class filters
+      let base = `/academics/students/`
+      const params = new URLSearchParams()
+      if (searchTerm) {
+        // Search across ALL students (ignore tab constraints)
+        params.set('q', searchTerm)
+      } else if (tab === 'graduated') {
+        params.set('is_graduated', 'true')
       } else if (tab === 'inactive') {
         // Count graduated among inactive: fetch all students with is_active=false (any graduation state)
-        studentsUrl += `?is_active=false`
+        params.set('is_active', 'false')
       } else {
         // active
-        studentsUrl += `?is_graduated=false&is_active=true`
+        params.set('is_graduated', 'false')
+        params.set('is_active', 'true')
       }
+      // Server-side Specific Grade & Class filters (if provided)
+      if (filterGrade) params.set('grade', String(filterGrade))
+      if (filterClass) params.set('klass', String(filterClass))
+      const studentsUrl = `${base}?${params.toString()}`
       try { setLoadingProgress(25) } catch {}
       const [st, cl] = await Promise.all([
         api.get(studentsUrl),
@@ -118,9 +127,10 @@ export default function AdminStudents(){
   }
 
   useEffect(()=>{ 
-    // Try to hydrate from cache first for this tab
+    // Try to hydrate from cache first for this tab (but not during a search)
     const now = Date.now()
     if (
+      !searchTerm &&
       cachedStudents &&
       cachedClasses &&
       cachedTab === tab &&
@@ -133,7 +143,7 @@ export default function AdminStudents(){
     } else {
       load()
     }
-  },[tab])
+  },[tab, searchTerm])
 
   // Load school name for print header (once per session)
   useEffect(() => {
@@ -680,7 +690,7 @@ export default function AdminStudents(){
           <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50">
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-xl font-bold text-gray-900">{tab==='active' ? 'Active Students' : (tab==='inactive' ? 'Inactive Students' : 'Graduated Students')}</h2>
+                <h2 className="text-xl font-bold text-gray-900">{searchTerm ? 'Search Results' : (tab==='active' ? 'Active Students' : (tab==='inactive' ? 'Inactive Students' : 'Graduated Students'))}</h2>
                 <p className="text-sm text-gray-600 mt-1">
                   {filteredStudents.length} of {studentsTotal} students
                   {searchTerm && ` matching "${searchTerm}"`}

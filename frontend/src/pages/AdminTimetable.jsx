@@ -1,7 +1,9 @@
 import React, { useEffect, useMemo, useState, useRef } from 'react'
 import api from '../api'
+import { useNavigate } from 'react-router-dom'
 
 export default function AdminTimetable() {
+  const navigate = useNavigate()
   const [showCreate, setShowCreate] = useState(false)
   const [showManage, setShowManage] = useState(false)
   // templates
@@ -1339,7 +1341,7 @@ export default function AdminTimetable() {
                 <div className="text-sm font-semibold text-gray-800">Block Timetable Template (Classes × Sessions)</div>
                 <div className="flex items-center gap-2 overflow-x-auto no-scrollbar -mx-1 px-1">
                   <button
-                    onClick={()=>{ const url = `/admin/timetable/teacher${currentPlan?`?planId=${currentPlan.id}`:''}`; window.location.href = url }}
+                    onClick={()=>{ const url = `/admin/timetable/teacher${currentPlan?`?planId=${currentPlan.id}`:''}`; navigate(url) }}
                     className="px-2.5 py-1 rounded text-xs border bg-white text-gray-700 border-gray-300 hover:bg-gray-50">
                     Teacher Timetable
                   </button>
@@ -1395,7 +1397,7 @@ export default function AdminTimetable() {
                           <button
                             className="underline decoration-dotted hover:decoration-solid"
                             title="Open class timetable"
-                            onClick={()=>{ const url = `/admin/timetable/class?classId=${cls.id}${currentPlan?`&planId=${currentPlan.id}`:''}`; window.location.href = url }}
+                            onClick={()=>{ const url = `/admin/timetable/class?classId=${cls.id}${currentPlan?`&planId=${currentPlan.id}`:''}`; navigate(url) }}
                           >
                             {cls.name || `Class ${cls.id}`}
                           </button>

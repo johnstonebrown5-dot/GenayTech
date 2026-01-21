@@ -36,6 +36,17 @@ export default function FloatingDeliveryLog(){
   const [resetBusy, setResetBusy] = useState(false)
   // Detect and cache the floating actions holder so the FAB mounts there immediately once available
   const [holderEl, setHolderEl] = useState(null)
+  // Compact mode (small screens)
+  const [isCompact, setIsCompact] = useState(false)
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return
+    const mql = window.matchMedia('(max-width: 640px)')
+    const onChange = (e) => setIsCompact(!!(e && e.matches))
+    setIsCompact(mql.matches)
+    try { mql.addEventListener('change', onChange) } catch { try { mql.addListener(onChange) } catch {} }
+    return () => { try { mql.removeEventListener('change', onChange) } catch { try { mql.removeListener(onChange) } catch {} } }
+  }, [])
 
   const stopOrResume = async () => {
     if (actionBusy) return
@@ -230,8 +241,8 @@ export default function FloatingDeliveryLog(){
     const el = btnRef.current
     if (!el) return
     const r = el.getBoundingClientRect()
-    const panelWidth = 384 // 24rem
-    const panelHeight = 360 // approx for clamping
+    const panelWidth = 416 // 26rem
+    const panelHeight = 420 // approx for clamping
     const w = window.innerWidth
     const h = window.innerHeight
     const left = Math.max(8, Math.min(r.left - panelWidth - 12, w - panelWidth - 8))
@@ -253,7 +264,13 @@ export default function FloatingDeliveryLog(){
     <div style={{ position:'relative', pointerEvents:'auto' }}>
       <button
         ref={btnRef}
-        onClick={() => setOpen(v=>!v)}
+        onClick={() => {
+          if (isCompact) {
+            setFullOpen(true); setCollapsed(true); setOpen(false); setHasNew(false)
+            return
+          }
+          setOpen(v=>!v)
+        }}
         aria-label="Message delivery logs"
         title="Message delivery logs"
         style={{
@@ -294,21 +311,20 @@ export default function FloatingDeliveryLog(){
 
   const panel = open ? (
     <div style={{ position:'fixed', left: panelPos.left, top: panelPos.top, zIndex:4000 }}>
-      <div className="bg-white/80 supports-[backdrop-filter]:bg-white/60 backdrop-blur-xl shadow-2xl ring-1 ring-gray-200/70 rounded-2xl w-[24rem] max-h-[60vh] overflow-hidden">
-        <div className="px-3.5 py-2.5 border-b border-gray-200/70 flex items-center gap-2 bg-gradient-to-r from-white to-sky-50/60">
+      <div className="bg-white/85 supports-[backdrop-filter]:bg-white/60 backdrop-blur-xl shadow-2xl ring-1 ring-gray-200/70 rounded-2xl w-[26rem] max-h-[70vh] overflow-hidden">
+        <div className="sticky top-0 z-10 px-3.5 py-2.5 border-b border-gray-200/70 flex items-center gap-2 bg-gradient-to-r from-white to-sky-50/60">
           <span className="inline-flex items-center gap-2 font-semibold text-gray-900 text-sm flex-1">
             <span className="inline-flex h-5 w-5 items-center justify-center rounded-md bg-blue-100 text-blue-700">✉️</span>
             Delivery logs
           </span>
-          <select value={filter} onChange={e=>setFilter(e.target.value)} className="text-sm border border-gray-300 rounded px-2 py-1">
+          <select value={filter} onChange={e=>setFilter(e.target.value)} className="h-7 text-sm border border-gray-300 rounded px-2 py-1">
             <option value="all">All</option>
             <option value="sms">SMS</option>
             <option value="email">Email</option>
           </select>
-          <button onClick={()=>{ setRetryStart(null); setRetryIds([]); load() }} className="text-xs px-2.5 py-1 rounded-lg bg-gray-100 hover:bg-gray-200 shadow-sm">Refresh</button>
-          <button onClick={()=>{ setOpen(false); setRetryStart(null); setRetryIds([]) }} className="ml-1 text-xs px-2 py-1 rounded-lg bg-white border border-gray-300 hover:bg-gray-50">Close</button>
+          <button onClick={()=>{ setRetryStart(null); setRetryIds([]); load() }} className="h-7 text-xs px-2.5 rounded-lg bg-gray-100 hover:bg-gray-200 shadow-sm">Refresh</button>
+          <button onClick={()=>{ setOpen(false); setRetryStart(null); setRetryIds([]) }} className="h-7 ml-1 text-xs px-2 rounded-lg bg-white border border-gray-300 hover:bg-gray-50">Close</button>
         </div>
-        {/* Progress bar */}
         <div className="px-3 pt-1 pb-2 border-b border-gray-100">
           <div className="flex items-center justify-between text-[11px] text-gray-600 mb-1">
             <span>Progress</span>
@@ -318,7 +334,6 @@ export default function FloatingDeliveryLog(){
             <div className="h-full" style={{ width: `${barStyle.pct}%`, background: barStyle.gradient }} />
           </div>
         </div>
-        {/* Summary row */}
         <div className="px-3.5 py-2 border-b border-gray-100/80 text-[12px] grid grid-cols-2 gap-2">
           <div className="flex items-center gap-2">
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-sm">
@@ -337,9 +352,8 @@ export default function FloatingDeliveryLog(){
             </span>
           </div>
         </div>
-        {/* Actions */}
         <div className="px-3.5 py-2 border-b border-gray-100/80 flex flex-wrap items-center gap-2">
-          <button disabled={actionBusy} onClick={stopOrResume} className={`text-xs px-2.5 py-1 rounded-lg border ${paused ? 'bg-yellow-50 text-yellow-700 border-yellow-200' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'} ${actionBusy ? 'opacity-60 cursor-not-allowed' : ''} w-full sm:w-auto`}>{paused ? 'Resume sending' : 'Stop sending'}</button>
+          <button disabled={actionBusy} onClick={stopOrResume} className={`h-8 text-xs px-2.5 rounded-lg border ${paused ? 'bg-yellow-50 text-yellow-700 border-yellow-200' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'} ${actionBusy ? 'opacity-60 cursor-not-allowed' : ''} w-full sm:w-auto`}>{paused ? 'Resume sending' : 'Stop sending'}</button>
           {/* Bulk retry failed */}
           {(() => {
             const failedIds = (Array.isArray(items) ? items : []).filter(it => it && it.ok === false).map(it => it.id)
@@ -354,7 +368,7 @@ export default function FloatingDeliveryLog(){
                   setRetryIds(failedIds)
                   try { await api.post('/communications/delivery-logs/retry/', { ids: failedIds }); await load() } catch (e) { setError('Retry failed') } finally { setRetryBusy(false) }
                 }}
-                className={`text-xs px-2.5 py-1 rounded-lg border ${failedIds.length? 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100':'bg-white text-gray-400 border-gray-200 cursor-not-allowed'} ${retryBusy ? 'opacity-60 cursor-wait' : ''} w-full sm:w-auto`}
+                className={`h-8 text-xs px-2.5 rounded-lg border ${failedIds.length? 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100':'bg-white text-gray-400 border-gray-200 cursor-not-allowed'} ${retryBusy ? 'opacity-60 cursor-wait' : ''} w-full sm:w-auto`}
                 title={failedIds.length? 'Retry failed sends' : 'No failed entries to retry'}
               >{retryBusy? 'Retrying…' : `Retry failed${failedIds.length? ` (${failedIds.length})`: ''}`}</button>
             )
@@ -362,15 +376,15 @@ export default function FloatingDeliveryLog(){
           <button
             disabled={resetBusy}
             onClick={clearLogs}
-            className={`text-xs px-2.5 py-1 rounded-lg border ${resetBusy? 'opacity-60 cursor-wait':''} bg-white text-red-600 border-red-200 hover:bg-red-50 w-full sm:w-auto`}
+            className={`h-8 text-xs px-2.5 rounded-lg border ${resetBusy? 'opacity-60 cursor-wait':''} bg-white text-red-600 border-red-200 hover:bg-red-50 w-full sm:w-auto`}
             title="Clear message logs"
           >{resetBusy? 'Clearing…' : 'Clear logs'}</button>
-          <button onClick={() => setShowList(v=>!v)} className="sm:ml-auto text-xs px-2.5 py-1 rounded-lg border bg-white text-gray-700 border-gray-300 hover:bg-gray-50 w-full sm:w-auto">{showList ? 'Hide' : 'View more'}</button>
-          <button onClick={() => { setFullOpen(true); setCollapsed(true); setOpen(false); setHasNew(false) }} className="text-xs px-2.5 py-1 rounded-lg border bg-white text-gray-700 border-gray-300 hover:bg-gray-50 w-full sm:w-auto">View detailed logs</button>
+          <button onClick={() => setShowList(v=>!v)} className="sm:ml-auto h-8 text-xs px-2.5 rounded-lg border bg-white text-gray-700 border-gray-300 hover:bg-gray-50 w-full sm:w-auto">{showList ? 'Hide' : 'View more'}</button>
+          <button onClick={() => { setFullOpen(true); setCollapsed(true); setOpen(false); setHasNew(false) }} className="h-8 text-xs px-2.5 rounded-lg border bg-white text-gray-700 border-gray-300 hover:bg-gray-50 w-full sm:w-auto">View detailed logs</button>
         </div>
         {error && <div className="px-3 py-2 text-xs text-red-600">{error}</div>}
         {showList && (
-        <div className="overflow-y-auto max-h-[50vh] divide-y divide-gray-100">
+        <div className="overflow-y-auto max-h-[52vh] divide-y divide-gray-100">
           {loading && items.length === 0 && (
             <div className="p-3 text-sm text-gray-500">Loading...</div>
           )}
@@ -416,6 +430,15 @@ export default function FloatingDeliveryLog(){
       </div>
     </div>
   ) : null
+
+  // If the side panel is open and screen switches to compact, move to collapsed summary
+  useEffect(() => {
+    if (isCompact && open) {
+      setOpen(false)
+      setFullOpen(true)
+      setCollapsed(true)
+    }
+  }, [isCompact, open])
 
   return (
     <>

@@ -1,11 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useSearchParams, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth'
 import api, { toAbsoluteUrl } from '../api'
 
 export default function TeacherTimetable() {
   const [sp] = useSearchParams()
   const planIdQS = sp.get('planId') ? Number(sp.get('planId')) : null
+  const navigate = useNavigate()
   const { user } = useAuth()
   const [loading, setLoading] = useState(true)
   const [teacherId, setTeacherId] = useState(null)
@@ -327,11 +328,11 @@ export default function TeacherTimetable() {
               </select>
               <button
                 disabled={!selectedClassId}
-                onClick={()=>{ if(selectedClassId){ const url = `/admin/timetable/class?classId=${selectedClassId}${plan?`&planId=${plan.id}`:''}`; window.location.href = url } }}
+                onClick={()=>{ if(selectedClassId){ const url = `/admin/timetable/class?classId=${selectedClassId}${plan?`&planId=${plan.id}`:''}`; navigate(url) } }}
                 className="px-3 py-1.5 rounded-lg text-white bg-gradient-to-r from-indigo-600 to-purple-600 text-sm disabled:opacity-50"
               >Class View</button>
               <button
-                onClick={()=>{ window.location.href = '/teacher/block-timetable' }}
+                onClick={()=>{ navigate('/teacher/block-timetable') }}
                 className="px-3 py-1.5 rounded-lg text-white bg-gradient-to-r from-sky-500 to-blue-600 text-sm"
               >Block View</button>
             </div>
