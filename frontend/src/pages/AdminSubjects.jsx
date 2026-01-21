@@ -12,7 +12,7 @@ export default function AdminSubjects(){
   const [creating, setCreating] = useState(false)
   const [loading, setLoading] = useState(true)
 
-  const [newSubject, setNewSubject] = useState({ code: '', name: '', category: 'other' })
+  const [newSubject, setNewSubject] = useState({ code: '', name: '', category: 'other', is_examinable: true })
 
   const [classAssign, setClassAssign] = useState({ klass: '', subject_ids: [] })
   const [teacherAssign, setTeacherAssign] = useState({ teacher_id: '', subject_ids: [] })
@@ -153,6 +153,10 @@ export default function AdminSubjects(){
                 <option value="humanities">Humanities</option>
                 <option value="other">Other</option>
               </select>
+              <label className="flex items-center gap-2 text-sm text-gray-700">
+                <input type="checkbox" checked={!!newSubject.is_examinable} onChange={e=>setNewSubject({...newSubject, is_examinable: e.target.checked})} />
+                <span>Examinable</span>
+              </label>
               <div className="md:col-span-1 flex justify-end">
                 <button className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded shadow" disabled={creating}>{creating? 'Creating...' : 'Add Subject'}</button>
               </div>
@@ -185,7 +189,7 @@ export default function AdminSubjects(){
                     const selected = classAssign.subject_ids.includes(s.id)
                     return (
                       <button type="button" key={s.id} onClick={()=>setClassAssign(a=>({...a, subject_ids: toggleId(a.subject_ids, s.id)}))} className={`px-2 py-1 rounded-full text-xs border ${selected? 'bg-purple-100 text-purple-700 border-purple-200' : 'hover:bg-gray-50'}`}>
-                        {s.name}
+                        {s.name}{s.is_examinable === false ? ' (Unexaminable)' : ''}
                       </button>
                     )
                   })}
@@ -231,7 +235,7 @@ export default function AdminSubjects(){
                     const selected = teacherAssign.subject_ids.includes(s.id)
                     return (
                       <button type="button" key={s.id} onClick={()=>setTeacherAssign(a=>({...a, subject_ids: toggleId(a.subject_ids, s.id)}))} className={`px-2 py-1 rounded-full text-xs border ${selected? 'bg-purple-100 text-purple-700 border-purple-200' : 'hover:bg-gray-50'}`}>
-                        {s.name}
+                        {s.name}{s.is_examinable === false ? ' (Unexaminable)' : ''}
                       </button>
                     )
                   })}
@@ -261,7 +265,12 @@ export default function AdminSubjects(){
               {subjects.map(s => (
                 <Link key={s.id} to={`/admin/subjects/${s.id}`} className="border rounded p-3 flex items-center justify-between hover:bg-gray-50">
                   <div>
-                    <div className="font-medium">{s.name}</div>
+                    <div className="font-medium flex items-center gap-2">
+                      <span>{s.name}</span>
+                      {s.is_examinable === false && (
+                        <span className="inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium bg-white text-amber-700 border-amber-300">Unexaminable</span>
+                      )}
+                    </div>
                     <div className="text-xs text-gray-500">{s.code} · {(s.category||'other').toString().replace(/^./,c=>c.toUpperCase())}</div>
                   </div>
                 </Link>

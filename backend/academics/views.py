@@ -2388,7 +2388,11 @@ class ExamViewSet(viewsets.ModelViewSet):
                 from communications.utils import send_sms, send_email_with_attachment, send_email_safe, create_messages_for_users
 
                 # Gather results grouped by student
-                res = ExamResult.objects.filter(exam=exam_local).select_related('student','subject')
+                res = (
+                    ExamResult.objects
+                    .filter(exam=exam_local, subject__is_examinable=True)
+                    .select_related('student','subject')
+                )
                 by_student = {}
                 for r in res:
                     s = r.student
@@ -2403,7 +2407,7 @@ class ExamViewSet(viewsets.ModelViewSet):
                     entry['count'] += 1
 
                 # Build a simple subject list for column order
-                subjects = list(exam_local.klass.subjects.all())
+                subjects = list(exam_local.klass.subjects.filter(is_examinable=True))
 
                 # Send messages per student
                 chat_user_ids = []

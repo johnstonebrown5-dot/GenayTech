@@ -11,7 +11,7 @@ export default function AdminSubjectProfile(){
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [editingSubject, setEditingSubject] = useState(false)
-  const [form, setForm] = useState({ code: '', name: '', category: 'other' })
+  const [form, setForm] = useState({ code: '', name: '', category: 'other', is_examinable: true })
   const [savingSubject, setSavingSubject] = useState(false)
   const [bands, setBands] = useState([]) // [{id, grade, min, max, order}]
   const [loadingBands, setLoadingBands] = useState(false)
@@ -38,7 +38,7 @@ export default function AdminSubjectProfile(){
         if (!cancelled) {
           setSubject(s.data)
           setStats(st.data || {})
-          setForm({ code: s.data?.code || '', name: s.data?.name || '', category: s.data?.category || 'other' })
+          setForm({ code: s.data?.code || '', name: s.data?.name || '', category: s.data?.category || 'other', is_examinable: (s.data?.is_examinable ?? true) })
         }
       } catch (e) {
         if (!cancelled) setError('Failed to load subject')
@@ -257,6 +257,10 @@ export default function AdminSubjectProfile(){
                   <option value="humanities">Humanities</option>
                   <option value="other">Other</option>
                 </select>
+                <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+                  <input type="checkbox" checked={!!form.is_examinable} onChange={e=>setForm(f=>({...f, is_examinable: e.target.checked}))} />
+                  <span>Examinable</span>
+                </label>
               </div>
             )}
           </div>
@@ -274,10 +278,10 @@ export default function AdminSubjectProfile(){
                   onClick={async()=>{
                     setSavingSubject(true)
                     try{
-                      const payload = { code: form.code, name: form.name, category: form.category }
+                      const payload = { code: form.code, name: form.name, category: form.category, is_examinable: !!form.is_examinable }
                       const { data } = await api.patch(`/academics/subjects/${id}/`, payload)
                       setSubject(data)
-                      setForm({ code: data.code, name: data.name, category: data.category||'other' })
+                      setForm({ code: data.code, name: data.name, category: data.category||'other', is_examinable: (data?.is_examinable ?? true) })
                       setEditingSubject(false)
                       showSuccess && showSuccess('Saved', 'Subject updated')
                     }catch(e){

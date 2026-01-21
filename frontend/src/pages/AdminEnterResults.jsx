@@ -59,19 +59,42 @@ export default function AdminEnterResults(){
         if (!alive) return
         const studentsList = Array.isArray(stuRes.data) ? stuRes.data : (Array.isArray(stuRes.data?.results) ? stuRes.data.results : [])
         setStudents(studentsList)
-        // existing results
+        // existing results (aggregate to percentage per subject so admin sees percent out of 100)
         let existing = []
         try{
           const { data } = await api.get(`/academics/exam_results/?exam=${examId}`)
           existing = Array.isArray(data) ? data : (Array.isArray(data?.results) ? data.results : [])
         }catch{}
-        const existingMap = new Map()
-        existing.forEach(r=> existingMap.set(`${r.student}-${r.subject}`, r.marks))
+        // Build map of components per subject id
+        const compsBySubject = componentsMap || {}
+        // Aggregate per student-subject: sum marks and sum denominators
+        const agg = new Map()
+        existing.forEach(r=>{
+          const sid = r?.student ?? r?.student_id ?? r?.student_detail?.id
+          const subid = r?.subject ?? r?.subject_id ?? r?.subject_detail?.id
+          if (!sid || !subid) return
+          const key = `${sid}-${subid}`
+          const marks = Number(r?.marks ?? r?.score ?? r?.value)
+          if (Number.isNaN(marks)) return
+          // Determine denominator: prefer explicit out_of, then component.max_marks, else exam total
+          let denom = Number(r?.out_of)
+          if (Number.isNaN(denom) || !denom){
+            const compId = r?.component ?? r?.component_id ?? r?.component_detail?.id
+            const comps = compsBySubject[subid] || []
+            const compObj = Array.isArray(comps) ? comps.find(c=> String(c.id)===String(compId)) : null
+            if (compObj && compObj.max_marks != null) denom = Number(compObj.max_marks)
+          }
+          if (Number.isNaN(denom) || !denom){ denom = Number(e.data?.total_marks) || 100 }
+          const curr = agg.get(key) || { sum:0, out:0 }
+          agg.set(key, { sum: curr.sum + marks, out: curr.out + denom })
+        })
         const rows = []
         for (const s of studentsList){
           for (const sub of subj){
             const key = `${s.id}-${sub.id}`
-            rows.push({ student: s.id, subject: sub.id, marks: existingMap.has(key) ? existingMap.get(key) : '' })
+            const a = agg.get(key)
+            const pct = a && a.out>0 ? Math.round((a.sum / a.out) * 100) : ''
+            rows.push({ student: s.id, subject: sub.id, marks: pct })
           }
         }
         if (!alive) return
