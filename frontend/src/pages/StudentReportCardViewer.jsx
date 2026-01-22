@@ -32,6 +32,8 @@ export default function StudentReportCardViewer({ embedded=false, hideControls=f
   // Summary data from Results page for the currently selected exam
   const [summarySubjects, setSummarySubjects] = useState(null)
   const [summaryStudent, setSummaryStudent] = useState(null)
+  const [summaryExam, setSummaryExam] = useState(null)
+  const [examMeta, setExamMeta] = useState(null)
   const isPrivileged = useMemo(() => {
     const role = typeof user?.role === 'string' ? user.role.toLowerCase() : ''
     return role === 'admin' || role === 'teacher' || !!user?.is_staff || !!user?.is_superuser
@@ -157,24 +159,48 @@ export default function StudentReportCardViewer({ embedded=false, hideControls=f
         const st = (Array.isArray(data?.students)? data.students: []).find(s=> String(s.id)===String(studentId)) || null
         setSummarySubjects(subs)
         setSummaryStudent(st)
+        setSummaryExam(data?.exam || null)
+        // If term-year is missing, sync it from summary exam meta
+        try{
+          const yr = data?.exam?.year || (data?.exam?.date ? new Date(data.exam.date).getFullYear() : null)
+          const tr = data?.exam?.term || data?.exam?.inferred_term?.number || null
+          if (yr && tr){
+            const key = `${yr}-T${tr}`
+            const current = controlledTermYear || selectedTermYear
+            if (current !== key){ onSelectedTermYearChange ? onSelectedTermYearChange(key) : setSelectedTermYear(key) }
+          }
+        }catch{}
       }catch{
-        if (alive){ setSummarySubjects(null); setSummaryStudent(null) }
+        if (alive){ setSummarySubjects(null); setSummaryStudent(null); setSummaryExam(null) }
       }
     })()
     return ()=>{ alive=false }
   }, [effectiveExamId, queryExamId, studentId])
 
-  // If an exam id is present in the query, prefer it as initial selection when results load
+  // Always fetch the exam detail so we have the authoritative name for the header
+  useEffect(()=>{
+    let active = true
+    ;(async()=>{
+      try{
+        const exId = effectiveExamId || queryExamId
+        if (!exId) { if (active) setExamMeta(null); return }
+        const res = await api.get(`/academics/exams/${exId}/`)
+        if (!active) return
+        setExamMeta(res?.data || null)
+      }catch{
+        if (active) setExamMeta(null)
+      }
+    })()
+    return ()=>{ active = false }
+  }, [effectiveExamId, queryExamId])
+
+  // If an exam id is present in the query, force it as the selected exam immediately
   useEffect(()=>{
     if (!queryExamId) return
     const want = String(queryExamId)
     if (effectiveExamId && String(effectiveExamId) === want) return
-    // Once we have some results/termExams, set it
-    const hasAny = examResults && examResults.length > 0
-    if (hasAny){
-      setSelectedExamId(want)
-    }
-  }, [queryExamId, examResults])
+    setSelectedExamId(want)
+  }, [queryExamId])
 
   useEffect(()=>{
     let active = true
@@ -207,21 +233,13 @@ export default function StudentReportCardViewer({ embedded=false, hideControls=f
   }, [queryExamId, studentId])
 
   const headerExamName = useMemo(()=>{
+    // Strict: only use real names fetched for the selected exam; do not synthesize labels
+    if (examMeta?.name) return examMeta.name
+    if (summaryExam?.name) return summaryExam.name
+    if (selectedExamFromResults?.name) return selectedExamFromResults.name
     if (selectedExam?.name) return selectedExam.name
-    // fallback: use first in termExams
-    if (termExams.length) return termExams[0].name
-    // final fallback: derive from latest examResults entry
-    let best = null
-    for (const r of examResults){
-      const ed = r.exam_detail || {}
-      const year = ed.year || (ed?.date ? (isNaN(new Date(ed.date)) ? null : new Date(ed.date).getFullYear()) : null)
-      const term = ed.term || ed?.inferred_term?.number || null
-      const baseName = ed.name || (typeof r.exam === 'object' ? (r.exam?.name || r.exam?.title || '') : '') || String(r.exam || '')
-      const label = `${baseName}${year ? ` • ${year}` : ''}${term ? ` • T${term}` : ''}`
-      best = label
-    }
-    return best || 'EXAM NAME'
-  }, [selectedExam, termExams, examResults])
+    return '-'
+  }, [examMeta?.name, summaryExam?.name, selectedExamFromResults?.name, selectedExam?.name])
 
   useEffect(()=>{
     const exists = effectiveExamId ? termExams.some(e => String(e.id) === String(effectiveExamId)) : false
@@ -307,6 +325,22 @@ export default function StudentReportCardViewer({ embedded=false, hideControls=f
     })()
     return ()=>{ active = false }
   }, [studentId, termExams])
+
+  // Ensure rank is also fetched for the explicitly selected exam id (even if not in termExams list yet)
+  useEffect(()=>{
+    let abort = false
+    ;(async()=>{
+      try{
+        const exId = effectiveExamId || queryExamId
+        if (!exId || !studentId) return
+        const { data } = await api.get(`/academics/exams/${exId}/rank`, { params: { student: studentId } })
+        if (!abort){
+          setRanks(prev => ({ ...prev, [String(exId)]: data }))
+        }
+      }catch{}
+    })()
+    return ()=>{ abort = true }
+  }, [effectiveExamId, queryExamId, studentId])
 
   const letterFromBands = (score, bands) => {
     const n = Number(score)
@@ -486,6 +520,16 @@ export default function StudentReportCardViewer({ embedded=false, hideControls=f
   }, [marksByExamAndSubject, selectedExam, summaryStudent, summarySubjects])
 
   const selectedTotals = useMemo(()=>{
+    // Prefer totals from summary percentages when available
+    if (summaryStudent && Array.isArray(summarySubjects)){
+      let sum = 0, count = 0
+      for (const s of summarySubjects){
+        const v = Number(summaryStudent?.subject_percentages?.[String(s.id)])
+        if (Number.isFinite(v)) { sum += v; count += 1 }
+      }
+      const avg = count ? (sum / count) : 0
+      return { sum, count, avg }
+    }
     if (!selectedExam) return { sum: 0, count: 0, avg: 0 }
     let sum = 0
     let count = 0
@@ -495,7 +539,7 @@ export default function StudentReportCardViewer({ embedded=false, hideControls=f
     }
     const avg = count ? (sum / count) : 0
     return { sum, count, avg }
-  }, [subjects, selectedExam, selectedExamMarks])
+  }, [subjects, selectedExam, selectedExamMarks, summaryStudent, summarySubjects])
 
   const totals = useMemo(()=>{
     if (subjects.length === 0 || termExams.length === 0) return { total: 0, count: 0, average: 0 }
@@ -533,6 +577,13 @@ export default function StudentReportCardViewer({ embedded=false, hideControls=f
     return list
   }, [examResults])
 
+  // Resolve rank object for the currently selected exam id (works with query param too)
+  const currentRank = useMemo(()=>{
+    const key = String(effectiveExamId || queryExamId || (selectedExam && selectedExam.id) || '')
+    if (!key) return null
+    return ranks[key] || null
+  }, [ranks, effectiveExamId, queryExamId, selectedExam?.id])
+
   return (
     <div className="p-6">
       <div className="max-w-3xl mx-auto">
@@ -566,7 +617,7 @@ export default function StudentReportCardViewer({ embedded=false, hideControls=f
         {loading && <div className="bg-white p-4 rounded card shadow border border-gray-100">Loading...</div>}
 
         {!loading && !error && (
-          <div className="relative overflow-hidden rounded-xl border border-gray-300 bg-white shadow-lg print:shadow-none">
+          <div className="relative overflow-hidden rounded-xl border border-gray-300 bg-white shadow-lg print:shadow-none report-card-print-area">
             {(() => {
               const raw = (school?.logo_url || school?.logo || '')
               const has = !!raw
@@ -678,11 +729,11 @@ export default function StudentReportCardViewer({ embedded=false, hideControls=f
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div className="border border-gray-300 rounded">
                   <div className="px-3 py-2 font-semibold border-b border-gray-300">Class Position</div>
-                  <div className="px-3 py-6">{(() => { const rk = selectedExam ? ranks[selectedExam.id] : null; return rk ? `${rk.class?.position || '-'} / ${rk.class?.size || '-'}` : '-' })()}</div>
+                  <div className="px-3 py-6">{currentRank ? `${currentRank.class?.position || '-'} / ${currentRank.class?.size || '-'}` : '-'}</div>
                 </div>
                 <div className="border border-gray-300 rounded">
                   <div className="px-3 py-2 font-semibold border-b border-gray-300">Grade Position</div>
-                  <div className="px-3 py-6">{(() => { const rk = selectedExam ? ranks[selectedExam.id] : null; return rk ? `${rk.grade?.position || '-'} / ${rk.grade?.size || '-'}` : '-' })()}</div>
+                  <div className="px-3 py-6">{currentRank ? `${currentRank.grade?.position || '-'} / ${currentRank.grade?.size || '-'}` : '-'}</div>
                 </div>
               </div>
 

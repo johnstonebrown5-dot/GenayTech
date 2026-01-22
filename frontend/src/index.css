@@ -489,3 +489,10 @@ select { appearance: none; -webkit-appearance: none; -moz-appearance: none; back
 .teacher-theme-dark .supports-\[backdrop-filter\]\:bg-white\/60 {
   background-color: #020617 !important;
 }
+
+/* Print only the Report Card area */
+@media print {
+  body * { visibility: hidden !important; }
+  .report-card-print-area, .report-card-print-area * { visibility: visible !important; }
+  .report-card-print-area { position: absolute; left: 0; top: 0; width: 100%; margin: 0; padding: 0; box-shadow: none !important; border: none !important; }
+}

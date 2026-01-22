@@ -1508,11 +1508,18 @@ class ExamViewSet(viewsets.ModelViewSet):
                 action = None
             is_detail_action = action in ('retrieve', 'summary', 'rank', 'report_card_pdf', 'compare_subjects')
             if is_detail_action:
-                # Include exams taught by the teacher OR published ones
+                # Include exams taught by the teacher OR published ones.
+                # Some datasets set textual status='published' without toggling the boolean flag.
+                # Allow both forms to avoid false 404s on detail endpoints.
+                try:
+                    status_published = Q(status__iexact='published')
+                except Exception:
+                    status_published = Q()
                 qs = qs.filter(
                     Q(klass__teacher=user) |
                     Q(klass__subject_teachers__teacher=user) |
-                    Q(published=True)
+                    Q(published=True) |
+                    status_published
                 ).distinct()
             else:
                 qs = qs.filter(Q(klass__teacher=user) | Q(klass__subject_teachers__teacher=user)).distinct()
@@ -1802,6 +1809,11 @@ class ExamViewSet(viewsets.ModelViewSet):
         res = base_res.select_related('student', 'subject', 'component')
         students_map = {}
         for r in res:
+            # Skip rows with missing/non-numeric marks to avoid TypeErrors
+            try:
+                mval = float(r.marks)
+            except Exception:
+                continue
             s = r.student
             entry = students_map.setdefault(s.id, {
                 'id': s.id,
@@ -1817,8 +1829,8 @@ class ExamViewSet(viewsets.ModelViewSet):
             # Aggregate per subject: sum component marks under the same subject
             sid = str(r.subject_id)
             prev = entry['marks'].get(sid, 0.0)
-            entry['marks'][sid] = prev + float(r.marks)
-            entry['total'] += float(r.marks)
+            entry['marks'][sid] = prev + mval
+            entry['total'] += mval
             entry['count'] += 1
             # Compute component percentage part
             # Determine denominator: prefer explicit out_of saved with the result,
@@ -1839,7 +1851,6 @@ class ExamViewSet(viewsets.ModelViewSet):
             if not denom:
                 denom = 100.0
             if denom and denom > 0:
-                mval = float(r.marks)
                 # Backward-compat: older rows may have stored percent-like marks (0..100) even when denom is smaller
                 if mval <= 100.0 and mval > denom:
                     part_pct = mval
@@ -2099,21 +2110,33 @@ class ExamViewSet(viewsets.ModelViewSet):
           OR if the exam is published (read-only access for transparency).
         - Others: denied.
         """
-        exam = self.get_object()
         user = request.user
-        # Admins always allowed
-        if self._is_admin(request):
-            return Response(self._build_summary(exam))
-        # Teachers: allow if published or assigned to the class
-        if getattr(user, 'role', None) == 'teacher':
-            is_class_teacher = getattr(exam.klass, 'teacher_id', None) == getattr(user, 'id', None)
-            is_subject_teacher = ClassSubjectTeacher.objects.filter(klass=exam.klass, teacher=user).exists()
-            is_published = bool(getattr(exam, 'published', False)) or str(getattr(exam, 'status', '')).lower() == 'published'
-            if is_published or is_class_teacher or is_subject_teacher:
-                return Response(self._build_summary(exam))
+        try:
+            exam = self.get_object()
+            # Admins always allowed
+            if self._is_admin(request):
+                data = self._build_summary(exam)
+                data['exam'] = {'id': getattr(exam, 'id', None), 'name': getattr(exam, 'name', None), 'year': getattr(exam, 'year', None), 'term': getattr(exam, 'term', None), 'klass': getattr(exam, 'klass_id', None), 'total_marks': getattr(exam, 'total_marks', None)}
+                return Response(data)
+            # Teachers: allow if published or assigned to the class
+            if getattr(user, 'role', None) == 'teacher':
+                is_class_teacher = getattr(exam.klass, 'teacher_id', None) == getattr(user, 'id', None)
+                is_subject_teacher = ClassSubjectTeacher.objects.filter(klass=exam.klass, teacher=user).exists()
+                is_published = bool(getattr(exam, 'published', False)) or str(getattr(exam, 'status', '')).lower() == 'published'
+                if is_published or is_class_teacher or is_subject_teacher:
+                    data = self._build_summary(exam)
+                    data['exam'] = {'id': getattr(exam, 'id', None), 'name': getattr(exam, 'name', None), 'year': getattr(exam, 'year', None), 'term': getattr(exam, 'term', None), 'klass': getattr(exam, 'klass_id', None), 'total_marks': getattr(exam, 'total_marks', None)}
+                    return Response(data)
+                return Response({'detail': 'You do not have permission to perform this action.'}, status=status.HTTP_403_FORBIDDEN)
+            # Default deny
             return Response({'detail': 'You do not have permission to perform this action.'}, status=status.HTTP_403_FORBIDDEN)
-        # Default deny
-        return Response({'detail': 'You do not have permission to perform this action.'}, status=status.HTTP_403_FORBIDDEN)
+        except Exception as e:
+            # Return a safe empty payload so the frontend can render a neutral state
+            try:
+                exam_info = {'id': getattr(exam, 'id', None), 'name': getattr(exam, 'name', None), 'year': getattr(exam, 'year', None), 'term': getattr(exam, 'term', None), 'klass': getattr(exam, 'klass_id', None)}
+            except Exception:
+                exam_info = None
+            return Response({'subjects': [], 'students': [], 'class_mean': 0, 'subject_means': [], 'subject_mean_percentages': [], 'exam': exam_info, 'error': 'summary_failed'}, status=status.HTTP_200_OK)
 
     @action(detail=True, methods=['get'], permission_classes=[IsAdmin], url_path='summary-csv')
     def summary_csv(self, request, pk=None):

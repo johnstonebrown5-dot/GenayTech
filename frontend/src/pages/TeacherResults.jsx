@@ -118,7 +118,32 @@ export default function TeacherResults(){
       try{
         setLoading(true); setError('')
         const { data } = await api.get(`/academics/exams/${selectedExam}/summary/`)
-        if (mounted) setSummary(data)
+        let payload = data || null
+        // Hydrate with roster if no students returned yet, so teachers can still see their list
+        try{
+          if (payload && Array.isArray(payload.students) && payload.students.length===0){
+            const klassId = payload?.exam?.klass || publishedExams.find(e=> String(e.id)===String(selectedExam))?.klass
+            if (klassId){
+              const res = await api.get(`/academics/students/?klass=${encodeURIComponent(klassId)}`)
+              const roster = Array.isArray(res?.data) ? res.data : (Array.isArray(res?.data?.results) ? res.data.results : [])
+              const students = roster.map((s, idx)=> ({ id: s.id, name: s.name, marks: {}, subject_percentages: {}, total: 0, average: 0, position: idx+1 }))
+              payload = { ...payload, students }
+            }
+          }
+          // If subjects missing, fetch from class details to render subject columns and percentages
+          if (payload && (!Array.isArray(payload.subjects) || payload.subjects.length===0)){
+            const klassId = payload?.exam?.klass || publishedExams.find(e=> String(e.id)===String(selectedExam))?.klass
+            if (klassId){
+              try{
+                const kres = await api.get(`/academics/classes/${encodeURIComponent(klassId)}/`)
+                const subs = Array.isArray(kres?.data?.subjects) ? kres.data.subjects : []
+                const examSubs = subs.filter(s=> s?.is_examinable !== false).map(s=>({ id: s.id, code: s.code, name: s.name }))
+                if (examSubs.length){ payload = { ...payload, subjects: examSubs } }
+              }catch{}
+            }
+          }
+        }catch{}
+        if (mounted) setSummary(payload)
       }catch(e){ if (mounted) setError(e?.response?.data?.detail || e?.message || 'Failed to load summary') }
       finally{ if (mounted) setLoading(false) }
     })()
@@ -227,6 +252,11 @@ export default function TeacherResults(){
   const toGrade = (avg) => letterFromBands(avg, globalBands)
 
   const pctTotalAndAvg = (st) => {
+    // Prefer server-computed totals/averages from summary
+    const t = Number(st?.total)
+    const a = Number(st?.average)
+    if (Number.isFinite(t) && Number.isFinite(a)) return { sum: t, avg: a }
+    // Fallback to compute from subject_percentages if provided
     const subs = Array.isArray(summary?.subjects) ? summary.subjects : []
     let sum = 0
     let cnt = 0
@@ -416,8 +446,10 @@ export default function TeacherResults(){
 
       {viewMode==='class' && !selectedExam ? (
         <div className="bg-white/90 backdrop-blur rounded-2xl border border-gray-200 shadow-sm px-4 py-3 text-xs md:text-sm text-gray-600">No published exams found for this grade.</div>
-      ) : viewMode==='class' && !summary ? (
+      ) : viewMode==='class' && loading ? (
         <div className="bg-white/90 backdrop-blur rounded-2xl border border-gray-200 shadow-sm px-4 py-3 text-sm text-gray-700">Loading…</div>
+      ) : viewMode==='class' && !summary ? (
+        <div className="bg-white/90 backdrop-blur rounded-2xl border border-gray-200 shadow-sm px-4 py-3 text-xs md:text-sm text-gray-600">No results to display. Try selecting a different exam.</div>
       ) : viewMode==='class' ? (
         <div className="bg-white/95 backdrop-blur rounded-2xl border border-gray-200 shadow-sm">
           <div className="p-4 flex items-center justify-between">
