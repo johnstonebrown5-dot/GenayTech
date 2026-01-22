@@ -40,6 +40,7 @@ export default function TeacherGrades(){
   // NEW: Allow teachers to input as raw marks or percentages
   const [inputAs, setInputAs] = useState('marks') // 'marks' | 'percent'
   const [unitModal, setUnitModal] = useState(false)
+  const [formModalOpen, setFormModalOpen] = useState(false)
   const refreshExams = () => {
     try { delete examsCacheRef.current[String(selectedClass)] } catch {}
     setExamsReloadKey(v=>v+1)
@@ -50,6 +51,29 @@ export default function TeacherGrades(){
   const [previewLoading, setPreviewLoading] = useState(false)
   const [previewError, setPreviewError] = useState('')
   const [previewSummary, setPreviewSummary] = useState(null)
+
+  // Display labels for header
+  const subjectDisplay = useMemo(()=>{
+    const s = subjects.find(x=> String(x.id)===String(selectedSubject))
+    if (!s) return 'Subject'
+    return s.code ? `${s.code} - ${s.name}` : String(s.name || 'Subject')
+  }, [subjects, selectedSubject])
+  const examDisplay = useMemo(()=>{
+    const e = exams.find(x=> String(x.id)===String(selectedExamId))
+    return e ? String(e.name || 'Exam') : 'Exam'
+  }, [exams, selectedExamId])
+
+  // Student search
+  const [searchQuery, setSearchQuery] = useState('')
+  const visibleStudents = useMemo(()=>{
+    const list = Array.isArray(students) ? students : []
+    const q = String(searchQuery||'').trim().toLowerCase()
+    if (!q) return list
+    return list.filter(s => (
+      String(s.name||'').toLowerCase().includes(q) ||
+      String(s.admission_no||'').toLowerCase().includes(q)
+    ))
+  }, [students, searchQuery])
 
   // Persist teacher Out Of preferences per class/subject/exam
   const outOfStoreKey = () => [
@@ -212,6 +236,21 @@ export default function TeacherGrades(){
   const [uploading, setUploading] = useState(false)
   const [commitUploading, setCommitUploading] = useState(false)
   const [uploadError, setUploadError] = useState('')
+
+  // Open the exam details form as a modal automatically on mobile
+  useEffect(()=>{
+    try{
+      const mq = typeof window !== 'undefined' && window.matchMedia ? window.matchMedia('(max-width: 767px)') : null
+      const openIfMobile = () => setFormModalOpen(Boolean(mq && mq.matches))
+      openIfMobile()
+      if (mq && mq.addEventListener){ mq.addEventListener('change', openIfMobile) }
+      else if (mq && mq.addListener){ mq.addListener(openIfMobile) }
+      return () => {
+        if (mq && mq.removeEventListener){ mq.removeEventListener('change', openIfMobile) }
+        else if (mq && mq.removeListener){ mq.removeListener(openIfMobile) }
+      }
+    }catch{}
+  }, [])
 
   const getMySubjectsFromClass = (klassObj, meObj) => {
     if (!klassObj) return []
@@ -1144,16 +1183,8 @@ export default function TeacherGrades(){
         <div className="p-3 md:p-4 flex items-center justify-between gap-3">
           <div>
             <div className="text-lg md:text-xl font-semibold tracking-tight text-white">Input Grades</div>
-            <div className="text-xs md:text-sm text-indigo-100">Enter and submit exam results for your class</div>
           </div>
           <div className="hidden md:flex items-center gap-2">
-            <button
-              onClick={()=>setInputAs(prev => prev === 'percent' ? 'marks' : 'percent')}
-              type="button"
-              className={`input-unit-toggle text-xs px-3 py-1.5 rounded-full border hover:bg-white shadow-sm ${inputAs==='percent' ? 'input-unit-toggle--percent bg-white/90 text-indigo-700 border-white/70' : 'bg-white/90 text-indigo-700 border-white/70'}`}
-            >
-              Input: {inputAs==='percent' ? 'Percentage (%)' : 'Marks'}
-            </button>
             <button
               onClick={reloadSavedMarks}
               type="button"
@@ -1161,53 +1192,147 @@ export default function TeacherGrades(){
             >
               Load Sheet
             </button>
-            <button
-              onClick={()=>setControlsOpen(v=>!v)}
-              className="text-xs md:text-sm px-3 py-1.5 rounded-full bg-indigo-900/80 text-white border border-white/30 hover:bg-indigo-900 shadow-sm"
-            >
-              {controlsOpen ? 'Hide Options' : 'Change Selection'}
-            </button>
-            <button
-              onClick={()=>navigate(`/teacher/admin/enter/${selectedExamId}?readonly=1&klass=${encodeURIComponent(selectedClass||'')}`)}
-              disabled={!selectedExamId}
-              className="text-xs md:text-sm px-3 py-1.5 rounded-full bg-white/90 text-indigo-700 border border-white/70 disabled:opacity-60 shadow-sm"
-            >
-              Preview Results
-            </button>
+            <span className="text-xs md:text-sm px-3 py-1.5 rounded-full bg-white/90 text-indigo-700 border border-white/70 shadow-sm whitespace-nowrap max-w-[50vw] overflow-hidden text-ellipsis">
+              {subjectDisplay} • {examDisplay}
+            </span>
           </div>
           <div className="md:hidden flex items-center gap-1.5">
-            <button
-              onClick={()=>setInputAs(prev => prev === 'percent' ? 'marks' : 'percent')}
-              type="button"
-              className={`input-unit-toggle text-[11px] px-2.5 py-1 rounded-full border ${inputAs==='percent' ? 'input-unit-toggle--percent bg-white/90 text-indigo-700 border-white/80' : 'bg-white/90 text-indigo-700 border-white/80'}`}
-            >
-              {inputAs==='percent' ? '% Input' : 'Marks'}
-            </button>
             <button
               onClick={reloadSavedMarks}
               className="text-[11px] px-2.5 py-1.5 rounded-full bg-white text-indigo-700 border border-indigo-200 shadow-sm"
             >
               Load Sheet
             </button>
-            <button
-              onClick={()=>setControlsOpen(v=>!v)}
-              className="text-[11px] px-2.5 py-1.5 rounded-full bg-indigo-900/90 text-white border border-white/30 shadow-sm"
-            >
-              {controlsOpen ? 'Hide' : 'Change'}
-            </button>
-            <button
-              onClick={()=>navigate(`/teacher/admin/enter/${selectedExamId}?readonly=1&klass=${encodeURIComponent(selectedClass||'')}`)}
-              disabled={!selectedExamId}
-              className="text-[11px] px-2.5 py-1.5 rounded-full bg-white text-indigo-700 border border-indigo-200 shadow-sm disabled:opacity-60"
-            >
-              Preview
-            </button>
+            <span className="text-[11px] px-2.5 py-1.5 rounded-full bg-white text-indigo-700 border border-indigo-200 shadow-sm whitespace-nowrap max-w-[45vw] overflow-hidden text-ellipsis">
+              {subjectDisplay} • {examDisplay}
+            </span>
           </div>
         </div>
       </div>
 
       {error && <div className="bg-red-50 text-red-700 p-3 rounded border border-red-200">{error}</div>}
       {message && <div className="bg-green-50 text-green-700 p-3 rounded border border-green-200">{message}</div>}
+
+      {/* Mobile-only: full controls in modal */}
+      <Modal open={formModalOpen} onClose={()=>setFormModalOpen(false)} title="Exam Details" size="sm">
+        <div className="space-y-3">
+          <div className="flex items-center justify-end">
+            <button
+              type="button"
+              onClick={()=>setFormModalOpen(false)}
+              className="text-xs md:text-sm px-3 py-1.5 rounded-full bg-indigo-900/80 text-white border border-indigo-900/50 hover:bg-indigo-900 shadow-sm"
+            >
+              Hide Details
+            </button>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 md:gap-3">
+            <div className="grid gap-1.5">
+              <label className="text-xs font-medium text-gray-600">Class</label>
+              <select
+                className="border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-300"
+                value={selectedClass}
+                onChange={e=>{ setSelectedClass(e.target.value); setControlsOpen(true) }}
+              >
+                {classes.map(c=> <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </div>
+            <div className="grid gap-1.5">
+              <label className="text-xs font-medium text-gray-600">Subject</label>
+              <select
+                className="border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-300"
+                value={selectedSubject}
+                onChange={e=>setSelectedSubject(e.target.value)}
+              >
+                {subjects.map(s=> <option key={s.id} value={s.id}>{s.code} - {s.name}</option>)}
+              </select>
+            </div>
+            {entryMode === 'single' && (
+              <div className="grid gap-1.5">
+                <label className="text-xs font-medium text-gray-600">Paper (Component)</label>
+                <select
+                  className="border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-300"
+                  value={selectedComponentId}
+                  onChange={e=>setSelectedComponentId(e.target.value)}
+                >
+                  {components.length === 0 && <option value="">(No papers) Whole Subject</option>}
+                  {components.map(c=> <option key={c.id} value={c.id}>{c.code} - {c.name}</option>)}
+                </select>
+              </div>
+            )}
+            <div className="grid gap-1.5">
+              <label className="text-xs font-medium text-gray-600">Entry Mode</label>
+              <select
+                className="border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-300"
+                value={entryMode}
+                onChange={e=>setEntryMode(e.target.value)}
+              >
+                <option value="single">Single Paper</option>
+                <option value="all">All Papers</option>
+              </select>
+            </div>
+            <div className="grid gap-1.5">
+              <label className="text-xs font-medium text-gray-600">Input Unit</label>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={()=>setInputAs(prev => prev === 'percent' ? 'marks' : 'percent')}
+                  className={`input-unit-toggle inline-flex items-center rounded-full border px-3 py-1 text-[11px] bg-white hover:bg-gray-50 ${inputAs==='percent' ? 'input-unit-toggle--percent border-gray-200' : 'border-gray-200'}`}
+                >
+                  {inputAs==='percent' ? 'Percentage (%)' : 'Marks'}
+                </button>
+                <span className="text-[11px] text-gray-500">Change how you type values</span>
+              </div>
+            </div>
+            {/* Out Of fields removed from modal per request */}
+            <div className="grid gap-1">
+              <div className="flex items-center justify-between">
+                <label className="text-xs text-gray-600">Exam</label>
+                <div className="flex items-center gap-3">
+                  <button type="button" onClick={reloadSavedMarks} className="text-[11px] text-indigo-700 hover:underline">Load Saved</button>
+                  <button type="button" onClick={refreshExams} className="text-[11px] text-indigo-700 hover:underline disabled:opacity-60" disabled={examsLoading}>Refresh</button>
+                </div>
+              </div>
+              <select
+                className="border p-2 rounded"
+                value={selectedExamId}
+                disabled={examsLoading}
+                onChange={e=>{
+                  const val = e.target.value
+                  setSelectedExamId(val)
+                  const ex = exams.find(x=>String(x.id)===val)
+                  if (ex){
+                    setExamMeta({
+                      name: ex.name,
+                      year: ex.year,
+                      term: ex.term,
+                      date: ex.date,
+                      total_marks: Number(ex.total_marks)||100,
+                    })
+                  }
+                }}
+              >
+                <option value="">{examsLoading ? 'Loading exams…' : 'Select Exam'}</option>
+                {exams.map(e=> (
+                  <option key={e.id} value={e.id}>{e.name} — T{e.term} — {e.year} — {e.date}</option>
+                ))}
+              </select>
+              {exams.length === 0 && (
+                <span className="text-[11px] text-gray-500">No unpublished exams for this class. Ask admin to create one.</span>
+              )}
+            </div>
+          </div>
+
+          {/* Read-only exam details */}
+          {selectedExamId && (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs text-gray-600">
+              <div className="px-2 py-1 rounded border bg-gray-50">Name: <span className="font-medium text-gray-800 ml-1">{examMeta.name}</span></div>
+              <div className="px-2 py-1 rounded border bg-gray-50">Year: <span className="font-medium text-gray-800 ml-1">{examMeta.year}</span></div>
+              <div className="px-2 py-1 rounded border bg-gray-50">Term: <span className="font-medium text-gray-800 ml-1">T{examMeta.term}</span></div>
+              <div className="px-2 py-1 rounded border bg-gray-50">Date: <span className="font-medium text-gray-800 ml-1">{examMeta.date}</span></div>
+            </div>
+          )}
+        </div>
+      </Modal>
 
       {/* Selection summary when collapsed */}
       {!controlsOpen && (
@@ -1224,9 +1349,19 @@ export default function TeacherGrades(){
         </div>
       )}
 
-      {/* Controls */}
+      {/* Controls (shown inline only on md+; on mobile they're inside the modal) */}
       {controlsOpen && (
+      <div className="hidden md:block">
       <div className="rounded-2xl border border-gray-100 bg-white/90 backdrop-blur shadow-md p-3 md:p-4 space-y-3 md:space-y-4">
+        <div className="flex items-center justify-end">
+          <button
+            type="button"
+            onClick={()=>setControlsOpen(false)}
+            className="text-xs md:text-sm px-3 py-1.5 rounded-full bg-indigo-900/80 text-white border border-indigo-900/50 hover:bg-indigo-900 shadow-sm"
+          >
+            Hide Details
+          </button>
+        </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 md:gap-3">
           <div className="grid gap-1.5">
             <label className="text-xs font-medium text-gray-600">Class</label>
@@ -1388,43 +1523,153 @@ export default function TeacherGrades(){
           </div>
         </div>
       </div>
+      </div>
       )}
 
         {studentsLoading && (
           <div className="mb-3 p-2 rounded-lg border bg-white shadow-sm text-sm text-gray-600 animate-pulse">Loading students…</div>
         )}
 
+        {/* Search Bar */}
+        <div className="mb-2 md:mb-3 flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={e=>setSearchQuery(e.target.value)}
+              placeholder="Search student by name or admission"
+              className="w-full md:w-80 border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-300"
+            />
+            <button
+              type="button"
+              onClick={()=>setSearchQuery(searchQuery)}
+              className="px-3 py-2 rounded-xl text-sm bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm"
+            >
+              Search
+            </button>
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={()=>setSearchQuery('')}
+                className="px-3 py-2 rounded-xl text-sm bg-white text-gray-700 border border-gray-200 hover:bg-gray-50"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+          <div className="text-xs text-gray-600">
+            <span>Total Students: {students.length}</span>
+          </div>
+        </div>
+
         {/* Students - mobile list */}
         <div className="md:hidden -mx-1">
-          <div className="text-sm font-medium text-gray-800 mb-2 px-1">Students</div>
-          <div className="space-y-2">
-            {students.map(st => (
-              <div key={st.id} className="flex items-center justify-between gap-3 px-3 py-2 border rounded-xl bg-white shadow-sm">
-                <div className="flex items-center gap-2 min-w-0">
-                  <div className="h-8 w-8 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-xs font-semibold">
-                    {(st.name||'').split(' ').map(p=>p[0]).slice(0,2).join('').toUpperCase()}
+          <div className="mb-2 px-1 flex items-center justify-between gap-2">
+            <div className="text-sm font-medium text-gray-800">Students</div>
+            {entryMode === 'all' && components.length > 0 ? (
+              <div className="flex items-center gap-2">
+                {components.slice(0,2).map(c => (
+                  <div key={c.id} className="flex items-center gap-1.5">
+                    <label className="text-[11px] text-gray-600" htmlFor={`outof-comp-${c.id}`}>{c.code}</label>
+                    <input
+                      id={`outof-comp-${c.id}`}
+                      className="w-16 text-right border border-gray-200 rounded-lg px-2 py-1 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-200"
+                      type="number"
+                      inputMode="decimal"
+                      min={1}
+                      step="1"
+                      value={outOfPerComp[c.id] ?? ''}
+                      onChange={e=> setOutOfPerComp(prev=>({ ...prev, [c.id]: e.target.value })) }
+                    />
                   </div>
-                  <div className="min-w-0">
-                    <div className="text-sm font-medium whitespace-normal break-words">{st.name}</div>
-                    <div className="text-[11px] text-gray-500">{st.admission_no}</div>
-                  </div>
-                </div>
-                <div className="flex items-center gap-1">
-                  <input
-                    type="number"
-                    inputMode="decimal"
-                    min={0}
-                    max={inputAs==='percent' ? 100 : (Number(outOf)||Number(examMeta.total_marks)||100)}
-                    step="1"
-                    className={`border px-2 py-1.5 rounded-lg w-24 text-right focus:ring-2 focus:ring-indigo-200 ${invalid[st.id] ? 'border-red-500 bg-red-50' : ''}`}
-                    value={inputAs==='percent' ? marksToPercent(marks[st.id], outOf) : (marks[st.id] || '')}
-                    onChange={e=>handleMarkChange(st.id, e.target.value)}
-                  />
-                  <span className="text-xs text-gray-500 w-14 text-right">{inputAs==='percent' ? '%' : toPercent(marks[st.id], outOf)}</span>
-                </div>
+                ))}
               </div>
-            ))}
+            ) : (
+              <div className="flex items-center gap-1.5">
+                <label className="text-[11px] text-gray-600" htmlFor="outof-inline">Out Of</label>
+                <input
+                  id="outof-inline"
+                  className="w-20 text-right border border-gray-200 rounded-lg px-2 py-1 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-200"
+                  type="number"
+                  inputMode="decimal"
+                  min={1}
+                  step="1"
+                  value={outOf}
+                  onChange={e=>setOutOf(e.target.value)}
+                />
+              </div>
+            )}
           </div>
+          {entryMode === 'all' ? (
+            <div className="overflow-x-auto border rounded-xl bg-white shadow-sm">
+              <table className="min-w-full text-xs">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-2 py-2 text-left w-40">Student</th>
+                    {components.map(c => (
+                      <th key={c.id} className="px-2 py-2 text-right">{c.code}</th>
+                    ))}
+                    <th className="px-2 py-2 text-right w-16">%</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {students.map((st, idx) => (
+                    <tr key={st.id} className={idx%2? 'bg-white' : 'bg-gray-50/50'}>
+                      <td className="px-2 py-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div className="min-w-0">
+                            <div className="text-[12px] font-medium truncate max-w-[160px]">{st.name}</div>
+                            <div className="text-[10px] text-gray-500">{st.admission_no}</div>
+                          </div>
+                        </div>
+                      </td>
+                      {components.map(c => (
+                        <td key={c.id} className="px-2 py-1 text-right">
+                          <input
+                            type="number"
+                            inputMode="decimal"
+                            min={0}
+                            max={inputAs==='percent' ? 100 : (Number(outOfPerComp[c.id])||Number(examMeta.total_marks)||100)}
+                            step="1"
+                            className={`border px-2 py-1 rounded w-20 text-right focus:ring-2 focus:ring-indigo-200 ${(invalidAll[c.id]?.[st.id]) ? 'border-red-500 bg-red-50' : ''}`}
+                            value={inputAs==='percent' ? marksToPercent((marksAll[c.id]?.[st.id]), outOfPerComp[c.id]) : ((marksAll[c.id]?.[st.id]) || '')}
+                            onChange={e=>handleMarkChangeAll(c.id, st.id, e.target.value)}
+                          />
+                        </td>
+                      ))}
+                      <td className="px-2 py-1 text-right text-[11px] text-gray-700">{toCombinedPercent(st.id)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {students.map(st => (
+                <div key={st.id} className="flex items-center justify-between gap-3 px-3 py-2 border rounded-xl bg-white shadow-sm">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium whitespace-normal break-words">{st.name}</div>
+                      <div className="text-[11px] text-gray-500">{st.admission_no}</div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      min={0}
+                      max={inputAs==='percent' ? 100 : (Number(outOf)||Number(examMeta.total_marks)||100)}
+                      step="1"
+                      className={`border px-2 py-1.5 rounded-lg w-24 text-right focus:ring-2 focus:ring-indigo-200 ${invalid[st.id] ? 'border-red-500 bg-red-50' : ''}`}
+                      value={inputAs==='percent' ? marksToPercent(marks[st.id], outOf) : (marks[st.id] || '')}
+                      onChange={e=>handleMarkChange(st.id, e.target.value)}
+                    />
+                    <span className="text-xs text-gray-500 w-14 text-right">{inputAs==='percent' ? '%' : toPercent(marks[st.id], outOf)}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="hidden md:block">
