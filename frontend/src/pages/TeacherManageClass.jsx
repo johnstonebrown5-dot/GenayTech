@@ -462,6 +462,8 @@ function ClassInfoPanel({ classId, initialInnerTab }){
   const [loadingCompare, setLoadingCompare] = useState(false)
   const resultsTableRef = useRef(null)
   const [shareChannel, setShareChannel] = useState('sms')
+  // Roster map for resolving names in delivery logs even if summary is empty
+  const [studentsMap, setStudentsMap] = useState({})
   const [sharing, setSharing] = useState(false)
   const [shareMsg, setShareMsg] = useState('')
   const [includeBreakdown, setIncludeBreakdown] = useState(true)
@@ -562,6 +564,23 @@ function ClassInfoPanel({ classId, initialInnerTab }){
   }
 
   useEffect(() => { if (innerTab==='results') loadResultsStatus() }, [innerTab, recentExam?.id])
+
+  // Load class roster when viewing Results so we can map student_id -> name for logs
+  useEffect(() => {
+    if (innerTab !== 'results') return
+    let cancelled = false
+    ;(async () => {
+      try{
+        const { data } = await api.get(`/academics/classes/${classId}/students/`)
+        if (cancelled) return
+        const arr = Array.isArray(data)? data : []
+        const map = {}
+        for (const s of arr){ map[String(s.id)] = { name: s.name, admission_no: s.admission_no } }
+        setStudentsMap(map)
+      }catch{ setStudentsMap({}) }
+    })()
+    return ()=>{ cancelled = true }
+  }, [classId, innerTab])
 
   // Load classes in same grade for compare (when toggled open)
   useEffect(() => {
@@ -778,10 +797,17 @@ function ClassInfoPanel({ classId, initialInnerTab }){
                   type="button"
                   onClick={() => {
                     try{
+                      const published = !!(recentExam?.published || String(recentExam?.status||'').toLowerCase()==='published')
+                      if (!published){
+                        alert('Only published results can be printed. Please ask the admin to publish this exam first.')
+                        return
+                      }
                       const html = resultsTableRef.current?.outerHTML || ''
                       const w = window.open('', '_blank')
                       if (w){
-                        w.document.write(`<!doctype html><html><head><title>Results - ${klass?.name||''}</title><style>table{border-collapse:collapse;width:100%}th,td{border:1px solid #ccc;padding:6px;font-size:12px}th{background:#f8fafc;text-align:left}</style></head><body>${html}</body></html>`)
+                        const ts = new Date().toLocaleString()
+                        const title = `${recentExam?.name||'Results'} - ${klass?.name||''}`
+                        w.document.write(`<!doctype html><html><head><title>${title}</title><style>body{font-family:system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif}h1{font-size:16px;margin:0 0 8px}h2{font-size:13px;margin:0 0 12px;color:#475569}table{border-collapse:collapse;width:100%}th,td{border:1px solid #ccc;padding:6px;font-size:12px}th{background:#f8fafc;text-align:left}</style></head><body><h1>${title}</h1><h2>Year ${recentExam?.year||''} · Term ${recentExam?.term||''} · Date ${recentExam?.date||''} · Printed ${ts}</h2>${html}</body></html>`)
                         w.document.close()
                         w.focus()
                         w.print()
@@ -902,7 +928,8 @@ function ClassInfoPanel({ classId, initialInnerTab }){
                         ) : (
                           (resultsStatusItems||[]).map((it,i) => {
                             const st = (recentSummary?.students||[]).find(s => String(s.id)===String(it.student_id))
-                            const label = st?.name || `#${it.student_id}`
+                            const roster = studentsMap[String(it.student_id)]
+                            const label = st?.name || roster?.name || `#${it.student_id}`
                             const cell = (obj) => (!obj ? '-' : (obj.ok ? `Sent · ${new Date(obj.created_at).toLocaleString()}` : `Failed · ${new Date(obj.created_at).toLocaleString()}`))
                             return (
                               <tr key={`${it.student_id}-${i}`} className={i%2===0? 'bg-white' : 'bg-gray-50'}>

@@ -79,15 +79,19 @@ export default function TeacherResults(){
           }
           return out
         }
-        const all = await fetchAll('/academics/exams/')
+        const all = await fetchAll('/academics/exams/?include_history=true')
         // helper to resolve class id/name on exam object
         const getKlassId = (e) => String(e?.klass ?? e?.class ?? e?.klass_id ?? e?.class_id ?? '')
         const isPublished = (e) => !!(e?.published || e?.is_published || String(e?.status||'').toLowerCase()==='published')
-        // keep only exams for classes matching this grade
+        // keep only exams that belong to the selected grade; prefer stable grade_level_tag on the exam
+        const normalize = (g)=> String(g||'').trim()
         const examsForGrade = all.filter(e => {
+          const tag = normalize(e?.grade_level_tag)
+          if (tag) return tag === normalize(currentGrade) && isPublished(e)
+          // Fallback: resolve via class list if tag missing
           const cid = getKlassId(e)
           const cls = classes.find(c => String(c.id)===String(cid))
-          return cls && String(cls.grade_level)===String(currentGrade) && isPublished(e)
+          return !!(cls && normalize(cls.grade_level)===normalize(currentGrade) && isPublished(e))
         })
         // sort by date desc then id desc
         examsForGrade.sort((a,b)=>{
@@ -163,13 +167,25 @@ export default function TeacherResults(){
                 total: s.total ?? null,
                 average: s.average ?? null,
                 marks: s.marks || {},
+                subject_percentages: s.subject_percentages || {},
               })
             }
           }catch{}
         }
         // sort by class name
         summaries.sort((a,b)=> String(a.className||'').localeCompare(String(b.className||'')))
-        // compute positions by total desc
+        // Compute totals/averages based on subject percentages, then compute positions by total desc
+        const allSubs = Array.from(subjectsMap.values())
+        for (const st of combined){
+          let sum = 0
+          let cnt = 0
+          for (const sub of allSubs){
+            const pct = Number(st?.subject_percentages?.[String(sub.id)])
+            if (Number.isFinite(pct)) { sum += pct; cnt += 1 }
+          }
+          st.total = Math.round(sum * 100) / 100
+          st.average = cnt ? (Math.round((sum / cnt) * 100) / 100) : 0
+        }
         combined.sort((a,b)=> (Number(b.total)||0) - (Number(a.total)||0))
         let lastTotal = null, lastPos = 0
         for (let i=0;i<combined.length;i++){
@@ -210,6 +226,25 @@ export default function TeacherResults(){
   }
   const toGrade = (avg) => letterFromBands(avg, globalBands)
 
+  const pctTotalAndAvg = (st) => {
+    const subs = Array.isArray(summary?.subjects) ? summary.subjects : []
+    let sum = 0
+    let cnt = 0
+    for (const s of subs){
+      const pct = Number(st?.subject_percentages?.[String(s.id)])
+      if (Number.isFinite(pct)) { sum += pct; cnt += 1 }
+    }
+    const avg = cnt ? (sum / cnt) : 0
+    return { sum, avg }
+  }
+
+  const formatMean = (value) => {
+    const v = Number(value)
+    if (!Number.isFinite(v)) return '-'
+    const r = Math.round(v * 100) / 100
+    return Number.isInteger(r) ? String(r) : r.toFixed(2)
+  }
+
   // Fetch grading bands for subjects of the current summary; choose first non-empty as global bands
   useEffect(() => {
     let active = true
@@ -241,7 +276,14 @@ export default function TeacherResults(){
   const handleClassPrint = () => {
     if (!summary) return
     const cols = [ 'Position','Student', ...summary.subjects.map(s=> s.code || s.name), 'Total','Grade' ]
-    const rows = summary.students.map(st=> [ st.position, st.name, ...summary.subjects.map(s=> st.marks?.[String(s.id)] ?? ''), st.total, toGrade(st.average) ])
+    const rows = summary.students.map(st=> {
+      const { sum, avg } = pctTotalAndAvg(st)
+      const perSubj = summary.subjects.map(s => {
+        const v = Number(st?.subject_percentages?.[String(s.id)])
+        return Number.isFinite(v) ? String(Math.round(v)) : ''
+      })
+      return [ st.position, st.name, ...perSubj, String(Math.round(sum)), toGrade(avg) ]
+    })
     const thead = `<tr>${cols.map(c=>`<th>${c}</th>`).join('')}</tr>`
     const tbody = rows.map(r=> `<tr>${r.map(c=>`<td>${c}</td>`).join('')}</tr>`).join('')
     const title = `${summary?.exam?.name||'Exam'} - ${classNameById(summary?.exam?.klass) || ''}`
@@ -250,7 +292,14 @@ export default function TeacherResults(){
   const handleClassCSV = () => {
     if (!summary) return
     const header = [ 'Position','Student', ...summary.subjects.map(s=> s.code || s.name), 'Total','Grade' ]
-    const data = summary.students.map(st=> [ st.position, st.name, ...summary.subjects.map(s=> s.marks?.[String(s.id)] ?? ''), st.total, toGrade(st.average) ])
+    const data = summary.students.map(st=> {
+      const { sum, avg } = pctTotalAndAvg(st)
+      const perSubj = summary.subjects.map(s => {
+        const v = Number(st?.subject_percentages?.[String(s.id)])
+        return Number.isFinite(v) ? String(Math.round(v)) : ''
+      })
+      return [ st.position, st.name, ...perSubj, String(Math.round(sum)), toGrade(avg) ]
+    })
     downloadCSV(`${(summary?.exam?.name||'exam').replaceAll(' ','_')}_class_results.csv`, [header, ...data])
   }
   const handleGradePrint = () => {
@@ -401,11 +450,22 @@ export default function TeacherResults(){
                     <tr key={st.id} className={idx % 2 ? 'bg-white' : 'bg-gray-50/50'}>
                       <td className="border border-gray-200 px-2 py-2">{st.position}</td>
                       <td className="border border-gray-200 px-2 py-2">{st.name}</td>
-                      {summary.subjects.map(s => (
-                        <td key={s.id} className="border border-gray-200 px-2 py-2">{st.marks?.[String(s.id)] ?? '-'}</td>
-                      ))}
-                      <td className="border border-gray-200 px-2 py-2 font-medium">{st.total}</td>
-                      <td className="border border-gray-200 px-2 py-2">{toGrade(st.average)}</td>
+                      {summary.subjects.map(s => {
+                        const v = Number(st?.subject_percentages?.[String(s.id)])
+                        const val = Number.isFinite(v) ? Math.round(v) : '-'
+                        return (
+                          <td key={s.id} className="border border-gray-200 px-2 py-2">{val}</td>
+                        )
+                      })}
+                      {(() => {
+                        const { sum, avg } = pctTotalAndAvg(st)
+                        return (
+                          <>
+                            <td className="border border-gray-200 px-2 py-2 font-medium">{Math.round(sum)}</td>
+                            <td className="border border-gray-200 px-2 py-2">{toGrade(avg)}</td>
+                          </>
+                        )
+                      })()}
                       <td className="border border-gray-200 px-2 py-2">
                         <button
                           onClick={()=> navigate(`/teacher/students/${st.id}/report-card?exam=${encodeURIComponent(String(selectedExam||''))}`)}
@@ -415,6 +475,40 @@ export default function TeacherResults(){
                     </tr>
                   ))}
                 </tbody>
+                <tfoot>
+                  <tr className="bg-gray-50">
+                    <td className="border border-gray-200 px-2 py-2 font-medium" colSpan={2}>Mean</td>
+                    {summary.subjects.map(s => {
+                      let sum = 0, cnt = 0
+                      for (const st of summary.students){
+                        const pct = Number(st?.subject_percentages?.[String(s.id)])
+                        if (Number.isFinite(pct)) { sum += pct; cnt += 1 }
+                      }
+                      const mean = cnt ? (sum / cnt) : 0
+                      return (
+                        <td key={`mean-${s.id}`} className="border border-gray-200 px-2 py-2">{formatMean(mean)}</td>
+                      )
+                    })}
+                    {(() => {
+                      // mean of student totals and overall grade from average percentage
+                      let totalSum = 0, totalCnt = 0, avgSum = 0, avgCnt = 0
+                      for (const st of summary.students){
+                        const { sum, avg } = pctTotalAndAvg(st)
+                        if (Number.isFinite(sum)) { totalSum += sum; totalCnt += 1 }
+                        if (Number.isFinite(avg)) { avgSum += avg; avgCnt += 1 }
+                      }
+                      const meanTotal = totalCnt ? (totalSum / totalCnt) : 0
+                      const meanAvg = avgCnt ? (avgSum / avgCnt) : 0
+                      return (
+                        <>
+                          <td className="border border-gray-200 px-2 py-2 font-medium">{formatMean(meanTotal)}</td>
+                          <td className="border border-gray-200 px-2 py-2">{toGrade(meanAvg)}</td>
+                          <td className="border border-gray-200 px-2 py-2"></td>
+                        </>
+                      )
+                    })()}
+                  </tr>
+                </tfoot>
               </table>
             </div>
           </div>

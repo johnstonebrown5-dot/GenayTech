@@ -65,6 +65,7 @@ export default function AdminStudentDashboard() {
   const [assessments, setAssessments] = useState([])
   const [attendance, setAttendance] = useState([])
   const [examResults, setExamResults] = useState([])
+  const [examOverviewRows, setExamOverviewRows] = useState([]) // built from /exams/:id/summary so it matches Admin Results
   const [uiSelectedTerm, setUiSelectedTerm] = useState(null)
   const [uiSelectedExamId, setUiSelectedExamId] = useState(null)
   const [showAllExams, setShowAllExams] = useState(false)
@@ -136,6 +137,59 @@ export default function AdminStudentDashboard() {
     return () => { isMounted = false }
   }, [id])
 
+  // Sync Exams Overview to use the same source as Admin Results: fetch per-exam summaries
+  useEffect(() => {
+    let active = true
+    ;(async () => {
+      try {
+        const uniqueExamIds = Array.from(new Set((examResults || []).map(r => String(r?.exam_detail?.id || r?.exam)).filter(Boolean)))
+        if (!uniqueExamIds.length) { if (active) setExamOverviewRows([]); return }
+        const rows = []
+        // Build a quick lookup of exam -> name from existing examResults
+        const nameById = new Map((examResults||[]).map(r=>{
+          const ed = r?.exam_detail || {}
+          const id = ed?.id || r?.exam
+          return [String(id||''), ed?.name || null]
+        }))
+        for (const exId of uniqueExamIds) {
+          try {
+            const { data } = await api.get(`/academics/exams/${exId}/summary/`)
+            const subjects = Array.isArray(data?.subjects) ? data.subjects : []
+            const students = Array.isArray(data?.students) ? data.students : []
+            const me = students.find(s => String(s.id) === String(id))
+            if (me) {
+              // Prefer proper exam name; fallback to fetched exam meta; final fallback avoids numeric ID label
+              let examName = (data?.exam?.name || '').trim()
+              if (!examName) examName = (nameById.get(String(exId)) || '').trim()
+              if (!examName) {
+                try {
+                  const meta = await api.get(`/academics/exams/${exId}/`)
+                  examName = String(meta?.data?.name || '')
+                } catch {}
+              }
+              if (!examName) examName = 'Exam'
+              rows.push({
+                exam: { id: data?.exam?.id || Number(exId), name: examName, year: data?.exam?.year || '', term: data?.exam?.term || '' },
+                subjects_count: subjects.length,
+                total_marks_obtained: Math.round(Number(me.total) || 0),
+                approx_percentage: Math.round(Number(me.average) || 0),
+              })
+            }
+          } catch {}
+        }
+        rows.sort((a,b)=>{
+          const ya = Number(a.exam?.year||0), yb = Number(b.exam?.year||0)
+          if (yb !== ya) return yb - ya
+          const ta = Number(a.exam?.term||0), tb = Number(b.exam?.term||0)
+          if (tb !== ta) return tb - ta
+          return Number(b.exam?.id||0) - Number(a.exam?.id||0)
+        })
+        if (active) setExamOverviewRows(rows)
+      } catch { if (active) setExamOverviewRows([]) }
+    })()
+    return () => { active = false }
+  }, [examResults, id])
+
   // History loader: runs independently so slow history queries
   // don't block the main student dashboard from rendering.
   useEffect(() => {
@@ -186,44 +240,16 @@ export default function AdminStudentDashboard() {
 
   const examsOverview = useMemo(()=>{
     try{
+      // Prefer overview rows constructed from exam summaries (matches Admin Results)
+      if (examOverviewRows && examOverviewRows.length){
+        return examOverviewRows
+      }
       if (historyData?.exams && historyData.exams.length){
         return historyData.exams
       }
-      // Derive from raw examResults if history endpoint doesn't provide exams
-      const map = new Map()
-      for (const r of (examResults||[])){
-        const ed = r.exam_detail || {}
-        const id = ed.id || r.exam
-        if (!id) continue
-        const key = String(id)
-        if (!map.has(key)){
-          let year = ed.year || null
-          if (!year && ed.date){ const d = new Date(ed.date); if (!isNaN(d)) year = d.getFullYear() }
-          const term = ed.term || ed?.inferred_term?.number || null
-          map.set(key, { exam: { id, name: ed.name || String(id), year, term }, subjects: new Set(), total: 0 })
-        }
-        const entry = map.get(key)
-        const sid = r.subject_detail?.id || r.subject
-        if (sid) entry.subjects.add(String(sid))
-        const m = Number(r.marks)
-        if (Number.isFinite(m)) entry.total += m
-      }
-      const list = Array.from(map.values()).map(e => ({
-        exam: e.exam,
-        subjects_count: e.subjects.size,
-        total_marks_obtained: e.total,
-        approx_percentage: null,
-      }))
-      list.sort((a,b)=>{
-        const ya = Number(a.exam?.year||0), yb = Number(b.exam?.year||0)
-        if (yb !== ya) return yb - ya
-        const ta = Number(a.exam?.term||0), tb = Number(b.exam?.term||0)
-        if (tb !== ta) return tb - ta
-        return Number((b.exam?.id)||0) - Number((a.exam?.id)||0)
-      })
-      return list
+      return []
     }catch{ return [] }
-  }, [historyData?.exams, examResults])
+  }, [historyData?.exams, examOverviewRows])
 
   const allExamsForStudent = useMemo(()=>{
     const map = new Map()
@@ -569,7 +595,7 @@ export default function AdminStudentDashboard() {
                 <div className="flex items-center justify-between mb-2">
                   <div className="font-medium">Exams Overview</div>
                 </div>
-                {(historyData.exams || examResults).length === 0 ? (
+                {examsOverview.length === 0 ? (
                   <div className="text-sm text-gray-500">No exams yet.</div>
                 ) : (
                   <div className="overflow-x-auto">
@@ -584,12 +610,16 @@ export default function AdminStudentDashboard() {
                         </tr>
                       </thead>
                       <tbody>
-                        {(historyData.exams || examResults).map((e)=> {
+                        {examsOverview.map((e)=> {
                           const pct = e.approx_percentage
                           const pctClass = pct == null ? 'bg-slate-100 text-slate-600' : (pct >= 75 ? 'bg-emerald-100 text-emerald-700' : pct >= 50 ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700')
                           return (
                             <tr key={e.exam.id} className="border-t">
-                              <td className="px-3 py-2">{e.exam.name}</td>
+                              <td className="px-3 py-2">
+                                <Link to={`/admin/students/${id}/report-card?exam=${encodeURIComponent(String(e.exam.id))}`} className="text-indigo-600 hover:underline">
+                                  {e.exam.name}
+                                </Link>
+                              </td>
                               <td className="px-3 py-2">{e.exam.year}-T{e.exam.term}</td>
                               <td className="px-3 py-2">{e.subjects_count}</td>
                               <td className="px-3 py-2">{e.total_marks_obtained}</td>

@@ -317,13 +317,18 @@ export default function AdminClassProfile(){
     const title = `${klass?.name || 'Class'} — ${recentExam.name || 'Exam'} Results`
     const subjHeaders = (recentSummary.subjects||[]).map(s => `<th style="border:1px solid #e5e7eb;padding:6px;text-align:center">${s.code||''}</th>`).join('')
     const bodyRows = (recentSummary.students||[]).map(st => {
-      const cells = (recentSummary.subjects||[]).map(s => `<td style="border:1px solid #e5e7eb;padding:6px;text-align:center">${st.marks?.[String(s.id)] ?? '-'}</td>`).join('')
-      const avg = typeof st.average === 'number' ? Number(st.average).toFixed(1) : (st.average || '-')
+      let sumPct = 0
+      const cells = (recentSummary.subjects||[]).map(s => {
+        const raw = Number(st?.subject_percentages?.[String(s.id)])
+        const val = Number.isFinite(raw) ? Math.round(raw) : '-'
+        if (Number.isFinite(raw)) sumPct += raw
+        return `<td style="border:1px solid #e5e7eb;padding:6px;text-align:center">${val}</td>`
+      }).join('')
+      const total = Math.round(sumPct)
       return `<tr>
         <td style="position:sticky;left:0;background:#fff;border:1px solid #e5e7eb;padding:6px">${st.name||''}</td>
         ${cells}
-        <td style="border:1px solid #e5e7eb;padding:6px;text-align:right;font-weight:600">${st.total ?? '-'}</td>
-        <td style="border:1px solid #e5e7eb;padding:6px;text-align:right">${avg}</td>
+        <td style="border:1px solid #e5e7eb;padding:6px;text-align:right;font-weight:600">${total}</td>
       </tr>`
     }).join('')
     const meta = `
@@ -353,7 +358,6 @@ export default function AdminClassProfile(){
                 <th style="position:sticky;left:0;background:#f9fafb;border:1px solid #e5e7eb;padding:6px;text-align:left">Student</th>
                 ${subjHeaders}
                 <th style="border:1px solid #e5e7eb;padding:6px;text-align:right">Total</th>
-                <th style="border:1px solid #e5e7eb;padding:6px;text-align:right">Average</th>
               </tr>
             </thead>
             <tbody>${bodyRows || ''}</tbody>
@@ -1301,21 +1305,30 @@ export default function AdminClassProfile(){
                                     <th key={s.id} className="border px-2 py-1 text-center whitespace-nowrap">{s.code}</th>
                                   ))}
                                   <th className="border px-2 py-1 text-right whitespace-nowrap">Total</th>
-                                  <th className="border px-2 py-1 text-right whitespace-nowrap">Average</th>
                                 </tr>
                               </thead>
                               <tbody>
                                 {recentSummary.students.length === 0 ? (
-                                  <tr><td className="px-2 py-3 text-sm text-gray-500" colSpan={(recentSummary.subjects?.length||0)+3}>No results captured for this exam yet.</td></tr>
+                                  <tr><td className="px-2 py-3 text-sm text-gray-500" colSpan={(recentSummary.subjects?.length||0)+2}>No results captured for this exam yet.</td></tr>
                                 ) : (
                                   recentSummary.students.map(st => (
                                     <tr key={st.id} className="hover:bg-gray-50">
                                       <td className="border px-2 py-1 sticky left-0 bg-white">{st.name}</td>
-                                      {recentSummary.subjects.map(s => (
-                                        <td key={s.id} className="border px-2 py-1 text-center">{st.marks?.[String(s.id)] ?? '-'}</td>
-                                      ))}
-                                      <td className="border px-2 py-1 font-medium text-right">{st.total}</td>
-                                      <td className="border px-2 py-1 text-right">{typeof st.average === 'number' ? Number(st.average).toFixed(1) : (st.average || '-')}</td>
+                                      {recentSummary.subjects.map(s => {
+                                        const pct = Number(st?.subject_percentages?.[String(s.id)])
+                                        const val = Number.isFinite(pct) ? Math.round(pct) : '-'
+                                        return (
+                                          <td key={s.id} className="border px-2 py-1 text-center">{val}</td>
+                                        )
+                                      })}
+                                      {(() => {
+                                        let sum = 0
+                                        for (const s of recentSummary.subjects){
+                                          const v = Number(st?.subject_percentages?.[String(s.id)])
+                                          if (Number.isFinite(v)) sum += v
+                                        }
+                                        return <td className="border px-2 py-1 font-medium text-right">{Math.round(sum)}</td>
+                                      })()}
                                     </tr>
                                   ))
                                 )}

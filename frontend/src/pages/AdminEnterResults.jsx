@@ -1,11 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import api from '../api'
 import { useNotification } from '../components/NotificationContext'
 
-export default function AdminEnterResults(){
+export default function AdminEnterResults({ readOnly }){
   const { id } = useParams()
   const navigate = useNavigate()
+  const location = useLocation()
   const examId = Number(id)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -13,6 +14,7 @@ export default function AdminEnterResults(){
   const [status, setStatus] = useState('idle')
   const [exam, setExam] = useState(null)
   const [klass, setKlass] = useState(null)
+  const [allClasses, setAllClasses] = useState([])
   const [students, setStudents] = useState([])
   const [subjects, setSubjects] = useState([])
   const [selectedSubject, setSelectedSubject] = useState('') // '' means All subjects
@@ -20,6 +22,8 @@ export default function AdminEnterResults(){
   const [invalid, setInvalid] = useState({}) // { 'studentId-subjectId': true }
   const [componentsMap, setComponentsMap] = useState({}) // { subjectId: [components] }
   const { showError } = useNotification?.() || { showError: ()=>{} }
+  const isReadOnly = Boolean(readOnly) || (new URLSearchParams(location.search).get('readonly') === '1')
+  const klassOverride = new URLSearchParams(location.search).get('klass')
 
   useEffect(()=>{
     let alive = true
@@ -28,17 +32,97 @@ export default function AdminEnterResults(){
         setLoading(true)
         setError('')
         // exam
-        const e = await api.get(`/academics/exams/${examId}/`)
-        if (!alive) return
-        setExam(e.data)
+        let e = null
+        try {
+          e = await api.get(`/academics/exams/${examId}/`)
+        } catch {
+          try {
+            e = await api.get(`/academics/exams/${examId}`)
+          } catch {}
+        }
+        // If exam detail is not accessible (teacher perms), fall back to summary (read-only view)
+        if (!e?.data){
+          try{
+            const s = await api.get(`/academics/exams/${examId}/summary/`)
+            const sx = s?.data || {}
+            const meta = sx?.exam ? {
+              id: sx.exam.id ?? examId,
+              name: sx.exam.name,
+              year: sx.exam.year,
+              term: sx.exam.term,
+              klass: sx.exam.klass,
+              total_marks: sx.exam.total_marks,
+            } : { id: examId }
+            if (alive) setExam(meta)
+          }catch{
+            // proceed with minimal meta so page can still render percentages from any accessible data
+            if (alive) setExam({ id: examId })
+          }
+        } else {
+          if (!alive) return
+          setExam(e.data)
+        }
+        // Normalize klass id from exam payload
+        const rawKlass = e?.data?.klass ?? e?.data?.class ?? e?.data?.klass_id ?? e?.data?.class_id
+        const fromExam = (typeof rawKlass === 'object' && rawKlass)
+          ? (rawKlass.id ?? rawKlass.klass ?? rawKlass.pk ?? rawKlass.ID)
+          : rawKlass
+        const overrideNum = Number(klassOverride)
+        const klassId = (Number.isFinite(overrideNum) && overrideNum > 0) ? overrideNum : fromExam
+        // Do not throw if klassId is missing – in read-only teacher mode we can still show data via summary
+        // We'll try to fill subjects/students using alternative endpoints below.
         // class details (need subjects) + students
-        const klassRes = await api.get(`/academics/classes/${e.data.klass}/`)
+        let klassObj = null
+        try {
+          const klassRes = await api.get(`/academics/classes/${encodeURIComponent(klassId)}/`)
+          klassObj = klassRes?.data || null
+        } catch {
+          try {
+            const klassRes = await api.get(`/academics/classes/${encodeURIComponent(klassId)}`)
+            klassObj = klassRes?.data || null
+          } catch {}
+        }
+        // Fallback: search class in list endpoints when direct detail is restricted
+        if (!klassObj && klassId){
+          try{
+            const list = await api.get('/academics/classes/')
+            const arr = Array.isArray(list?.data) ? list.data : (Array.isArray(list?.data?.results) ? list.data.results : [])
+            const found = arr.find(c => String(c.id) === String(klassId))
+            if (found) klassObj = found
+          }catch{}
+        }
         if (!alive) return
-        setKlass(klassRes.data)
-        const subjRaw = Array.isArray(klassRes.data?.subjects) ? klassRes.data.subjects : []
+        if (!klassObj) {
+          // Fallback: try locate from my classes
+          try {
+            const mine = await api.get('/academics/classes/mine/')
+            const list = Array.isArray(mine?.data) ? mine.data : (Array.isArray(mine?.data?.results) ? mine.data.results : [])
+            klassObj = list.find(c => String(c?.id) === String(klassId)) || null
+          } catch {}
+        }
+        setKlass(klassObj || { id: klassId })
+        let subjRaw = Array.isArray(klassObj?.subjects) ? klassObj.subjects : []
+        if ((!subjRaw || !subjRaw.length) && klassId){
+          try{
+            const klassRes = await api.get(`/academics/classes/${encodeURIComponent(klassId)}/`)
+            const d = klassRes?.data
+            subjRaw = Array.isArray(d?.subjects) ? d.subjects : subjRaw
+          }catch{}
+        }
         // Filter out non-examinable subjects from entry grid and dropdown
-        const subj = subjRaw.filter(s => s?.is_examinable !== false)
+        let subj = subjRaw.filter(s => s?.is_examinable !== false)
+
+        // Fallback: if class endpoints didn't include subjects (common under teacher perms), use exam summary subjects
+        if ((!subj || !subj.length) && examId){
+          try{
+            const res = await api.get(`/academics/exams/${examId}/summary/`)
+            const summarySubjects = Array.isArray(res?.data?.subjects) ? res.data.subjects : []
+            subj = summarySubjects.filter(s => s?.is_examinable !== false)
+          }catch{}
+        }
+
         setSubjects(subj)
+
         // Load components for each subject (to auto-include when only one exists)
         let componentsLoadedMap = {}
         try {
@@ -59,9 +143,35 @@ export default function AdminEnterResults(){
         } catch {
           setComponentsMap({})
         }
-        const stuRes = await api.get(`/academics/students/?klass=${e.data.klass}`)
+        // Load students with robust fallbacks (teacher may have restricted endpoints)
+        let studentsList = []
+        try {
+          const stuRes = await api.get(`/academics/students/?klass=${encodeURIComponent(klassId)}`)
+          studentsList = Array.isArray(stuRes.data) ? stuRes.data : (Array.isArray(stuRes.data?.results) ? stuRes.data.results : [])
+        } catch {}
+        if (!studentsList.length) {
+          try {
+            const alt = await api.get(`/academics/students/?class=${encodeURIComponent(klassId)}`)
+            studentsList = Array.isArray(alt.data) ? alt.data : (Array.isArray(alt.data?.results) ? alt.data.results : [])
+          } catch {}
+        }
+        if (!studentsList.length && klassId) {
+          try {
+            const res = await api.get(`/academics/classes/${encodeURIComponent(klassId)}/students/`)
+            studentsList = Array.isArray(res.data) ? res.data : (Array.isArray(res.data?.results) ? res.data.results : [])
+          } catch {}
+        }
+        // Final fallback: use exam summary students (only present when there are saved results)
+        if (!studentsList.length && examId){
+          try{
+            const res = await api.get(`/academics/exams/${examId}/summary/`)
+            const ss = Array.isArray(res?.data?.students) ? res.data.students : []
+            studentsList = ss
+              .filter(x => x && x.id != null)
+              .map(x => ({ id: x.id, name: x.name || String(x.id), admission_no: x.admission_no || '' }))
+          }catch{}
+        }
         if (!alive) return
-        const studentsList = Array.isArray(stuRes.data) ? stuRes.data : (Array.isArray(stuRes.data?.results) ? stuRes.data.results : [])
         setStudents(studentsList)
         // existing results (raw per-component marks)
         let existing = []
@@ -143,8 +253,29 @@ export default function AdminEnterResults(){
     return ()=>{ alive = false }
   }, [examId])
 
+  // Load class options for read-only teacher view switching
+  useEffect(()=>{
+    let active = true
+    ;(async()=>{
+      try{
+        const res = await api.get('/academics/classes/')
+        const arr = Array.isArray(res?.data) ? res.data : (Array.isArray(res?.data?.results) ? res.data.results : [])
+        if (active) setAllClasses(arr)
+      }catch{
+        if (active) setAllClasses([])
+      }
+    })()
+    return ()=>{ active = false }
+  }, [])
+
+  const classNameById = (id) => {
+    const c = allClasses.find(x => String(x.id)===String(id))
+    return c?.name || klass?.name || id
+  }
+
   const save = async (e) => {
     e?.preventDefault?.()
+    if (isReadOnly) return
     setSaving(true)
     setStatus('saving')
     setError('')
@@ -179,9 +310,10 @@ export default function AdminEnterResults(){
   }
 
   const title = useMemo(()=>{
-    if (!exam || !klass) return 'Enter Results'
-    return `${exam.name} — Year ${exam.year} — Term ${exam.term} — ${klass.name}`
-  }, [exam, klass])
+    if (!exam) return 'Enter Results'
+    const klabel = classNameById(klass?.id)
+    return `${exam.name ?? '—'} — Year ${exam.year ?? '—'} — Term ${exam.term ?? '—'} — ${klabel ?? '—'}`
+  }, [exam, klass, allClasses])
 
   // Subjects currently visible based on filter
   const visibleSubjects = useMemo(()=>{
@@ -290,6 +422,11 @@ export default function AdminEnterResults(){
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <h1 className="text-xl sm:text-2xl font-bold text-gray-900">{title}</h1>
         </div>
+        {error && (
+          <div className="bg-red-50 text-red-700 border border-red-200 rounded-lg px-3 py-2 text-sm">
+            {error}
+          </div>
+        )}
         <div className="sticky top-0 z-10 bg-white/90 backdrop-blur supports-[backdrop-filter]:bg-white/70 rounded-lg border border-gray-200 px-3 py-2 flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0 w-full sm:w-auto">
             <label className="text-xs text-gray-600">Subject</label>
@@ -307,9 +444,29 @@ export default function AdminEnterResults(){
             <span className="hidden sm:inline text-xs text-gray-500">Total {Number(exam?.total_marks||100)}</span>
           </div>
           <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+            {isReadOnly && (
+              <label className="text-xs text-gray-600 flex items-center gap-2">
+                <span>Class</span>
+                <select
+                  className="border pl-2 pr-2 py-2 rounded-lg text-sm bg-white"
+                  value={klass?.id || ''}
+                  onChange={(e)=>{
+                    const params = new URLSearchParams(location.search)
+                    if (e.target.value) params.set('klass', String(e.target.value)); else params.delete('klass')
+                    if (!params.get('readonly')) params.set('readonly','1')
+                    navigate({ pathname: location.pathname, search: params.toString() })
+                  }}
+                >
+                  <option value="">Select class…</option>
+                  {allClasses.map(c => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              </label>
+            )}
             <button className="px-3 py-1.5 rounded-lg border text-sm" onClick={()=>navigate(-1)}>Back</button>
-            <button disabled={saving} onClick={save} className={`px-3.5 py-1.5 rounded-lg text-sm text-white ${status==='saved' ? 'bg-green-600' : 'bg-blue-600'} disabled:opacity-60`}>
-              {saving? 'Saving...' : status==='saved' ? 'Saved' : 'Save Results'}
+            <button disabled={saving || isReadOnly} onClick={save} className={`px-3.5 py-1.5 rounded-lg text-sm text-white ${status==='saved' ? 'bg-green-600' : 'bg-blue-600'} disabled:opacity-60`}>
+              {isReadOnly ? 'Read-only' : (saving? 'Saving...' : status==='saved' ? 'Saved' : 'Save Results')}
             </button>
           </div>
         </div>
@@ -386,7 +543,8 @@ export default function AdminEnterResults(){
                                   placeholder={placeholder}
                                   className="border px-2 py-1 rounded w-16 text-center border-gray-300 bg-white"
                                   value={repOut}
-                                  onChange={e=>setOutOfFor(s.id, c.id, e.target.value)}
+                                  disabled={isReadOnly}
+                                  onChange={e=>{ if (!isReadOnly) setOutOfFor(s.id, c.id, e.target.value) }}
                                 />
                               </th>
                             )
@@ -412,7 +570,8 @@ export default function AdminEnterResults(){
                             placeholder={placeholder}
                             className="border px-2 py-1 rounded w-16 text-center border-gray-300 bg-white"
                             value={repOut}
-                            onChange={e=>setOutOfFor(s.id, null, e.target.value)}
+                            disabled={isReadOnly}
+                            onChange={e=>{ if (!isReadOnly) setOutOfFor(s.id, null, e.target.value) }}
                           />
                         </th>
                         <th className="border px-2 py-1 text-center text-gray-400">—</th>
@@ -452,7 +611,9 @@ export default function AdminEnterResults(){
                                     placeholder={`${total}`}
                                     className={`border px-2 py-1 rounded w-16 text-center ${isInvalid ? 'border-red-500 bg-red-50' : 'border-gray-300'}`}
                                     value={val}
+                                    disabled={isReadOnly}
                                     onChange={e=>{
+                                      if (isReadOnly) return
                                       const v = e.target.value
                                       // validate
                                       let bad = false
@@ -502,7 +663,9 @@ export default function AdminEnterResults(){
                               placeholder={`${total}`}
                               className={`border px-2 py-1 rounded w-16 text-center ${isInvalid ? 'border-red-500 bg-red-50' : 'border-gray-300'}`}
                               value={val}
+                              disabled={isReadOnly}
                               onChange={e=>{
+                                if (isReadOnly) return
                                 const v = e.target.value
                                 // validate
                                 let bad = false

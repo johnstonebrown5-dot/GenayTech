@@ -264,14 +264,21 @@ export default function AdminResults(){
           const sid = String(s.id)
           if (!subjectMap.has(sid)) subjectMap.set(sid, { id: s.id, code: s.code, name: s.name })
         }
-        // Each summary has students with totals/averages
+        // Each summary has students with percentages; compute total and average from percentages for consistency
         for (const st of (summary?.students || [])){
+          let sumPct = 0
+          let cntPct = 0
+          for (const s of (summary?.subjects || [])){
+            const pct = Number(st?.subject_percentages?.[String(s.id)])
+            if (Number.isFinite(pct)) { sumPct += pct; cntPct += 1 }
+          }
+          const avgPct = cntPct ? (sumPct / cntPct) : 0
           rows.push({
             student_id: st.id,
             name: st.name,
             klass: klassName,
-            total: Number(st.total || 0),
-            average: Number(st.average || 0),
+            total: Math.round(sumPct),
+            average: avgPct,
             marks: st.marks || {},
           })
         }
@@ -391,7 +398,7 @@ export default function AdminResults(){
           <div className="flex items-center justify-between mb-2">
             <h2 className="font-medium">Class Results</h2>
             <div className="flex items-center gap-3">
-              {summary && <div className="text-sm text-gray-600">Class Mean: <span className="font-semibold">{summary.class_mean}</span></div>}
+              {summary && <div className="text-sm text-gray-600">Class Mean: <span className="font-semibold">{Number.isFinite(Number(summary.class_mean)) ? Math.round(Number(summary.class_mean)) : '-'}</span></div>}
               {selectedExam && (
                 <>
                   <button onClick={()=>download(selectedExam,'csv')} className="px-3 py-1.5 rounded border text-sm">Download CSV</button>
@@ -426,13 +433,26 @@ export default function AdminResults(){
                       <td className="border px-2 py-1">{st.name}</td>
                       {summary.subjects.map(s => {
                         const rawPct = st?.subject_percentages?.[String(s.id)]
-                        const val = Number.isFinite(Number(rawPct)) ? Number(rawPct).toFixed(2) : '-'
+                        const val = Number.isFinite(Number(rawPct)) ? Math.round(Number(rawPct)) : '-'
                         return (
                           <td key={s.id} className="border px-2 py-1">{val}</td>
                         )
                       })}
-                      <td className="border px-2 py-1 font-medium">{Number.isFinite(Number(st.total)) ? Number(st.total) : 0}</td>
-                      <td className="border px-2 py-1">{toGrade(st.average)}</td>
+                      {(() => {
+                        let sum = 0
+                        let cnt = 0
+                        for (const s of summary.subjects){
+                          const pct = Number(st?.subject_percentages?.[String(s.id)])
+                          if (Number.isFinite(pct)) { sum += pct; cnt += 1 }
+                        }
+                        const avg = cnt ? (sum / cnt) : 0
+                        return (
+                          <>
+                            <td className="border px-2 py-1 font-medium">{Math.round(sum)}</td>
+                            <td className="border px-2 py-1">{toGrade(avg)}</td>
+                          </>
+                        )
+                      })()}
                     </tr>
                   ))}
                 </tbody>
@@ -446,7 +466,7 @@ export default function AdminResults(){
               <div className="font-medium mb-1">Subject Means</div>
               <div className="flex gap-3 flex-wrap">
                 {summary.subject_mean_percentages.map(sm => (
-                  <span key={sm.subject} className="px-2 py-1 rounded bg-gray-100">{summary.subjects.find(s=>s.id===sm.subject)?.code}: <b>{sm.mean_percentage}</b></span>
+                  <span key={sm.subject} className="px-2 py-1 rounded bg-gray-100">{summary.subjects.find(s=>s.id===sm.subject)?.code}: <b>{Number.isFinite(Number(sm.mean_percentage)) ? Math.round(Number(sm.mean_percentage)) : '-'}</b></span>
                 ))}
               </div>
             </div>

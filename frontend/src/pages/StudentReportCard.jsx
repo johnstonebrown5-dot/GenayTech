@@ -230,13 +230,64 @@ export default function StudentReportCard(){
     return out
   }, [examResults, parsedTermYear])
 
-  // Overall totals across the term (sum over all exam-subject marks)
+  // Percentages per subject per exam (aggregates multi-component subjects)
+  const percentagesByExamAndSubject = useMemo(()=>{
+    const byKey = {} // { [exId]: { [sid]: { marksSum, denomSum, pctSum, pctCount } } }
+    for (const r of examResults){
+      const ed = r.exam_detail || {}
+      if (!ed?.published) continue
+      if (!parsedTermYear || ed.year !== parsedTermYear.year || ed.term !== parsedTermYear.term) continue
+      const exId = ed.id || r.exam
+      const sid = r.subject_detail?.id || r.subject
+      if (!exId || !sid) continue
+      byKey[String(exId)] = byKey[String(exId)] || {}
+      const bucket = byKey[String(exId)][String(sid)] || { marksSum: 0, denomSum: 0, pctSum: 0, pctCount: 0 }
+
+      const marks = Number(r.marks)
+      const denom = (() => {
+        const outOf = Number(r.out_of)
+        if (Number.isFinite(outOf) && outOf > 0) return outOf
+        const compMax = Number(r.component_detail?.max_marks)
+        if (Number.isFinite(compMax) && compMax > 0) return compMax
+        const examMax = Number(ed.total_marks)
+        if (Number.isFinite(examMax) && examMax > 0) return examMax
+        return NaN
+      })()
+      if (Number.isFinite(marks) && Number.isFinite(denom) && denom > 0){
+        bucket.marksSum += marks
+        bucket.denomSum += denom
+      } else {
+        const pct = Number(r.percentage)
+        if (Number.isFinite(pct)) { bucket.pctSum += pct; bucket.pctCount += 1 }
+      }
+
+      byKey[String(exId)][String(sid)] = bucket
+    }
+
+    const out = {}
+    for (const exId of Object.keys(byKey)){
+      out[String(exId)] = {}
+      for (const sid of Object.keys(byKey[String(exId)])){
+        const b = byKey[String(exId)][String(sid)]
+        let pct = NaN
+        if (Number.isFinite(b.denomSum) && b.denomSum > 0){
+          pct = (b.marksSum / b.denomSum) * 100
+        } else if (b.pctCount > 0){
+          pct = b.pctSum / b.pctCount
+        }
+        out[String(exId)][String(sid)] = Number.isFinite(pct) ? (Math.round(pct * 100) / 100) : NaN
+      }
+    }
+    return out
+  }, [examResults, parsedTermYear])
+
+  // Overall totals across the term (sum over all exam-subject percentages)
   const totals = useMemo(()=>{
     if (subjects.length === 0 || termExams.length === 0) return { total: 0, count: 0, average: 0 }
     let total = 0
     let count = 0
     for (const ex of termExams){
-      const m = marksByExamAndSubject[String(ex.id)] || {}
+      const m = percentagesByExamAndSubject[String(ex.id)] || {}
       for (const subj of subjects){
         const v = m[String(subj.id)]
         if (Number.isFinite(v)) { total += v; count += 1 }
@@ -244,7 +295,7 @@ export default function StudentReportCard(){
     }
     const average = count ? (total / count) : 0
     return { total, count, average }
-  }, [subjects, termExams, marksByExamAndSubject])
+  }, [subjects, termExams, percentagesByExamAndSubject])
 
   // Build exam history (unchanged, for context)
   const examHistory = useMemo(()=>{
@@ -466,7 +517,7 @@ export default function StudentReportCard(){
                         <tr className="bg-gray-50 text-gray-500">
                           {termExams.map(ex => (
                             <>
-                              <th key={`${ex.id}-m`} className="text-right px-3 py-1 font-medium">Marks</th>
+                              <th key={`${ex.id}-m`} className="text-right px-3 py-1 font-medium">Percentage</th>
                               <th key={`${ex.id}-g`} className="text-center px-3 py-1 font-medium">Grade</th>
                             </>
                           ))}
@@ -478,10 +529,11 @@ export default function StudentReportCard(){
                             <td className="px-3 py-2">{subj.label}</td>
                             {termExams.map(ex => {
                               const v = marksByExamAndSubject[String(ex.id)]?.[String(subj.id)]
+                              const pct = percentagesByExamAndSubject[String(ex.id)]?.[String(subj.id)]
                               return (
                                 <>
-                                  <td key={`${ex.id}-${subj.id}-m`} className="px-3 py-2 text-right">{Number.isFinite(v) ? v : '-'}</td>
-                                  <td key={`${ex.id}-${subj.id}-g`} className="px-3 py-2 text-center">{Number.isFinite(v) ? toGrade(v, subj.id) : '-'}</td>
+                                  <td key={`${ex.id}-${subj.id}-m`} className="px-3 py-2 text-right">{Number.isFinite(pct) ? `${pct}%` : '-'}</td>
+                                  <td key={`${ex.id}-${subj.id}-g`} className="px-3 py-2 text-center">{Number.isFinite(pct) ? toGrade(pct, subj.id) : '-'}</td>
                                 </>
                               )
                             })}
@@ -494,7 +546,7 @@ export default function StudentReportCard(){
                           {termExams.map(ex => {
                             let sum = 0
                             let cnt = 0
-                            const m = marksByExamAndSubject[String(ex.id)] || {}
+                            const m = percentagesByExamAndSubject[String(ex.id)] || {}
                             for (const subj of subjects){
                               const v = m[String(subj.id)]
                               if (Number.isFinite(v)) { sum += v; cnt += 1 }
@@ -502,8 +554,8 @@ export default function StudentReportCard(){
                             const avg = cnt ? (sum / cnt) : 0
                             return (
                               <>
-                                <td key={`${ex.id}-t`} className="px-3 py-2 text-right font-medium">{sum.toFixed(2)}</td>
-                                <td key={`${ex.id}-a`} className="px-3 py-2 text-center font-medium">{avg.toFixed(2)}</td>
+                                <td key={`${ex.id}-t`} className="px-3 py-2 text-right font-medium">{`${sum.toFixed(2)}%`}</td>
+                                <td key={`${ex.id}-a`} className="px-3 py-2 text-center font-medium">{`${avg.toFixed(2)}%`}</td>
                               </>
                             )
                           })}

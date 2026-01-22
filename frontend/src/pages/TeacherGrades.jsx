@@ -1162,7 +1162,7 @@ export default function TeacherGrades(){
               {controlsOpen ? 'Hide Options' : 'Change Selection'}
             </button>
             <button
-              onClick={()=>navigate('/teacher/preview-results')}
+              onClick={()=>navigate(`/teacher/admin/enter/${selectedExamId}?readonly=1&klass=${encodeURIComponent(selectedClass||'')}`)}
               disabled={!selectedExamId}
               className="text-xs md:text-sm px-3 py-1.5 rounded-full bg-white/90 text-indigo-700 border border-white/70 disabled:opacity-60 shadow-sm"
             >
@@ -1184,7 +1184,7 @@ export default function TeacherGrades(){
               {controlsOpen ? 'Hide' : 'Change'}
             </button>
             <button
-              onClick={()=>navigate('/teacher/preview-results')}
+              onClick={()=>navigate(`/teacher/admin/enter/${selectedExamId}?readonly=1&klass=${encodeURIComponent(selectedClass||'')}`)}
               disabled={!selectedExamId}
               className="text-[11px] px-2.5 py-1.5 rounded-full bg-white text-indigo-700 border border-indigo-200 shadow-sm disabled:opacity-60"
             >
@@ -1487,7 +1487,7 @@ export default function TeacherGrades(){
         {/* Desktop save button */}
         <div className="hidden md:flex justify-end">
           <div className="flex gap-2">
-            <button onClick={()=>navigate('/teacher/preview-results')} disabled={!selectedExamId} className="px-4 py-2 rounded-lg text-indigo-700 bg-white border border-indigo-200 hover:bg-indigo-50 disabled:opacity-60 shadow-soft">Preview Results</button>
+            <button onClick={()=>navigate(`/teacher/admin/enter/${selectedExamId}?readonly=1&klass=${encodeURIComponent(selectedClass||'')}`)} disabled={!selectedExamId} className="px-4 py-2 rounded-lg text-indigo-700 bg-white border border-indigo-200 hover:bg-indigo-50 disabled:opacity-60 shadow-soft">Preview Results</button>
             <button onClick={submit} disabled={saving || !canSubmit} className="px-4 py-2 rounded-lg text-white bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 disabled:opacity-60 shadow-soft">{saving ? 'Saving...' : 'Save Grades'}</button>
           </div>
         </div>
@@ -1499,7 +1499,7 @@ export default function TeacherGrades(){
           <div className="rounded-2xl bg-white shadow-xl border border-gray-200 p-3 flex items-center justify-between">
             <div className="text-xs text-gray-600">Total Students: <span className="font-medium text-gray-800">{students.length}</span></div>
             <div className="flex gap-2">
-              <button onClick={()=>navigate('/teacher/preview-results')} disabled={!selectedExamId} className="px-4 py-2 rounded-lg text-indigo-700 bg-white border border-indigo-200 disabled:opacity-60 shadow-soft">Preview</button>
+              <button onClick={()=>navigate(`/teacher/admin/enter/${selectedExamId}?readonly=1&klass=${encodeURIComponent(selectedClass||'')}`)} disabled={!selectedExamId} className="px-4 py-2 rounded-lg text-indigo-700 bg-white border border-indigo-200 disabled:opacity-60 shadow-soft">Preview</button>
               <button onClick={submit} disabled={saving || !canSubmit} className="px-4 py-2 rounded-lg text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 shadow-soft">{saving ? 'Saving...' : 'Save Grades'}</button>
             </div>
           </div>

@@ -29,6 +29,9 @@ export default function StudentReportCardViewer({ embedded=false, hideControls=f
   const [bandsBySubject, setBandsBySubject] = useState(new Map())
   const [globalBands, setGlobalBands] = useState(null)
   const [selectedExamClass, setSelectedExamClass] = useState(null)
+  // Summary data from Results page for the currently selected exam
+  const [summarySubjects, setSummarySubjects] = useState(null)
+  const [summaryStudent, setSummaryStudent] = useState(null)
   const isPrivileged = useMemo(() => {
     const role = typeof user?.role === 'string' ? user.role.toLowerCase() : ''
     return role === 'admin' || role === 'teacher' || !!user?.is_staff || !!user?.is_superuser
@@ -139,6 +142,27 @@ export default function StudentReportCardViewer({ embedded=false, hideControls=f
     if (!effectiveExamId) return null
     return termExams.find(e => String(e.id) === String(effectiveExamId)) || selectedExamFromResults || null
   }, [termExams, effectiveExamId, selectedExamFromResults])
+
+  // Load Results-page summary for the selected exam and capture subjects + this student's row
+  useEffect(()=>{
+    let alive = true
+    ;(async()=>{
+      try{
+        setSummarySubjects(null); setSummaryStudent(null)
+        const exId = effectiveExamId || queryExamId
+        if (!exId || !studentId) return
+        const { data } = await api.get(`/academics/exams/${exId}/summary/`)
+        if (!alive) return
+        const subs = Array.isArray(data?.subjects) ? data.subjects : []
+        const st = (Array.isArray(data?.students)? data.students: []).find(s=> String(s.id)===String(studentId)) || null
+        setSummarySubjects(subs)
+        setSummaryStudent(st)
+      }catch{
+        if (alive){ setSummarySubjects(null); setSummaryStudent(null) }
+      }
+    })()
+    return ()=>{ alive=false }
+  }, [effectiveExamId, queryExamId, studentId])
 
   // If an exam id is present in the query, prefer it as initial selection when results load
   useEffect(()=>{
@@ -397,6 +421,10 @@ export default function StudentReportCardViewer({ embedded=false, hideControls=f
   }, [examResults, parsedTermYear, effectiveExamId, isPrivileged])
 
   const subjects = useMemo(()=>{
+    // Prefer subjects from Results-page summary when available
+    if (Array.isArray(summarySubjects) && summaryStudent){
+      return summarySubjects.map(s=> ({ id: s.id, label: s.code ? `${s.code} — ${s.name}` : (s.name || String(s.id)) }))
+    }
     // Prefer subjects that have marks for the selected exam
     const map = new Map()
     const byExam = marksByExamAndSubject
@@ -445,9 +473,17 @@ export default function StudentReportCardViewer({ embedded=false, hideControls=f
 
 
   const selectedExamMarks = useMemo(()=>{
+    if (summaryStudent && Array.isArray(summarySubjects)){
+      const out = {}
+      for (const s of summarySubjects){
+        const v = summaryStudent?.subject_percentages?.[String(s.id)]
+        if (v != null) out[String(s.id)] = Math.round(Number(v))
+      }
+      return out
+    }
     if (!selectedExam) return {}
     return marksByExamAndSubject[String(selectedExam.id)] || {}
-  }, [marksByExamAndSubject, selectedExam])
+  }, [marksByExamAndSubject, selectedExam, summaryStudent, summarySubjects])
 
   const selectedTotals = useMemo(()=>{
     if (!selectedExam) return { sum: 0, count: 0, avg: 0 }

@@ -258,6 +258,7 @@ export default function App() {
               <Route path="lessons" element={<TeacherLessons/>} />
               <Route path="grades" element={<TeacherGrades/>} />
               <Route path="preview-results" element={<TeacherPreviewResults/>} />
+              <Route path="admin/enter/:id" element={<AdminEnterResults readOnly={true} />} />
               <Route path="results" element={<TeacherResults/>} />
               <Route path="analytics" element={<TeacherAnalytics/>} />
               <Route path="profile" element={<TeacherProfile/>} />

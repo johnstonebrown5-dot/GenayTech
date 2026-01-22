@@ -825,30 +825,60 @@ class ClassViewSet(viewsets.ModelViewSet):
             s = r.student
             entry = per_student.setdefault(s.id, {
                 'student': s,
-                'total': 0.0,
-                'count': 0,
-                'subjects': {},  # subject_code -> total marks
+                # aggregate per subject: { code: {marks_sum, denom_sum} }
+                'subject_aggs': {},
             })
-            entry['total'] += float(r.marks)
-            entry['count'] += 1
             try:
                 sub_code = getattr(r.subject, 'code', None) or getattr(r.subject, 'name', None) or ''
             except Exception:
                 sub_code = ''
-            if sub_code:
-                prev_mark = entry['subjects'].get(sub_code, 0.0)
-                entry['subjects'][sub_code] = prev_mark + float(r.marks)
+            if not sub_code:
+                continue
+            # Determine denominator for this result
+            try:
+                marks_val = float(r.marks)
+            except Exception:
+                marks_val = 0.0
+            denom_val = None
+            try:
+                if r.out_of is not None:
+                    dv = float(r.out_of)
+                    denom_val = dv if dv > 0 else None
+            except Exception:
+                denom_val = None
+            if denom_val is None:
+                try:
+                    comp_max = float(getattr(getattr(r, 'component', None), 'max_marks', 0) or 0)
+                    denom_val = comp_max if comp_max > 0 else None
+                except Exception:
+                    denom_val = None
+            # Fallback: skip if we cannot infer a denominator (cannot compute percentage)
+            if denom_val is None or denom_val <= 0:
+                continue
+            agg = entry['subject_aggs'].setdefault(sub_code, {'marks_sum': 0.0, 'denom_sum': 0.0})
+            agg['marks_sum'] += marks_val
+            agg['denom_sum'] += denom_val
 
-        # Compute averages and sort by total desc for positions (class-level)
+        # Compute per-student subject percentages and totals; sort by total desc for positions (class-level)
         ordered = []
         for sid, data in per_student.items():
-            total = data['total']
-            count = data['count'] or 1
-            avg = total / count
+            subj_pct_ints = {}
+            total_pct = 0.0
+            count = 0
+            for code, agg in (data.get('subject_aggs') or {}).items():
+                ms = float(agg.get('marks_sum') or 0.0)
+                ds = float(agg.get('denom_sum') or 0.0)
+                if ds > 0:
+                    pct = (ms / ds) * 100.0
+                    subj_pct_ints[code] = int(round(pct))
+                    total_pct += pct
+                    count += 1
+            avg_pct = (total_pct / count) if count else 0.0
+            data['subject_pct_ints'] = subj_pct_ints
             ordered.append({
                 'student': data['student'],
-                'total': round(total, 2),
-                'average': round(avg, 2),
+                'total': round(total_pct),  # whole-number total of percentages
+                'average': round(avg_pct, 2),
             })
         ordered.sort(key=lambda x: x['total'], reverse=True)
         # Assign positions (simple ranking by total, ties share same position)
@@ -933,12 +963,11 @@ class ClassViewSet(viewsets.ModelViewSet):
         for row in ordered:
             stu = row['student']
             total = row['total']
-            avg = row['average']
             pos = row['position']
             name = getattr(stu, 'name', '') or getattr(stu, 'admission_no', '') or f"Student {stu.id}"
             adm = getattr(stu, 'admission_no', '') or ''
             # Subject performance summary like: MATH 80, ENG 75, SCI 78
-            subj_marks = per_student.get(stu.id, {}).get('subjects', {})
+            subj_marks = per_student.get(stu.id, {}).get('subject_pct_ints', {})
             try:
                 items = sorted(subj_marks.items(), key=lambda kv: kv[0])
             except Exception:
@@ -946,10 +975,10 @@ class ClassViewSet(viewsets.ModelViewSet):
             subj_parts = []
             for code, mark in items:
                 try:
-                    mark_val = float(mark)
+                    mark_val = int(round(float(mark)))
                 except Exception:
-                    mark_val = 0.0
-                subj_parts.append(f"{code} {mark_val:.0f}")
+                    mark_val = 0
+                subj_parts.append(f"{code} {mark_val}")
             subjects_str = ', '.join(subj_parts)
 
             # Build tailored message including student, class, grade, subjects and class teacher
@@ -968,7 +997,7 @@ class ClassViewSet(viewsets.ModelViewSet):
             pos_text = f"Class Pos {pos}/{cls_total}"
             if pos_grade and out_grade:
                 pos_text += f"; Grade Pos {pos_grade}/{out_grade}"
-            summary = f" Total {total:.0f}, Avg {avg:.1f}, {pos_text}."
+            summary = f" Total {int(round(total))}, {pos_text}."
             subjects_clause = f" Subjects: {subjects_str}." if subjects_str else ''
             teacher_clause = ''
             if teacher_name:
@@ -1468,10 +1497,25 @@ class ExamViewSet(viewsets.ModelViewSet):
         if school and not self._is_admin(self.request):
             qs = qs.filter(klass__school=school)
 
-        # If requester is a teacher, restrict to classes they teach (class teacher or subject teacher)
+        # If requester is a teacher, restrict to classes they teach (class teacher or subject teacher).
+        # However, for detail actions like summary/rank/report_card_pdf/compare_subjects, allow access to
+        # published exams from the same school to avoid 404 before the per-action permission checks.
         user = getattr(self.request, 'user', None)
         if user and getattr(user, 'role', None) == 'teacher' and not (user.is_staff or user.is_superuser):
-            qs = qs.filter(Q(klass__teacher=user) | Q(klass__subject_teachers__teacher=user)).distinct()
+            try:
+                action = getattr(self, 'action', None)
+            except Exception:
+                action = None
+            is_detail_action = action in ('retrieve', 'summary', 'rank', 'report_card_pdf', 'compare_subjects')
+            if is_detail_action:
+                # Include exams taught by the teacher OR published ones
+                qs = qs.filter(
+                    Q(klass__teacher=user) |
+                    Q(klass__subject_teachers__teacher=user) |
+                    Q(published=True)
+                ).distinct()
+            else:
+                qs = qs.filter(Q(klass__teacher=user) | Q(klass__subject_teachers__teacher=user)).distinct()
 
         # Default: limit to current academic year unless include_history=true (SAFE methods only, non-admins)
         if self.request.method in permissions.SAFE_METHODS and not self._is_admin(self.request):
@@ -1745,17 +1789,17 @@ class ExamViewSet(viewsets.ModelViewSet):
         return super().destroy(request, *args, **kwargs)
 
     def _build_summary(self, exam):
-        # Limit subjects to class subjects for column ordering (exclude non-examinable)
+        # Prefer examinable subjects; if none flagged, fallback to all subjects
+        subj_qs_ex = exam.klass.subjects.filter(is_examinable=True)
+        use_examinable_only = subj_qs_ex.exists()
         class_subjects = list(
-            exam.klass.subjects.filter(is_examinable=True).values('id', 'code', 'name')
+            (subj_qs_ex if use_examinable_only else exam.klass.subjects.all()).values('id', 'code', 'name')
         )
-        # Exclude non-examinable subjects from results aggregation
-        res = (
-            ExamResult.objects
-            .filter(exam=exam, student__is_active=True)
-            .filter(subject__is_examinable=True)
-            .select_related('student', 'subject', 'component')
-        )
+        # Aggregate results; when no subjects are flagged examinable, do not filter them out
+        base_res = ExamResult.objects.filter(exam=exam, student__is_active=True)
+        if use_examinable_only:
+            base_res = base_res.filter(subject__is_examinable=True)
+        res = base_res.select_related('student', 'subject', 'component')
         students_map = {}
         for r in res:
             s = r.student
@@ -1766,7 +1810,9 @@ class ExamViewSet(viewsets.ModelViewSet):
                 'count': 0,
                 'marks': {},
                 # Track component-level percentages to compute subject percentage as average of components
-                'subject_percent_parts': {}
+                'subject_percent_parts': {},
+                # Also track weighted accumulator per subject: sum(marks) and sum(denominators)
+                'subject_pct_acc': {},
             })
             # Aggregate per subject: sum component marks under the same subject
             sid = str(r.subject_id)
@@ -1801,16 +1847,46 @@ class ExamViewSet(viewsets.ModelViewSet):
                     part_pct = (mval / denom) * 100.0
                 parts = entry['subject_percent_parts'].setdefault(sid, [])
                 parts.append(part_pct)
+                # Weighted accumulator for precise subject percentage across components
+                acc = entry['subject_pct_acc'].setdefault(sid, {'num': 0.0, 'den': 0.0})
+                acc['num'] += mval
+                acc['den'] += denom
         students = []
         for sid, e in students_map.items():
-            avg = (e['total'] / e['count']) if e['count'] else 0.0
             # Build subject percentage map by averaging component percentages for that subject
             subj_pct_map = {}
             for sub_id, parts in e['subject_percent_parts'].items():
                 if parts:
-                    subj_pct_map[sub_id] = round(sum(parts) / len(parts), 2)
-            students.append({ 'id': e['id'], 'name': e['name'], 'total': round(e['total'],2), 'average': round(avg,2), 'marks': e['marks'], 'subject_percentages': subj_pct_map })
-        # sort by total desc
+                    # Prefer weighted percentage across components when we have denominators
+                    acc = (e.get('subject_pct_acc') or {}).get(sub_id)
+                    if acc and acc.get('den'):
+                        try:
+                            subj_pct_map[sub_id] = round((float(acc['num']) / float(acc['den'])) * 100.0, 2)
+                        except Exception:
+                            subj_pct_map[sub_id] = round(sum(parts) / len(parts), 2)
+                    else:
+                        subj_pct_map[sub_id] = round(sum(parts) / len(parts), 2)
+
+            # Totals/averages to MATCH the Results page: use subject percentages
+            pct_values = list(subj_pct_map.values())
+            pct_sum = sum(pct_values) if pct_values else 0.0
+            pct_cnt = len(pct_values)
+            pct_avg = (pct_sum / pct_cnt) if pct_cnt else 0.0
+
+            # Fallbacks in case percentages are unavailable for legacy data
+            raw_avg = (e['total'] / e['count']) if e['count'] else 0.0
+            total_field = round(pct_sum if pct_cnt else e['total'], 2)
+            average_field = round(pct_avg if pct_cnt else raw_avg, 2)
+
+            students.append({
+                'id': e['id'],
+                'name': e['name'],
+                'total': total_field,
+                'average': average_field,
+                'marks': e['marks'],
+                'subject_percentages': subj_pct_map,
+            })
+        # sort by total desc (which is based on percent-sum for consistency with Results page)
         students.sort(key=lambda x: x['total'], reverse=True)
         # assign positions
         position = 1
@@ -1824,7 +1900,7 @@ class ExamViewSet(viewsets.ModelViewSet):
             else:
                 same_rank_count += 1
             st['position'] = position
-        # class mean (average of student averages)
+        # class mean (average of student averages, using percentage-based averages)
         class_mean = round(sum(s['average'] for s in students) / len(students), 2) if students else 0.0
         # subject means (by marks) and mean percentages (by averaging student subject percentages)
         subj_means = []
