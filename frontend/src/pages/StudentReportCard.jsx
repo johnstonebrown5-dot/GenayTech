@@ -210,7 +210,22 @@ export default function StudentReportCard(){
       const sid = r.subject_detail?.id || r.subject
       if (!exId || !sid) continue
       out[String(exId)] = out[String(exId)] || {}
-      out[String(exId)][String(sid)] = Number(r.marks || 0)
+      // Prefer component "Total" if present, else fall back to common mark fields
+      const candidates = [
+        r.total,
+        r.component_total,
+        r.components_total,
+        r.subject_total,
+        r.total_marks,
+        r.total_mark,
+        r.marks,
+        r.score,
+        r.mark,
+        r.value,
+      ]
+      let val = 0
+      for (const c of candidates){ const n = Number(c); if (Number.isFinite(n)) { val = n; break } }
+      out[String(exId)][String(sid)] = val
     }
     return out
   }, [examResults, parsedTermYear])

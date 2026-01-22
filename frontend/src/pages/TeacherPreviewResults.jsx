@@ -73,6 +73,50 @@ export default function TeacherPreviewResults(){
         try{
           const res = await api.get(`/academics/exams/${selectedExam}/summary/`)
           data = res?.data || null
+          // Normalize: ensure per-student subject_percentages exist
+          if (data && Array.isArray(data.students) && Array.isArray(data.subjects)){
+            try{
+              const subjectOutOf = new Map()
+              for (const s of data.subjects){
+                const sid = s?.id
+                const out = (
+                  s?.outOf ?? s?.out_of ?? s?.max ?? s?.maximum ?? s?.out_of_marks ?? s?.total_out_of
+                )
+                const n = Number(out)
+                if (sid!=null && Number.isFinite(n) && n>0) subjectOutOf.set(String(sid), n)
+              }
+              for (const st of data.students){
+                if (st && !st.subject_percentages){
+                  const pctMap = {}
+                  // Prefer explicit list if provided
+                  if (Array.isArray(st.subjects)){
+                    for (const it of st.subjects){
+                      const sid = it?.subject ?? it?.subject_id ?? it?.id
+                      const pct = it?.percentage ?? it?.percent ?? it?.pct
+                      if (sid!=null && pct!=null && pct!=='') pctMap[String(sid)] = Number(pct)
+                      else if (sid!=null){
+                        const mark = it?.total ?? it?.marks ?? it?.score ?? it?.value
+                        const denom = Number(subjectOutOf.get(String(sid))) || Number(it?.out_of || it?.outOf || it?.maximum || 100)
+                        const m = Number(mark)
+                        if (Number.isFinite(m) && denom>0) pctMap[String(sid)] = Math.round((m/denom)*100)
+                      }
+                    }
+                  }
+                  // Fall back to marks map if present
+                  if (Object.keys(pctMap).length===0 && st.marks){
+                    for (const s of data.subjects){
+                      const sid = s?.id
+                      if (sid==null) continue
+                      const m = Number(st.marks[String(sid)])
+                      const denom = Number(subjectOutOf.get(String(sid))) || 100
+                      if (Number.isFinite(m) && denom>0) pctMap[String(sid)] = Math.round((m/denom)*100)
+                    }
+                  }
+                  st.subject_percentages = pctMap
+                }
+              }
+            }catch{ /* ignore normalization errors */ }
+          }
         }catch(err){
           // fallback: compute summary from exam_results when summary endpoint rejects
           const fetchAll = async (url) => {
@@ -92,6 +136,8 @@ export default function TeacherPreviewResults(){
           // Build subjects and students
           const subjectsMap = new Map()
           const studentsMap = new Map()
+          const subjectOutOf = new Map() // sid -> outOf
+          const componentsBySubject = new Map() // sid -> Map(cid -> { id, name, outOf })
           for (const r of rows){
             const sid = r?.subject ?? r?.subject_id ?? r?.subject_detail?.id
             const sname = r?.subject_detail?.name || r?.subject_name || ''
@@ -100,17 +146,43 @@ export default function TeacherPreviewResults(){
             const stId = r?.student ?? r?.student_id ?? r?.student_detail?.id
             const stName = r?.student_detail?.name || r?.student_name || String(stId)
             if (stId!=null && !studentsMap.has(String(stId))) studentsMap.set(String(stId), { id: stId, name: stName, marks: {}, total: 0, average: 0 })
+            // capture an outOf value per subject when available (support many variants)
+            const out = (
+              r?.outOf ?? r?.out_of ?? r?.outOfMarks ?? r?.out_of_marks ??
+              r?.total_out_of ?? r?.out_of_total ?? r?.components_out_of ?? r?.component_out_of ?? r?.components_total_out_of ??
+              r?.max ?? r?.maximum ?? r?.max_mark ?? r?.max_marks ?? r?.subject_max ?? r?.subject_out_of ??
+              r?.subject_detail?.outOf ?? r?.subject_detail?.out_of ?? r?.subject_detail?.max ?? r?.subject_detail?.maximum
+            )
+            const on = Number(out)
+            if (sid!=null && Number.isFinite(on) && on > 0 && !subjectOutOf.has(String(sid))) subjectOutOf.set(String(sid), on)
+            // capture component meta
+            const compId = r?.component ?? r?.component_id ?? r?.component_detail?.id
+            if (sid!=null && compId!=null){
+              const cname = r?.component_detail?.name || r?.component_name || r?.component_label || `comp ${compId}`
+              const cout = r?.component_detail?.max_marks ?? r?.component_detail?.out_of ?? r?.component_out_of ?? r?.out_of ?? null
+              let cmap = componentsBySubject.get(String(sid))
+              if (!cmap){ cmap = new Map(); componentsBySubject.set(String(sid), cmap) }
+              if (!cmap.has(String(compId))){ cmap.set(String(compId), { id: compId, name: cname, outOf: cout }) }
+            }
           }
           // fill marks
           for (const r of rows){
             const stId = r?.student ?? r?.student_id ?? r?.student_detail?.id
             const sid = r?.subject ?? r?.subject_id ?? r?.subject_detail?.id
-            const val = r?.marks ?? r?.score ?? r?.value
+            const val = r?.total ?? r?.component_total ?? r?.components_total ?? r?.subject_total ?? r?.total_marks ?? r?.total_mark ?? r?.marks ?? r?.score ?? r?.mark ?? r?.value
+            const compId = r?.component ?? r?.component_id ?? r?.component_detail?.id
             if (stId==null || sid==null) continue
             const st = studentsMap.get(String(stId))
             if (!st) continue
             const num = Number(val)
             st.marks[String(sid)] = Number.isFinite(num) ? num : ''
+            // capture per-component marks
+            if (compId!=null){
+              if (!st.component_marks) st.component_marks = {}
+              const bySubj = st.component_marks[String(sid)] || {}
+              bySubj[String(compId)] = Number.isFinite(num) ? num : ''
+              st.component_marks[String(sid)] = bySubj
+            }
           }
           // compute totals/positions
           const subs = Array.from(subjectsMap.values())
@@ -124,6 +196,15 @@ export default function TeacherPreviewResults(){
             }
             st.total = t
             st.average = cnt ? Math.round((t / cnt) * 10) / 10 : 0
+            // per-subject percentages used by preview UI
+            const pctMap = {}
+            for (const s of subs){
+              const m = Number(st.marks[String(s.id)])
+              if (!Number.isFinite(m)) continue
+              const denom = Number(subjectOutOf.get(String(s.id))) || 100
+              if (denom > 0) pctMap[String(s.id)] = Math.round((m / denom) * 100)
+            }
+            st.subject_percentages = pctMap
           }
           studs.sort((a,b)=> (Number(b.total)||0) - (Number(a.total)||0))
           let last = null, pos=0
@@ -146,7 +227,22 @@ export default function TeacherPreviewResults(){
           // exam meta (best effort)
           let examMeta = null
           try{ const er = await api.get(`/academics/exams/${selectedExam}/`); examMeta = er?.data || null }catch{}
-          data = { exam: examMeta, subjects: subs, students: studs }
+          // Build columns: components first (if any), then subject percent column
+          const columns = []
+          for (const s of subs){
+            const cmap = componentsBySubject.get(String(s.id))
+            if (cmap && cmap.size){
+              for (const comp of Array.from(cmap.values())){
+                const base = s.code || s.name
+                const label = base
+                const title = `${base} ${comp.name}` + (comp?.outOf ? ` (out of ${comp.outOf})` : '')
+                columns.push({ type: 'component', subjectId: s.id, componentId: comp.id, header: label, title, outOf: comp?.outOf ?? '' })
+              }
+            }
+            // Always include a subject percent column
+            columns.push({ type: 'percent', subjectId: s.id, header: s.code || s.name, outOf: '' })
+          }
+          data = { exam: examMeta, subjects: subs, students: studs, columns }
         }
         if (active) setSummary(data)
       }catch(e){ if (active) setError(e?.response?.data?.detail || e?.message || 'Failed to load summary') }
@@ -231,11 +327,16 @@ export default function TeacherPreviewResults(){
   const handlePrint = () => {
     if (!summary) return
     const cols = ['Position','Student','Admission', ...summary.subjects.map(s=> s.code || s.name), 'Total']
+    const subjectCell = (st, subjectId) => {
+      const pct = st?.subject_percentages?.[String(subjectId)]
+      if (pct != null && pct !== '') return `${pct}%`
+      return st?.marks?.[String(subjectId)] ?? ''
+    }
     const rows = summary.students.map(st=> [
       st.position,
       (studentMap[String(st.id)]?.name || st.name || st.id),
       (studentMap[String(st.id)]?.admission_no || st.admission_no || ''),
-      ...summary.subjects.map(s=> st.marks?.[String(s.id)] ?? ''),
+      ...summary.subjects.map(s=> subjectCell(st, s.id)),
       st.total
     ])
     const thead = `<tr>${cols.map(c=>`<th>${c}</th>`).join('')}</tr>`
@@ -315,22 +416,42 @@ export default function TeacherPreviewResults(){
                     <th className="border border-gray-200 px-2 py-2 text-left w-20">Position</th>
                     <th className="border border-gray-200 px-2 py-2 text-left w-64">Student</th>
                     <th className="border border-gray-200 px-2 py-2 text-left w-40">Admission</th>
-                    {summary.subjects.map(s => (
-                      <th key={s.id} className="border border-gray-200 px-2 py-2 text-left">{s.code || s.name}</th>
+                    {(summary.columns && summary.columns.length ? summary.columns : summary.subjects.map(s=>({type:'percent',subjectId:s.id,header:s.code||s.name,outOf:''}))).map((col, idx) => (
+                      <th key={col.key || `${col.type}-${col.subjectId}-${col.componentId || 'pct'}-${idx}`} className="border border-gray-200 px-2 py-2 text-left" title={col.title || ''}>{col.header}</th>
                     ))}
                     <th className="border border-gray-200 px-2 py-2 text-left">Total</th>
                     <th className="border border-gray-200 px-2 py-2 text-left w-28">Slip</th>
                   </tr>
                 </thead>
                 <tbody>
+                  {/* Out Of row to match entry layout */}
+                  <tr className="bg-white">
+                    <td className="border border-gray-200 px-2 py-2 text-gray-500">Out Of</td>
+                    <td className="border border-gray-200 px-2 py-2" colSpan={2}></td>
+                    {(summary.columns && summary.columns.length ? summary.columns : summary.subjects.map(s=>({type:'percent',subjectId:s.id,header:s.code||s.name,outOf:''}))).map((col, idx) => {
+                      const out = col.type==='component' ? (col.outOf ?? '') : ''
+                      return (
+                        <td key={`out-${col.key || idx}`} className="border border-gray-200 px-2 py-2 text-gray-600">{out || (col.type==='percent' ? '-' : '-')}</td>
+                      )
+                    })}
+                    <td className="border border-gray-200 px-2 py-2"></td>
+                    <td className="border border-gray-200 px-2 py-2"></td>
+                  </tr>
                   {summary.students.map((st,idx) => (
                     <tr key={st.id} className={idx % 2 ? 'bg-white' : 'bg-gray-50/50'}>
                       <td className="border border-gray-200 px-2 py-2">{st.position}</td>
                       <td className="border border-gray-200 px-2 py-2">{studentMap[String(st.id)]?.name || st.name || st.id}</td>
                       <td className="border border-gray-200 px-2 py-2">{studentMap[String(st.id)]?.admission_no || '-'}</td>
-                      {summary.subjects.map(s => (
-                        <td key={s.id} className="border border-gray-200 px-2 py-2">{st.marks?.[String(s.id)] ?? '-'}</td>
-                      ))}
+                      {(summary.columns && summary.columns.length ? summary.columns : summary.subjects.map(s=>({type:'percent',subjectId:s.id,header:s.code||s.name,outOf:''}))).map((col, idx2) => {
+                        if (col.type === 'component'){
+                          const cm = st?.component_marks?.[String(col.subjectId)]?.[String(col.componentId)]
+                          return <td key={`c-${idx2}`} className="border border-gray-200 px-2 py-2">{cm !== '' && cm != null ? cm : '-'}</td>
+                        } else {
+                          const pct = st?.subject_percentages?.[String(col.subjectId)]
+                          const value = (pct != null && pct !== '') ? `${pct}%` : (st.marks?.[String(col.subjectId)] ?? '-')
+                          return <td key={`p-${idx2}`} className="border border-gray-200 px-2 py-2">{value}</td>
+                        }
+                      })}
                       <td className="border border-gray-200 px-2 py-2 font-medium">{st.total}</td>
                       <td className="border border-gray-200 px-2 py-2">
                         <button

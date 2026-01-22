@@ -1557,9 +1557,13 @@ export default function TeacherGrades(){
                       <tr key={st.id} className={idx%2? 'bg-white' : 'bg-gray-50/50'}>
                         <td className="border px-2 py-1">{st.position}</td>
                         <td className="border px-2 py-1">{st.name}</td>
-                        {(previewSummary.subjects||[]).map(s => (
-                          <td key={s.id} className="border px-2 py-1">{st.marks?.[String(s.id)] ?? '-'}</td>
-                        ))}
+                        {(previewSummary.subjects||[]).map(s => {
+                          const pct = st?.subject_percentages?.[String(s.id)]
+                          const value = (pct != null && pct !== '') ? `${pct}%` : (st.marks?.[String(s.id)] ?? '-')
+                          return (
+                            <td key={s.id} className="border px-2 py-1">{value}</td>
+                          )
+                        })}
                         <td className="border px-2 py-1 font-medium">{st.total}</td>
                       </tr>
                     ))}

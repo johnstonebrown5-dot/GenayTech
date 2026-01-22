@@ -29,12 +29,14 @@ export default function StudentReportCardViewer({ embedded=false, hideControls=f
   const [bandsBySubject, setBandsBySubject] = useState(new Map())
   const [globalBands, setGlobalBands] = useState(null)
   const [selectedExamClass, setSelectedExamClass] = useState(null)
+  const isPrivileged = useMemo(() => {
+    const role = typeof user?.role === 'string' ? user.role.toLowerCase() : ''
+    return role === 'admin' || role === 'teacher' || !!user?.is_staff || !!user?.is_superuser
+  }, [user?.role, user?.is_staff, user?.is_superuser])
 
   const termYearOptions = useMemo(()=>{
     const set = new Set()
-    const requirePublished = !(
-      user?.role === 'admin' || user?.role === 'teacher' || user?.is_staff || user?.is_superuser
-    )
+    const requirePublished = !isPrivileged
     for (const r of examResults){
       const ed = r.exam_detail || {}
       if (requirePublished && !ed?.published) continue
@@ -51,7 +53,7 @@ export default function StudentReportCardViewer({ embedded=false, hideControls=f
       }
     }
     return Array.from(set)
-  }, [examResults])
+  }, [examResults, isPrivileged])
 
   const [selectedTermYear, setSelectedTermYear] = useState(null)
 
@@ -60,9 +62,7 @@ export default function StudentReportCardViewer({ embedded=false, hideControls=f
     if (!current && examResults.length){
       for (let i = examResults.length - 1; i >= 0; i--) {
         const ed = examResults[i]?.exam_detail
-        const requirePublished = !(
-          user?.role === 'admin' || user?.role === 'teacher' || user?.is_staff || user?.is_superuser
-        )
+        const requirePublished = !isPrivileged
         const hasYear = ed?.year || (ed?.date ? !isNaN(new Date(ed.date)) : false)
         const term = ed?.term || ed?.inferred_term?.number
         if ((!requirePublished || ed?.published) && hasYear && term){
@@ -73,7 +73,7 @@ export default function StudentReportCardViewer({ embedded=false, hideControls=f
         }
       }
     }
-  }, [examResults, controlledTermYear, selectedTermYear, onSelectedTermYearChange])
+  }, [examResults, controlledTermYear, selectedTermYear, onSelectedTermYearChange, isPrivileged])
 
   const effectiveTermYear = controlledTermYear || selectedTermYear
 
@@ -89,9 +89,7 @@ export default function StudentReportCardViewer({ embedded=false, hideControls=f
   const termExams = useMemo(()=>{
     const seen = new Set()
     const list = []
-    const requirePublished = !(
-      user?.role === 'admin' || user?.role === 'teacher' || user?.is_staff || user?.is_superuser
-    )
+    const requirePublished = !isPrivileged
     for (const r of examResults){
       const ed = r.exam_detail || {}
       const id = toId(ed.id) || toId(r.exam) || toId(r.exam_id)
@@ -116,7 +114,7 @@ export default function StudentReportCardViewer({ embedded=false, hideControls=f
       return Number(b.id||0) - Number(a.id||0)
     })
     return list
-  }, [examResults, parsedTermYear, user?.role, user?.is_staff, user?.is_superuser])
+  }, [examResults, parsedTermYear, isPrivileged])
 
   const [selectedExamId, setSelectedExamId] = useState(null)
 
@@ -362,9 +360,7 @@ export default function StudentReportCardViewer({ embedded=false, hideControls=f
   // Build marks map first so it can be used by subject derivation below
   const marksByExamAndSubject = useMemo(()=>{
     const out = {}
-    const requirePublished = !(
-      user?.role === 'admin' || user?.role === 'teacher' || user?.is_staff || user?.is_superuser
-    )
+    const requirePublished = !isPrivileged
     for (const r of examResults){
       const ed = r.exam_detail || {}
       if (requirePublished && !ed?.published) continue
@@ -380,13 +376,25 @@ export default function StudentReportCardViewer({ embedded=false, hideControls=f
       const sid = toId(r.subject_detail?.id) || toId(r.subject) || toId(r.subject_id)
       if (!exId || !sid) continue
       out[String(exId)] = out[String(exId)] || {}
-      const candidates = [r.marks, r.score, r.mark, r.value]
+      // Prefer component "Total" if present, then fall back to common mark fields
+      const candidates = [
+        r.total,
+        r.component_total,
+        r.components_total,
+        r.subject_total,
+        r.total_marks,
+        r.total_mark,
+        r.marks,
+        r.score,
+        r.mark,
+        r.value,
+      ]
       let val = 0
       for (const c of candidates){ const n = Number(c); if (Number.isFinite(n)) { val = n; break } }
       out[String(exId)][String(sid)] = val
     }
     return out
-  }, [examResults, parsedTermYear, effectiveExamId, user?.role, user?.is_staff, user?.is_superuser])
+  }, [examResults, parsedTermYear, effectiveExamId, isPrivileged])
 
   const subjects = useMemo(()=>{
     // Prefer subjects that have marks for the selected exam
@@ -396,7 +404,7 @@ export default function StudentReportCardViewer({ embedded=false, hideControls=f
     if (exId && byExam[exId]){
       for (const r of examResults){
         const ed = r.exam_detail || {}
-        if (!ed?.published && !(user?.role==='admin'||user?.role==='teacher'||user?.is_staff||user?.is_superuser)) continue
+        if (!ed?.published && !isPrivileged) continue
         const year = ed.year || (ed?.date ? (isNaN(new Date(ed.date)) ? null : new Date(ed.date).getFullYear()) : null)
         const term = ed.term || ed?.inferred_term?.number || null
         if (parsedTermYear){
@@ -415,9 +423,7 @@ export default function StudentReportCardViewer({ embedded=false, hideControls=f
     if (map.size === 0){
       for (const r of examResults){
         const ed = r.exam_detail || {}
-        const requirePublished = !(
-          user?.role === 'admin' || user?.role === 'teacher' || user?.is_staff || user?.is_superuser
-        )
+        const requirePublished = !isPrivileged
         if (requirePublished && !ed?.published) continue
         const year = ed.year || (ed?.date ? (isNaN(new Date(ed.date)) ? null : new Date(ed.date).getFullYear()) : null)
         const term = ed.term || ed?.inferred_term?.number || null
@@ -433,7 +439,7 @@ export default function StudentReportCardViewer({ embedded=false, hideControls=f
       }
     }
     return Array.from(map.values())
-  }, [examResults, parsedTermYear, selectedExam, marksByExamAndSubject, user?.role, user?.is_staff, user?.is_superuser])
+  }, [examResults, parsedTermYear, selectedExam, marksByExamAndSubject, isPrivileged])
 
   
 
@@ -598,25 +604,35 @@ export default function StudentReportCardViewer({ embedded=false, hideControls=f
                     </tr>
                   </thead>
                   <tbody>
-                    {subjects.map((subj)=>{
-                      const v = selectedExamMarks[String(subj.id)]
-                      return (
-                        <tr key={String(subj.id)}>
-                          <td className="px-3 py-2 border-t border-gray-200">{subj.label}</td>
-                          <td className="px-3 py-2 text-center border-t border-gray-200">{Number.isFinite(v) ? v : '-'}</td>
-                          <td className="px-3 py-2 text-center border-t border-gray-200">{Number.isFinite(v) ? (
-                            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${gradeBadgeClass(toGrade(v, subj.id))}`}>{toGrade(v, subj.id)}</span>
-                          ) : '-'}</td>
+                    {subjects.length === 0 ? (
+                      <tr>
+                        <td colSpan={3} className="px-3 py-6 text-center text-gray-500">
+                          No marks found for the selected exam/term.
+                        </td>
+                      </tr>
+                    ) : (
+                      <>
+                        {subjects.map((subj)=>{
+                          const v = selectedExamMarks[String(subj.id)]
+                          return (
+                            <tr key={String(subj.id)}>
+                              <td className="px-3 py-2 border-t border-gray-200">{subj.label}</td>
+                              <td className="px-3 py-2 text-center border-t border-gray-200">{Number.isFinite(v) ? v : '-'}</td>
+                              <td className="px-3 py-2 text-center border-t border-gray-200">{Number.isFinite(v) ? (
+                                <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${gradeBadgeClass(toGrade(v, subj.id))}`}>{toGrade(v, subj.id)}</span>
+                              ) : '-'}</td>
+                            </tr>
+                          )
+                        })}
+                        <tr>
+                          <td className="px-3 py-2 border-t border-gray-300 font-semibold">Total</td>
+                          <td className="px-3 py-2 text-center border-t border-gray-300 font-semibold">{selectedTotals.sum.toFixed(2)}</td>
+                          <td className="px-3 py-2 text-center border-t border-gray-300 font-semibold">
+                            {(() => { const g = letterFromBands(selectedTotals.avg, globalBands); return <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${gradeBadgeClass(g)}`}>{g}</span> })()}
+                          </td>
                         </tr>
-                      )
-                    })}
-                    <tr>
-                      <td className="px-3 py-2 border-t border-gray-300 font-semibold">Total</td>
-                      <td className="px-3 py-2 text-center border-t border-gray-300 font-semibold">{selectedTotals.sum.toFixed(2)}</td>
-                      <td className="px-3 py-2 text-center border-t border-gray-300 font-semibold">
-                        {(() => { const g = letterFromBands(selectedTotals.avg, globalBands); return <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${gradeBadgeClass(g)}`}>{g}</span> })()}
-                      </td>
-                    </tr>
+                      </>
+                    )}
                   </tbody>
                 </table>
               </div>
