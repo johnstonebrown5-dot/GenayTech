@@ -12,6 +12,28 @@ export default function TeacherPreviewResults(){
   const [error, setError] = useState('')
   const [studentMap, setStudentMap] = useState({}) // { id: { name, admission_no } }
   const [school, setSchool] = useState({ name: '', logo: '', motto: '' })
+  // grid helpers
+  const [subjects, setSubjects] = useState([]) // normalized subjects
+  const [componentsMap, setComponentsMap] = useState({}) // { subjectId: [components] }
+  // helper: compute representative out_of for a component like admin grid does
+  const componentOutOf = (subjectId, componentId) => {
+    try{
+      // Prefer precomputed column metadata from summary when available
+      const cols = Array.isArray(summary?.columns) ? summary.columns : []
+      const found = cols.find(c => c?.type==='component' && String(c.subjectId)===String(subjectId) && String(c.componentId)===String(componentId) && (c.outOf!=null))
+      const fromCols = Number(found?.outOf)
+      if (Number.isFinite(fromCols) && fromCols > 0) return fromCols
+      // Fallback to subject_components API data (max_marks)
+      const arr = componentsMap?.[subjectId] || []
+      const comp = arr.find(x => String(x?.id)===String(componentId))
+      const mm = Number(comp?.max_marks)
+      if (Number.isFinite(mm) && mm > 0) return mm
+      // Fallback to exam total
+      const examTotal = Number(summary?.exam?.total_marks)
+      if (Number.isFinite(examTotal) && examTotal > 0) return examTotal
+    }catch{}
+    return 100
+  }
 
   useEffect(()=>{
     let mounted = true
@@ -251,6 +273,32 @@ export default function TeacherPreviewResults(){
     return ()=>{ active=false }
   }, [selectedExam])
 
+  // Normalize subjects list and lazily fetch components per subject to mirror admin grid
+  useEffect(()=>{
+    let alive = true
+    ;(async()=>{
+      try{
+        const subs = Array.isArray(summary?.subjects) ? summary.subjects : []
+        setSubjects(subs)
+        if (!subs.length) { setComponentsMap({}); return }
+        const entries = await Promise.all(subs.map(async (s)=>{
+          try{
+            const r = await api.get(`/academics/subject_components/?subject=${s.id}`)
+            const arr = Array.isArray(r.data) ? r.data : (Array.isArray(r?.data?.results) ? r.data.results : [])
+            return [s.id, arr]
+          }catch{ return [s.id, []] }
+        }))
+        if (!alive) return
+        const map = {}
+        for (const [sid, arr] of entries){ map[sid] = arr }
+        setComponentsMap(map)
+      }catch{
+        if (alive) setComponentsMap({})
+      }
+    })()
+    return ()=>{ alive=false }
+  }, [summary])
+
   // Load students (by class if available, else per-student fallback) to resolve names and admission numbers
   useEffect(()=>{
     let alive = true
@@ -413,54 +461,116 @@ export default function TeacherPreviewResults(){
               <table className="min-w-full text-xs md:text-sm">
                 <thead className="bg-gray-50 sticky top-0 z-10">
                   <tr>
-                    <th className="border border-gray-200 px-2 py-2 text-left w-20">Position</th>
-                    <th className="border border-gray-200 px-2 py-2 text-left w-64">Student</th>
-                    <th className="border border-gray-200 px-2 py-2 text-left w-40">Admission</th>
-                    {(summary.columns && summary.columns.length ? summary.columns : summary.subjects.map(s=>({type:'percent',subjectId:s.id,header:s.code||s.name,outOf:''}))).map((col, idx) => (
-                      <th key={col.key || `${col.type}-${col.subjectId}-${col.componentId || 'pct'}-${idx}`} className="border border-gray-200 px-2 py-2 text-left" title={col.title || ''}>{col.header}</th>
-                    ))}
-                    <th className="border border-gray-200 px-2 py-2 text-left">Total</th>
-                    <th className="border border-gray-200 px-2 py-2 text-left w-28">Slip</th>
+                    <th className="border px-2 py-1 text-left sticky left-0 bg-gray-50" rowSpan={2}>Student</th>
+                    <th className="border px-2 py-1 text-left" rowSpan={2}>Admission</th>
+                    {subjects.map(s => {
+                      const comps = componentsMap[s.id] || []
+                      const count = (Array.isArray(comps) && comps.length>0) ? comps.length + 1 : 2
+                      return (
+                        <th key={`grp-${s.id}`} className="border px-2 py-1 text-center" colSpan={count}>{s.code || s.name}</th>
+                      )
+                    })}
+                    <th className="border px-2 py-1 text-center" rowSpan={2}>All Subjects</th>
+                    <th className="border px-2 py-1 text-center" rowSpan={2}>Slip</th>
+                  </tr>
+                  <tr>
+                    {subjects.map(s => {
+                      const comps = componentsMap[s.id] || []
+                      if (Array.isArray(comps) && comps.length>0){
+                        return (
+                          <React.Fragment key={`sub-${s.id}`}>
+                            {comps.map(c => {
+                              const repOut = Number(componentOutOf(s.id, c.id))
+                              const label = c.code || c.name || 'Paper'
+                              return (
+                                <th key={`c-${s.id}-${c.id}`} className="border px-2 py-1 text-center whitespace-nowrap">
+                                  {label}{Number.isFinite(repOut)? ` (out of ${repOut})` : ''}
+                                </th>
+                              )
+                            })}
+                            <th key={`tot-${s.id}`} className="border px-2 py-1 text-center">Total</th>
+                          </React.Fragment>
+                        )
+                      }
+                      return (
+                        <React.Fragment key={`single-${s.id}`}>
+                          <th className="border px-2 py-1 text-center">Marks</th>
+                          <th className="border px-2 py-1 text-center">Percent</th>
+                        </React.Fragment>
+                      )
+                    })}
+                  </tr>
+                  <tr>
+                    <th className="border px-2 py-1 text-left sticky left-0 bg-gray-50">Out Of</th>
+                    <th className="border px-2 py-1 text-center text-gray-400">—</th>
+                    {subjects.map(s => {
+                      const comps = componentsMap[s.id] || []
+                      if (Array.isArray(comps) && comps.length>0){
+                        return (
+                          <React.Fragment key={`out-${s.id}`}>
+                            {comps.map(c => (
+                              <th key={`out-${s.id}-${c.id}`} className="border px-2 py-1 text-center">{componentOutOf(s.id, c.id)}</th>
+                            ))}
+                            <th key={`out-tot-${s.id}`} className="border px-2 py-1 text-center text-gray-400">—</th>
+                          </React.Fragment>
+                        )
+                      }
+                      const placeholder = String(Number(summary?.exam?.total_marks ?? 100))
+                      return (
+                        <React.Fragment key={`out-single-${s.id}`}>
+                          <th className="border px-2 py-1 text-center">{placeholder}</th>
+                          <th className="border px-2 py-1 text-center text-gray-400">—</th>
+                        </React.Fragment>
+                      )
+                    })}
+                    <th className="border px-2 py-1 text-center text-gray-400">—</th>
+                    <th className="border px-2 py-1 text-center text-gray-400">—</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {/* Out Of row to match entry layout */}
-                  <tr className="bg-white">
-                    <td className="border border-gray-200 px-2 py-2 text-gray-500">Out Of</td>
-                    <td className="border border-gray-200 px-2 py-2" colSpan={2}></td>
-                    {(summary.columns && summary.columns.length ? summary.columns : summary.subjects.map(s=>({type:'percent',subjectId:s.id,header:s.code||s.name,outOf:''}))).map((col, idx) => {
-                      const out = col.type==='component' ? (col.outOf ?? '') : ''
-                      return (
-                        <td key={`out-${col.key || idx}`} className="border border-gray-200 px-2 py-2 text-gray-600">{out || (col.type==='percent' ? '-' : '-')}</td>
-                      )
-                    })}
-                    <td className="border border-gray-200 px-2 py-2"></td>
-                    <td className="border border-gray-200 px-2 py-2"></td>
-                  </tr>
-                  {summary.students.map((st,idx) => (
-                    <tr key={st.id} className={idx % 2 ? 'bg-white' : 'bg-gray-50/50'}>
-                      <td className="border border-gray-200 px-2 py-2">{st.position}</td>
-                      <td className="border border-gray-200 px-2 py-2">{studentMap[String(st.id)]?.name || st.name || st.id}</td>
-                      <td className="border border-gray-200 px-2 py-2">{studentMap[String(st.id)]?.admission_no || '-'}</td>
-                      {(summary.columns && summary.columns.length ? summary.columns : summary.subjects.map(s=>({type:'percent',subjectId:s.id,header:s.code||s.name,outOf:''}))).map((col, idx2) => {
-                        if (col.type === 'component'){
-                          const cm = st?.component_marks?.[String(col.subjectId)]?.[String(col.componentId)]
-                          return <td key={`c-${idx2}`} className="border border-gray-200 px-2 py-2">{cm !== '' && cm != null ? cm : '-'}</td>
-                        } else {
-                          const pct = st?.subject_percentages?.[String(col.subjectId)]
-                          const value = (pct != null && pct !== '') ? `${pct}%` : (st.marks?.[String(col.subjectId)] ?? '-')
-                          return <td key={`p-${idx2}`} className="border border-gray-200 px-2 py-2">{value}</td>
-                        }
-                      })}
-                      <td className="border border-gray-200 px-2 py-2 font-medium">{st.total}</td>
-                      <td className="border border-gray-200 px-2 py-2">
-                        <button
-                          onClick={()=> navigate(`/teacher/students/${st.id}/report-card?exam=${encodeURIComponent(String(selectedExam||''))}`)}
-                          className="px-2 py-1 rounded border text-[11px] bg-white hover:bg-gray-50"
-                        >View</button>
-                      </td>
-                    </tr>
-                  ))}
+                  {summary.students.map((st, idx) => {
+                    const grand = subjects.reduce((sum, s)=>{
+                      const pct = Number(st?.subject_percentages?.[String(s.id)])
+                      return sum + (Number.isFinite(pct) ? pct : 0)
+                    }, 0)
+                    return (
+                      <tr key={st.id} className={`${idx % 2 === 1 ? 'bg-gray-50/40' : ''}`}>
+                        <td className="border px-2 py-1 sticky left-0 bg-white">{studentMap[String(st.id)]?.name || st.name || st.id}</td>
+                        <td className="border px-2 py-1">{studentMap[String(st.id)]?.admission_no || st.admission_no || '-'}</td>
+                        {subjects.map(s => {
+                          const comps = componentsMap[s.id] || []
+                          if (Array.isArray(comps) && comps.length>0){
+                            return (
+                              <React.Fragment key={`row-${st.id}-${s.id}`}>
+                                {comps.map(c => {
+                                  const val = st?.component_marks?.[String(s.id)]?.[String(c.id)]
+                                  return (
+                                    <td key={`c-${s.id}-${c.id}`} className="border px-1.5 py-1 text-center">{(val!=='' && val!=null) ? val : '-'}</td>
+                                  )
+                                })}
+                                <td className="border px-1.5 py-1 text-center font-medium">{Number(st?.subject_percentages?.[String(s.id)]) || 0}%</td>
+                              </React.Fragment>
+                            )
+                          }
+                          const marks = st?.marks?.[String(s.id)]
+                          const pct = Number(st?.subject_percentages?.[String(s.id)])
+                          return (
+                            <React.Fragment key={`single-row-${st.id}-${s.id}`}>
+                              <td className="border px-1.5 py-1 text-center">{(marks!=='' && marks!=null) ? marks : '-'}</td>
+                              <td className="border px-1.5 py-1 text-center font-medium">{Number.isFinite(pct) ? pct : 0}%</td>
+                            </React.Fragment>
+                          )
+                        })}
+                        <td className="border px-1.5 py-1 text-center font-semibold">{grand}</td>
+                        <td className="border px-1.5 py-1 text-center">
+                          <button
+                            onClick={()=> navigate(`/teacher/students/${st.id}/report-card?exam=${encodeURIComponent(String(selectedExam||''))}`)}
+                            className="px-2 py-1 rounded border text-[11px] bg-white hover:bg-gray-50"
+                          >View</button>
+                        </td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>

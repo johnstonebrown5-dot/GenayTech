@@ -245,6 +245,22 @@ export default function AdminEnterResults(){
     return Math.round((m / denom) * 100)
   }
 
+  // Grand total across all subjects for a student
+  const grandTotal = (studentId) => {
+    try {
+      return subjects.reduce((sum, s) => {
+        const comps = componentsMap[s.id] || []
+        // Use percentage for both component and single-part subjects
+        if (Array.isArray(comps) && comps.length>0){
+          return sum + subjectPercent(studentId, s.id)
+        }
+        return sum + subjectPercent(studentId, s.id)
+      }, 0)
+    } catch {
+      return 0
+    }
+  }
+
   const setOutOfFor = (subjectId, componentId, nextOut) => {
     const outNum = nextOut === '' || nextOut === null || typeof nextOut === 'undefined' ? undefined : Number(nextOut)
     setResults(prev => prev.map(r => {
@@ -307,11 +323,12 @@ export default function AdminEnterResults(){
                   <th className="border px-2 py-1 text-left sticky left-0 bg-gray-50" rowSpan={2}>Student</th>
                   {visibleSubjects.map(s => {
                     const comps = componentsMap[s.id] || []
-                    const count = (Array.isArray(comps) && comps.length>0) ? comps.length + 1 : 1
+                    const count = (Array.isArray(comps) && comps.length>0) ? comps.length + 1 : 2
                     return (
                       <th key={`grp-${s.id}`} className="border px-2 py-1 text-center" colSpan={count}>{s.code}</th>
                     )
                   })}
+                  <th className="border px-2 py-1 text-center" rowSpan={2}>All Subjects</th>
                 </tr>
                 <tr>
                   {visibleSubjects.map(s => {
@@ -337,7 +354,12 @@ export default function AdminEnterResults(){
                         </React.Fragment>
                       )
                     }
-                    return <th key={`single-${s.id}`} className="border px-2 py-1 text-center">Marks</th>
+                    return (
+                      <React.Fragment key={`single-${s.id}`}>
+                        <th className="border px-2 py-1 text-center">Marks</th>
+                        <th className="border px-2 py-1 text-center">Percent</th>
+                      </React.Fragment>
+                    )
                   })}
                 </tr>
                 <tr>
@@ -380,20 +402,24 @@ export default function AdminEnterResults(){
                     }catch{}
                     const placeholder = String(Number(exam?.total_marks ?? 100))
                     return (
-                      <th key={`out-single-${s.id}`} className="border px-2 py-1 text-center">
-                        <input
-                          type="number"
-                          inputMode="decimal"
-                          min={1}
-                          step="1"
-                          placeholder={placeholder}
-                          className="border px-2 py-1 rounded w-16 text-center border-gray-300 bg-white"
-                          value={repOut}
-                          onChange={e=>setOutOfFor(s.id, null, e.target.value)}
-                        />
-                      </th>
+                      <React.Fragment key={`out-single-${s.id}`}>
+                        <th className="border px-2 py-1 text-center">
+                          <input
+                            type="number"
+                            inputMode="decimal"
+                            min={1}
+                            step="1"
+                            placeholder={placeholder}
+                            className="border px-2 py-1 rounded w-16 text-center border-gray-300 bg-white"
+                            value={repOut}
+                            onChange={e=>setOutOfFor(s.id, null, e.target.value)}
+                          />
+                        </th>
+                        <th className="border px-2 py-1 text-center text-gray-400">—</th>
+                      </React.Fragment>
                     )
                   })}
+                  <th className="border px-2 py-1 text-center text-gray-400">—</th>
                 </tr>
               </thead>
               <tbody>
@@ -465,41 +491,45 @@ export default function AdminEnterResults(){
                       const cellKey = `${stu.id}-${s.id}`
                       const isInvalid = overTotal || !!invalid[cellKey]
                       return (
-                        <td key={`single-${s.id}`} className={`border px-1.5 py-1 text-center ${isMissingCell ? 'bg-rose-50' : ''} ${isInvalid ? 'outline outline-1 outline-red-400' : ''}`}>
-                          <input
-                            type="number"
-                            inputMode="decimal"
-                            min={0}
-                            max={total}
-                            step="1"
-                            placeholder={`${total}`}
-                            className={`border px-2 py-1 rounded w-16 text-center ${isInvalid ? 'border-red-500 bg-red-50' : 'border-gray-300'}`}
-                            value={val}
-                            onChange={e=>{
-                              const v = e.target.value
-                              // validate
-                              let bad = false
-                              if (v !== '' && v !== null && typeof v !== 'undefined'){
-                                const n = Number(v)
-                                if (Number.isNaN(n) || n < 0 || n > total){
-                                  bad = true
-                                  if (!invalid[cellKey]){
-                                    showError('Invalid marks', `Value must be between 0 and ${total}.`, 3000)
+                        <React.Fragment key={`single-row-${stu.id}-${s.id}`}>
+                          <td className={`border px-1.5 py-1 text-center ${isMissingCell ? 'bg-rose-50' : ''} ${isInvalid ? 'outline outline-1 outline-red-400' : ''}`}>
+                            <input
+                              type="number"
+                              inputMode="decimal"
+                              min={0}
+                              max={total}
+                              step="1"
+                              placeholder={`${total}`}
+                              className={`border px-2 py-1 rounded w-16 text-center ${isInvalid ? 'border-red-500 bg-red-50' : 'border-gray-300'}`}
+                              value={val}
+                              onChange={e=>{
+                                const v = e.target.value
+                                // validate
+                                let bad = false
+                                if (v !== '' && v !== null && typeof v !== 'undefined'){
+                                  const n = Number(v)
+                                  if (Number.isNaN(n) || n < 0 || n > total){
+                                    bad = true
+                                    if (!invalid[cellKey]){
+                                      showError('Invalid marks', `Value must be between 0 and ${total}.`, 3000)
+                                    }
                                   }
                                 }
-                              }
-                              setInvalid(prev => ({ ...prev, [cellKey]: bad }))
-                              setResults(prev => {
-                                const copy = [...prev]
-                                const i = copy.findIndex(r => r.student===stu.id && r.subject===s.id)
-                                if (i>-1) copy[i] = { ...copy[i], marks: v }
-                                return copy
-                              })
-                            }}
-                          />
-                        </td>
+                                setInvalid(prev => ({ ...prev, [cellKey]: bad }))
+                                setResults(prev => {
+                                  const copy = [...prev]
+                                  const i = copy.findIndex(r => r.student===stu.id && r.subject===s.id)
+                                  if (i>-1) copy[i] = { ...copy[i], marks: v }
+                                  return copy
+                                })
+                              }}
+                            />
+                          </td>
+                          <td className="border px-1.5 py-1 text-center font-medium">{subjectPercent(stu.id, s.id)}%</td>
+                        </React.Fragment>
                       )
                     })}
+                    <td className="border px-1.5 py-1 text-center font-semibold">{grandTotal(stu.id)}</td>
                   </tr>
                 ))}
               </tbody>
