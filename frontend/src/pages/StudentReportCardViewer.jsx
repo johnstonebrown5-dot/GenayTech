@@ -121,6 +121,33 @@ export default function StudentReportCardViewer({ embedded=false, hideControls=f
     return list
   }, [examResults, parsedTermYear, isPrivileged])
 
+  // All exams for this student (respecting published visibility for non-privileged)
+  const allExams = useMemo(()=>{
+    const seen = new Set()
+    const list = []
+    const requirePublished = !isPrivileged
+    for (const r of examResults){
+      const ed = r.exam_detail || {}
+      const id = toId(ed.id) || toId(r.exam) || toId(r.exam_id)
+      if (!id || seen.has(String(id))) continue
+      if (requirePublished && !ed?.published) continue
+      const year = ed.year || (ed?.date ? (isNaN(new Date(ed.date)) ? null : new Date(ed.date).getFullYear()) : null)
+      const term = ed.term || ed?.inferred_term?.number || null
+      const baseName = ed.name || (typeof r.exam === 'object' ? (r.exam?.name || r.exam?.title || '') : '') || String(r.exam || '')
+      const label = `${baseName}${year ? ` • ${year}` : ''}${term ? ` • T${term}` : ''}`
+      list.push({ id, name: label, total_marks: ed.total_marks, term, year, grade: ed.grade_level_tag, klass: ed.klass })
+      seen.add(String(id))
+    }
+    list.sort((a,b)=>{
+      const ya = Number(a.year||0), yb = Number(b.year||0)
+      if (yb !== ya) return yb - ya
+      const ta = Number(a.term||0), tb = Number(b.term||0)
+      if (tb !== ta) return tb - ta
+      return Number(b.id||0) - Number(a.id||0)
+    })
+    return list
+  }, [examResults, isPrivileged])
+
   const [selectedExamId, setSelectedExamId] = useState(null)
 
   const effectiveExamId = controlledExamId || selectedExamId
@@ -231,6 +258,31 @@ export default function StudentReportCardViewer({ embedded=false, hideControls=f
     })()
     return ()=>{ active = false }
   }, [queryExamId, studentId])
+
+  // Load all exam results for this student to populate selectors when no specific exam is forced
+  useEffect(()=>{
+    let active = true
+    ;(async()=>{
+      try{
+        if (!studentId) return
+        const res = await api.get(`/academics/exam_results/?student=${studentId}`)
+        const rows = Array.isArray(res?.data) ? res.data : (Array.isArray(res?.data?.results) ? res.data.results : [])
+        if (!active || !rows.length) return
+        setExamResults(prev => {
+          const prevArr = Array.isArray(prev) ? prev : []
+          // Merge unique by [exam,subject,component] to avoid duplicates if a specific-exam fetch also runs
+          const seen = new Set(prevArr.map(r=>`${r.exam||r.exam_id}|${r.subject||r.subject_id}|${r.component||r.component_id||''}`))
+          const merged = [...prevArr]
+          for (const r of rows){
+            const key = `${r.exam||r.exam_id}|${r.subject||r.subject_id}|${r.component||r.component_id||''}`
+            if (!seen.has(key)) { merged.push(r); seen.add(key) }
+          }
+          return merged
+        })
+      }catch{}
+    })()
+    return ()=>{ active = false }
+  }, [studentId])
 
   const headerExamName = useMemo(()=>{
     // Strict: only use real names fetched for the selected exam; do not synthesize labels
@@ -597,9 +649,9 @@ export default function StudentReportCardViewer({ embedded=false, hideControls=f
                 ))}
               </select>
             )}
-            {showExamSelector && termExams.length>0 && (
+            {showExamSelector && (termExams.length>0 || allExams.length>0) && (
               <select className="px-2 py-1.5 border rounded bg-white text-sm" value={effectiveExamId || ''} onChange={(e)=> { const v = e.target.value || null; onSelectedExamIdChange ? onSelectedExamIdChange(v) : setSelectedExamId(v) }} title="Select exam">
-                {termExams.map(ex => (
+                {(termExams.length>0 ? termExams : allExams).map(ex => (
                   <option key={ex.id} value={ex.id}>{ex.name}</option>
                 ))}
               </select>

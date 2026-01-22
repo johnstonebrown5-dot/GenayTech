@@ -888,10 +888,9 @@ export default function TeacherGrades(){
     handleMarkChange(studentId, String(next))
   }
 
-  // Auto-collapse controls panel once key selections are present
+  // Keep controls panel visible until the user explicitly hides it
   useEffect(()=>{
-    const ready = selectedClass && selectedSubject && selectedExamId
-    if (ready) setControlsOpen(false)
+    // No auto-collapse behavior
   }, [selectedClass, selectedSubject, selectedExamId])
 
   // ---------- Draft persistence (localStorage) ----------
@@ -1156,6 +1155,13 @@ export default function TeacherGrades(){
               Input: {inputAs==='percent' ? 'Percentage (%)' : 'Marks'}
             </button>
             <button
+              onClick={reloadSavedMarks}
+              type="button"
+              className="text-xs md:text-sm px-3 py-1.5 rounded-full bg-white/90 text-indigo-700 border border-white/70 hover:bg-white shadow-sm"
+            >
+              Load Sheet
+            </button>
+            <button
               onClick={()=>setControlsOpen(v=>!v)}
               className="text-xs md:text-sm px-3 py-1.5 rounded-full bg-indigo-900/80 text-white border border-white/30 hover:bg-indigo-900 shadow-sm"
             >
@@ -1176,6 +1182,12 @@ export default function TeacherGrades(){
               className={`input-unit-toggle text-[11px] px-2.5 py-1 rounded-full border ${inputAs==='percent' ? 'input-unit-toggle--percent bg-white/90 text-indigo-700 border-white/80' : 'bg-white/90 text-indigo-700 border-white/80'}`}
             >
               {inputAs==='percent' ? '% Input' : 'Marks'}
+            </button>
+            <button
+              onClick={reloadSavedMarks}
+              className="text-[11px] px-2.5 py-1.5 rounded-full bg-white text-indigo-700 border border-indigo-200 shadow-sm"
+            >
+              Load Sheet
             </button>
             <button
               onClick={()=>setControlsOpen(v=>!v)}

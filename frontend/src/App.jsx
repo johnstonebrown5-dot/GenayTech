@@ -24,6 +24,7 @@ import TeacherLayout from './components/TeacherLayout'
 import StudentDashboard from './pages/StudentDashboard'
 import StudentReportCard from './pages/StudentReportCard'
 import StudentReportCardViewer from './pages/StudentReportCardViewer'
+import StudentAllReportCards from './pages/StudentAllReportCards'
 import StudentLayout from './components/StudentLayout'
 import FinanceDashboard from './pages/FinanceDashboard';
 import FinanceLayout from './components/FinanceLayout';
@@ -220,7 +221,7 @@ export default function App() {
               <Route path="students/:id" element={<AdminStudentDashboard/>} />
               <Route path="students/:id/invoices" element={<AdminStudentInvoices/>} />
               <Route path="students/:id/payments" element={<AdminStudentPayments/>} />
-              <Route path="students/:id/report-card" element={<StudentReportCardViewer/>} />
+              <Route path="students/:id/report-card" element={<StudentAllReportCards/>} />
               <Route path="teachers" element={<AdminTeachers/>} />
               <Route path="teachers/:id" element={<AdminTeacherProfile/>} />
               <Route path="staff" element={<AdminStaff/>} />
@@ -267,7 +268,7 @@ export default function App() {
               <Route path="timetable" element={<TeacherTimetable/>} />
               <Route path="block-timetable" element={<TeacherBlockTimetable/>} />
               <Route path="events" element={<TeacherEvents/>} />
-              <Route path="students/:id/report-card" element={<StudentReportCardViewer/>} />
+              <Route path="students/:id/report-card" element={<StudentAllReportCards/>} />
             </Route>
             <Route path="/student" element={<ProtectedRoute roles={["student","admin"]}><StudentLayout><Outlet/></StudentLayout></ProtectedRoute>}>
               <Route index element={<StudentDashboard/>} />

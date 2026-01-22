@@ -1,63 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import StudentReportCardViewer from './StudentReportCardViewer'
 import Modal from '../components/Modal'
 import api from '../api'
 import { uploadToCloudinary } from '../utils/cloudinary'
 import { toast } from '../utils/toast'
 import { showLoadingHint, setLoadingProgress, clearLoadingHint } from '../utils/loading'
-
-function Selectors({ examResults, uiSelectedExamId, setUiSelectedExamId }){
-  const allExams = React.useMemo(()=>{
-    const toId = (v) => {
-      if (v == null) return null
-      if (typeof v === 'object') return v.id ?? v.pk ?? v.value ?? null
-      return v
-    }
-    const seen = new Set()
-    const out = []
-    for (const r of (examResults||[])){
-      const ed = r.exam_detail || {}
-      const id = toId(ed.id) || toId(r.exam) || toId(r.exam_id)
-
-      if (!id || seen.has(String(id))) continue
-      seen.add(String(id))
-      // Try to infer year/term if missing
-      let year = ed.year || null
-      if (!year && ed.date){ const d = new Date(ed.date); if (!isNaN(d)) year = d.getFullYear() }
-      const term = ed.term || ed?.inferred_term?.number || null
-      out.push({ id, name: ed.name || String(r.exam||''), year, term })
-    }
-    // Sort newest first by year, then term, then id
-    out.sort((a,b)=>{
-      const ya = Number(a.year||0), yb = Number(b.year||0)
-      if (yb !== ya) return yb - ya
-      const ta = Number(a.term||0), tb = Number(b.term||0)
-      if (tb !== ta) return tb - ta
-      return Number(b.id||0) - Number(a.id||0)
-    })
-    return out
-  }, [examResults])
-
-  React.useEffect(()=>{
-    if (!uiSelectedExamId && allExams.length){
-      setUiSelectedExamId(allExams[0].id)
-    }
-  }, [uiSelectedExamId, allExams, setUiSelectedExamId])
-
-  return (
-    <div className="mb-3 flex items-center gap-2">
-      <select className="px-2 py-1.5 border rounded bg-white text-sm" value={uiSelectedExamId || ''} onChange={(e)=>{
-        const v = e.target.value || null
-        setUiSelectedExamId(v)
-      }} title="Select Exam">
-        {allExams.map(ex => (
-          <option key={ex.id} value={ex.id}>{ex.name}{ex.year? ` • ${ex.year}`:''}{ex.term? ` • T${ex.term}`:''}</option>
-        ))}
-      </select>
-    </div>
-  )
-}
 
 export default function AdminStudentDashboard() {
   const { id } = useParams()
@@ -66,9 +13,6 @@ export default function AdminStudentDashboard() {
   const [attendance, setAttendance] = useState([])
   const [examResults, setExamResults] = useState([])
   const [examOverviewRows, setExamOverviewRows] = useState([]) // built from /exams/:id/summary so it matches Admin Results
-  const [uiSelectedTerm, setUiSelectedTerm] = useState(null)
-  const [uiSelectedExamId, setUiSelectedExamId] = useState(null)
-  const [showAllExams, setShowAllExams] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [finance, setFinance] = useState({ total_billed: 0, total_paid: 0, balance: 0 })
@@ -470,90 +414,7 @@ export default function AdminStudentDashboard() {
           </div>
         )}
 
-        <div className="grid md:grid-cols-2 gap-6">
-          <div className="bg-white rounded shadow p-4">
-            <h2 className="font-medium mb-2">Assessments</h2>
-            {assessments.length === 0 ? (
-              <div className="text-sm text-gray-500">No assessments yet.</div>
-            ) : (
-              <table className="w-full text-left text-sm">
-                <thead>
-                  <tr>
-                    <th>Competency</th>
-                    <th>Level</th>
-                    <th>Date</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {assessments.map(a => (
-                    <tr key={a.id} className="border-t">
-                      <td>{a.competency}</td>
-                      <td>{a.level}</td>
-                      <td>{a.date}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
-
-          <div className="bg-white rounded shadow p-4">
-            <h2 className="font-medium mb-2">Attendance</h2>
-            {attendance.length === 0 ? (
-              <div className="text-sm text-gray-500">No attendance records yet.</div>
-            ) : (
-              <table className="w-full text-left text-sm">
-                <thead>
-                  <tr>
-                    <th>Date</th>
-                    <th>Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {attendance.map(at => (
-                    <tr key={at.id} className="border-t">
-                      <td>{at.date}</td>
-                      <td className="capitalize">{at.status}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
-        </div>
-
-        <div className="bg-white rounded shadow p-4">
-          <div className="flex items-center justify-between mb-2">
-            <h2 className="font-medium">Exam Results</h2>
-            <div className="flex items-center gap-3">
-              <label className="text-sm inline-flex items-center gap-1">
-                <input type="checkbox" checked={showAllExams} onChange={e=>setShowAllExams(e.target.checked)} />
-                <span>Show all exams</span>
-              </label>
-              <Link to={`/admin/students/${id}/report-card`} className="text-sm text-indigo-600 hover:underline">Open Printable</Link>
-            </div>
-          </div>
-          {examResults.length === 0 ? (
-            <div className="text-sm text-gray-500">No exam results yet.</div>
-          ) : (
-            <>
-              {!showAllExams ? (
-                <>
-                  <Selectors examResults={examResults} uiSelectedTerm={uiSelectedTerm} setUiSelectedTerm={setUiSelectedTerm} uiSelectedExamId={uiSelectedExamId} setUiSelectedExamId={setUiSelectedExamId} />
-                  <div className="-mx-4">
-                    <StudentReportCardViewer embedded hideHistory showTermSelector={false} showExamSelector={false} showBackPrint={false} selectedTermYear={uiSelectedTerm} onSelectedTermYearChange={setUiSelectedTerm} selectedExamId={uiSelectedExamId} onSelectedExamIdChange={setUiSelectedExamId} />
-                  </div>
-                </>
-              ) : (
-                <div className="space-y-6 -mx-4">
-                  {allExamsForStudent.map(ex => (
-                    <StudentReportCardViewer key={ex.id} embedded hideHistory hideControls showTermSelector={false} showExamSelector={false} showBackPrint={false} selectedTermYear={`${ex.year}-T${ex.term}`} selectedExamId={ex.id} />
-                  ))}
-                </div>
-              )}
-            </>
-          )}
-        </div>
+        
 
         <div className="bg-white rounded shadow p-4">
           <h2 className="font-medium mb-2">Student History</h2>
@@ -615,11 +476,7 @@ export default function AdminStudentDashboard() {
                           const pctClass = pct == null ? 'bg-slate-100 text-slate-600' : (pct >= 75 ? 'bg-emerald-100 text-emerald-700' : pct >= 50 ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700')
                           return (
                             <tr key={e.exam.id} className="border-t">
-                              <td className="px-3 py-2">
-                                <Link to={`/admin/students/${id}/report-card?exam=${encodeURIComponent(String(e.exam.id))}`} className="text-indigo-600 hover:underline">
-                                  {e.exam.name}
-                                </Link>
-                              </td>
+                              <td className="px-3 py-2">{e.exam.name}</td>
                               <td className="px-3 py-2">{e.exam.year}-T{e.exam.term}</td>
                               <td className="px-3 py-2">{e.subjects_count}</td>
                               <td className="px-3 py-2">{e.total_marks_obtained}</td>
@@ -679,67 +536,7 @@ export default function AdminStudentDashboard() {
               </div>
             </div>
           )}
-          {historyData && (
-            <div className="mt-6">
-              <div className="flex flex-wrap items-end gap-2 mb-3">
-                <input className="px-2 py-1.5 border rounded text-sm w-28" placeholder="Year" value={histYear} onChange={e=>setHistYear(e.target.value)} />
-                <select className="px-2 py-1.5 border rounded text-sm w-28" value={histTerm} onChange={e=>setHistTerm(e.target.value)}>
-                  <option value="">Term</option>
-                  <option value="1">T1</option>
-                  <option value="2">T2</option>
-                  <option value="3">T3</option>
-                </select>
-                <input className="px-2 py-1.5 border rounded text-sm w-40" placeholder="Academic Year" value={histAcademicYear} onChange={e=>setHistAcademicYear(e.target.value)} />
-                <label className="inline-flex items-center gap-2 text-sm">
-                  <input type="checkbox" checked={histIncludeSubjects} onChange={e=>setHistIncludeSubjects(e.target.checked)} />
-                  <span>Include Subjects</span>
-                </label>
-              </div>
-              {Array.isArray(historyData.exams_grouped_academic_year) && historyData.exams_grouped_academic_year.length > 0 ? (
-                <div className="space-y-4">
-                  {historyData.exams_grouped_academic_year.map((ay, idx) => (
-                    <div key={idx} className="border rounded">
-                      <div className="px-3 py-2 bg-slate-50 font-medium">{ay.academic_year_label}</div>
-                      <div className="divide-y">
-                        {(ay.terms || []).map((t, i) => (
-                          <div key={i} className="p-3">
-                            <div className="text-sm font-medium mb-2">Term {t.term} • Exams: {t.total_exams} • Total: {Number(t.total_marks_obtained || 0)}</div>
-                            {t.approx_percentage_mean != null && (
-                              <div className="text-xs mb-2">Avg %: {t.approx_percentage_mean}</div>
-                            )}
-                            <div className="overflow-x-auto">
-                              <table className="w-full text-left text-sm">
-                                <thead>
-                                  <tr>
-                                    <th className="px-2 py-1.5">Exam</th>
-                                    <th className="px-2 py-1.5">Subjects</th>
-                                    <th className="px-2 py-1.5">Total</th>
-                                    <th className="px-2 py-1.5">%</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {(t.items || []).map((e, j) => (
-                                    <tr key={j} className="border-t">
-                                      <td className="px-2 py-1.5">{e.exam?.name}</td>
-                                      <td className="px-2 py-1.5">{e.subjects_count}</td>
-                                      <td className="px-2 py-1.5">{e.total_marks_obtained}</td>
-                                      <td className="px-2 py-1.5">{e.approx_percentage ?? '-'}</td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-sm text-gray-500">No grouped exam history found.</div>
-              )}
-            </div>
-          )}
+          
         </div>
       </div>
       {/* Edit Student Modal */}
