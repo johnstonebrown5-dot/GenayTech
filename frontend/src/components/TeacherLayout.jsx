@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth'
@@ -39,6 +39,48 @@ export default function TeacherLayout({ children }){
   const [dismissedIds, setDismissedIds] = useState(() => {
     try { return JSON.parse(localStorage.getItem('dismissed_broadcast_ids') || '[]') } catch { return [] }
   })
+
+  // Keep the app awake on supported browsers (Screen Wake Lock API)
+  const wakeLockRef = useRef(null)
+  useEffect(() => {
+    let cancelled = false
+    const canWake = () => typeof navigator !== 'undefined' && 'wakeLock' in navigator
+    const acquire = async () => {
+      if (!canWake()) return
+      try {
+        if (document.visibilityState !== 'visible') return
+        const lock = await navigator.wakeLock.request('screen')
+        if (cancelled) { try{ lock.release?.() }catch{}; return }
+        wakeLockRef.current = lock
+        lock.addEventListener?.('release', () => { /* auto released */ })
+      } catch {
+        // Will try again on next user interaction/visibility
+      }
+    }
+    const release = async () => {
+      try { await wakeLockRef.current?.release?.() } catch {}
+      wakeLockRef.current = null
+    }
+    const onVisibility = () => { if (document.visibilityState === 'visible') acquire(); else release() }
+    const onResume = () => acquire()
+    // Initial attempt
+    acquire()
+    // Re-acquire on visibility changes
+    document.addEventListener('visibilitychange', onVisibility)
+    window.addEventListener('focus', onResume)
+    // Help some browsers requiring a gesture: retry on first pointer/keydown
+    const gesture = () => { acquire(); window.removeEventListener('pointerdown', gesture); window.removeEventListener('keydown', gesture) }
+    window.addEventListener('pointerdown', gesture)
+    window.addEventListener('keydown', gesture)
+    return () => {
+      cancelled = true
+      document.removeEventListener('visibilitychange', onVisibility)
+      window.removeEventListener('focus', onResume)
+      window.removeEventListener('pointerdown', gesture)
+      window.removeEventListener('keydown', gesture)
+      release()
+    }
+  }, [])
   const [darkMode, setDarkMode] = useState(() => {
     if (typeof window === 'undefined') return false
     try {
@@ -269,7 +311,7 @@ export default function TeacherLayout({ children }){
         </div>
       )}
       {/* Top bar - refreshed style */}
-      <header className="sticky top-0 z-30 bg-white text-gray-900 px-3 md:px-4 h-14 flex items-center gap-2 md:gap-3 shadow-sm border-b border-gray-200">
+      <header className="sticky top-0 z-30 bg-white/80 backdrop-blur supports-[backdrop-filter]:bg-white/60 text-gray-900 px-3 md:px-4 h-14 flex items-center gap-2 md:gap-3 shadow-md border-b border-gray-100">
         <button
           className="p-2 rounded hover:bg-gray-100 hidden md:inline-flex"
           aria-label="Collapse sidebar"
@@ -299,30 +341,29 @@ export default function TeacherLayout({ children }){
             </svg>
           </button>
         </div>
-        <div className="flex-1 flex items-center justify-center gap-2 text-xs md:text-sm px-1 md:px-2 text-gray-700 truncate">
-          {schoolLogo ? (
-            <img src={schoolLogo} alt="School logo" className="h-5 w-5 md:h-6 md:w-6 object-contain rounded" />
-          ) : null}
-          <span className="truncate opacity-90">{schoolName || ''}</span>
-          {currentTerm && currentYear && (
-            <span className="text-[10px] md:text-xs px-1.5 md:px-2 py-0.5 rounded bg-blue-100 text-blue-700 font-medium">
-              Term {currentTerm.number} {currentYear.label?.split('/')?.[1] || currentYear.label}
-            </span>
-          )}
+        <div className="flex-1 flex items-center justify-center px-1 md:px-2">
+          <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full border border-gray-200 bg-white/80 shadow-sm text-xs md:text-sm text-gray-700 truncate">
+            {schoolLogo ? (
+              <img src={schoolLogo} alt="School logo" className="h-5 w-5 md:h-5 object-contain rounded" />
+            ) : null}
+            <span className="truncate max-w-[42vw] md:max-w-[50vw] font-medium">{schoolName || ''}</span>
+            {currentTerm && currentYear && (
+              <span className="text-[10px] md:text-xs px-1.5 py-0.5 rounded-full bg-indigo-100 text-indigo-700 font-semibold whitespace-nowrap">
+                Term {currentTerm.number} {currentYear.label?.split('/')?.[1] || currentYear.label}
+              </span>
+            )}
+          </div>
         </div>
         <div className="ml-auto flex items-center gap-2 md:gap-3">
           <Link
             to="/teacher/profile"
-            className="inline-flex items-center gap-2 px-2.5 py-1.5 rounded-full border border-gray-200 bg-white hover:bg-gray-50 shadow-sm transition-colors"
+            className="inline-flex items-center gap-2 px-2 py-1 rounded-full border border-gray-200 bg-white/90 hover:bg-white shadow-sm transition-colors"
             aria-label="Open profile"
           >
-            <div className="h-8 w-8 rounded-full bg-indigo-500 text-white flex items-center justify-center text-xs font-semibold">
+            <div className="h-8 w-8 rounded-full bg-indigo-600 text-white flex items-center justify-center text-xs font-semibold">
               {initials}
             </div>
-            <div className="hidden sm:flex flex-col leading-tight max-w-[140px]">
-              <span className="text-xs font-medium text-gray-800 truncate">{displayName}</span>
-              <span className="text-[10px] text-gray-500">View profile</span>
-            </div>
+            <span className="hidden sm:inline text-xs font-medium text-gray-800 max-w-[140px] truncate">{displayName}</span>
           </Link>
           <button
             type="button"
@@ -462,13 +503,13 @@ export default function TeacherLayout({ children }){
         </aside>
 
         {/* Content area */}
-        <main className={`transition-all duration-200 px-0 md:px-6 py-4 pb-16 md:py-6 md:pb-6 ${isOpen? 'md:ml-64':'md:ml-16'}`}>
+        <main className={`transition-all duration-200 px-0 md:px-6 pt-1 pb-16 md:pt-6 md:pb-6 ${isOpen? 'md:ml-64':'md:ml-16'}`}>
           {children}
         </main>
       </div>
-      {/* Bottom Nav (mobile) */}
-      <nav className="sm:hidden fixed bottom-0 inset-x-0 z-30 border-t border-slate-200 bg-white/95 backdrop-blur-xl">
-        <div className="max-w-xl mx-auto flex items-stretch justify-around py-1.5">
+      {/* Bottom Nav (mobile) - floating dock */}
+      <nav className="sm:hidden fixed bottom-2 inset-x-2 z-30">
+        <div className="max-w-xl mx-auto rounded-2xl border border-slate-200/70 bg-white/90 backdrop-blur-xl shadow-xl px-2 py-1.5 flex items-center justify-around">
           {([
             { to: '/teacher', label: 'Dashboard', icon: '📊' },
             { to: '/teacher/classes', label: 'Classes', icon: '📚' },
@@ -478,8 +519,8 @@ export default function TeacherLayout({ children }){
           ]).map(item => {
             const isMore = item.type === 'more'
             const active = isMore ? isMobileOpen : pathname === item.to
-            const commonClasses = `flex flex-col items-center justify-center flex-1 gap-0.5 text-[11px] ${active ? 'text-blue-600' : 'text-slate-500'}`
-            const iconClass = `text-lg ${active ? 'scale-110' : ''}`
+            const commonClasses = `relative flex flex-col items-center justify-center flex-1 gap-0.5 text-[11px] transition-colors rounded-xl px-2 py-1 ${active ? 'bg-emerald-50 text-emerald-700' : 'text-slate-500'}`
+            const iconClass = `text-base ${active ? 'scale-110' : ''}`
             if (isMore){
               return (
                 <button

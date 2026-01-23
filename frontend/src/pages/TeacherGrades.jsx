@@ -75,6 +75,22 @@ export default function TeacherGrades(){
     ))
   }, [students, searchQuery])
 
+  // Sort mode for students list
+  const [sortMode, setSortMode] = useState('name_asc') // 'name_asc' | 'name_desc' | 'adm_asc' | 'adm_desc'
+  const sortedStudents = useMemo(() => {
+    const arr = Array.isArray(students) ? [...students] : []
+    const byName = (a,b) => String(a.name||'').localeCompare(String(b.name||''))
+    const byAdm = (a,b) => String(a.admission_no||'').localeCompare(String(b.admission_no||''))
+    switch (sortMode){
+      case 'name_desc': arr.sort((a,b)=> byName(b,a)); break
+      case 'adm_asc': arr.sort(byAdm); break
+      case 'adm_desc': arr.sort((a,b)=> byAdm(b,a)); break
+      case 'name_asc':
+      default: arr.sort(byName)
+    }
+    return arr
+  }, [students, sortMode])
+
   // Persist teacher Out Of preferences per class/subject/exam
   const outOfStoreKey = () => [
     'outofprefs',
@@ -465,7 +481,46 @@ export default function TeacherGrades(){
     ;(async ()=>{
       try{
         setStudentsLoading(true)
-        const studentsPromise = api.get(`/academics/students/?klass=${selectedClass}`)
+        // Fetch ALL students for this class (handle pagination and varied response shapes)
+        const fetchAllStudents = async () => {
+          const baseUrls = [
+            `/academics/students/?klass=${encodeURIComponent(selectedClass)}&page_size=200`,
+            `/academics/students/?class=${encodeURIComponent(selectedClass)}&page_size=200`,
+            `/academics/students/?klass_id=${encodeURIComponent(selectedClass)}&page_size=200`,
+            `/academics/students/?class_id=${encodeURIComponent(selectedClass)}&page_size=200`,
+          ]
+          const getAll = async (url) => {
+            let out = []
+            let next = url
+            let guard = 0
+            while (next && guard < 50){
+              const r = await api.get(next)
+              const d = r?.data
+              if (Array.isArray(d)) { out = d; break }
+              if (d && Array.isArray(d.results)) { out = out.concat(d.results); next = d.next; guard++; continue }
+              // Some backends use items
+              if (d && Array.isArray(d.items)) { out = out.concat(d.items); next = d.next; guard++; continue }
+              break
+            }
+            return out
+          }
+          for (const u of baseUrls){
+            try{
+              const arr = await getAll(u)
+              if (arr && arr.length) return arr
+            }catch{}
+          }
+          // Last resort: fetch unfiltered list and filter locally by klass id fields
+          try{
+            const arr = await getAll('/academics/students/?page_size=1000')
+            const klassId = String(selectedClass)
+            return (arr||[]).filter(s => {
+              const k = s?.klass ?? s?.class ?? s?.klass_id ?? s?.class_id ?? s?.klass_detail?.id ?? s?.class_detail?.id
+              return String(k||'') === klassId
+            })
+          }catch{}
+          return []
+        }
         const loadExams = async () => {
           if (examsCacheRef.current[String(selectedClass)]){
             return examsCacheRef.current[String(selectedClass)]
@@ -535,11 +590,11 @@ export default function TeacherGrades(){
           setExamsLoading(false)
           return prioritized
         }
-        const [studentsRes, examsList] = await Promise.allSettled([studentsPromise, loadExams()])
+        const [studentsRes, examsList] = await Promise.allSettled([fetchAllStudents(), loadExams()])
         if (!mounted) return
         if (studentsRes.status === 'fulfilled'){
-          const res = studentsRes.value
-          const arr = Array.isArray(res.data) ? res.data : (Array.isArray(res?.data?.results) ? res.data.results : [])
+          const list = Array.isArray(studentsRes.value) ? studentsRes.value : []
+          const arr = list.slice().sort((a,b)=> String(a.name||'').localeCompare(String(b.name||'')) || String(a.admission_no||'').localeCompare(String(b.admission_no||'')))
           setStudents(arr)
           const init = {}
           arr.forEach(s => { init[s.id] = '' })
@@ -1176,11 +1231,11 @@ export default function TeacherGrades(){
   }
 
   return (
-    <div className="teacher-grades-page px-2 md:px-4 lg:px-6 py-3 md:py-4 space-y-3 md:space-y-4 max-w-6xl mx-auto pb-24 md:pb-0 min-h-screen">
+    <div className="teacher-grades-page px-0 md:px-4 lg:px-6 py-1 md:py-4 space-y-2 md:space-y-4 max-w-6xl mx-auto pb-24 md:pb-0 min-h-screen">
       {/* Header */}
       <div className="relative overflow-hidden rounded-2xl border border-gray-200 bg-gradient-to-r from-indigo-500 via-indigo-600 to-sky-500 shadow-md">
         <div className="pointer-events-none absolute -right-16 -top-16 h-40 w-40 rounded-full bg-white/15 blur-2" />
-        <div className="p-3 md:p-4 flex items-center justify-between gap-3">
+        <div className="p-2 md:p-4 flex items-center justify-between gap-2 md:gap-3">
           <div>
             <div className="text-lg md:text-xl font-semibold tracking-tight text-white">Input Grades</div>
           </div>
@@ -1188,24 +1243,38 @@ export default function TeacherGrades(){
             <button
               onClick={reloadSavedMarks}
               type="button"
-              className="text-xs md:text-sm px-3 py-1.5 rounded-full bg-white/90 text-indigo-700 border border-white/70 hover:bg-white shadow-sm"
+              className="group inline-flex items-center gap-2 text-xs md:text-sm pl-2.5 pr-3 py-1.5 rounded-full bg-gradient-to-r from-white/95 to-white/80 text-indigo-700 border border-white/70 shadow-sm hover:from-white hover:to-white hover:shadow transition-colors"
+              aria-label="Refresh Sheet"
             >
-              Load Sheet
+              <svg className="h-3.5 w-3.5 text-indigo-600 group-hover:animate-spin-slow" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M3.5 10a6.5 6.5 0 1111.04 4.62l1.22 1.22a.75.75 0 01-1.06 1.06l-2.7-2.7a.75.75 0 01-.22-.53V9.5a.75.75 0 011.5 0v2.74A5 5 0 105 10a.75.75 0 01-1.5 0z"/></svg>
+              Refresh Sheet
             </button>
-            <span className="text-xs md:text-sm px-3 py-1.5 rounded-full bg-white/90 text-indigo-700 border border-white/70 shadow-sm whitespace-nowrap max-w-[50vw] overflow-hidden text-ellipsis">
+            <button
+              type="button"
+              onClick={()=>setFormModalOpen(true)}
+              className="text-xs md:text-sm px-3 py-1.5 rounded-full bg-white/90 text-indigo-700 border border-white/70 shadow-sm whitespace-nowrap max-w-[50vw] overflow-hidden text-ellipsis hover:bg-white"
+              aria-label="Change exam and subject"
+            >
               {subjectDisplay} • {examDisplay}
-            </span>
+            </button>
           </div>
           <div className="md:hidden flex items-center gap-1.5">
             <button
               onClick={reloadSavedMarks}
-              className="text-[11px] px-2.5 py-1.5 rounded-full bg-white text-indigo-700 border border-indigo-200 shadow-sm"
+              className="group inline-flex items-center gap-1.5 text-[11px] pl-2.5 pr-3 py-1.5 rounded-full bg-white text-indigo-700 border border-indigo-200 shadow-sm hover:bg-indigo-50/50 transition-colors"
+              aria-label="Refresh Sheet"
             >
-              Load Sheet
+              <svg className="h-3.5 w-3.5 text-indigo-600 group-hover:animate-spin-slow" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M3.5 10a6.5 6.5 0 1111.04 4.62l1.22 1.22a.75.75 0 01-1.06 1.06l-2.7-2.7a.75.75 0 01-.22-.53V9.5a.75.75 0 011.5 0v2.74A5 5 0 105 10a.75.75 0 01-1.5 0z"/></svg>
+              Refresh
             </button>
-            <span className="text-[11px] px-2.5 py-1.5 rounded-full bg-white text-indigo-700 border border-indigo-200 shadow-sm whitespace-nowrap max-w-[45vw] overflow-hidden text-ellipsis">
+            <button
+              type="button"
+              onClick={()=>setFormModalOpen(true)}
+              className="text-[11px] px-2.5 py-1.5 rounded-full bg-white text-indigo-700 border border-indigo-200 shadow-sm whitespace-nowrap max-w-[45vw] overflow-hidden text-ellipsis hover:bg-indigo-50/50"
+              aria-label="Change exam and subject"
+            >
               {subjectDisplay} • {examDisplay}
-            </span>
+            </button>
           </div>
         </div>
       </div>
@@ -1216,15 +1285,6 @@ export default function TeacherGrades(){
       {/* Mobile-only: full controls in modal */}
       <Modal open={formModalOpen} onClose={()=>setFormModalOpen(false)} title="Exam Details" size="sm">
         <div className="space-y-3">
-          <div className="flex items-center justify-end">
-            <button
-              type="button"
-              onClick={()=>setFormModalOpen(false)}
-              className="text-xs md:text-sm px-3 py-1.5 rounded-full bg-indigo-900/80 text-white border border-indigo-900/50 hover:bg-indigo-900 shadow-sm"
-            >
-              Hide Details
-            </button>
-          </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 md:gap-3">
             <div className="grid gap-1.5">
               <label className="text-xs font-medium text-gray-600">Class</label>
@@ -1565,7 +1625,20 @@ export default function TeacherGrades(){
         {/* Students - mobile list */}
         <div className="md:hidden -mx-1">
           <div className="mb-2 px-1 flex items-center justify-between gap-2">
-            <div className="text-sm font-medium text-gray-800">Students</div>
+            <div className="flex items-center gap-2">
+              <div className="text-sm font-medium text-gray-800">Students</div>
+              <select
+                aria-label="Sort students"
+                className="text-[11px] border border-gray-200 rounded-lg px-2 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-200"
+                value={sortMode}
+                onChange={e=>setSortMode(e.target.value)}
+              >
+                <option value="name_asc">Name A–Z</option>
+                <option value="name_desc">Name Z–A</option>
+                <option value="adm_asc">Admission ↑</option>
+                <option value="adm_desc">Admission ↓</option>
+              </select>
+            </div>
             {entryMode === 'all' && components.length > 0 ? (
               <div className="flex items-center gap-2">
                 {components.slice(0,2).map(c => (
@@ -1613,7 +1686,7 @@ export default function TeacherGrades(){
                   </tr>
                 </thead>
                 <tbody>
-                  {students.map((st, idx) => (
+                  {sortedStudents.map((st, idx) => (
                     <tr key={st.id} className={idx%2? 'bg-white' : 'bg-gray-50/50'}>
                       <td className="px-2 py-2">
                         <div className="flex items-center gap-2 min-w-0">
@@ -1645,7 +1718,7 @@ export default function TeacherGrades(){
             </div>
           ) : (
             <div className="space-y-2">
-              {students.map(st => (
+              {sortedStudents.map(st => (
                 <div key={st.id} className="flex items-center justify-between gap-3 px-3 py-2 border rounded-xl bg-white shadow-sm">
                   <div className="flex items-center gap-2 min-w-0">
                     <div className="min-w-0">
@@ -1691,7 +1764,7 @@ export default function TeacherGrades(){
               </tr>
             </thead>
             <tbody>
-              {students.map((st, idx) => (
+              {sortedStudents.map((st, idx) => (
                 <tr key={st.id} className={`border-t ${idx%2===0? 'bg-white':'bg-gray-50'}`}>
                   <td className="py-2">{st.name}</td>
                   <td className="py-2">{st.admission_no}</td>
@@ -1752,18 +1825,18 @@ export default function TeacherGrades(){
 
       {/* Sticky mobile save bar */}
       <div className="md:hidden fixed inset-x-0 bottom-14 z-40">
-        <div className="mx-auto max-w-4xl px-4 pb-2">
-          <div className="rounded-2xl bg-white shadow-xl border border-gray-200 p-3 flex items-center justify-between">
-            <div className="text-xs text-gray-600">Total Students: <span className="font-medium text-gray-800">{students.length}</span></div>
-            <div className="flex gap-2">
-              <button onClick={()=>navigate(`/teacher/admin/enter/${selectedExamId}?readonly=1&klass=${encodeURIComponent(selectedClass||'')}`)} disabled={!selectedExamId} className="px-4 py-2 rounded-lg text-indigo-700 bg-white border border-indigo-200 disabled:opacity-60 shadow-soft">Preview</button>
-              <button onClick={submit} disabled={saving || !canSubmit} className="px-4 py-2 rounded-lg text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 shadow-soft">{saving ? 'Saving...' : 'Save Grades'}</button>
+        <div className="mx-auto max-w-4xl px-3 pb-1.5">
+          <div className="rounded-xl bg-white shadow-lg border border-gray-200 p-2 flex items-center justify-between">
+            <div className="text-[11px] text-gray-600">Total Students: <span className="font-medium text-gray-800">{students.length}</span></div>
+            <div className="flex gap-1.5">
+              <button onClick={()=>navigate(`/teacher/admin/enter/${selectedExamId}?readonly=1&klass=${encodeURIComponent(selectedClass||'')}`)} disabled={!selectedExamId} className="px-3 py-1.5 rounded-md text-indigo-700 bg-white border border-indigo-200 disabled:opacity-60 shadow-soft text-[12px]">Preview</button>
+              <button onClick={submit} disabled={saving || !canSubmit} className="px-3 py-1.5 rounded-md text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 shadow-soft text-[12px]">{saving ? 'Saving...' : 'Save Grades'}</button>
             </div>
           </div>
         </div>
       </div>
       {/* Spacer so the fixed bar doesn't cover content */}
-      <div className="h-28 md:hidden" aria-hidden="true" />
+      <div className="h-20 md:hidden" aria-hidden="true" />
 
       {/* Input Unit Modal */}
       <Modal open={unitModal} onClose={()=>setUnitModal(false)} title="Choose Input Unit" size="sm">

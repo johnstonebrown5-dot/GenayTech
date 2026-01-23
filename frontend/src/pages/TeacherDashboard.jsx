@@ -204,22 +204,36 @@ function DutiesPanel({ duties=[], onChanged }){
     setNextClass(best)
   }, [me, plan, template, periods, blockAssignments, classes])
 
-  // Live countdown updater (1s for accuracy)
+  // Live countdown updater (1s for accuracy) + haptic buzz at start
+  const [buzzed, setBuzzed] = useState(false)
   useEffect(()=>{
-    if (!nextClass?.start){ setCountdown(''); return }
+    if (!nextClass?.start){ setCountdown(''); setBuzzed(false); return }
+    setBuzzed(false)
     const tick = ()=>{
       const now = new Date()
-      const diff = Math.max(0, nextClass.start - now)
+      const diffRaw = nextClass.start - now
+      const diff = Math.max(0, diffRaw)
       const mins = Math.floor(diff/60000)
       const secs = Math.floor((diff%60000)/1000)
       const hrs = Math.floor(mins/60)
       const remMin = mins%60
       const label = hrs>0 ? `${hrs}h ${remMin}m` : `${remMin}m ${secs.toString().padStart(2,'0')}s`
       setCountdown(label)
+      // Trigger a one-time buzz when we cross the start time
+      if (diffRaw <= 0 && !buzzed){
+        try{
+          if (typeof window !== 'undefined' && navigator && typeof navigator.vibrate === 'function'){
+            // Vibrate ~5 seconds (pattern to improve compatibility)
+            navigator.vibrate([300,100,300,100,300,100,300,100,300,100,300,100,300,100,300])
+            setTimeout(()=>{ try{ navigator.vibrate(0) }catch{} }, 5200)
+          }
+        }catch{}
+        setBuzzed(true)
+      }
     }
     tick()
     const id = setInterval(tick, 1000)
-    return ()=> clearInterval(id)
+    return ()=> { clearInterval(id); try{ if (navigator?.vibrate) navigator.vibrate(0) }catch{} }
   }, [nextClass?.start])
 
   return (
@@ -247,22 +261,9 @@ function DutiesPanel({ duties=[], onChanged }){
         </div>
       </div>
 
-      {/* Summary cards */}
-      {/* Mobile: horizontal snap scroller */}
-      <div className="sm:hidden -mx-2 px-2">
-        <div ref={sliderRef} className="flex gap-3 overflow-x-auto snap-x snap-mandatory pb-1 no-scrollbar scroll-smooth">
-          <DashCard title="Classes" value={classes.length} icon="📚" to="/teacher/classes" accent="from-indigo-500 to-indigo-600"/>
-          <DashCard title="Attendance" value="Mark" icon="🗓️" to="/teacher/attendance" accent="from-emerald-500 to-emerald-600"/>
-          <DashCard title="Lesson Plans" value="Create" icon="🧭" to="/teacher/lessons" accent="from-fuchsia-500 to-pink-600"/>
-          <DashCard title="Grades" value="Input" icon="📝" to="/teacher/grades" accent="from-amber-500 to-orange-600"/>
-        </div>
-      </div>
-      {/* Desktop/tablet: grid */}
-      <div className="hidden sm:grid gap-3 sm:gap-4 grid-cols-2 md:grid-cols-4 items-stretch">
+      {/* Summary: single full-width Classes card on all screen sizes */}
+      <div className="w-full">
         <DashCard title="Classes" value={classes.length} icon="📚" to="/teacher/classes" accent="from-indigo-500 to-indigo-600"/>
-        <DashCard title="Attendance" value="Mark" icon="🗓️" to="/teacher/attendance" accent="from-emerald-500 to-emerald-600"/>
-        <DashCard title="Lesson Plans" value="Create" icon="🧭" to="/teacher/lessons" accent="from-fuchsia-500 to-pink-600"/>
-        <DashCard title="Grades" value="Input" icon="📝" to="/teacher/grades" accent="from-amber-500 to-orange-600"/>
       </div>
 
       {/* Next class + Today's tasks */}
