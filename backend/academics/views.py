@@ -1826,15 +1826,10 @@ class ExamViewSet(viewsets.ModelViewSet):
                 # Also track weighted accumulator per subject: sum(marks) and sum(denominators)
                 'subject_pct_acc': {},
             })
-            # Aggregate per subject: sum component marks under the same subject
-            sid = str(r.subject_id)
-            prev = entry['marks'].get(sid, 0.0)
-            entry['marks'][sid] = prev + mval
-            entry['total'] += mval
-            entry['count'] += 1
             # Compute component percentage part
             # Determine denominator: prefer explicit out_of saved with the result,
             # then component.max_marks, then exam.total_marks, else 100
+            sid = str(r.subject_id)
             denom = None
             try:
                 if getattr(r, 'out_of', None):
@@ -1854,14 +1849,21 @@ class ExamViewSet(viewsets.ModelViewSet):
                 # Backward-compat: older rows may have stored percent-like marks (0..100) even when denom is smaller
                 if mval <= 100.0 and mval > denom:
                     part_pct = mval
+                    norm_marks = (mval / 100.0) * denom
                 else:
                     part_pct = (mval / denom) * 100.0
+                    norm_marks = mval
                 parts = entry['subject_percent_parts'].setdefault(sid, [])
                 parts.append(part_pct)
                 # Weighted accumulator for precise subject percentage across components
                 acc = entry['subject_pct_acc'].setdefault(sid, {'num': 0.0, 'den': 0.0})
-                acc['num'] += mval
+                acc['num'] += norm_marks
                 acc['den'] += denom
+                # Aggregate per subject: sum component marks under the same subject
+                prev = entry['marks'].get(sid, 0.0)
+                entry['marks'][sid] = prev + norm_marks
+                entry['total'] += norm_marks
+                entry['count'] += 1
         students = []
         for sid, e in students_map.items():
             # Build subject percentage map by averaging component percentages for that subject

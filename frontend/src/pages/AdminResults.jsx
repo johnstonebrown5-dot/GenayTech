@@ -39,7 +39,7 @@ export default function AdminResults(){
 
       win.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${title}</title>
         <style>
-          @page { size: A4 portrait; margin: 12mm; }
+          @page { size: landscape; margin: 10mm; }
           :root{
             --text:#111827;
             --muted:#6b7280;
@@ -56,31 +56,31 @@ export default function AdminResults(){
           .print-wrap{ padding: 0; }
           .print-header{
             text-align: center;
-            padding: 10px 0 12px;
+            padding: 6px 0 8px;
             border-bottom: 1px solid var(--border);
           }
           .print-header__logo{
-            width: 64px;
-            height: 64px;
+            width: 44px;
+            height: 44px;
             object-fit: contain;
             display: block;
-            margin: 0 auto 6px;
+            margin: 0 auto 4px;
           }
           .print-header__name{
-            font-size: 18px;
+            font-size: 15px;
             font-weight: 800;
             letter-spacing: 0.4px;
             margin: 0;
           }
           .print-header__motto{
-            font-size: 12px;
+            font-size: 10px;
             color: var(--muted);
             margin-top: 4px;
           }
           .print-title{
             text-align:center;
-            font-size: 13px;
-            margin: 10px 0 12px;
+            font-size: 11px;
+            margin: 6px 0 8px;
             color: var(--text);
             font-weight: 600;
           }
@@ -88,36 +88,75 @@ export default function AdminResults(){
             display:flex;
             justify-content: space-between;
             gap: 12px;
-            font-size: 11px;
+            font-size: 10px;
             color: var(--muted);
-            margin: 0 0 10px;
+            margin: 0 0 6px;
           }
 
-          table{
+          table.print-table{
             width: 100%;
             border-collapse: separate;
             border-spacing: 0;
-            font-size: 11px;
+            font-size: 9.5px;
+            table-layout: fixed;
             border: 1px solid var(--border);
             border-radius: 10px;
             overflow: hidden;
           }
-          thead th{
+          table.print-table thead th{
             background: var(--head);
             color: #111827;
             font-weight: 700;
             text-transform: uppercase;
             letter-spacing: 0.35px;
-            font-size: 10px;
+            font-size: 9px;
           }
-          th, td{
-            padding: 8px 10px;
+          table.print-table th,
+          table.print-table td{
+            padding: 4px 6px;
             border-bottom: 1px solid var(--border);
             vertical-align: top;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
           }
-          tbody tr:nth-child(even) td{ background: var(--stripe); }
-          tbody tr:last-child td{ border-bottom: 0; }
-          td{ color: #111827; }
+          table.print-table th:not(:last-child),
+          table.print-table td:not(:last-child){ border-right: 1px solid var(--border); }
+          table.print-table tbody tr:nth-child(even) td{ background: var(--stripe); }
+          table.print-table tbody tr:last-child td{ border-bottom: 0; }
+          table.print-table td{ color: #111827; }
+
+          /* Full list column sizing: # | Student | Class | [subjects...] | Total | Grade */
+          table.print-table--full thead th:nth-child(1),
+          table.print-table--full tbody td:nth-child(1){ width: 28px; text-align: right; }
+          table.print-table--full thead th:nth-child(2),
+          table.print-table--full tbody td:nth-child(2){ width: 170px; }
+          table.print-table--full thead th:nth-child(3),
+          table.print-table--full tbody td:nth-child(3){ width: 90px; }
+          table.print-table--full thead th:nth-last-child(2),
+          table.print-table--full tbody td:nth-last-child(2){ width: 52px; text-align: right; }
+          table.print-table--full thead th:nth-last-child(1),
+          table.print-table--full tbody td:nth-last-child(1){ width: 46px; text-align: center; }
+          table.print-table--full thead th:nth-child(n+4):not(:nth-last-child(-n+2)),
+          table.print-table--full tbody td:nth-child(n+4):not(:nth-last-child(-n+2)){
+            width: 34px;
+            text-align: center;
+          }
+
+          /* Class results column sizing: Pos | Student | [subjects...] | Total | Grade */
+          table.print-table--class thead th:nth-child(1),
+          table.print-table--class tbody td:nth-child(1){ width: 34px; text-align: right; }
+          table.print-table--class thead th:nth-child(2),
+          table.print-table--class tbody td:nth-child(2){ width: 200px; }
+          table.print-table--class thead th:nth-last-child(2),
+          table.print-table--class tbody td:nth-last-child(2){ width: 56px; text-align: right; }
+          table.print-table--class thead th:nth-last-child(1),
+          table.print-table--class tbody td:nth-last-child(1){ width: 46px; text-align: center; }
+          table.print-table--class thead th:nth-child(n+3):not(:nth-last-child(-n+2)),
+          table.print-table--class tbody td:nth-child(n+3):not(:nth-last-child(-n+2)){
+            width: 34px;
+            text-align: center;
+          }
 
           @media print {
             .no-print{ display: none !important; }
@@ -170,7 +209,9 @@ export default function AdminResults(){
     try{
       const table = fullListTableRef.current
       if (!table) return
-      const html = table.outerHTML
+      const clone = table.cloneNode(true)
+      try{ clone.className = `${clone.className || ''} print-table print-table--full`.trim() }catch{}
+      const html = clone.outerHTML
       const title = `Full Grade List${grade ? ` — ${grade}` : ''}`
       openPrintWindow({ title, metaLeftHtml: grade ? `Grade: <b>${grade}</b>` : '', contentHtml: html })
     }catch{}
@@ -180,7 +221,9 @@ export default function AdminResults(){
     try{
       const table = classResultsTableRef.current
       if (!table) return
-      const html = table.outerHTML
+      const clone = table.cloneNode(true)
+      try{ clone.className = `${clone.className || ''} print-table print-table--class`.trim() }catch{}
+      const html = clone.outerHTML
       const ex = (Array.isArray(exams) ? exams : []).find(e => String(e.id) === String(selectedExam))
       const examLabel = ex ? `${ex.name || 'Exam'} • ${ex.year || ''} • T${ex.term || ''} • ${classNameById(ex.klass)}` : 'Class Results'
       const title = `Class Results${examLabel ? ` — ${examLabel}` : ''}`
