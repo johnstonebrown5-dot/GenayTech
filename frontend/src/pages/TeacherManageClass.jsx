@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import api from '../api'
 import { useAuth } from '../auth'
+import AdminClassPrintReportCards from './AdminClassPrintReportCards'
 
 export default function TeacherManageClass(){
   const { user } = useAuth()
@@ -67,12 +68,8 @@ export default function TeacherManageClass(){
 
 function TeacherClassReportCardsPanel({ classId }){
   return (
-    <div className="rounded-none sm:rounded-xl border-t border-b sm:border border-gray-200 bg-white p-4 shadow w-full">
-      <div className="font-medium mb-2">Print report cards for the whole class</div>
-      <div className="text-sm text-gray-600 mb-3">Select the exam on the next page, then print.</div>
-      <div className="flex items-center gap-2">
-        <Link to={`/teacher/classes/${classId}/print-report-cards`} className="px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700" target="_blank" rel="noreferrer">Open Print View</Link>
-      </div>
+    <div className="rounded-none sm:rounded-xl border-t border-b sm:border border-gray-200 bg-white p-0 shadow w-full">
+      <AdminClassPrintReportCards classIdProp={classId} embedded={true} />
     </div>
   )
 }

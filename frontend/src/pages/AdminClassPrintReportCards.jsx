@@ -2,8 +2,10 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { useParams, Link, useSearchParams, useLocation } from 'react-router-dom'
 import api from '../api'
 
-export default function AdminClassPrintReportCards(){
-  const { id } = useParams()
+export default function AdminClassPrintReportCards({ classIdProp = null, embedded = false }){
+  const params = useParams()
+  const { id: routeId } = params || {}
+  const id = String(classIdProp ?? routeId ?? '')
   const location = useLocation()
   const [searchParams, setSearchParams] = useSearchParams()
   const [klass, setKlass] = useState(null)
@@ -81,12 +83,12 @@ export default function AdminClassPrintReportCards(){
   useEffect(()=>{
     const exId = recentExam?.id
     const curr = searchParams.get('exam')
-    if (exId && String(curr)!==String(exId)){
+    if (!embedded && exId && String(curr)!==String(exId)){
       const sp = new URLSearchParams(searchParams)
       sp.set('exam', String(exId))
       setSearchParams(sp, { replace: true })
     }
-  }, [recentExam])
+  }, [recentExam, embedded])
 
   // When we have an exam and students, fetch rank data from backend per student
   useEffect(()=>{
@@ -248,7 +250,7 @@ export default function AdminClassPrintReportCards(){
                 <button type="button" onClick={()=>setLayout('summary')} className={`px-2 py-1 text-sm ${layout==='summary'?'bg-gray-800 text-white':'bg-white'}`}>Summary</button>
               </div>
             </div>
-            <Link to={backTo} className="px-3 py-1.5 rounded border hover:bg-gray-50">Back</Link>
+            {!embedded && (<Link to={backTo} className="px-3 py-1.5 rounded border hover:bg-gray-50">Back</Link>)}
             <button onClick={handlePrint} className="px-3 py-1.5 rounded bg-indigo-600 text-white hover:bg-indigo-700">Print</button>
           </div>
         </div>

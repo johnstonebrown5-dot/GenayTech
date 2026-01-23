@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { useParams, useNavigate, Link, useSearchParams } from 'react-router-dom'
 import Modal from '../components/Modal'
 import api from '../api'
+import AdminClassPrintReportCards from './AdminClassPrintReportCards'
 
 export default function AdminClassProfile(){
   const { id } = useParams()
@@ -760,7 +761,7 @@ export default function AdminClassProfile(){
           <div className="flex items-center gap-2">
             <button onClick={() => navigate(-1)} className="px-3 py-1.5 rounded bg-gray-100 text-gray-800 hover:bg-gray-200">Back</button>
             <Link to="/admin/classes" className="px-3 py-1.5 rounded bg-blue-100 text-blue-700 hover:bg-blue-200">All Classes</Link>
-            <Link to={`/admin/classes/${id}/print-report-cards`} className="px-3 py-1.5 rounded bg-indigo-600 text-white hover:bg-indigo-700">Print Report Cards</Link>
+            <button onClick={() => setActiveTab('reportcards')} className="px-3 py-1.5 rounded bg-indigo-600 text-white hover:bg-indigo-700">Print Report Cards</button>
           </div>
         </div>
 
@@ -1365,12 +1366,8 @@ export default function AdminClassProfile(){
                 )}
 
                 {activeTab === 'reportcards' && (
-                  <div className="space-y-3 max-w-3xl">
-                    <div className="text-sm text-gray-600">Print report cards for this class for a selected exam.</div>
-                    <div className="flex items-center gap-2">
-                      <Link to={`/admin/classes/${id}/print-report-cards`} className="px-4 py-2 rounded bg-indigo-600 text-white hover:bg-indigo-700" target="_blank" rel="noreferrer">Open Print View</Link>
-                    </div>
-                    <div className="text-xs text-gray-500">You can select the exam inside the print view before printing.</div>
+                  <div className="rounded-none sm:rounded-xl border-t border-b sm:border border-gray-200 bg-white p-0 shadow">
+                    <AdminClassPrintReportCards classIdProp={id} embedded={true} />
                   </div>
                 )}
               </>
