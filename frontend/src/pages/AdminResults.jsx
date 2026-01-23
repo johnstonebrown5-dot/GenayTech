@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import api from '../api'
+import api, { toAbsoluteUrl } from '../api'
 
 export default function AdminResults(){
   const [params, setParams] = useSearchParams()
@@ -18,32 +18,192 @@ export default function AdminResults(){
   const [err, setErr] = useState('')
   const [fullListSearch, setFullListSearch] = useState('')
   const [tab, setTab] = useState('class') // class | compare | block | full
+  const classResultsTableRef = useRef(null)
   const fullListTableRef = useRef(null)
   const [bandsBySubject, setBandsBySubject] = useState(new Map()) // subjectId -> bands[]
   const [globalBands, setGlobalBands] = useState(null) // bands[] to compute overall Grade
+  const [school, setSchool] = useState(null)
+
+  const openPrintWindow = ({ title, metaLeftHtml = '' , contentHtml }) => {
+    try{
+      const schoolName = String(school?.name || '').trim()
+      const schoolMotto = String(school?.motto || '').trim()
+      const rawLogo = String(school?.logo_url || school?.logo || '').trim()
+      const logoSrc = rawLogo ? toAbsoluteUrl(rawLogo) : ''
+
+      const now = new Date()
+      const metaRight = `Printed: ${now.toLocaleDateString()} ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+
+      const win = window.open('', '_blank', 'width=1200,height=800')
+      if (!win) return
+
+      win.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${title}</title>
+        <style>
+          @page { size: A4 portrait; margin: 12mm; }
+          :root{
+            --text:#111827;
+            --muted:#6b7280;
+            --border:#e5e7eb;
+            --head:#f8fafc;
+            --stripe:#fafafa;
+          }
+          html, body { height: 100%; }
+          body{
+            font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+            color: var(--text);
+            margin: 0;
+          }
+          .print-wrap{ padding: 0; }
+          .print-header{
+            text-align: center;
+            padding: 10px 0 12px;
+            border-bottom: 1px solid var(--border);
+          }
+          .print-header__logo{
+            width: 64px;
+            height: 64px;
+            object-fit: contain;
+            display: block;
+            margin: 0 auto 6px;
+          }
+          .print-header__name{
+            font-size: 18px;
+            font-weight: 800;
+            letter-spacing: 0.4px;
+            margin: 0;
+          }
+          .print-header__motto{
+            font-size: 12px;
+            color: var(--muted);
+            margin-top: 4px;
+          }
+          .print-title{
+            text-align:center;
+            font-size: 13px;
+            margin: 10px 0 12px;
+            color: var(--text);
+            font-weight: 600;
+          }
+          .meta{
+            display:flex;
+            justify-content: space-between;
+            gap: 12px;
+            font-size: 11px;
+            color: var(--muted);
+            margin: 0 0 10px;
+          }
+
+          table{
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+            font-size: 11px;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            overflow: hidden;
+          }
+          thead th{
+            background: var(--head);
+            color: #111827;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.35px;
+            font-size: 10px;
+          }
+          th, td{
+            padding: 8px 10px;
+            border-bottom: 1px solid var(--border);
+            vertical-align: top;
+          }
+          tbody tr:nth-child(even) td{ background: var(--stripe); }
+          tbody tr:last-child td{ border-bottom: 0; }
+          td{ color: #111827; }
+
+          @media print {
+            .no-print{ display: none !important; }
+            thead { display: table-header-group; }
+            tfoot { display: table-footer-group; }
+            tr { break-inside: avoid; page-break-inside: avoid; }
+          }
+        </style>
+      </head><body>
+        <div class="print-wrap">
+          <div class="print-header">
+            ${logoSrc ? `<img class="print-header__logo" src="${logoSrc}" alt="School Logo" />` : ''}
+            ${schoolName ? `<h1 class="print-header__name">${schoolName}</h1>` : ''}
+            ${schoolMotto ? `<div class="print-header__motto">${schoolMotto}</div>` : ''}
+          </div>
+          <div class="print-title">${title}</div>
+          <div class="meta">
+            <div>${metaLeftHtml || ''}</div>
+            <div>${metaRight}</div>
+          </div>
+          ${contentHtml}
+        </div>
+        <script>
+          (function(){
+            function waitForImages(){
+              var imgs = Array.prototype.slice.call(document.images || []);
+              if (!imgs.length) return Promise.resolve();
+              return Promise.all(imgs.map(function(img){
+                if (img.complete) return Promise.resolve();
+                return new Promise(function(res){
+                  img.onload = img.onerror = function(){ res(); };
+                });
+              }));
+            }
+            window.onload = function(){
+              waitForImages().then(function(){
+                window.focus();
+                window.print();
+                setTimeout(function(){ try{ window.close(); }catch(e){} }, 300);
+              });
+            };
+          })();
+        <\/script>
+      </body></html>`)
+      win.document.close()
+    }catch{}
+  }
 
   const printFullList = () => {
     try{
       const table = fullListTableRef.current
       if (!table) return
       const html = table.outerHTML
-      const win = window.open('', '_blank', 'width=1200,height=800')
-      if (!win) return
-      win.document.write(`<!doctype html><html><head><title>Full Grade List</title>
-        <style>
-          body{ font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; padding:16px; }
-          table{ border-collapse: collapse; width: 100%; font-size: 12px; }
-          th, td{ border: 1px solid #ddd; padding: 6px; text-align: left; }
-          th{ background:#f3f4f6; }
-        </style>
-      </head><body>
-        <h2>Full Grade List</h2>
-        ${html}
-        <script>window.onload = function(){ window.print(); setTimeout(()=>window.close(), 300); }<\/script>
-      </body></html>`)
-      win.document.close()
+      const title = `Full Grade List${grade ? ` — ${grade}` : ''}`
+      openPrintWindow({ title, metaLeftHtml: grade ? `Grade: <b>${grade}</b>` : '', contentHtml: html })
     }catch{}
   }
+
+  const printClassResults = () => {
+    try{
+      const table = classResultsTableRef.current
+      if (!table) return
+      const html = table.outerHTML
+      const ex = (Array.isArray(exams) ? exams : []).find(e => String(e.id) === String(selectedExam))
+      const examLabel = ex ? `${ex.name || 'Exam'} • ${ex.year || ''} • T${ex.term || ''} • ${classNameById(ex.klass)}` : 'Class Results'
+      const title = `Class Results${examLabel ? ` — ${examLabel}` : ''}`
+      const metaLeft = grade ? `Grade: <b>${grade}</b>` : ''
+      openPrintWindow({ title, metaLeftHtml: metaLeft, contentHtml: html })
+    }catch{}
+  }
+
+  useEffect(() => {
+    let active = true
+    ;(async () => {
+      try{
+        const sch = await api.get('/auth/school/info/')
+        if (active) setSchool(sch?.data || null)
+        return
+      }catch{}
+      try{
+        const sch = await api.get('/auth/school/me/')
+        if (active) setSchool(sch?.data || null)
+      }catch{}
+    })()
+    return () => { active = false }
+  }, [])
 
   // Load all classes for dropdowns
   useEffect(() => {
@@ -323,6 +483,7 @@ export default function AdminResults(){
             total: Math.round(sumPct),
             average: avgPct,
             marks: st.marks || {},
+            subject_percentages: st.subject_percentages || {},
           })
         }
       }
@@ -361,6 +522,57 @@ export default function AdminResults(){
   }
 
   const toGrade = (avg) => letterFromBands(avg, globalBands)
+
+  const formatMean = (value) => {
+    const v = Number(value)
+    if (!Number.isFinite(v)) return '-'
+    const r = Math.round(v * 100) / 100
+    return Number.isInteger(r) ? String(r) : r.toFixed(2)
+  }
+
+  const blockSubjectMeanPct = useMemo(() => {
+    try{
+      const subjects = Array.isArray(blockResults?.subjects) ? blockResults.subjects : []
+      const students = Array.isArray(blockResults?.students) ? blockResults.students : []
+      if (!subjects.length || !students.length) return new Map()
+      const out = new Map()
+      for (const s of subjects){
+        let sum = 0
+        let cnt = 0
+        for (const st of students){
+          const pct = Number(st?.subject_percentages?.[String(s.id)])
+          if (Number.isFinite(pct)) { sum += pct; cnt += 1 }
+        }
+        out.set(String(s.id), cnt ? (sum / cnt) : null)
+      }
+      return out
+    }catch{
+      return new Map()
+    }
+  }, [blockResults])
+
+  const blockMean = useMemo(() => {
+    try{
+      const students = Array.isArray(blockResults?.students) ? blockResults.students : []
+      if (!students.length) return { meanTotal: null, meanAvg: null }
+      let sumTotal = 0
+      let cntTotal = 0
+      let sumAvg = 0
+      let cntAvg = 0
+      for (const s of students){
+        const t = Number(s?.total)
+        const a = Number(s?.average)
+        if (Number.isFinite(t)) { sumTotal += t; cntTotal += 1 }
+        if (Number.isFinite(a)) { sumAvg += a; cntAvg += 1 }
+      }
+      return {
+        meanTotal: cntTotal ? (sumTotal / cntTotal) : null,
+        meanAvg: cntAvg ? (sumAvg / cntAvg) : null,
+      }
+    }catch{
+      return { meanTotal: null, meanAvg: null }
+    }
+  }, [blockResults])
 
   // Fetch grading bands for subjects of the selected exam summary, choose first non-empty as global bands
   useEffect(() => {
@@ -446,6 +658,7 @@ export default function AdminResults(){
                 <>
                   <button onClick={()=>download(selectedExam,'csv')} className="px-3 py-1.5 rounded border text-sm">Download CSV</button>
                   <button onClick={()=>download(selectedExam,'pdf')} className="px-3 py-1.5 rounded border text-sm">Download PDF</button>
+                  <button onClick={printClassResults} className="px-3 py-1.5 rounded border text-sm">Print</button>
                 </>
               )}
             </div>
@@ -456,9 +669,9 @@ export default function AdminResults(){
           ) : loading ? (
             <div>Loading...</div>
           ) : summary ? (
-            <div className="overflow-auto">
-              <table className="min-w-full text-sm">
-                <thead>
+            <div className="overflow-auto rounded-xl border border-gray-200">
+              <table ref={classResultsTableRef} className="min-w-full text-sm">
+                <thead className="bg-gray-50 sticky top-0 z-10">
                   <tr>
                     <th className="border px-2 py-1 text-left">Position</th>
                     <th className="border px-2 py-1 text-left">Student</th>
@@ -469,9 +682,9 @@ export default function AdminResults(){
                     <th className="border px-2 py-1 text-left">Grade</th>
                   </tr>
                 </thead>
-                <tbody>
-                  {summary.students.map(st => (
-                    <tr key={st.id}>
+                <tbody className="divide-y divide-gray-100">
+                  {summary.students.map((st, idx) => (
+                    <tr key={st.id} className={idx % 2 ? 'bg-white' : 'bg-gray-50/50'}>
                       <td className="border px-2 py-1">{st.position}</td>
                       <td className="border px-2 py-1">{st.name}</td>
                       {summary.subjects.map(s => {
@@ -532,9 +745,9 @@ export default function AdminResults(){
           ) : (!blockResults || !blockResults.students || blockResults.students.length===0) ? (
             <div className="text-sm text-gray-600">No data.</div>
           ) : (
-            <div className="overflow-auto">
+            <div className="overflow-auto rounded-xl border border-gray-200">
               <table ref={fullListTableRef} className="min-w-full text-sm">
-                <thead>
+                <thead className="bg-gray-50 sticky top-0 z-10">
                   <tr>
                     <th className="border px-2 py-1 text-left">#</th>
                     <th className="border px-2 py-1 text-left">Student</th>
@@ -546,7 +759,7 @@ export default function AdminResults(){
                     <th className="border px-2 py-1 text-left">Grade</th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="divide-y divide-gray-100">
                   {blockResults.students
                     .filter(r => {
                       const q = fullListSearch.trim().toLowerCase()
@@ -554,13 +767,13 @@ export default function AdminResults(){
                       return String(r.name||'').toLowerCase().includes(q) || String(r.klass||'').toLowerCase().includes(q)
                     })
                     .map((r, idx) => (
-                      <tr key={`${r.student_id}-${idx}`}>
+                      <tr key={`${r.student_id}-${idx}`} className={idx % 2 ? 'bg-white' : 'bg-gray-50/50'}>
                         <td className="border px-2 py-1">{idx+1}</td>
                         <td className="border px-2 py-1">{r.name}</td>
                         <td className="border px-2 py-1">{r.klass}</td>
                         {Array.isArray(blockResults.subjects) && blockResults.subjects.map(s => {
-                          const raw = r.marks?.[String(s.id)]
-                          const val = Number.isFinite(Number(raw)) ? Number(raw) : 0
+                          const rawPct = r?.subject_percentages?.[String(s.id)]
+                          const val = Number.isFinite(Number(rawPct)) ? Math.round(Number(rawPct)) : '-'
                           return <td key={s.id} className="border px-2 py-1">{val}</td>
                         })}
                         <td className="border px-2 py-1">{r.total}</td>
@@ -568,6 +781,19 @@ export default function AdminResults(){
                       </tr>
                     ))}
                 </tbody>
+                <tfoot>
+                  <tr className="bg-gray-50">
+                    <td className="border px-2 py-1 font-medium" colSpan={3}>Mean</td>
+                    {Array.isArray(blockResults.subjects) && blockResults.subjects.map(s => {
+                      const m = blockSubjectMeanPct.get(String(s.id))
+                      return (
+                        <td key={`mean-${s.id}`} className="border px-2 py-1 font-medium">{formatMean(m)}</td>
+                      )
+                    })}
+                    <td className="border px-2 py-1 font-medium">{formatMean(blockMean.meanTotal)}</td>
+                    <td className="border px-2 py-1">{toGrade(blockMean.meanAvg)}</td>
+                  </tr>
+                </tfoot>
               </table>
             </div>
           )}
