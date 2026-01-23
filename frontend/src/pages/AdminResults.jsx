@@ -62,7 +62,16 @@ export default function AdminResults(){
         }
         return out
       }
-      const list = await fetchAll('/academics/classes/')
+      let list = []
+      try {
+        list = await fetchAll('/academics/classes/')
+      } catch {
+        try {
+          list = await fetchAll('/academics/classes/mine/')
+        } catch {
+          list = []
+        }
+      }
       setClasses(Array.isArray(list) ? list : [])
     })()
   }, [])
@@ -85,22 +94,52 @@ export default function AdminResults(){
         }
         return out
       }
-      const all = await fetchAll(`/academics/exams/?include_history=true`)
-      // Filter by selected grade using local classes reference
+      let all = []
+      try {
+        // Prefer server-side grade filtering (authoritative and avoids relying on classes list)
+        const g = encodeURIComponent(String(grade || '').trim())
+        all = await fetchAll(`/academics/exams/?include_history=true&grade=${g}`)
+      } catch {
+        try {
+          const g = encodeURIComponent(String(grade || '').trim())
+          all = await fetchAll(`/academics/exams/?grade=${g}`)
+        } catch {
+          try {
+            all = await fetchAll('/academics/exams/?include_history=true')
+          } catch {
+            try {
+              all = await fetchAll('/academics/exams/')
+            } catch {
+              all = []
+            }
+          }
+        }
+      }
+
+      // Fallback client-side filtering if the backend didn't filter (or returned mixed results)
       const normalizeGrade = (g)=>{
         const s = String(g||'').trim()
         const m = s.match(/\d+/)
         if (m) return m[0]
         return s.toLowerCase()
       }
-      const classById = new Map(classes.map(c => [String(c.id), c]))
-      const inGrade = (Array.isArray(all) ? all : []).filter(e => {
+      const classById = new Map((classes || []).map(c => [String(c.id), c]))
+      const allArr = Array.isArray(all) ? all : []
+      const hasOnlyGrade = allArr.length > 0 && allArr.every(e => {
+        const tag = String(e?.grade_level_tag || '').trim()
+        return !tag || normalizeGrade(tag) === normalizeGrade(grade)
+      })
+      const inGrade = hasOnlyGrade ? allArr : allArr.filter(e => {
+        const tag = String(e?.grade_level_tag || '').trim()
+        if (tag) return normalizeGrade(tag) === normalizeGrade(grade)
         const cid = String(e?.klass ?? e?.class ?? e?.klass_id ?? e?.class_id ?? '')
         const cls = classById.get(cid)
         return cls && normalizeGrade(cls.grade_level) === normalizeGrade(grade)
       })
+
       // Only allow selection of exams that are published (done & visible)
-      const published = inGrade.filter(e => !!(e.published || e.is_published || String(e.status||'').toLowerCase()==='published'))
+      const isPublished = (e) => !!(e?.published || e?.is_published || String(e?.status||'').toLowerCase()==='published')
+      const published = inGrade.filter(isPublished)
       const list = (published.length > 0) ? published : inGrade
       setExams(list)
       // if selected exam not in published exams for grade, reset
@@ -244,7 +283,11 @@ export default function AdminResults(){
 
   useEffect(() => { loadCompare(compareIds) }, [compareIds])
 
-  const classNameById = (id) => classes.find(c=>c.id===id)?.name || id
+  const classNameById = (id) => {
+    const key = (typeof id === 'object' && id !== null) ? (id.id ?? id.pk ?? '') : id
+    const sid = String(key)
+    return classes.find(c=>String(c.id)===sid)?.name || key
+  }
 
   // Build combined grade cohort results for the active exam block
   const blockResults = useMemo(() => {

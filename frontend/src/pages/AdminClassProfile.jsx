@@ -99,7 +99,7 @@ export default function AdminClassProfile(){
   useEffect(() => {
     try{
       const t = (searchParams.get('tab') || '').toLowerCase()
-      if (['class','subjects','students','results','messages'].includes(t)) {
+      if (['class','subjects','students','results','messages','reportcards'].includes(t)) {
         setActiveTab(t)
       }
     }catch{}
@@ -774,6 +774,7 @@ export default function AdminClassProfile(){
                 { key: 'students', label: 'Students' },
                 { key: 'results', label: 'Results' },
                 { key: 'messages', label: 'Messages' },
+                { key: 'reportcards', label: 'Report Cards' },
               ].map(t => (
                 <button
                   key={t.key}
@@ -1360,6 +1361,16 @@ export default function AdminClassProfile(){
                         </div>
                       </div>
                     )}
+                  </div>
+                )}
+
+                {activeTab === 'reportcards' && (
+                  <div className="space-y-3 max-w-3xl">
+                    <div className="text-sm text-gray-600">Print report cards for this class for a selected exam.</div>
+                    <div className="flex items-center gap-2">
+                      <Link to={`/admin/classes/${id}/print-report-cards`} className="px-4 py-2 rounded bg-indigo-600 text-white hover:bg-indigo-700" target="_blank" rel="noreferrer">Open Print View</Link>
+                    </div>
+                    <div className="text-xs text-gray-500">You can select the exam inside the print view before printing.</div>
                   </div>
                 )}
               </>

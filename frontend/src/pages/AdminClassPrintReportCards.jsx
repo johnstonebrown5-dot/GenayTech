@@ -1,9 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { useParams, Link, useSearchParams } from 'react-router-dom'
+import { useParams, Link, useSearchParams, useLocation } from 'react-router-dom'
 import api from '../api'
 
 export default function AdminClassPrintReportCards(){
   const { id } = useParams()
+  const location = useLocation()
   const [searchParams, setSearchParams] = useSearchParams()
   const [klass, setKlass] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -159,6 +160,12 @@ export default function AdminClassPrintReportCards(){
     return `${klass?.name || 'Class'} — ${recentExam?.name || 'Exam'} Results`
   }, [klass?.name, recentExam?.name])
 
+  const backTo = useMemo(() => {
+    const p = String(location?.pathname || '')
+    if (p.startsWith('/teacher/')) return '/teacher/manage-class?tab=info'
+    return `/admin/classes/${id}`
+  }, [location?.pathname, id])
+
   const rankMap = useMemo(()=>{
     const arr = Array.isArray(summary.students) ? summary.students.slice() : []
     arr.sort((a,b)=> Number(b.total||0) - Number(a.total||0))
@@ -241,7 +248,7 @@ export default function AdminClassPrintReportCards(){
                 <button type="button" onClick={()=>setLayout('summary')} className={`px-2 py-1 text-sm ${layout==='summary'?'bg-gray-800 text-white':'bg-white'}`}>Summary</button>
               </div>
             </div>
-            <Link to={`/admin/classes/${id}`} className="px-3 py-1.5 rounded border hover:bg-gray-50">Back</Link>
+            <Link to={backTo} className="px-3 py-1.5 rounded border hover:bg-gray-50">Back</Link>
             <button onClick={handlePrint} className="px-3 py-1.5 rounded bg-indigo-600 text-white hover:bg-indigo-700">Print</button>
           </div>
         </div>

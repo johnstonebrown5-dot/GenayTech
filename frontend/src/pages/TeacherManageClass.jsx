@@ -54,11 +54,25 @@ export default function TeacherManageClass(){
         <TabButton active={tab==='add'} onClick={()=>setTab('add')}>Add Student</TabButton>
         <TabButton active={tab==='edit'} onClick={()=>setTab('edit')}>Edit Students</TabButton>
         <TabButton active={tab==='fees'} onClick={()=>setTab('fees')}>Send Fees Notifications</TabButton>
+        <TabButton active={tab==='reportcards'} onClick={()=>setTab('reportcards')}>Report Cards</TabButton>
       </div>
       {tab === 'info' && <ClassInfoPanel classId={myClass.id} initialInnerTab={initialInnerView} />}
       {tab === 'add' && <AddStudentPanel classId={myClass.id} />}
       {tab === 'edit' && <EditStudentsPanel classId={myClass.id} />}
       {tab === 'fees' && <FeesNotifyPanel classId={myClass.id} />}
+      {tab === 'reportcards' && <TeacherClassReportCardsPanel classId={myClass.id} />}
+    </div>
+  )
+}
+
+function TeacherClassReportCardsPanel({ classId }){
+  return (
+    <div className="rounded-none sm:rounded-xl border-t border-b sm:border border-gray-200 bg-white p-4 shadow w-full">
+      <div className="font-medium mb-2">Print report cards for the whole class</div>
+      <div className="text-sm text-gray-600 mb-3">Select the exam on the next page, then print.</div>
+      <div className="flex items-center gap-2">
+        <Link to={`/teacher/classes/${classId}/print-report-cards`} className="px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700" target="_blank" rel="noreferrer">Open Print View</Link>
+      </div>
     </div>
   )
 }

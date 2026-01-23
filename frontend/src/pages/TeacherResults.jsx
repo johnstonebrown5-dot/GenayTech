@@ -1,8 +1,13 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import api from '../api'
+import AdminResults from './AdminResults'
 
 export default function TeacherResults(){
+  return <AdminResults />
+}
+
+function TeacherResultsLegacy(){
   const navigate = useNavigate()
   const [classes, setClasses] = useState([])
   const [selectedClass, setSelectedClass] = useState('')

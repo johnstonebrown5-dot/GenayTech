@@ -50,26 +50,38 @@ export default function StudentAllReportCards(){
       <div class="print-container avoid-break fit-scale">${html}</div>
       <script>
         (function(){
+          var didPrint = false;
           function fitOnce(){
             try{
               var el = document.querySelector('.print-container');
               if(!el){ window.print(); return }
-              var avail = window.innerHeight ? (window.innerHeight - 6) : 1000; // small buffer
-              var h = el.getBoundingClientRect().height || el.scrollHeight;
-              if (h > 0 && avail > 0){
-                var scale = Math.min(1, avail / h);
+              // Fit to actual A4 printable area (not the browser viewport), otherwise the preview shrinks too much.
+              var marginMm = 4;
+              var pxPerMm = 96 / 25.4;
+              var availW = (210 - (marginMm * 2)) * pxPerMm;
+              var availH = (297 - (marginMm * 2)) * pxPerMm;
+              var rect = el.getBoundingClientRect();
+              var w = rect.width || el.scrollWidth;
+              var h = rect.height || el.scrollHeight;
+              if (w > 0 && h > 0 && availW > 0 && availH > 0){
+                // Fit width to A4; do NOT force-fit height to a single page (that makes preview tiny).
+                var scale = Math.min(1, availW / w);
                 el.style.transform = 'scale(' + scale + ')';
               }
             }catch(e){}
           }
           // Wait a tick for styles to apply, then print
-          setTimeout(function(){ fitOnce(); setTimeout(function(){ window.print() }, 60) }, 60);
+          setTimeout(function(){
+            if (didPrint) return;
+            fitOnce();
+            setTimeout(function(){ if (didPrint) return; didPrint = true; window.print(); }, 60);
+          }, 60);
         })();
       </script>
     </body></html>`
     win.document.open()
     win.document.write(doc)
-    try{ win.document.close(); win.focus(); win.print(); }catch{}
+    try{ win.document.close(); win.focus(); }catch{}
   }
 
   useEffect(()=>{

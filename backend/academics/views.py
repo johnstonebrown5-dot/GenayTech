@@ -2111,36 +2111,51 @@ class ExamViewSet(viewsets.ModelViewSet):
         - Others: denied.
         """
         user = request.user
+
+        # Fetch exam directly (do not rely on filtered get_queryset for teachers) then apply explicit access rules.
         try:
-            exam = self.get_object()
-            # Admins always allowed
-            if self._is_admin(request):
-                data = self._build_summary(exam)
-                data['exam'] = {'id': getattr(exam, 'id', None), 'name': getattr(exam, 'name', None), 'year': getattr(exam, 'year', None), 'term': getattr(exam, 'term', None), 'klass': getattr(exam, 'klass_id', None), 'total_marks': getattr(exam, 'total_marks', None)}
-                return Response(data)
-            # Teachers: allow if published or assigned to the class
+            exam = Exam.objects.select_related('klass').get(pk=pk)
+        except Exam.DoesNotExist:
+            return Response({'detail': 'Exam not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        # Enforce school scoping for non-admins
+        if not self._is_admin(request):
+            school = getattr(user, 'school', None)
+            if school and getattr(exam.klass, 'school_id', None) not in (None, getattr(school, 'id', None)):
+                return Response({'detail': 'Exam not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        # Admins always allowed
+        if self._is_admin(request):
+            data = self._build_summary(exam)
+            data['exam'] = {'id': getattr(exam, 'id', None), 'name': getattr(exam, 'name', None), 'year': getattr(exam, 'year', None), 'term': getattr(exam, 'term', None), 'klass': getattr(exam, 'klass_id', None), 'total_marks': getattr(exam, 'total_marks', None)}
+            return Response(data)
+
+        # Teachers: allow if published or assigned to the class
+        if getattr(user, 'role', None) == 'teacher':
+            is_class_teacher = getattr(exam.klass, 'teacher_id', None) == getattr(user, 'id', None)
+            is_subject_teacher = ClassSubjectTeacher.objects.filter(klass=exam.klass, teacher=user).exists()
+            is_published = bool(getattr(exam, 'published', False)) or str(getattr(exam, 'status', '')).lower() == 'published'
+            if not (is_published or is_class_teacher or is_subject_teacher):
+                return Response({'detail': 'You do not have permission to perform this action.'}, status=status.HTTP_403_FORBIDDEN)
+            data = self._build_summary(exam)
+            data['exam'] = {'id': getattr(exam, 'id', None), 'name': getattr(exam, 'name', None), 'year': getattr(exam, 'year', None), 'term': getattr(exam, 'term', None), 'klass': getattr(exam, 'klass_id', None), 'total_marks': getattr(exam, 'total_marks', None)}
+            return Response(data)
+
+        return Response({'detail': 'You do not have permission to perform this action.'}, status=status.HTTP_403_FORBIDDEN)
+
+    @action(detail=True, methods=['get'], permission_classes=[permissions.IsAuthenticated], url_path='summary-csv')
+    def summary_csv(self, request, pk=None):
+        exam = self.get_object()
+        user = request.user
+        if not self._is_admin(request):
             if getattr(user, 'role', None) == 'teacher':
                 is_class_teacher = getattr(exam.klass, 'teacher_id', None) == getattr(user, 'id', None)
                 is_subject_teacher = ClassSubjectTeacher.objects.filter(klass=exam.klass, teacher=user).exists()
                 is_published = bool(getattr(exam, 'published', False)) or str(getattr(exam, 'status', '')).lower() == 'published'
-                if is_published or is_class_teacher or is_subject_teacher:
-                    data = self._build_summary(exam)
-                    data['exam'] = {'id': getattr(exam, 'id', None), 'name': getattr(exam, 'name', None), 'year': getattr(exam, 'year', None), 'term': getattr(exam, 'term', None), 'klass': getattr(exam, 'klass_id', None), 'total_marks': getattr(exam, 'total_marks', None)}
-                    return Response(data)
+                if not (is_published or is_class_teacher or is_subject_teacher):
+                    return Response({'detail': 'You do not have permission to perform this action.'}, status=status.HTTP_403_FORBIDDEN)
+            else:
                 return Response({'detail': 'You do not have permission to perform this action.'}, status=status.HTTP_403_FORBIDDEN)
-            # Default deny
-            return Response({'detail': 'You do not have permission to perform this action.'}, status=status.HTTP_403_FORBIDDEN)
-        except Exception as e:
-            # Return a safe empty payload so the frontend can render a neutral state
-            try:
-                exam_info = {'id': getattr(exam, 'id', None), 'name': getattr(exam, 'name', None), 'year': getattr(exam, 'year', None), 'term': getattr(exam, 'term', None), 'klass': getattr(exam, 'klass_id', None)}
-            except Exception:
-                exam_info = None
-            return Response({'subjects': [], 'students': [], 'class_mean': 0, 'subject_means': [], 'subject_mean_percentages': [], 'exam': exam_info, 'error': 'summary_failed'}, status=status.HTTP_200_OK)
-
-    @action(detail=True, methods=['get'], permission_classes=[IsAdmin], url_path='summary-csv')
-    def summary_csv(self, request, pk=None):
-        exam = self.get_object()
         school = getattr(request.user, 'school', None)
         data = self._build_summary(exam)
         # Build CSV
@@ -2497,7 +2512,7 @@ class ExamViewSet(viewsets.ModelViewSet):
             try:
                 exam_local = Exam.objects.select_related('klass','klass__school').get(pk=exam_id)
                 # Import here to avoid hard deps if communications app changes
-                from communications.utils import send_sms, send_email_with_attachment, send_email_safe, create_messages_for_users
+                from communications.utils import send_email_with_attachment, send_email_safe, create_messages_for_users
 
                 # Gather results grouped by student
                 res = (
@@ -2637,12 +2652,6 @@ class ExamViewSet(viewsets.ModelViewSet):
                         parts.append(pos_text)
                     parts.append(f"Login: {dashboard_url}")
                     sms = f"{meta}. " + '. '.join(parts)
-                    try:
-                        phone = getattr(s, 'guardian_id', None)
-                        if phone:
-                            send_sms(phone, sms)
-                    except Exception:
-                        pass
 
                     # Collect for chat mirror and in-app notifications
                     if getattr(s, 'user_id', None):
@@ -2848,6 +2857,7 @@ class ExamViewSet(viewsets.ModelViewSet):
                             body=body,
                             recipient_user_ids=chat_user_ids,
                             system_tag='results',
+                            queue_delivery=False,
                         )
                 except Exception:
                     pass
@@ -2863,9 +2873,19 @@ class ExamViewSet(viewsets.ModelViewSet):
 
         return Response({'detail': 'Published', 'published_at': exam.published_at})
 
-    @action(detail=True, methods=['get'], permission_classes=[IsAdmin], url_path='summary-pdf')
+    @action(detail=True, methods=['get'], permission_classes=[permissions.IsAuthenticated], url_path='summary-pdf')
     def summary_pdf(self, request, pk=None):
         exam = self.get_object()
+        user = request.user
+        if not self._is_admin(request):
+            if getattr(user, 'role', None) == 'teacher':
+                is_class_teacher = getattr(exam.klass, 'teacher_id', None) == getattr(user, 'id', None)
+                is_subject_teacher = ClassSubjectTeacher.objects.filter(klass=exam.klass, teacher=user).exists()
+                is_published = bool(getattr(exam, 'published', False)) or str(getattr(exam, 'status', '')).lower() == 'published'
+                if not (is_published or is_class_teacher or is_subject_teacher):
+                    return Response({'detail': 'You do not have permission to perform this action.'}, status=status.HTTP_403_FORBIDDEN)
+            else:
+                return Response({'detail': 'You do not have permission to perform this action.'}, status=status.HTTP_403_FORBIDDEN)
         school = getattr(request.user, 'school', None)
         data = self._build_summary(exam)
         if not REPORTLAB_AVAILABLE:
