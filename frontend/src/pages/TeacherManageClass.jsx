@@ -44,7 +44,7 @@ export default function TeacherManageClass(){
   )
 
   return (
-    <div className="px-2 md:px-0">
+    <div className="px-0 md:px-0">
       <div className="mb-3">
         <h1 className="text-xl font-semibold text-slate-900">Manage My Class</h1>
         <div className="text-sm text-slate-600">{myClass?.name || 'Class'} · ID {myClass?.id}</div>
@@ -91,7 +91,7 @@ function AddStudentPanel({ classId }){
   }
 
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-4 shadow">
+    <div className="rounded-none sm:rounded-xl border-t border-b sm:border border-gray-200 bg-white p-4 shadow w-full">
       <div className="font-medium mb-3">Add a new student to this class</div>
       {error && <div className="mb-3 text-sm text-red-700 bg-red-50 border border-red-200 rounded p-2">{String(error)}</div>}
       {done && <div className="mb-3 text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded p-2">Student added. ID {done?.id}</div>}
@@ -140,7 +140,7 @@ function EditStudentsPanel({ classId }){
   })
 
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-4 shadow">
+    <div className="rounded-none sm:rounded-xl border-t border-b sm:border border-gray-200 bg-white p-4 shadow w-full">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-3">
         <div className="font-medium">Edit students (limited fields)</div>
         <div className="flex items-center gap-2">
@@ -307,7 +307,7 @@ function FeesNotifyPanel({ classId }){
   }
 
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-4 shadow">
+    <div className="rounded-none sm:rounded-xl border-t border-b sm:border border-gray-200 bg-white p-4 shadow w-full">
       <div className="font-medium mb-3">Send fees notifications to this class</div>
       {error && <div className="mb-3 text-sm text-red-700 bg-red-50 border border-red-200 rounded p-2">{String(error)}</div>}
       {result && (
@@ -632,7 +632,7 @@ function ClassInfoPanel({ classId, initialInnerTab }){
   }, [showCompare, compareClassId])
 
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-4 shadow">
+    <div className="rounded-none sm:rounded-xl border-t border-b sm:border border-gray-200 bg-white p-4 shadow w-full">
       <div className="flex items-center gap-2 mb-3">
         <button
           className={`px-3 py-1.5 rounded ${innerTab==='info' ? 'bg-blue-600 text-white' : 'bg-white border manage-toggle'} text-sm`}
@@ -653,7 +653,7 @@ function ClassInfoPanel({ classId, initialInnerTab }){
             <InfoCard label="Class Teacher" value={(klass?.teacher_detail ? `${klass.teacher_detail.first_name} ${klass.teacher_detail.last_name}` : '—')} color="fuchsia" />
           </div>
 
-          <div className="p-3 rounded-xl border border-slate-200 bg-slate-50">
+          <div className="p-3 rounded-none sm:rounded-xl border-t border-b sm:border border-slate-200 bg-slate-50">
             <div className="flex items-center justify-between mb-2">
               <div className="text-sm font-semibold text-gray-800">Class History</div>
               {loadingHistory && <div className="text-xs text-gray-500">Loading…</div>}
@@ -733,7 +733,7 @@ function ClassInfoPanel({ classId, initialInnerTab }){
             )}
           </div>
 
-          <div className="mt-4 rounded-xl border border-gray-200 bg-white">
+          <div className="mt-4 rounded-none sm:rounded-xl border-t border-b sm:border border-gray-200 bg-white">
             <div className="px-3 py-2 text-sm font-semibold text-gray-800 border-b bg-gray-50">Subject Teachers</div>
             <div className="overflow-x-auto">
               <table className="min-w-full text-sm">

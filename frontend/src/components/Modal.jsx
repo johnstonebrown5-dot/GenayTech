@@ -54,23 +54,26 @@ export default function Modal({ open, onClose, title, children, size = 'md' }){
 
   if (!open) return null
 
-  const sizeClass = size === 'lg' ? 'max-w-3xl' : size === 'xl' ? 'max-w-5xl' : size === 'sm' ? 'max-w-md' : 'max-w-xl'
+  const isFull = size === 'full'
+  const sizeClass = isFull
+    ? 'w-full h-[100dvh] md:h-auto md:max-h-[90vh] md:max-w-xl rounded-none md:rounded'
+    : (size === 'lg' ? 'max-w-3xl' : size === 'xl' ? 'max-w-5xl' : size === 'sm' ? 'max-w-md' : 'max-w-xl')
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    <div className={`fixed inset-0 z-50 flex ${isFull ? 'items-stretch justify-stretch' : 'items-center justify-center'}`}>
       <div className="absolute inset-0 bg-black/40 opacity-0 animate-fadeIn" onClick={onClose} />
       <span ref={sentinelStart} tabIndex={0} />
       <div
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
-        className={`relative bg-white rounded shadow-lg w-full ${sizeClass} p-4 transform scale-95 opacity-0 animate-zoomIn max-h-[90vh]`}
+        className={`relative bg-white ${isFull ? 'shadow-none' : 'shadow-lg'} w-full ${sizeClass} transform scale-95 opacity-0 animate-zoomIn ${isFull ? 'flex flex-col' : 'rounded p-4 max-h-[90vh]'}`}
       >
-        <div className="flex items-center justify-between mb-3">
+        <div className={`flex items-center justify-between ${isFull ? 'px-4 py-3 border-b sticky top-0 bg-white z-10' : 'mb-3'}`}>
           <h3 className="font-semibold text-gray-800">{title}</h3>
           <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded" aria-label="Close" data-modal-close>✖</button>
         </div>
-        <div className="overflow-auto max-h-[75vh] pr-1">
+        <div className={`${isFull ? 'flex-1 overflow-auto px-4 pb-4' : 'overflow-auto max-h-[75vh] pr-1'}`}>
           {children}
         </div>
       </div>

@@ -1231,7 +1231,7 @@ export default function TeacherGrades(){
   }
 
   return (
-    <div className="teacher-grades-page px-0 md:px-4 lg:px-6 py-1 md:py-4 space-y-2 md:space-y-4 max-w-6xl mx-auto pb-24 md:pb-0 min-h-screen">
+    <div className="teacher-grades-page px-2 md:px-4 lg:px-6 py-1 md:py-4 space-y-2 md:space-y-4 max-w-6xl mx-auto pb-24 md:pb-0 min-h-screen">
       {/* Header */}
       <div className="relative overflow-hidden rounded-2xl border border-gray-200 bg-gradient-to-r from-indigo-500 via-indigo-600 to-sky-500 shadow-md">
         <div className="pointer-events-none absolute -right-16 -top-16 h-40 w-40 rounded-full bg-white/15 blur-2" />
@@ -1283,7 +1283,7 @@ export default function TeacherGrades(){
       {message && <div className="bg-green-50 text-green-700 p-3 rounded border border-green-200">{message}</div>}
 
       {/* Mobile-only: full controls in modal */}
-      <Modal open={formModalOpen} onClose={()=>setFormModalOpen(false)} title="Exam Details" size="sm">
+      <Modal open={formModalOpen} onClose={()=>setFormModalOpen(false)} title="Exam Details" size="full">
         <div className="space-y-3">
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 md:gap-3">
             <div className="grid gap-1.5">
