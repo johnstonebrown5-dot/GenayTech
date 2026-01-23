@@ -78,7 +78,7 @@ export default function TeacherGrades(){
   // Sort mode for students list
   const [sortMode, setSortMode] = useState('name_asc') // 'name_asc' | 'name_desc' | 'adm_asc' | 'adm_desc'
   const sortedStudents = useMemo(() => {
-    const arr = Array.isArray(students) ? [...students] : []
+    const arr = Array.isArray(visibleStudents) ? [...visibleStudents] : []
     const byName = (a,b) => String(a.name||'').localeCompare(String(b.name||''))
     const byAdm = (a,b) => String(a.admission_no||'').localeCompare(String(b.admission_no||''))
     switch (sortMode){
@@ -89,7 +89,7 @@ export default function TeacherGrades(){
       default: arr.sort(byName)
     }
     return arr
-  }, [students, sortMode])
+  }, [visibleStudents, sortMode])
 
   // Persist teacher Out Of preferences per class/subject/exam
   const outOfStoreKey = () => [
