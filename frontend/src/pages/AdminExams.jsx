@@ -55,6 +55,7 @@ export default function AdminExams(){
   const [dayKey, setDayKey] = useState('')
   const [dayItems, setDayItems] = useState([])
   const [showFilters, setShowFilters] = useState(false)
+  const [sortBy, setSortBy] = useState('latest') // latest|oldest|published_first|unpublished_first
 
   const bulkPublishExams = async () => {
     const ids = Array.from(selected)
@@ -147,6 +148,25 @@ export default function AdminExams(){
     // status filter
     const matchesStatus = filterStatus==='all' || (filterStatus==='published' ? !!e.published : !e.published)
     return matchesSearch && matchesGrade && matchesClass && matchesStatus
+  })
+
+  const sortedExams = [...filteredExams].sort((a,b) => {
+    if (sortBy === 'published_first'){
+      const ap = a.published ? 0 : 1
+      const bp = b.published ? 0 : 1
+      if (ap !== bp) return ap - bp
+      return String(b.date || '').localeCompare(String(a.date || ''))
+    }
+    if (sortBy === 'unpublished_first'){
+      const ap = a.published ? 1 : 0
+      const bp = b.published ? 1 : 0
+      if (ap !== bp) return ap - bp
+      return String(b.date || '').localeCompare(String(a.date || ''))
+    }
+    if (sortBy === 'oldest'){
+      return String(a.date || '').localeCompare(String(b.date || ''))
+    }
+    return String(b.date || '').localeCompare(String(a.date || ''))
   })
 
   // Selection helpers
@@ -359,6 +379,13 @@ export default function AdminExams(){
               <span className="text-xs sm:text-sm font-semibold">Exam Calendar</span>
             </button>
             <button
+              onClick={()=>navigate('/admin/results')}
+              className="shrink-0 flex-1 sm:flex-none inline-flex items-center justify-center gap-0 sm:gap-2 bg-indigo-600 text-white px-2.5 sm:px-3.5 py-2 rounded-lg hover:bg-indigo-700"
+              aria-label="Open Results"
+            >
+              <span className="text-xs sm:text-sm font-semibold">Open Results</span>
+            </button>
+            <button
               onClick={()=>setShowCreateExam(true)}
               className="shrink-0 flex-1 sm:flex-none inline-flex items-center justify-center gap-0 sm:gap-2 bg-blue-600 text-white px-2.5 sm:px-3.5 py-2 rounded-lg hover:bg-blue-700"
               aria-label="Create Exam"
@@ -388,7 +415,7 @@ export default function AdminExams(){
             <div className="mb-2 text-sm bg-blue-50 text-blue-800 px-3 py-2 rounded">{banner}</div>
           )}
           {/* Filters */}
-          <div className={`${showFilters ? '' : 'hidden'} grid gap-2 md:gap-3 md:grid-cols-5 mb-3`}>
+          <div className={`${showFilters ? '' : 'hidden'} grid gap-2 md:gap-3 md:grid-cols-6 mb-3`}>
             <label className="grid gap-1">
               <span className="text-xs text-gray-600">Search</span>
               <div className="relative">
@@ -423,6 +450,15 @@ export default function AdminExams(){
                 <option value="unpublished">Unpublished</option>
               </select>
             </label>
+            <label className="grid gap-1">
+              <span className="text-xs text-gray-600">Sort</span>
+              <select value={sortBy} onChange={e=>setSortBy(e.target.value)} className="border p-2 rounded w-full bg-white">
+                <option value="published_first">Published first</option>
+                <option value="latest">Latest</option>
+                <option value="unpublished_first">Unpublished first</option>
+                <option value="oldest">Oldest</option>
+              </select>
+            </label>
             <div className="flex items-end">
               <button onClick={()=>{setSearch('');setFilterGrade('');setFilterClass('');setFilterStatus('all')}} className="w-full border px-3 py-2 rounded">Clear</button>
             </div>
@@ -437,7 +473,7 @@ export default function AdminExams(){
 
           {/* Mobile cards */}
           <div className="grid gap-2 md:hidden">
-            {filteredExams.map(e => {
+            {sortedExams.map(e => {
               const klassName = classes.find(c=>c.id===e.klass)?.name || e.klass
               const gradeLevel = classes.find(c=>c.id===e.klass)?.grade_level || ''
               return (
@@ -451,6 +487,7 @@ export default function AdminExams(){
                     <span className={`px-2 py-0.5 rounded-full text-[11px] ${e.published? 'bg-emerald-100 text-emerald-700':'bg-gray-100 text-gray-600'}`}>{e.published? 'Published':'Draft'}</span>
                     <div className="flex items-center gap-2">
                       <button onClick={()=>navigate(`/admin/exams/${e.id}/enter`)} className="text-blue-600 text-xs">Enter</button>
+                      <button onClick={()=>navigate(`/admin/results?exam=${e.id}&grade=${encodeURIComponent(classes.find(c=>c.id===e.klass)?.grade_level || '')}`)} className="text-indigo-700 text-xs">View Results</button>
                     </div>
                   </div>
                 </div>
@@ -468,7 +505,7 @@ export default function AdminExams(){
                 </tr>
               </thead>
               <tbody>
-                {filteredExams.map(e => (
+                {sortedExams.map(e => (
                   <tr key={e.id} className="border-t">
                     <td className="px-3 py-2"><input type="checkbox" checked={selected.has(e.id)} onChange={()=>toggleSelect(e.id)} aria-label={`Select exam ${e.name}`} /></td>
                     <td className="px-3 py-2">
@@ -485,6 +522,7 @@ export default function AdminExams(){
                         <button onClick={()=>openEdit(e)} className="text-gray-700">Edit</button>
                         <button onClick={()=>navigate(`/admin/exams/${e.id}/enter`)} className="text-blue-600">Enter Results</button>
                         <button onClick={()=>navigate(`/admin/results?exam=${e.id}&grade=${encodeURIComponent(classes.find(c=>c.id===e.klass)?.grade_level || '')}`)} className="text-indigo-700">Results Page</button>
+                        <button onClick={()=>navigate(`/admin/results?exam=${e.id}&grade=${encodeURIComponent(classes.find(c=>c.id===e.klass)?.grade_level || '')}`)} className="text-green-700">View Results</button>
                         <button onClick={()=>publishExam(e)} disabled={!!e.published || publishingId===e.id} className={`text-purple-700 ${e.published? 'opacity-50 cursor-not-allowed':''}`}>{publishingId===e.id ? 'Publishing...' : (e.published ? 'Published' : 'Publish')}</button>
                         <button onClick={()=>deleteExam(e)} disabled={deletingId===e.id} className={`text-red-700 ${deletingId===e.id? 'opacity-50':''}`}>{deletingId===e.id? 'Deleting...' : 'Delete'}</button>
                       </div>

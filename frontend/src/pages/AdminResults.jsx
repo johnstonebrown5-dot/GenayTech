@@ -617,6 +617,44 @@ export default function AdminResults(){
     }
   }, [blockResults])
 
+  const classSubjectMeanPct = useMemo(() => {
+    try{
+      const arr = Array.isArray(summary?.subject_mean_percentages) ? summary.subject_mean_percentages : []
+      const out = new Map()
+      for (const row of arr){
+        if (row && row.subject != null){
+          out.set(String(row.subject), row.mean_percentage)
+        }
+      }
+      return out
+    }catch{
+      return new Map()
+    }
+  }, [summary?.subject_mean_percentages])
+
+  const classMean = useMemo(() => {
+    try{
+      const students = Array.isArray(summary?.students) ? summary.students : []
+      if (!students.length) return { meanTotal: null, meanAvg: null }
+      let sumTotal = 0
+      let cntTotal = 0
+      let sumAvg = 0
+      let cntAvg = 0
+      for (const s of students){
+        const t = Number(s?.total)
+        const a = Number(s?.average)
+        if (Number.isFinite(t)) { sumTotal += t; cntTotal += 1 }
+        if (Number.isFinite(a)) { sumAvg += a; cntAvg += 1 }
+      }
+      return {
+        meanTotal: cntTotal ? (sumTotal / cntTotal) : null,
+        meanAvg: cntAvg ? (sumAvg / cntAvg) : null,
+      }
+    }catch{
+      return { meanTotal: null, meanAvg: null }
+    }
+  }, [summary?.students])
+
   // Fetch grading bands for subjects of the selected exam summary, choose first non-empty as global bands
   useEffect(() => {
     let active = true
@@ -755,6 +793,16 @@ export default function AdminResults(){
                     </tr>
                   ))}
                 </tbody>
+                <tfoot>
+                  <tr className="bg-gray-50">
+                    <td className="border px-2 py-1 font-medium" colSpan={2}>Mean Score</td>
+                    {summary.subjects.map(s => (
+                      <td key={`mean-${s.id}`} className="border px-2 py-1 font-medium">{formatMean(classSubjectMeanPct.get(String(s.id)))}</td>
+                    ))}
+                    <td className="border px-2 py-1 font-medium">{formatMean(classMean.meanTotal)}</td>
+                    <td className="border px-2 py-1">{toGrade(classMean.meanAvg)}</td>
+                  </tr>
+                </tfoot>
               </table>
             </div>
           ) : (
@@ -826,7 +874,7 @@ export default function AdminResults(){
                 </tbody>
                 <tfoot>
                   <tr className="bg-gray-50">
-                    <td className="border px-2 py-1 font-medium" colSpan={3}>Mean</td>
+                    <td className="border px-2 py-1 font-medium" colSpan={3}>Mean Score</td>
                     {Array.isArray(blockResults.subjects) && blockResults.subjects.map(s => {
                       const m = blockSubjectMeanPct.get(String(s.id))
                       return (
