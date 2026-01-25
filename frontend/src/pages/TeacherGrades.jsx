@@ -292,8 +292,6 @@ export default function TeacherGrades(){
         return all.filter(s => allowedIds.has(String(s.id)))
       }
     }
-    // Fallback: if teacher is class teacher and no mapping, allow all
-    if (String(klassObj.teacher) === myId) return all
     // Otherwise none
     return []
   }

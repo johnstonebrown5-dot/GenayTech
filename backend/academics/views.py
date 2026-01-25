@@ -3070,11 +3070,10 @@ class ExamResultViewSet(viewsets.ModelViewSet):
             if self.request.method in permissions.SAFE_METHODS:
                 qs = qs.filter(
                     Q(exam__published=True) |
-                    Q(exam__klass__teacher=user) |
                     Q(exam__klass__subject_teachers__teacher=user)
                 ).distinct()
             else:
-                qs = qs.filter(Q(exam__klass__teacher=user) | Q(exam__klass__subject_teachers__teacher=user)).distinct()
+                qs = qs.filter(Q(exam__klass__subject_teachers__teacher=user)).distinct()
         # If requester is a student (not staff), only show published exams and their own results
         if getattr(user, 'role', None) == 'student' and not (user.is_staff or user.is_superuser):
             qs = qs.filter(exam__published=True, student__user=user)
@@ -3160,21 +3159,11 @@ class ExamResultViewSet(viewsets.ModelViewSet):
         if user and getattr(user, 'role', None) == 'teacher' and not (user.is_staff or user.is_superuser):
             allowed = False
             reason = ''
-            if exam and exam.klass and exam.klass.teacher_id == user.id:
-                allowed = True
-                reason = 'class_teacher'
             if not allowed and exam and subject:
                 # Exact subject assignment
                 if ClassSubjectTeacher.objects.filter(klass=exam.klass, teacher=user, subject=subject).exists():
                     allowed = True
                     reason = 'subject_teacher_exact'
-                else:
-                    # Fallback: teacher mapped to the class for any subject and chosen subject belongs to the class
-                    mapped_any = ClassSubjectTeacher.objects.filter(klass=exam.klass, teacher=user).exists()
-                    subject_in_class = exam.klass.subjects.filter(pk=getattr(subject, 'id', None)).exists()
-                    if mapped_any and subject_in_class:
-                        allowed = True
-                        reason = 'subject_teacher_class_scope'
             if not allowed:
                 raise ValidationError({'detail': 'You are not assigned to this class/subject for this exam', 'code': 'not_assigned'})
         # Upsert to avoid unique_together conflicts (exam, student, subject)
@@ -3191,6 +3180,30 @@ class ExamResultViewSet(viewsets.ModelViewSet):
                     defaults={'marks': vd['marks'], 'out_of': vd.get('out_of')},
                 )
             serializer.instance = obj
+
+    def perform_update(self, serializer):
+        user = getattr(self.request, 'user', None)
+        instance = getattr(serializer, 'instance', None)
+        exam = serializer.validated_data.get('exam') or getattr(instance, 'exam', None)
+        subject = serializer.validated_data.get('subject') or getattr(instance, 'subject', None)
+        component = serializer.validated_data.get('component') or getattr(instance, 'component', None)
+
+        school = getattr(getattr(self.request, 'user', None), 'school', None)
+        if school and exam and getattr(getattr(exam, 'klass', None), 'school_id', None) != school.id:
+            raise ValidationError({'exam': 'Exam must belong to your school'})
+
+        if component and subject and component.subject_id != subject.id:
+            raise ValidationError({'component': 'Component does not belong to the selected subject'})
+
+        if user and getattr(user, 'role', None) == 'teacher' and not (user.is_staff or user.is_superuser):
+            allowed = False
+            if not allowed and exam and subject:
+                if ClassSubjectTeacher.objects.filter(klass=exam.klass, teacher=user, subject=subject).exists():
+                    allowed = True
+            if not allowed:
+                raise ValidationError({'detail': 'You are not assigned to this class/subject for this exam', 'code': 'not_assigned'})
+
+        serializer.save()
 
     @action(detail=False, methods=['post'], permission_classes=[IsTeacherOrAdmin], url_path='bulk')
     def bulk_upsert(self, request):
@@ -3279,16 +3292,9 @@ class ExamResultViewSet(viewsets.ModelViewSet):
             # Teacher permission: same rules as perform_create
             if user and getattr(user, 'role', None) == 'teacher' and not (user.is_staff or user.is_superuser):
                 allowed = False
-                if exam and exam.klass and exam.klass.teacher_id == user.id:
-                    allowed = True
                 if not allowed and exam and subject:
                     if ClassSubjectTeacher.objects.filter(klass=exam.klass, teacher=user, subject=subject).exists():
                         allowed = True
-                    else:
-                        mapped_any = ClassSubjectTeacher.objects.filter(klass=exam.klass, teacher=user).exists()
-                        subject_in_class = exam.klass.subjects.filter(pk=getattr(subject, 'id', None)).exists()
-                        if mapped_any and subject_in_class:
-                            allowed = True
                 if not allowed:
                     errors.append({'index': idx, 'error': {'detail': 'You are not assigned to this class/subject for this exam'}})
                     continue
@@ -3474,16 +3480,9 @@ class ExamResultViewSet(viewsets.ModelViewSet):
         user = getattr(request, 'user', None)
         if user and getattr(user, 'role', None) == 'teacher' and not (user.is_staff or user.is_superuser):
             allowed = False
-            if exam and exam.klass and exam.klass.teacher_id == user.id:
-                allowed = True
             if not allowed and subject:
                 if ClassSubjectTeacher.objects.filter(klass=exam.klass, teacher=user, subject=subject).exists():
                     allowed = True
-                else:
-                    mapped_any = ClassSubjectTeacher.objects.filter(klass=exam.klass, teacher=user).exists()
-                    subject_in_class = exam.klass.subjects.filter(pk=getattr(subject, 'id', None)).exists()
-                    if mapped_any and subject_in_class:
-                        allowed = True
             if not allowed:
                 return Response({'detail': 'You are not assigned to this class/subject for this exam'}, status=403)
 
@@ -3963,16 +3962,9 @@ class ExamResultViewSet(viewsets.ModelViewSet):
         user = getattr(request, 'user', None)
         if user and getattr(user, 'role', None) == 'teacher' and not (user.is_staff or user.is_superuser):
             allowed = False
-            if exam and exam.klass and exam.klass.teacher_id == user.id:
-                allowed = True
             if not allowed and subject:
                 if ClassSubjectTeacher.objects.filter(klass=exam.klass, teacher=user, subject=subject).exists():
                     allowed = True
-                else:
-                    mapped_any = ClassSubjectTeacher.objects.filter(klass=exam.klass, teacher=user).exists()
-                    subject_in_class = exam.klass.subjects.filter(pk=getattr(subject, 'id', None)).exists()
-                    if mapped_any and subject_in_class:
-                        allowed = True
             if not allowed:
                 return Response({'detail': 'You are not assigned to this class/subject for this exam'}, status=403)
 
