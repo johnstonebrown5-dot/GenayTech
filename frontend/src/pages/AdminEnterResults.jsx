@@ -21,9 +21,23 @@ export default function AdminEnterResults({ readOnly }){
   const [results, setResults] = useState([]) // rows: {student, subject, component|null, marks}
   const [invalid, setInvalid] = useState({}) // { 'studentId-subjectId': true }
   const [componentsMap, setComponentsMap] = useState({}) // { subjectId: [components] }
-  const { showError } = useNotification?.() || { showError: ()=>{} }
+  const { showError, showSuccess } = useNotification?.() || { showError: ()=>{}, showSuccess: ()=>{} }
   const isReadOnly = Boolean(readOnly) || (new URLSearchParams(location.search).get('readonly') === '1')
   const klassOverride = new URLSearchParams(location.search).get('klass')
+  const [reloadKey, setReloadKey] = useState(0)
+
+  const createUploadRow = (subjectId = '') => ({
+    uid: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    subjectId: subjectId ? String(subjectId) : '',
+    componentId: '',
+    outOf: '',
+    file: null,
+    error: '',
+    uploading: false,
+    committing: false,
+  })
+
+  const [uploadRows, setUploadRows] = useState([createUploadRow('')])
 
   useEffect(()=>{
     let alive = true
@@ -251,7 +265,7 @@ export default function AdminEnterResults({ readOnly }){
       }
     })()
     return ()=>{ alive = false }
-  }, [examId])
+  }, [examId, reloadKey])
 
   // Load class options for read-only teacher view switching
   useEffect(()=>{
@@ -314,6 +328,156 @@ export default function AdminEnterResults({ readOnly }){
     const klabel = classNameById(klass?.id)
     return `${exam.name ?? '—'} — Year ${exam.year ?? '—'} — Term ${exam.term ?? '—'} — ${klabel ?? '—'}`
   }, [exam, klass, allClasses])
+
+  useEffect(()=>{
+    if (!selectedSubject) return
+    setUploadRows(prev => {
+      if (!Array.isArray(prev) || prev.length === 0) return [createUploadRow(String(selectedSubject))]
+      const first = prev[0]
+      if (first && !first.subjectId) return [{ ...first, subjectId: String(selectedSubject) }, ...prev.slice(1)]
+      return prev
+    })
+  }, [selectedSubject])
+
+  const updateUploadRow = (uid, patch) => {
+    setUploadRows(prev => prev.map(r => (r.uid === uid ? { ...r, ...patch } : r)))
+  }
+
+  const addUploadRow = () => {
+    setUploadRows(prev => [...(Array.isArray(prev) ? prev : []), createUploadRow(selectedSubject || '')])
+  }
+
+  const removeUploadRow = (uid) => {
+    setUploadRows(prev => {
+      const next = (Array.isArray(prev) ? prev : []).filter(r => r.uid !== uid)
+      return next.length ? next : [createUploadRow(selectedSubject || '')]
+    })
+  }
+
+  const downloadTemplate = async (row) => {
+    try{
+      const subjId = Number(row?.subjectId)
+      if (!examId || !subjId) throw new Error('Select Subject first')
+      const compId = row?.componentId ? Number(row.componentId) : undefined
+      const params = new URLSearchParams({ exam: String(examId), subject: String(subjId) })
+      if (compId) params.append('component', String(compId))
+      const res = await api.get(`/academics/exam_results/upload-template/?${params.toString()}`, { responseType: 'blob' })
+      const blob = new Blob([res.data], { type: 'text/csv;charset=utf-8' })
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `upload_template_exam${examId}_subject${subjId}${compId?`_comp${compId}`:''}.csv`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      window.URL.revokeObjectURL(url)
+      showSuccess('Template downloaded', 'Roster CSV generated.', 2500)
+    }catch(e){
+      const msg = e?.response?.data?.detail || e?.message || 'Failed to download template'
+      showError('Download failed', msg, 4000)
+    }
+  }
+
+  const applyPreviewRows = (rows, subjId, compId) => {
+    if (!Array.isArray(rows) || rows.length===0) return
+    const byId = new Set(students.map(s=>s.id))
+    const next = [...results]
+    rows.forEach(r => {
+      const sid = Number(r.student)
+      const val = r.scaled_marks
+      const intVal = (val == null || val === '') ? '' : Math.round(Number(val))
+      if (!Number.isNaN(sid) && byId.has(sid)){
+        const idx = next.findIndex(x => x.student===sid && x.subject===subjId && ((compId ?? null)===(x.component ?? null)))
+        if (idx>-1){ next[idx] = { ...next[idx], marks: String(intVal) }
+        } else {
+          next.push({ student: sid, subject: subjId, component: compId ?? null, marks: String(intVal) })
+        }
+      }
+    })
+    setResults(next)
+  }
+
+  const previewUpload = async (row) => {
+    const uid = row?.uid
+    try{
+      updateUploadRow(uid, { uploading: true, error: '' })
+      const subjId = Number(row?.subjectId)
+      if (!examId || !subjId) throw new Error('Select Subject first')
+      const form = new FormData()
+      if (!row?.file) throw new Error('Choose a file to upload')
+      form.append('file', row.file)
+      form.append('exam', String(examId))
+      form.append('subject', String(subjId))
+      if (row?.componentId) form.append('component', String(row.componentId))
+      if (row?.outOf) form.append('out_of', String(row.outOf))
+      form.append('commit', 'false')
+      form.append('debug', 'true')
+      const res = await api.post('/academics/exam_results/upload/', form, { headers: { 'Content-Type': 'multipart/form-data' } })
+      const data = res?.data || {}
+      const rows = Array.isArray(data.rows) ? data.rows : []
+      applyPreviewRows(rows, subjId, row?.componentId ? Number(row.componentId) : null)
+      const matched = rows.filter(r => r.student && !r.error).length
+      const total = rows.length
+      const failed = total - matched
+      showSuccess('Preview applied', `Filled ${matched}/${total} rows${failed?` (${failed} unmatched/invalid)`:''}.`, 3500)
+    }catch(e){
+      const msg = e?.response?.data?.detail || e?.message || 'Upload failed'
+      updateUploadRow(uid, { error: msg })
+      showError('Upload failed', msg, 5000)
+    } finally {
+      updateUploadRow(uid, { uploading: false })
+    }
+  }
+
+  const commitUpload = async (row) => {
+    const uid = row?.uid
+    try{
+      updateUploadRow(uid, { committing: true, error: '' })
+      const subjId = Number(row?.subjectId)
+      if (!examId || !subjId) throw new Error('Select Subject first')
+      if (!row?.file) throw new Error('Choose a file to upload')
+      const form = new FormData()
+      form.append('file', row.file)
+      form.append('exam', String(examId))
+      form.append('subject', String(subjId))
+      if (row?.componentId) form.append('component', String(row.componentId))
+      if (row?.outOf) form.append('out_of', String(row.outOf))
+      form.append('commit', 'true')
+      const res = await api.post('/academics/exam_results/upload/', form, { headers: { 'Content-Type': 'multipart/form-data' } })
+      const failed = Number(res?.data?.failed || 0)
+      if (failed === 0){
+        showSuccess('Upload saved', 'All parsed marks were saved.', 3000)
+      } else {
+        const errs = Array.isArray(res?.data?.errors) ? res.data.errors : []
+        const detail = errs.slice(0,3).map(e=> typeof e?.error==='string' ? e.error : JSON.stringify(e?.error||'Failed')).join(' | ')
+        showError('Partial save', `${failed} failed. ${detail}${errs.length>3?' ...':''}`, 6000)
+      }
+      setReloadKey(v=>v+1)
+      updateUploadRow(uid, { file: null })
+    }catch(e){
+      const msg = e?.response?.data?.detail || e?.message || 'Commit failed'
+      updateUploadRow(uid, { error: msg })
+      showError('Commit failed', msg, 5000)
+    } finally {
+      updateUploadRow(uid, { committing: false })
+    }
+  }
+
+  const previewAllUploads = async () => {
+    const rows = Array.isArray(uploadRows) ? uploadRows : []
+    await rows.reduce(
+      (p, r) => p.then(() => (r?.subjectId && r?.file ? previewUpload(r) : null)),
+      Promise.resolve()
+    )
+  }
+
+  const commitAllUploads = async () => {
+    const rows = Array.isArray(uploadRows) ? uploadRows : []
+    await rows.reduce(
+      (p, r) => p.then(() => (r?.subjectId && r?.file ? commitUpload(r) : null)),
+      Promise.resolve()
+    )
+  }
 
   // Subjects currently visible based on filter
   const visibleSubjects = useMemo(()=>{
@@ -470,6 +634,105 @@ export default function AdminEnterResults({ readOnly }){
             </button>
           </div>
         </div>
+        {!isReadOnly && (
+          <div className="rounded-lg border border-gray-200 p-3 bg-gray-50/50">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <div className="text-sm font-medium text-gray-800">Upload grades (multiple subjects)</div>
+              <div className="flex gap-2">
+                <button type="button" className="px-3 py-2 rounded border bg-white" onClick={addUploadRow}>Add another subject</button>
+                <button type="button" className="px-3 py-2 rounded text-white bg-indigo-600 disabled:opacity-60" onClick={previewAllUploads}>Preview All</button>
+                <button type="button" className="px-3 py-2 rounded text-white bg-emerald-600 disabled:opacity-60" onClick={commitAllUploads}>Commit All</button>
+              </div>
+            </div>
+            <div className="mt-3 grid gap-3">
+              {(Array.isArray(uploadRows) ? uploadRows : []).map((row, idx) => {
+                const subjectNum = Number(row?.subjectId || '')
+                const comps = componentsMap[subjectNum] || []
+                return (
+                  <div key={row.uid} className="rounded-lg border border-gray-200 bg-white p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="text-xs text-gray-600">Upload #{idx+1}</div>
+                      <button type="button" className="text-xs text-red-700" onClick={()=>removeUploadRow(row.uid)} disabled={(uploadRows||[]).length<=1}>Remove</button>
+                    </div>
+                    <div className="mt-2 flex flex-col md:flex-row md:items-end gap-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 flex-1">
+                        <label className="text-xs text-gray-700 flex flex-col">
+                          <span className="mb-1">Subject</span>
+                          <select
+                            className="border rounded px-2 py-2"
+                            value={row.subjectId}
+                            onChange={e=> updateUploadRow(row.uid, { subjectId: e.target.value, componentId: '', error: '' })}
+                          >
+                            <option value="">Select subject…</option>
+                            {subjects.map(s=> (<option key={s.id} value={s.id}>{s.code} — {s.name}</option>))}
+                          </select>
+                        </label>
+                        <label className="text-xs text-gray-700 flex flex-col">
+                          <span className="mb-1">Paper/Component (optional)</span>
+                          <select
+                            className="border rounded px-2 py-2"
+                            value={row.componentId}
+                            onChange={e=> updateUploadRow(row.uid, { componentId: e.target.value, error: '' })}
+                          >
+                            <option value="">—</option>
+                            {(Array.isArray(comps) ? comps : []).map(c => (
+                              <option key={c.id} value={c.id}>{c.code || c.name}</option>
+                            ))}
+                          </select>
+                        </label>
+                        <label className="text-xs text-gray-700 flex flex-col">
+                          <span className="mb-1">Out Of (optional)</span>
+                          <input
+                            type="number"
+                            inputMode="decimal"
+                            min={1}
+                            step="1"
+                            className="border rounded px-2 py-2"
+                            value={row.outOf}
+                            onChange={e=> updateUploadRow(row.uid, { outOf: e.target.value, error: '' })}
+                            placeholder={String(Number(exam?.total_marks||100))}
+                          />
+                        </label>
+                        <label className="text-xs text-gray-700 flex flex-col">
+                          <span className="mb-1">CSV/XLSX or Image</span>
+                          <input
+                            type="file"
+                            accept=".csv,.xlsx,.xls,.png,.jpg,.jpeg"
+                            onChange={e=> updateUploadRow(row.uid, { file: e.target.files?.[0]||null, error: '' })}
+                            className="border rounded px-2 py-2 bg-white"
+                          />
+                        </label>
+                      </div>
+                      <div className="flex gap-2 md:self-start">
+                        <button
+                          type="button"
+                          className="px-3 py-2 rounded border bg-white"
+                          disabled={!row.subjectId}
+                          onClick={()=>downloadTemplate(row)}
+                        >Download Template</button>
+                        <button
+                          type="button"
+                          className="px-3 py-2 rounded text-white bg-indigo-600 disabled:opacity-60"
+                          disabled={row.uploading}
+                          onClick={()=>previewUpload(row)}
+                        >{row.uploading ? 'Previewing…' : 'Preview Fill'}</button>
+                        <button
+                          type="button"
+                          className="px-3 py-2 rounded text-white bg-emerald-600 disabled:opacity-60"
+                          disabled={row.committing}
+                          onClick={()=>commitUpload(row)}
+                        >{row.committing ? 'Saving…' : 'Commit Save'}</button>
+                      </div>
+                    </div>
+                    {row.error && (
+                      <div className="mt-2 bg-red-50 text-red-700 p-2 rounded border border-red-200 text-sm">{row.error}</div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
         {loading && <div>Loading...</div>}
         {!loading && (
           <div className="bg-white rounded-xl shadow-card border border-gray-200 p-3 overflow-auto max-h-[70vh] md:max-h-[75vh]">

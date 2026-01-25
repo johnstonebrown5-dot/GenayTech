@@ -9,7 +9,22 @@ export default function FloatingButton(){
   const isSmall = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(max-width: 480px)').matches
   const size = isSmall ? 40 : 44
   const iconSize = isSmall ? 16 : 18
-  const root = typeof document !== 'undefined' ? document.getElementById('floating-actions-root') : null
+  const [root, setRoot] = React.useState(null)
+
+  React.useEffect(() => {
+    if (typeof document === 'undefined') return
+    const existing = document.getElementById('floating-actions-root')
+    if (existing) { setRoot(existing); return }
+    const obs = new MutationObserver(() => {
+      const el = document.getElementById('floating-actions-root')
+      if (el) {
+        setRoot(el)
+        try { obs.disconnect() } catch {}
+      }
+    })
+    try { obs.observe(document.body, { childList: true, subtree: true }) } catch {}
+    return () => { try { obs.disconnect() } catch {} }
+  }, [])
 
   const button = (
     <button

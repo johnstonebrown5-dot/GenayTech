@@ -7,6 +7,9 @@ export default function FloatingActions(){
   const rootRef = useRef(null)
   const draggingRef = useRef(false)
   const movedRef = useRef(false)
+  const pointerIdRef = useRef(null)
+  const rafRef = useRef(null)
+  const pendingPosRef = useRef(null)
   const startRef = useRef({ x: 0, y: 0 })
   const offsetRef = useRef({ x: 0, y: 0 })
   // Responsive FAB size (mobile: 48, tablet: 52, desktop: 60)
@@ -114,27 +117,81 @@ export default function FloatingActions(){
   }, [])
 
   const onPointerDown = (e) => {
+    try { e.preventDefault() } catch {}
     try { e.currentTarget.setPointerCapture(e.pointerId) } catch {}
     draggingRef.current = true
     movedRef.current = false
+    pointerIdRef.current = e.pointerId
     startRef.current = { x: e.clientX, y: e.clientY }
     offsetRef.current = { x: pos.x, y: pos.y }
+
+    const onMove = (ev) => onPointerMove(ev)
+    const onUp = (ev) => onPointerUp(ev)
+    const onCancel = (ev) => onPointerCancel(ev)
+    try { window.addEventListener('pointermove', onMove, { passive: false }) } catch { try { window.addEventListener('pointermove', onMove) } catch {} }
+    try { window.addEventListener('pointerup', onUp, { passive: false }) } catch { try { window.addEventListener('pointerup', onUp) } catch {} }
+    try { window.addEventListener('pointercancel', onCancel, { passive: false }) } catch { try { window.addEventListener('pointercancel', onCancel) } catch {} }
+    e.currentTarget.__fabListeners = { onMove, onUp, onCancel }
   }
   const onPointerMove = (e) => {
     if (!draggingRef.current) return
+    if (pointerIdRef.current != null && e.pointerId != null && e.pointerId !== pointerIdRef.current) return
+    try { e.preventDefault() } catch {}
     const dx = e.clientX - startRef.current.x
     const dy = e.clientY - startRef.current.y
-    if (Math.abs(dx) + Math.abs(dy) > 6) movedRef.current = true
+    if (Math.abs(dx) + Math.abs(dy) > 4) movedRef.current = true
     const next = clampToViewport(offsetRef.current.x + dx, offsetRef.current.y + dy)
-    setPos(next)
+    pendingPosRef.current = next
+    if (!rafRef.current){
+      rafRef.current = requestAnimationFrame(() => {
+        rafRef.current = null
+        if (pendingPosRef.current) setPos(pendingPosRef.current)
+      })
+    }
   }
   const onPointerUp = (e) => {
     if (!draggingRef.current) return
+    if (pointerIdRef.current != null && e.pointerId != null && e.pointerId !== pointerIdRef.current) return
+    try { e.preventDefault() } catch {}
     try { e.currentTarget.releasePointerCapture(e.pointerId) } catch {}
     draggingRef.current = false
+    pointerIdRef.current = null
     try { localStorage.setItem('fab_pos', JSON.stringify(pos)) } catch {}
     // If we dragged, prevent toggle; click handler will check movedRef
     setTimeout(() => { movedRef.current = false }, 0)
+
+    const ls = e.currentTarget.__fabListeners
+    if (ls){
+      try { window.removeEventListener('pointermove', ls.onMove) } catch {}
+      try { window.removeEventListener('pointerup', ls.onUp) } catch {}
+      try { window.removeEventListener('pointercancel', ls.onCancel) } catch {}
+      try { delete e.currentTarget.__fabListeners } catch {}
+    }
+    if (rafRef.current){
+      try { cancelAnimationFrame(rafRef.current) } catch {}
+      rafRef.current = null
+    }
+    pendingPosRef.current = null
+  }
+
+  const onPointerCancel = (e) => {
+    if (!draggingRef.current) return
+    try { e.preventDefault() } catch {}
+    draggingRef.current = false
+    pointerIdRef.current = null
+    const ls = e.currentTarget && e.currentTarget.__fabListeners
+    if (ls){
+      try { window.removeEventListener('pointermove', ls.onMove) } catch {}
+      try { window.removeEventListener('pointerup', ls.onUp) } catch {}
+      try { window.removeEventListener('pointercancel', ls.onCancel) } catch {}
+      try { delete e.currentTarget.__fabListeners } catch {}
+    }
+    if (rafRef.current){
+      try { cancelAnimationFrame(rafRef.current) } catch {}
+      rafRef.current = null
+    }
+    pendingPosRef.current = null
+    movedRef.current = false
   }
 
   return (
@@ -172,7 +229,7 @@ export default function FloatingActions(){
       >
         <div
           style={{
-            display: expanded ? 'flex' : 'none',
+            display: 'flex',
             flexDirection: 'column',
             alignItems: 'flex-end',
             gap: 10,
@@ -180,10 +237,12 @@ export default function FloatingActions(){
             borderRadius: 12,
             padding: '6px 6px',
             maxWidth: 420,
-            opacity: 1,
-            transition: 'all 280ms ease',
-            overflow: 'visible',
-            pointerEvents: 'auto',
+            maxHeight: expanded ? 560 : 0,
+            opacity: expanded ? 1 : 0,
+            transform: expanded ? 'translateY(0) scale(1)' : 'translateY(6px) scale(0.98)',
+            transition: 'max-height 260ms ease, opacity 200ms ease, transform 220ms ease',
+            overflow: 'hidden',
+            pointerEvents: expanded ? 'auto' : 'none',
           }}
         >
           <div
@@ -221,6 +280,10 @@ export default function FloatingActions(){
           transform: expanded ? 'translateY(0)' : 'translateY(0)',
           transition: 'background-color 200ms ease, box-shadow 200ms ease, transform 150ms ease, filter 150ms ease',
           filter: expanded ? 'none' : 'drop-shadow(0 2px 8px rgba(37,99,235,0.35))',
+          touchAction: 'none',
+          WebkitUserSelect: 'none',
+          userSelect: 'none',
+          WebkitTapHighlightColor: 'transparent',
         }}
         onMouseDown={(e)=>{ e.currentTarget.style.transform = 'scale(0.98)'}}
         onMouseUp={(e)=>{ e.currentTarget.style.transform = 'scale(1)'}}

@@ -1,12 +1,24 @@
-import React, { useMemo, useState } from 'react'
+import React, { useState } from 'react'
 import { createPortal } from 'react-dom'
 import HelpModal from './HelpModal'
 
 export default function FloatingHelpAction(){
   const [open, setOpen] = useState(false)
-  const root = useMemo(() => {
-    if (typeof document === 'undefined') return null
-    return document.getElementById('floating-actions-root')
+  const [root, setRoot] = useState(null)
+
+  React.useEffect(() => {
+    if (typeof document === 'undefined') return
+    const existing = document.getElementById('floating-actions-root')
+    if (existing) { setRoot(existing); return }
+    const obs = new MutationObserver(() => {
+      const el = document.getElementById('floating-actions-root')
+      if (el) {
+        setRoot(el)
+        try { obs.disconnect() } catch {}
+      }
+    })
+    try { obs.observe(document.body, { childList: true, subtree: true }) } catch {}
+    return () => { try { obs.disconnect() } catch {} }
   }, [])
 
   const node = (

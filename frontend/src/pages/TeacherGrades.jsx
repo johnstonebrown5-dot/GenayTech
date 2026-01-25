@@ -253,6 +253,13 @@ export default function TeacherGrades(){
   const [commitUploading, setCommitUploading] = useState(false)
   const [uploadError, setUploadError] = useState('')
 
+  // When in 'All Papers' mode and there are multiple components, the user must pick
+  // the specific component column to receive uploaded marks; otherwise preview would
+  // not know which column to fill. Use this flag to guide/disallow actions.
+  const mustPickComponent = useMemo(() => (
+    entryMode === 'all' && Array.isArray(components) && components.length > 0 && !selectedComponentId
+  ), [entryMode, components, selectedComponentId])
+
   // Open the exam details form as a modal automatically on mobile
   useEffect(()=>{
     try{
@@ -327,6 +334,7 @@ export default function TeacherGrades(){
       const examId = Number(selectedExamId)
       const subjectId = Number(selectedSubject)
       if (!examId || !subjectId) throw new Error('Select Exam and Subject first')
+      if (mustPickComponent) throw new Error('Select a Paper/Component to fill before uploading')
       if (!uploadFile) throw new Error('Choose a file or photo to upload')
       const form = new FormData()
       form.append('file', uploadFile)
@@ -334,7 +342,9 @@ export default function TeacherGrades(){
       form.append('subject', String(subjectId))
       if (selectedComponentId) form.append('component', String(selectedComponentId))
       // If teacher set Out Of, pass to scale
-      const out = entryMode === 'single' ? outOf : ''
+      const out = (entryMode === 'single')
+        ? outOf
+        : (selectedComponentId ? (outOfPerComp?.[selectedComponentId] ?? '') : '')
       if (out) form.append('out_of', String(out))
       form.append('commit', 'false')
       // Temporary: request backend to include OCR debug info for images
@@ -399,13 +409,16 @@ export default function TeacherGrades(){
       const examId = Number(selectedExamId)
       const subjectId = Number(selectedSubject)
       if (!examId || !subjectId) throw new Error('Select Exam and Subject first')
+      if (mustPickComponent) throw new Error('Select a Paper/Component to fill before uploading')
       if (!uploadFile) throw new Error('Choose a file or photo to upload')
       const form = new FormData()
       form.append('file', uploadFile)
       form.append('exam', String(examId))
       form.append('subject', String(subjectId))
       if (selectedComponentId) form.append('component', String(selectedComponentId))
-      const out = entryMode === 'single' ? outOf : ''
+      const out = (entryMode === 'single')
+        ? outOf
+        : (selectedComponentId ? (outOfPerComp?.[selectedComponentId] ?? '') : '')
       if (out) form.append('out_of', String(out))
       form.append('commit', 'true')
       const res = await api.post('/academics/exam_results/upload/', form, { headers: { 'Content-Type': 'multipart/form-data' } })
@@ -1577,10 +1590,15 @@ export default function TeacherGrades(){
           <div className="flex flex-col md:flex-row gap-2 md:items-center">
             <input type="file" accept=".csv,.xlsx,.xls,.png,.jpg,.jpeg,.bmp,.webp,.tif,.tiff" onChange={e=>setUploadFile(e.target.files?.[0]||null)} />
             <div className="flex gap-2">
-              <button type="button" onClick={previewUpload} disabled={uploading || !uploadFile || !selectedExamId || !selectedSubject} className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-sky-500 to-blue-600 text-white disabled:opacity-60">{uploading ? 'Uploading…' : 'Preview'}</button>
-              <button type="button" onClick={commitUpload} disabled={commitUploading || !uploadFile || !selectedExamId || !selectedSubject} className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 text-white disabled:opacity-60">{commitUploading ? 'Saving…' : 'Commit'}</button>
+              <button type="button" onClick={previewUpload} disabled={uploading || !uploadFile || !selectedExamId || !selectedSubject || mustPickComponent} className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-sky-500 to-blue-600 text-white disabled:opacity-60">{uploading ? 'Uploading…' : 'Preview'}</button>
+              <button type="button" onClick={commitUpload} disabled={commitUploading || !uploadFile || !selectedExamId || !selectedSubject || mustPickComponent} className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 text-white disabled:opacity-60">{commitUploading ? 'Saving…' : 'Commit'}</button>
             </div>
           </div>
+          {mustPickComponent && (
+            <div className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1 mt-2 inline-block">
+              Select a Paper/Component above to indicate which column the uploaded marks should fill.
+            </div>
+          )}
         </div>
       </div>
       </div>
