@@ -6,6 +6,8 @@ from .models import (
     TimetableTemplate, PeriodSlotTemplate, TimetablePlan, TimetableClassConfig, ClassSubjectQuota,
     TeacherAvailability, TimetableVersion, TeacherDuty
 )
+from django.db import transaction, IntegrityError
+from django.utils.crypto import get_random_string
 from django.contrib.auth import get_user_model
 
 User = get_user_model()
@@ -89,6 +91,95 @@ class StudentSerializer(serializers.ModelSerializer):
             'passport_no','phone','email','address','photo','photo_url',
             'is_graduated','graduation_year','boarding_status','is_active'
         ]
+
+    def create(self, validated_data):
+        request = self.context.get('request') if isinstance(self.context, dict) else None
+
+        user = validated_data.pop('user', None)
+        klass = validated_data.get('klass')
+        incoming_school = validated_data.pop('school', None)
+
+        school = None
+        try:
+            if klass and getattr(klass, 'school', None):
+                school = klass.school
+        except Exception:
+            school = None
+        if school is None and request is not None:
+            try:
+                school = getattr(request.user, 'school', None)
+            except Exception:
+                school = None
+        if school is None and incoming_school is not None:
+            school = incoming_school
+
+        name = (validated_data.get('name') or '').strip()
+        first_name = ''
+        last_name = ''
+        if name:
+            parts = name.split()
+            first_name = parts[0]
+            last_name = ' '.join(parts[1:])
+
+        with transaction.atomic():
+            admission_no = (validated_data.get('admission_no') or '').strip()
+            if admission_no:
+                if Student.objects.filter(admission_no=admission_no).exists():
+                    raise serializers.ValidationError({'admission_no': 'A student with this admission number already exists'})
+            if user is None:
+                username = admission_no
+                password = validated_data.get('guardian_id') or get_random_string(12)
+                if not username:
+                    raise serializers.ValidationError({'admission_no': 'This field is required'} )
+
+                existing = User.objects.filter(username=username).first()
+                if existing is not None:
+                    if getattr(existing, 'role', None) != 'student':
+                        raise serializers.ValidationError({'admission_no': 'A non-student user already exists with this admission number as username'})
+                    user = existing
+                    if school is not None and getattr(user, 'school_id', None) is None:
+                        try:
+                            user.school = school
+                            user.save(update_fields=['school'])
+                        except Exception:
+                            pass
+            else:
+                if getattr(user, 'role', None) != 'student':
+                    raise serializers.ValidationError({'user_id': 'User role must be student'})
+                if school is not None and getattr(user, 'school_id', None) is None:
+                    try:
+                        user.school = school
+                        user.save(update_fields=['school'])
+                    except Exception:
+                        pass
+
+            if user is not None:
+                if Student.objects.filter(user=user).exists():
+                    raise serializers.ValidationError({'user_id': 'This user account is already linked to another student'})
+
+            try:
+                if user is None:
+                    user = User.objects.create_user(
+                        username=username,
+                        password=password,
+                        role='student',
+                        first_name=first_name,
+                        last_name=last_name,
+                        email=validated_data.get('email', '') or '',
+                        phone=validated_data.get('phone', '') or '',
+                        school=school,
+                    )
+                if school is not None:
+                    student = Student.objects.create(user=user, school=school, **validated_data)
+                else:
+                    student = Student.objects.create(user=user, **validated_data)
+            except IntegrityError:
+                # Normalize common uniqueness issues into user-friendly 400s
+                if admission_no:
+                    raise serializers.ValidationError({'admission_no': 'A student with this admission number already exists'})
+                raise serializers.ValidationError({'detail': 'Failed to create student due to a constraint violation'})
+
+        return student
 
     def get_photo_url(self, obj):
         request = self.context.get('request')

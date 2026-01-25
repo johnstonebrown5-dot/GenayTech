@@ -5,11 +5,13 @@ import api from '../../api'
 import { parseIntent, bestFuzzy } from './intentParser'
 import { useAuth } from '../../auth'
 import helpContent from '../../content/helpContent.json'
+import { useNotification } from '../NotificationContext'
 
 export default function AssistantPanel(){
   const { open, closePanel, memory, setMemory, pushIntent } = useAssistant()
   const navigate = useNavigate()
   const { user } = useAuth()
+  const { showSuccess, showError } = useNotification()
   const [input, setInput] = React.useState('')
   const [messages, setMessages] = React.useState(() => {
     const name = user?.first_name || user?.username || 'there'
@@ -604,6 +606,7 @@ export default function AssistantPanel(){
       if (klass) payload.klass = klass
       await api.post('/academics/students/', payload)
       append('assistant', 'Student created.')
+      try { showSuccess('Student Added', `Student ${name} has been added successfully.`) } catch {}
       setMemory(prev => ({ ...prev, lastResource: { type: 'student' } }))
       setFlow(null); setFlowData({})
       navigate('/admin/students')
@@ -616,10 +619,11 @@ export default function AssistantPanel(){
         if (parts.length) msg = parts.join('; ')
       }
       append('assistant', `Failed to add student: ${msg}`)
+      try { showError('Failed to Add Student', msg) } catch {}
     }finally{
       setBusy(false)
     }
-  }, [flowData, resolveClassIdByName, append, setMemory, navigate])
+  }, [flowData, resolveClassIdByName, append, setMemory, navigate, showSuccess, showError])
 
   const handleSearch = React.useCallback(async ({ scope, q }) => {
     const ql = (q || '').toLowerCase().trim()
@@ -843,7 +847,7 @@ export default function AssistantPanel(){
                 <input placeholder="Class (optional)" value={flowData.className || ''} onChange={e=>setFlowData(d=>({ ...d, className: e.target.value }))} style={{ height: 36, borderRadius: 8, border: '1px solid #e5e7eb', padding: '0 10px' }} />
                 <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
                   <button onClick={()=>{ setFlow(null); setFlowData({}); }} disabled={busy} style={{ height: 36, padding: '0 12px' }}>Cancel</button>
-                  <button onClick={submitAddStudent} disabled={busy} style={{ height: 36, padding: '0 12px', background: '#2563eb', color: 'white', border: 'none', borderRadius: 6 }}>Add Student</button>
+                  <button onClick={submitAddStudent} disabled={busy} style={{ height: 36, padding: '0 12px', background: '#2563eb', color: 'white', border: 'none', borderRadius: 6 }}>{busy ? 'Adding…' : 'Add Student'}</button>
                 </div>
               </div>
             )}

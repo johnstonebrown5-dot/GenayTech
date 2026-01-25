@@ -1,4 +1,4 @@
-from django.core.mail import send_mail, EmailMessage
+from django.core.mail import send_mail, EmailMessage, EmailMultiAlternatives
 from django.conf import settings
 import logging
 from datetime import datetime
@@ -7,14 +7,135 @@ import threading
 import json
 import requests
 import os
+import mimetypes
 from requests.adapters import HTTPAdapter
 from urllib3.util import ssl_  # type: ignore
 from urllib3.util.retry import Retry  # type: ignore
 import ssl as pyssl
 from django.utils import timezone
 import phonenumbers
+from django.template.loader import render_to_string
+from django.core.files.storage import default_storage
+from email.mime.image import MIMEImage
 
 logger = logging.getLogger(__name__)
+
+
+def _resolve_school_email_context(school_id: int | None) -> dict:
+    ctx: dict = {
+        'school_name': 'EduTrack',
+        'school_address': '',
+        'school_phone': '',
+        'school_email': '',
+        'school_website': '',
+        'logo_url': '',
+        'logo_cid': '',
+    }
+    if not school_id:
+        return ctx
+    try:
+        from accounts.models import School
+        school = School.objects.filter(id=school_id).first()
+    except Exception:
+        school = None
+    if not school:
+        return ctx
+
+    ctx['school_name'] = getattr(school, 'name', '') or ctx['school_name']
+    ctx['school_address'] = getattr(school, 'address', '') or ''
+
+    homepage = getattr(school, 'homepage', None) or {}
+    social = getattr(school, 'social_links', None) or {}
+    contact = homepage.get('contact') if isinstance(homepage, dict) else None
+    if not isinstance(contact, dict):
+        contact = {}
+
+    def _first_nonempty(*vals):
+        for v in vals:
+            try:
+                s = str(v or '').strip()
+            except Exception:
+                s = ''
+            if s:
+                return s
+        return ''
+
+    ctx['school_phone'] = _first_nonempty(
+        contact.get('phone'),
+        contact.get('tel'),
+        contact.get('telephone'),
+        homepage.get('phone') if isinstance(homepage, dict) else None,
+        social.get('phone') if isinstance(social, dict) else None,
+    )
+    ctx['school_email'] = _first_nonempty(
+        contact.get('email'),
+        homepage.get('email') if isinstance(homepage, dict) else None,
+        social.get('email') if isinstance(social, dict) else None,
+    )
+    ctx['school_website'] = _first_nonempty(
+        contact.get('website'),
+        homepage.get('website') if isinstance(homepage, dict) else None,
+        social.get('website') if isinstance(social, dict) else None,
+    )
+
+    logo_url = ''
+    try:
+        if getattr(school, 'logo', None):
+            logo_url = getattr(school.logo, 'url', '') or ''
+    except Exception:
+        logo_url = ''
+    if logo_url and (logo_url.startswith('http://') or logo_url.startswith('https://')):
+        ctx['logo_url'] = logo_url
+    return ctx
+
+
+def _try_attach_logo(email: EmailMultiAlternatives, *, school_id: int | None, cid: str = 'school_logo') -> dict:
+    if not school_id:
+        return {'logo_cid': ''}
+    try:
+        from accounts.models import School
+        school = School.objects.filter(id=school_id).only('id', 'logo').first()
+    except Exception:
+        school = None
+    if not school or not getattr(school, 'logo', None):
+        return {'logo_cid': ''}
+    try:
+        name = getattr(getattr(school, 'logo', None), 'name', '') or ''
+        if not name:
+            return {'logo_cid': ''}
+        with default_storage.open(name, 'rb') as f:
+            data = f.read()
+        if not data:
+            return {'logo_cid': ''}
+        mime, _ = mimetypes.guess_type(name)
+        mime = mime or 'image/png'
+        if not mime.startswith('image/'):
+            return {'logo_cid': ''}
+        subtype = mime.split('/', 1)[1]
+        img = MIMEImage(data, _subtype=subtype)
+        img.add_header('Content-ID', f'<{cid}>')
+        img.add_header('Content-Disposition', 'inline', filename=os.path.basename(name) or 'logo')
+        email.attach(img)
+        return {'logo_cid': cid}
+    except Exception:
+        return {'logo_cid': ''}
+
+
+def _append_contact_to_text(text_message: str, ctx: dict) -> str:
+    msg = text_message or ''
+    school_name = str(ctx.get('school_name') or '').strip()
+    school_address = str(ctx.get('school_address') or '').strip()
+    school_phone = str(ctx.get('school_phone') or '').strip()
+    school_email = str(ctx.get('school_email') or '').strip()
+    school_website = str(ctx.get('school_website') or '').strip()
+    parts = [p for p in [school_address, school_phone, school_email, school_website] if p]
+    if school_name or parts:
+        msg = (msg.rstrip() + "\n\n---\n").rstrip() + "\n"
+        if school_name:
+            msg += f"{school_name}\n"
+        if parts:
+            msg += " • ".join(parts) + "\n"
+    return msg
 
 
 def log_delivery(*, school_id: int | None, channel: str, recipient: str, ok: bool, message: str = '', context: str = '') -> None:
@@ -263,7 +384,7 @@ def send_sms(phone: str, message: str) -> bool:
             pass
 
 
-def send_email_safe(subject: str, message: str, recipient: str, reply_to: list[str] | None = None, from_name: str | None = None) -> bool:
+def send_email_safe(subject: str, message: str, recipient: str, reply_to: list[str] | None = None, from_name: str | None = None, school_id: int | None = None) -> bool:
     if not recipient:
         return False
     # In local/dev, allow skipping real SMTP to avoid timeouts
@@ -286,19 +407,29 @@ def send_email_safe(subject: str, message: str, recipient: str, reply_to: list[s
     except Exception:
         from_email = base_from
 
-    # 1) Try using current Django settings (usually TLS on 587)
+    ctx = _resolve_school_email_context(school_id)
+    text_message = _append_contact_to_text(message or '', ctx)
+
+    def _build_email(connection=None):
+        email = EmailMultiAlternatives(subject or 'Notification', text_message or '', from_email, [recipient], connection=connection)
+        if reply_to:
+            try:
+                email.reply_to = reply_to
+            except Exception:
+                pass
+        logo_meta = _try_attach_logo(email, school_id=school_id)
+        wrapped_html = render_to_string(
+            'email_text_wrapper.html',
+            {**ctx, 'subject': subject or 'Notification', 'text_message': message or '', 'logo_cid': logo_meta.get('logo_cid') or ''},
+        )
+        if wrapped_html:
+            email.attach_alternative(wrapped_html, 'text/html')
+        return email
+
     try:
-        if reply_to or from_name:
-            email = EmailMessage(subject or 'Notification', message or '', from_email, [recipient])
-            if reply_to:
-                try: email.reply_to = reply_to
-                except Exception: pass
-            email.send(fail_silently=False)
-            return True
-        else:
-            sent = send_mail(subject or 'Notification', message, from_email, [recipient], fail_silently=False)
-            if sent > 0:
-                return True
+        email = _build_email(connection=None)
+        email.send(fail_silently=False)
+        return True
     except Exception as e:
         logger.warning("Primary SMTP send failed (TLS/port from settings): %s", e)
 
@@ -316,10 +447,7 @@ def send_email_safe(subject: str, message: str, recipient: str, reply_to: list[s
         )
         conn.open()
         try:
-            email = EmailMessage(subject or 'Notification', message or '', from_email, [recipient], connection=conn)
-            if reply_to:
-                try: email.reply_to = reply_to
-                except Exception: pass
+            email = _build_email(connection=conn)
             email.send(fail_silently=False)
             return True
         finally:
@@ -344,7 +472,7 @@ def send_email_safe(subject: str, message: str, recipient: str, reply_to: list[s
         )
         conn.open()
         try:
-            email = EmailMessage(subject or 'Notification', message or '', from_email, [recipient], connection=conn)
+            email = _build_email(connection=conn)
             email.send(fail_silently=False)
             return True
         finally:
@@ -357,13 +485,144 @@ def send_email_safe(subject: str, message: str, recipient: str, reply_to: list[s
         return False
 
 
-def send_email_with_attachment(subject: str, message: str, recipient: str, filename: str, content: bytes, mimetype: str = 'application/pdf') -> bool:
+def send_email_safe_html(
+     subject: str,
+     text_message: str,
+     html_message: str,
+     recipient: str,
+     reply_to: list[str] | None = None,
+     from_name: str | None = None,
+     school_id: int | None = None,
+ ) -> bool:
+     if not recipient:
+         return False
+     try:
+         if getattr(settings, 'EMAIL_LOOPBACK', False):
+             logger.info("EMAIL_LOOPBACK enabled; pretending to send email to %s (subject=%r)", recipient, subject)
+             return True
+     except Exception:
+         pass
+
+     host_user = getattr(settings, 'EMAIL_HOST_USER', '')
+     host_pass = getattr(settings, 'EMAIL_HOST_PASSWORD', '')
+     if not host_user or not host_pass:
+         logger.warning("Email credentials missing; skipping email to %s", recipient)
+         return False
+
+     base_from = getattr(settings, 'DEFAULT_FROM_EMAIL', host_user or 'no-reply@example.com')
+     from_email = base_from
+     try:
+         if from_name:
+             from_email = f"{from_name} <{base_from}>"
+     except Exception:
+         from_email = base_from
+
+     ctx = _resolve_school_email_context(school_id)
+     final_text = _append_contact_to_text(text_message or '', ctx)
+     wrapped_html = render_to_string(
+         'email_html_wrapper.html',
+         {**ctx, 'subject': subject or 'Notification', 'inner_html': html_message or ''},
+     )
+
+     def _build_email(connection=None):
+         email = EmailMultiAlternatives(
+             subject or 'Notification',
+             final_text or '',
+             from_email,
+             [recipient],
+             connection=connection,
+         )
+         if reply_to:
+             try:
+                 email.reply_to = reply_to
+             except Exception:
+                 pass
+         if wrapped_html:
+             email.attach_alternative(wrapped_html, 'text/html')
+         logo_meta = _try_attach_logo(email, school_id=school_id)
+         if logo_meta.get('logo_cid'):
+             wrapped_html2 = render_to_string(
+                 'email_html_wrapper.html',
+                 {**ctx, 'subject': subject or 'Notification', 'inner_html': html_message or '', 'logo_cid': logo_meta.get('logo_cid')},
+             )
+             email.alternatives = [(wrapped_html2, 'text/html')]
+         return email
+
+     try:
+         email = _build_email(connection=None)
+         email.send(fail_silently=False)
+         return True
+     except Exception as e:
+         logger.warning("Primary SMTP send failed (HTML) for %s: %s", recipient, e)
+
+     try:
+         from django.core.mail import get_connection
+         conn = get_connection(
+             host=getattr(settings, 'EMAIL_HOST', 'smtp.gmail.com'),
+             port=int(getattr(settings, 'EMAIL_PORT', 587) or 587),
+             username=host_user,
+             password=host_pass,
+             use_tls=True,
+             use_ssl=False,
+             timeout=20,
+         )
+         conn.open()
+         try:
+             email = _build_email(connection=conn)
+             email.send(fail_silently=False)
+             return True
+         finally:
+             try:
+                 conn.close()
+             except Exception:
+                 pass
+     except Exception as e:
+         logger.warning("SMTP TLS fallback failed (HTML) for %s: %s", recipient, e)
+
+     try:
+         from django.core.mail import get_connection
+         conn = get_connection(
+             host=getattr(settings, 'EMAIL_HOST', 'smtp.gmail.com'),
+             port=465,
+             username=host_user,
+             password=host_pass,
+             use_tls=False,
+             use_ssl=True,
+             timeout=20,
+         )
+         conn.open()
+         try:
+             email = _build_email(connection=conn)
+             email.send(fail_silently=False)
+             return True
+         finally:
+             try:
+                 conn.close()
+             except Exception:
+                 pass
+     except Exception as e:
+         logger.exception("All SMTP attempts failed (HTML) for %s: %s", recipient, e)
+         return False
+
+
+def send_email_with_attachment(subject: str, message: str, recipient: str, filename: str, content: bytes, mimetype: str = 'application/pdf', school_id: int | None = None) -> bool:
     """Send an email with a single attachment. Returns False on error."""
     if not recipient:
         return False
     try:
-        from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', 'no-reply@example.com')
-        email = EmailMessage(subject or 'Notification', message or '', from_email, [recipient])
+        base_from = getattr(settings, 'DEFAULT_FROM_EMAIL', 'no-reply@example.com')
+        from_email = base_from
+        ctx = _resolve_school_email_context(school_id)
+        final_text = _append_contact_to_text(message or '', ctx)
+
+        email = EmailMultiAlternatives(subject or 'Notification', final_text or '', from_email, [recipient])
+        logo_meta = _try_attach_logo(email, school_id=school_id)
+        wrapped_html = render_to_string(
+            'email_text_wrapper.html',
+            {**ctx, 'subject': subject or 'Notification', 'text_message': message or '', 'logo_cid': logo_meta.get('logo_cid') or ''},
+        )
+        if wrapped_html:
+            email.attach_alternative(wrapped_html, 'text/html')
         if content is not None:
             email.attach(filename or 'attachment.pdf', content, mimetype or 'application/octet-stream')
         email.send(fail_silently=True)
@@ -495,7 +754,7 @@ def process_arrears_campaign(campaign_id: int):
                 if recipient:
                     ok = False
                     try:
-                        ok = send_email_safe(campaign.email_subject or 'School Fees Arrears', msg, recipient)
+                        ok = send_email_safe(campaign.email_subject or 'School Fees Arrears', msg, recipient, school_id=getattr(campaign, 'school_id', None))
                     except Exception:
                         logger.exception("send_email_safe crashed for %s", recipient)
                         ok = False
@@ -607,7 +866,7 @@ def process_message_delivery(message_id: int):
             if email:
                 ok_email = False
                 try:
-                    ok_email = send_email_safe(subject, msg.body, email)
+                    ok_email = send_email_safe(subject, msg.body, email, school_id=getattr(msg, 'school_id', None))
                     if ok_email:
                         sent_email += 1
                 except Exception:
@@ -697,7 +956,7 @@ def deliver_message_collect(message_id: int) -> dict:
             if email:
                 ok_email = False
                 try:
-                    ok_email = send_email_safe(subject, msg.body, email)
+                    ok_email = send_email_safe(subject, msg.body, email, school_id=getattr(msg, 'school_id', None))
                 except Exception:
                     logger.exception("Failed to email user %s", getattr(u, 'id', ''))
                     ok_email = False
@@ -862,7 +1121,7 @@ def notify_enrollment(student) -> bool:
         if recipient:
             try:
                 subj = f"Enrollment Confirmation{(' - ' + getattr(school,'name','')) if school else ''}"
-                ok = send_email_safe(subj, body, recipient)
+                ok = send_email_safe(subj, body, recipient, school_id=school_id)
             except Exception:
                 ok = False
             try:
@@ -945,7 +1204,7 @@ def notify_payment_received(invoice, payment) -> bool:
         if recipient:
             try:
                 subj = f"Fee payment received - Invoice {invoice.id}"
-                send_email_safe(subj, body, recipient)
+                send_email_safe(subj, body, recipient, school_id=school_id)
             except Exception:
                 pass
         return True

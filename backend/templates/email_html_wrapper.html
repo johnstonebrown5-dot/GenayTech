@@ -1,0 +1,7 @@
+{% extends "email_base.html" %}
+
+{% block title %}{{ subject }}{% endblock %}
+
+{% block content %}
+  {{ inner_html|safe }}
+{% endblock %}

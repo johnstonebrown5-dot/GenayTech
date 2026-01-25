@@ -22,6 +22,8 @@ from .views import (
     password_reset_request,
     password_reset_verify,
     password_reset_confirm,
+    users_delete_otp_request,
+    users_delete_otp_confirm,
 )
 
 urlpatterns = [
@@ -36,6 +38,8 @@ urlpatterns = [
     path('users/status/', update_user_status, name='users-status'),
     path('users/reset_password/', reset_password, name='users-reset-password'),
     path('users/change_password/', change_password, name='users-change-password'),
+    path('users/delete/otp/request/', users_delete_otp_request, name='users-delete-otp-request'),
+    path('users/delete/otp/confirm/', users_delete_otp_confirm, name='users-delete-otp-confirm'),
     path('password-reset/request/', password_reset_request, name='password-reset-request'),
     path('password-reset/verify/', password_reset_verify, name='password-reset-verify'),
     path('password-reset/confirm/', password_reset_confirm, name='password-reset-confirm'),

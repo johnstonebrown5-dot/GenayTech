@@ -11,6 +11,7 @@ from django.db.models import Sum, Avg
 from django.http import HttpResponse
 from django.conf import settings
 from django.core.cache import cache
+from django.template.loader import render_to_string
 import threading
 from io import BytesIO, StringIO
 from datetime import date
@@ -30,7 +31,7 @@ except Exception:
     REPORTLAB_AVAILABLE = False
 import csv, io
 from django_filters.rest_framework import DjangoFilterBackend
-from communications.utils import send_sms, send_email_safe, log_delivery, create_messages_for_users, resolve_default_sender_id
+from communications.utils import send_sms, send_email_safe, send_email_safe_html, send_email_with_attachment, log_delivery, create_messages_for_users, resolve_default_sender_id
 from communications.models import DeliveryLog
 from finance.models import Invoice, Payment
 from .models import (
@@ -393,7 +394,7 @@ class ClassViewSet(viewsets.ModelViewSet):
                 if email:
                     try:
                         subj = f"Fees balance update - {class_name}"
-                        ok_email = send_email_safe(subj, body, email)
+                        ok_email = send_email_safe(subj, body, email, school_id=school_id)
                     except Exception:
                         ok_email = False
                     try:
@@ -632,7 +633,7 @@ class ClassViewSet(viewsets.ModelViewSet):
                 return Response({'detail': 'No email on record'}, status=status.HTTP_400_BAD_REQUEST)
             try:
                 subj = f"Fees balance update - {class_name}"
-                ok = send_email_safe(subj, body, email)
+                ok = send_email_safe(subj, body, email, school_id=school_id)
             except Exception:
                 ok = False
             try:
@@ -1042,7 +1043,7 @@ class ClassViewSet(viewsets.ModelViewSet):
                 if email:
                     ok_email = False
                     try:
-                        ok_email = send_email_safe(exam_name, msg, email)
+                        ok_email = send_email_safe(exam_name, msg, email, school_id=school_id)
                     except Exception:
                         ok_email = False
                     try:
@@ -2836,10 +2837,11 @@ class ExamViewSet(viewsets.ModelViewSet):
                                     recipient=recipient,
                                     filename=filename,
                                     content=attachment_bytes,
-                                    mimetype='application/pdf'
+                                    mimetype='application/pdf',
+                                    school_id=getattr(getattr(exam_local, 'klass', None), 'school_id', None),
                                 )
                             else:
-                                send_email_safe(f"{exam_local.name} Results", body, recipient)
+                                send_email_safe(f"{exam_local.name} Results", body, recipient, school_id=getattr(getattr(exam_local, 'klass', None), 'school_id', None))
                     except Exception:
                         pass
 
@@ -4695,12 +4697,22 @@ class StudentViewSet(viewsets.ModelViewSet):
         message = (
             'Use this 6-digit verification code to confirm the bulk students action:\n\n'
             f'{code}\n\n'
-            'This code expires in 10 minutes.'
+            'This code expires in 10 minutes. If you did not request this, you can safely ignore this email.'
+        )
+        html_message = render_to_string(
+            'verification_code_email.html',
+            {
+                'brand': 'EduTrack',
+                'title': 'Verify your email address',
+                'intro': 'To confirm the bulk students action, please enter the verification code below in the app.',
+                'code': code,
+                'footer': 'This code expires in 10 minutes. If you did not request this, you can safely ignore this email.',
+            },
         )
 
         ok = False
         try:
-            ok = send_email_safe(subject, message, recipient)
+            ok = send_email_safe_html(subject, message, html_message, recipient, school_id=getattr(user, 'school_id', None))
         except Exception:
             ok = False
 

@@ -8,14 +8,15 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from django.contrib.auth import get_user_model
 from .serializers import UserSerializer, SchoolSerializer, NonTeachingStaffSerializer
 from .permissions import IsAdminOrStaff
-from django.db import IntegrityError
+from django.db import IntegrityError, transaction
 from django.db.models import Q
 from django.utils.text import slugify
+from django.utils.crypto import get_random_string
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
 from .models import School, EmailVerificationToken, NonTeachingStaff, PasswordResetCode
 from django.core.cache import cache
-from django.core.mail import send_mail
+from django.template.loader import render_to_string
 from django.conf import settings
 from datetime import timedelta
 import secrets
@@ -26,6 +27,7 @@ from django.db.models import Q
 from django.core.files.storage import default_storage
 from django.core.files.base import ContentFile
 import requests
+from communications.utils import send_email_safe_html, send_email_safe
 
 User = get_user_model()
 
@@ -258,7 +260,7 @@ def create_user(request):
     """
     data = request.data
     username = data.get('username')
-    password = data.get('password') or User.objects.make_random_password()
+    password = data.get('password') or get_random_string(12)
     role = data.get('role')
     if not username or not role:
         return Response({"detail": "username and role are required"}, status=400)
@@ -312,7 +314,7 @@ def reset_password(request):
     user_id = request.data.get('user_id')
     new_password = request.data.get('new_password')
     if not user_id or not new_password:
-        return Response({"detail": "user_id and new_password required"}, status=400)
+      return Response({"detail": "user_id and new_password required"}, status=400)
     try:
         u = User.objects.get(id=user_id)
     except User.DoesNotExist:
@@ -328,6 +330,161 @@ def reset_password(request):
     u.set_password(new_password)
     u.save(update_fields=['password'])
     return Response({"detail": "Password reset"})
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated, IsAdminOrStaff])
+@parser_classes([JSONParser])
+def users_delete_otp_request(request):
+    data = request.data or {}
+    raw_ids = data.get('user_ids')
+    if raw_ids is None:
+        raw_ids = data.get('user_id')
+    if raw_ids is None:
+        return Response({"detail": "user_id or user_ids is required"}, status=400)
+
+    if isinstance(raw_ids, (list, tuple)):
+        ids = list(raw_ids)
+    else:
+        ids = [raw_ids]
+
+    try:
+        ids = [int(x) for x in ids if x is not None and str(x).strip() != '']
+    except Exception:
+        return Response({"detail": "Invalid user_ids"}, status=400)
+    ids = sorted(set(ids))
+    if not ids:
+        return Response({"detail": "user_ids cannot be empty"}, status=400)
+
+    admin_email = (getattr(request.user, 'email', '') or '').strip().lower()
+    if not admin_email:
+        return Response({"detail": "Your account has no email address. Add an email to receive OTP."}, status=400)
+
+    ip = request.META.get('HTTP_X_FORWARDED_FOR', '').split(',')[0].strip() or request.META.get('REMOTE_ADDR', '')
+    rate_key = f"del_user_req:{request.user.id}:{ip}"
+    attempts = cache.get(rate_key, 0)
+    if attempts and int(attempts) >= 10:
+        return Response({"detail": "Too many requests. Try again later."}, status=429)
+    cache.set(rate_key, int(attempts) + 1, 60 * 60)
+
+    code_int = secrets.randbelow(900000) + 100000
+    code = f"{code_int:06d}"
+    expires_in = 15 * 60
+    cache_key = f"del_user_otp:{request.user.id}"
+    cache.set(
+        cache_key,
+        {
+            'code': code,
+            'expires_at': int(timezone.now().timestamp()) + expires_in,
+            'attempts': 0,
+            'user_ids': ids,
+        },
+        expires_in,
+    )
+
+    subject = "EduTrack delete user verification code"
+    text_message = (
+        "Use this 6-digit verification code to confirm deleting user account(s):\n\n"
+        f"{code}\n\n"
+        "This code expires in 15 minutes. If you did not request this, you can safely ignore this email."
+    )
+    try:
+        html_message = render_to_string(
+            'verification_code_email.html',
+            {
+                'brand': 'EduTrack',
+                'title': 'Confirm delete user',
+                'intro': f"Enter the verification code below to confirm deleting {len(ids)} user account(s).",
+                'code': code,
+                'footer': 'This code expires in 15 minutes. If you did not request this, you can safely ignore this email.',
+            },
+        )
+    except Exception:
+        html_message = ''
+    try:
+        send_email_safe_html(subject, text_message, html_message, admin_email, school_id=getattr(request.user, 'school_id', None))
+    except Exception:
+        pass
+
+    return Response({"detail": "OTP sent"})
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated, IsAdminOrStaff])
+@parser_classes([JSONParser])
+def users_delete_otp_confirm(request):
+    data = request.data or {}
+    code = (data.get('code') or '').strip()
+    raw_ids = data.get('user_ids')
+    if raw_ids is None:
+        raw_ids = data.get('user_id')
+    if not code or raw_ids is None:
+        return Response({"detail": "code and user_id/user_ids are required"}, status=400)
+
+    if isinstance(raw_ids, (list, tuple)):
+        ids = list(raw_ids)
+    else:
+        ids = [raw_ids]
+    try:
+        ids = [int(x) for x in ids if x is not None and str(x).strip() != '']
+    except Exception:
+        return Response({"detail": "Invalid user_ids"}, status=400)
+    ids = sorted(set(ids))
+    if not ids:
+        return Response({"detail": "user_ids cannot be empty"}, status=400)
+
+    cache_key = f"del_user_otp:{request.user.id}"
+    rec = cache.get(cache_key)
+    if not rec:
+        return Response({"detail": "OTP expired. Request a new one."}, status=400)
+
+    now_ts = int(timezone.now().timestamp())
+    exp = int(rec.get('expires_at') or 0)
+    if exp and now_ts >= exp:
+        cache.delete(cache_key)
+        return Response({"detail": "OTP expired. Request a new one."}, status=400)
+    if int(rec.get('attempts') or 0) >= 5:
+        cache.delete(cache_key)
+        return Response({"detail": "Too many attempts. Request a new OTP."}, status=400)
+
+    expected_ids = sorted([int(x) for x in (rec.get('user_ids') or [])])
+    if expected_ids != ids:
+        return Response({"detail": "OTP does not match this delete request. Request a new OTP."}, status=400)
+
+    if str(rec.get('code') or '') != code:
+        rec['attempts'] = int(rec.get('attempts') or 0) + 1
+        ttl = max(1, exp - now_ts) if exp else 60
+        cache.set(cache_key, rec, ttl)
+        return Response({"detail": "Invalid OTP"}, status=400)
+
+    if request.user.id in ids:
+        return Response({"detail": "You cannot delete your own account"}, status=403)
+
+    qs = User.objects.filter(id__in=ids)
+    found_ids = set(qs.values_list('id', flat=True))
+    missing = [i for i in ids if i not in found_ids]
+    if missing:
+        return Response({"detail": f"User(s) not found: {', '.join([str(x) for x in missing])}"}, status=404)
+
+    if not request.user.is_superuser:
+        if qs.filter(Q(is_superuser=True) | Q(is_staff=True)).exists():
+            return Response({"detail": "Not allowed to delete staff/superuser accounts"}, status=403)
+
+    if not (request.user.is_superuser or request.user.is_staff):
+        req_school_id = getattr(getattr(request.user, 'school', None), 'id', None)
+        if not req_school_id:
+            return Response({"detail": "Not allowed"}, status=403)
+        if qs.exclude(school_id=req_school_id).exists():
+            return Response({"detail": "Not allowed: one or more users are not in your school"}, status=403)
+
+    with transaction.atomic():
+        deleted_count = 0
+        for u in qs.select_for_update():
+            u.delete()
+            deleted_count += 1
+
+    cache.delete(cache_key)
+    return Response({"detail": "User(s) deleted", "deleted": deleted_count})
 
 
 @api_view(["POST"])
@@ -391,19 +548,22 @@ def password_reset_request(request):
     # Send email best-effort
     subject = "EduTrack password reset code"
     message = (
-        f"Hello {user.first_name or user.username},\n\n"
-        f"Your EduTrack password reset code is: {code}.\n"
-        "This code will expire in 15 minutes. If you did not request this, you can ignore this email.\n\n"
-        "Thanks,\nEduTrack"
+        f"Use this 6-digit verification code to reset your EduTrack password:\n\n"
+        f"{code}\n\n"
+        "This code expires in 15 minutes. If you did not request this, you can safely ignore this email."
+    )
+    html_message = render_to_string(
+        'verification_code_email.html',
+        {
+            'brand': 'EduTrack',
+            'title': 'Verify your email address',
+            'intro': 'To reset your password, please enter the verification code below in the app.',
+            'code': code,
+            'footer': 'This code expires in 15 minutes. If you did not request this, you can safely ignore this email.',
+        },
     )
     try:
-        send_mail(
-            subject=subject,
-            message=message,
-            from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', None) or 'no-reply@edutrack.local',
-            recipient_list=[raw_email],
-            fail_silently=True,
-        )
+        send_email_safe_html(subject, message, html_message, raw_email, school_id=getattr(user, 'school_id', None))
     except Exception:
         # Do not expose internal errors to client
         pass
@@ -967,7 +1127,7 @@ def trial_signup(request):
     verify_url = request.build_absolute_uri(f"/api/auth/verify-email/?token={token}")
     # Send welcome email (best-effort)
     try:
-        send_mail(
+        send_email_safe(
             subject="Welcome to EduTrack — Your 14‑day trial",
             message=(
                 f"Hi {admin_first_name or 'there'},\n\n"
@@ -976,9 +1136,8 @@ def trial_signup(request):
                 "Please verify your email by opening this link: " + verify_url + "\n\n"
                 "Thanks for trying EduTrack!"
             ),
-            from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', None) or 'no-reply@edutrack.local',
-            recipient_list=[admin_email],
-            fail_silently=True,
+            recipient=admin_email,
+            school_id=getattr(school, 'id', None),
         )
     except Exception:
         pass

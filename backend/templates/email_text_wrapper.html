@@ -1,0 +1,7 @@
+{% extends "email_base.html" %}
+
+{% block title %}{{ subject }}{% endblock %}
+
+{% block content %}
+  <div style="font-size: 14px; line-height: 1.6; white-space: pre-line;">{{ text_message }}</div>
+{% endblock %}

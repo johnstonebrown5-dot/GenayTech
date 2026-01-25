@@ -2,6 +2,7 @@ from django.db.models.signals import post_save
 from django.dispatch import receiver
 from django.apps import apps
 from django.conf import settings
+import threading
 
 @receiver(post_save, sender='accounts.School')
 def create_default_subjects_for_school(sender, instance, created, **kwargs):
@@ -44,7 +45,7 @@ def notify_student_enrollment(sender, instance, created, **kwargs):
         return
     try:
         from communications.utils import notify_enrollment
-        notify_enrollment(instance)
+        threading.Thread(target=notify_enrollment, args=(instance,), daemon=True).start()
     except Exception:
         # Avoid breaking save flow
         pass

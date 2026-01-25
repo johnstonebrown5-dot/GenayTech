@@ -245,9 +245,17 @@ export default function AdminStudents(){
       showSuccess('Student Enrolled', `Student ${form.name} has been successfully enrolled with account created. Username: ${form.admission_no}, Password: ${form.guardian_id}`)
     } catch (err) {
       setAddStatus('idle')
-      const msg = err?.response?.data ? JSON.stringify(err.response.data) : (err?.message || 'Failed to enroll student')
+      const data = err?.response?.data
+      let msg = data?.detail || err?.message || 'Failed to enroll student'
+      if (data && typeof data === 'object' && !Array.isArray(data)) {
+        const parts = []
+        Object.keys(data).forEach(k => {
+          parts.push(`${k}: ${Array.isArray(data[k]) ? data[k].join(' ') : String(data[k])}`)
+        })
+        if (parts.length) msg = parts.join('; ')
+      }
       setAddError(msg)
-      showError('Failed to Enroll Student', 'There was an error enrolling the student. Please try again.')
+      showError('Failed to Enroll Student', msg)
     }
   }
 

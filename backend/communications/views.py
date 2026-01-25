@@ -180,7 +180,7 @@ class DeliveryLogViewSet(viewsets.ReadOnlyModelViewSet):
                     ok = send_sms(rec.recipient, rec.message_snippet or '')
                 elif rec.channel == 'email':
                     subj = "Delivery retry"
-                    ok = send_email_safe(subj, rec.message_snippet or '', rec.recipient)
+                    ok = send_email_safe(subj, rec.message_snippet or '', rec.recipient, school_id=getattr(rec, 'school_id', None))
             except Exception:
                 ok = False
             try:
@@ -494,7 +494,7 @@ class ContactInquiryView(APIView):
             body = "\n".join(lines)
 
             # Send to support mailbox
-            send_email_safe(subject, body, "edutrack46@gmail.com")
+            send_email_safe(subject, body, "edutrack46@gmail.com", school_id=None)
             return Response({"detail": "sent"}, status=status.HTTP_200_OK)
         except Exception:
             logger.exception("Failed to send contact inquiry email")
@@ -578,7 +578,7 @@ class ReportIssueView(APIView):
                 user_email = str(getattr(user, 'email', '') or request.data.get('email') or '').strip()
                 display_name = (str(getattr(user, 'first_name', '') or '').strip() or getattr(user, 'username', '') or str(request.data.get('name') or 'User'))
                 reply_list = [user_email] if user_email else None
-                ok = send_email_safe(subject, body, to_addr, reply_to=reply_list, from_name=display_name)
+                ok = send_email_safe(subject, body, to_addr, reply_to=reply_list, from_name=display_name, school_id=school_id)
             except Exception:
                 ok = False
             if not ok:

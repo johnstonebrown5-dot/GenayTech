@@ -26,6 +26,11 @@ export default function AdminUsers(){
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(25)
   const [totalCount, setTotalCount] = useState(undefined)
+  const [showDeleteOtp, setShowDeleteOtp] = useState(false)
+  const [deleteIds, setDeleteIds] = useState([])
+  const [deleteCode, setDeleteCode] = useState('')
+  const [deleteSendingOtp, setDeleteSendingOtp] = useState(false)
+  const [deleteConfirming, setDeleteConfirming] = useState(false)
 
   const load = async () => {
     setLoading(true)
@@ -78,6 +83,46 @@ export default function AdminUsers(){
       showError('Bulk update failed', msg)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const beginDelete = async (ids) => {
+    const clean = Array.from(new Set((Array.isArray(ids) ? ids : []).map(x => Number(x)).filter(x => !Number.isNaN(x))))
+    if (clean.length === 0) return
+    setDeleteIds(clean)
+    setDeleteCode('')
+    setShowDeleteOtp(true)
+    setDeleteSendingOtp(true)
+    try {
+      await api.post('/auth/users/delete/otp/request/', { user_ids: clean })
+      showSuccess('OTP Sent', 'A verification code has been sent to your email. Enter it to confirm deletion.')
+    } catch (err) {
+      const msg = err?.response?.data?.detail || err?.message || 'Failed to request OTP.'
+      showError('Failed to request OTP', msg)
+      setShowDeleteOtp(false)
+    } finally {
+      setDeleteSendingOtp(false)
+    }
+  }
+
+  const confirmDelete = async (e) => {
+    e?.preventDefault?.()
+    if (!deleteCode || deleteCode.trim().length === 0) return
+    setDeleteConfirming(true)
+    try {
+      const { data } = await api.post('/auth/users/delete/otp/confirm/', { user_ids: deleteIds, code: deleteCode.trim() })
+      const deleted = data?.deleted
+      showSuccess('Users Deleted', `Deleted ${typeof deleted === 'number' ? deleted : deleteIds.length} user(s).`)
+      setShowDeleteOtp(false)
+      setDeleteIds([])
+      setDeleteCode('')
+      clearSelected()
+      await load()
+    } catch (err) {
+      const msg = err?.response?.data?.detail || err?.message || 'Failed to delete user(s).'
+      showError('Delete failed', msg)
+    } finally {
+      setDeleteConfirming(false)
     }
   }
   // Debounce search + react to role changes
@@ -280,9 +325,14 @@ export default function AdminUsers(){
                       <div className="text-gray-600 text-xs">{u.email}</div>
                     </div>
                     <div className="mt-3 flex justify-end">
-                      <button onClick={(e)=>{ e.stopPropagation(); toggleActive(u) }} className={`px-3 py-1 rounded-lg border-hairline ${u.is_active? 'text-red-700 bg-red-50 hover:bg-red-100':'text-green-700 bg-green-50 hover:bg-green-100'} transition`}>
-                        {u.is_active? 'Deactivate':'Activate'}
-                      </button>
+                      <div className="flex gap-2">
+                        <button onClick={(e)=>{ e.stopPropagation(); toggleActive(u) }} className={`px-3 py-1 rounded-lg border-hairline ${u.is_active? 'text-red-700 bg-red-50 hover:bg-red-100':'text-green-700 bg-green-50 hover:bg-green-100'} transition`}>
+                          {u.is_active? 'Deactivate':'Activate'}
+                        </button>
+                        <button onClick={(e)=>{ e.stopPropagation(); beginDelete([u.id]) }} className="px-3 py-1 rounded-lg border-hairline bg-red-600 text-white hover:bg-red-700 transition">
+                          Delete
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -346,9 +396,14 @@ export default function AdminUsers(){
                       <span className={`text-xs px-2 py-0.5 rounded-full ${u.is_active ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>{u.is_active ? 'Active' : 'Inactive'}</span>
                     </td>
                     <td>
-                      <button onClick={(e)=>{ e.stopPropagation(); toggleActive(u) }} className={`px-3 py-1 rounded-lg border-hairline ${u.is_active? 'text-red-700 bg-red-50 hover:bg-red-100':'text-green-700 bg-green-50 hover:bg-green-100'} transition`}>
-                        {u.is_active? 'Deactivate':'Activate'}
-                      </button>
+                      <div className="flex items-center justify-end gap-2">
+                        <button onClick={(e)=>{ e.stopPropagation(); toggleActive(u) }} className={`px-3 py-1 rounded-lg border-hairline ${u.is_active? 'text-red-700 bg-red-50 hover:bg-red-100':'text-green-700 bg-green-50 hover:bg-green-100'} transition`}>
+                          {u.is_active? 'Deactivate':'Activate'}
+                        </button>
+                        <button onClick={(e)=>{ e.stopPropagation(); beginDelete([u.id]) }} className="px-3 py-1 rounded-lg border-hairline bg-red-600 text-white hover:bg-red-700 transition">
+                          Delete
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -365,6 +420,7 @@ export default function AdminUsers(){
             )}
             <button disabled={isNoneSelected || loading} onClick={()=>bulkSetActive(false)} className={`px-3 py-1.5 rounded-lg border-hairline bg-red-50 text-red-700 hover:bg-red-100 transition ${isNoneSelected||loading? 'opacity-50 cursor-not-allowed':''}`}>Deactivate Selected</button>
             <button disabled={isNoneSelected || loading} onClick={()=>bulkSetActive(true)} className={`px-3 py-1.5 rounded-lg border-hairline bg-green-50 text-green-700 hover:bg-green-100 transition ${isNoneSelected||loading? 'opacity-50 cursor-not-allowed':''}`}>Activate Selected</button>
+            <button disabled={isNoneSelected || loading} onClick={()=>beginDelete(users.filter(u => selected.has(u.id)).map(u=>u.id))} className={`px-3 py-1.5 rounded-lg border-hairline bg-red-600 text-white hover:bg-red-700 transition ${isNoneSelected||loading? 'opacity-50 cursor-not-allowed':''}`}>Delete Selected</button>
             {!isNoneSelected && (
               <button onClick={clearSelected} className="px-3 py-1.5 rounded-lg border-hairline bg-gray-50 hover:bg-gray-100 transition">Clear</button>
             )}
@@ -445,6 +501,44 @@ export default function AdminUsers(){
                 <span className="inline-block h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
               )}
               {savingEdit ? 'Saving...' : 'Save Changes'}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal open={showDeleteOtp} onClose={()=>{ if (!deleteSendingOtp && !deleteConfirming) { setShowDeleteOtp(false); setDeleteIds([]); setDeleteCode('') } }} title="Delete User(s)" size="sm">
+        <form onSubmit={confirmDelete} className="grid gap-3">
+          <div className="text-sm text-gray-700">
+            {deleteIds.length === 1 ? (
+              <span>Deleting 1 user account requires OTP verification.</span>
+            ) : (
+              <span>Deleting {deleteIds.length} user accounts requires OTP verification.</span>
+            )}
+          </div>
+          <input
+            className="border p-2 rounded"
+            placeholder="Enter 6-digit OTP"
+            value={deleteCode}
+            onChange={e=>setDeleteCode(e.target.value)}
+            disabled={deleteSendingOtp || deleteConfirming}
+            required
+          />
+          <div className="flex justify-end gap-2 mt-2">
+            <button
+              type="button"
+              onClick={()=>{ if (!deleteSendingOtp && !deleteConfirming) { setShowDeleteOtp(false); setDeleteIds([]); setDeleteCode('') } }}
+              className="px-4 py-2 rounded border"
+              disabled={deleteSendingOtp || deleteConfirming}
+            >Cancel</button>
+            <button
+              type="submit"
+              disabled={deleteSendingOtp || deleteConfirming || !deleteCode.trim()}
+              className={`bg-red-600 text-white px-4 py-2 rounded flex items-center gap-2 ${(deleteSendingOtp || deleteConfirming || !deleteCode.trim())? 'opacity-60 cursor-not-allowed':''}`}
+            >
+              {(deleteSendingOtp || deleteConfirming) && (
+                <span className="inline-block h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              )}
+              {deleteSendingOtp ? 'Sending OTP...' : deleteConfirming ? 'Deleting...' : 'Confirm Delete'}
             </button>
           </div>
         </form>
