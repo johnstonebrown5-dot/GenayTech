@@ -28,7 +28,7 @@ export default function FloatingActions(){
     } catch {}
     const size = getFabSize()
     const x = Math.max(8, (window.innerWidth || 0) - 16 - size)
-    const y = Math.max(8, (window.innerHeight || 0) - 24 - size)
+    const y = Math.max(8, Math.round(((window.innerHeight || 0) - size) / 2))
     return { x, y }
   })
   const { pathname } = useLocation()

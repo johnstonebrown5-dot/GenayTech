@@ -11,6 +11,8 @@ import { showLoadingHint, setLoadingProgress, clearLoadingHint } from '../utils/
 let cachedStudents = null
 let cachedClasses = null
 let cachedTab = 'active'
+let cachedStudentsTotal = 0
+let cachedStudentsNext = ''
 let studentsCacheTimestamp = 0
 const STUDENTS_CACHE_TTL_MS = 5 * 60 * 1000 // 5 minutes
 
@@ -20,6 +22,17 @@ export default function AdminStudents(){
   const [studentsTotal, setStudentsTotal] = useState(0)
   const [studentsNext, setStudentsNext] = useState('') // pagination next URL for students
   const [loadingMore, setLoadingMore] = useState(false)
+  const [exporting, setExporting] = useState(false)
+  const [selectedStudentIds, setSelectedStudentIds] = useState([])
+  const [bulkOpen, setBulkOpen] = useState(false)
+  const [bulkAction, setBulkAction] = useState('')
+  const [bulkSubmitting, setBulkSubmitting] = useState(false)
+  const [bulkAgree, setBulkAgree] = useState(false)
+  const [bulkForm, setBulkForm] = useState({ gender: '', klass: '', boarding_status: '' })
+  const [bulkOtpCode, setBulkOtpCode] = useState('')
+  const [bulkOtpSending, setBulkOtpSending] = useState(false)
+  const [bulkOtpSent, setBulkOtpSent] = useState(false)
+  const [bulkOtpError, setBulkOtpError] = useState('')
   const [form, setForm] = useState({ admission_no:'', upi_number:'', name:'', dob:'', gender:'', guardian_id:'', guardian_name:'', guardian_passport_no:'', birth_certificate_no:'', klass:'', boarding_status:'day' })
   const [showAddStudent, setShowAddStudent] = useState(false)
   const [addStatus, setAddStatus] = useState('idle') // idle | adding | completed
@@ -49,6 +62,7 @@ export default function AdminStudents(){
   const load = async () => {
     try {
       setIsLoading(true)
+      setStudentsNext('')
       try { showLoadingHint('Loading students…', 8) } catch {}
       // Build students query with optional tab/search and server-side grade/class filters
       let base = `/academics/students/`
@@ -67,8 +81,9 @@ export default function AdminStudents(){
         params.set('is_active', 'true')
       }
       // Server-side Specific Grade & Class filters (if provided)
-      if (filterGrade) params.set('grade', String(filterGrade))
-      if (filterClass) params.set('klass', String(filterClass))
+      if (tab === 'active' && filterGrade) params.set('grade', String(filterGrade))
+      if (tab === 'active' && filterClass) params.set('klass', String(filterClass))
+      if (filterGender) params.set('gender', String(filterGender))
       const studentsUrl = `${base}?${params.toString()}`
       try { setLoadingProgress(25) } catch {}
       const [st, cl] = await Promise.all([
@@ -89,6 +104,8 @@ export default function AdminStudents(){
       cachedStudents = stData
       cachedClasses = clData
       cachedTab = tab
+      cachedStudentsTotal = stIsArray ? stData.length : (Number(st.data?.count) || stData.length)
+      cachedStudentsNext = stIsArray ? '' : (st.data?.next || '')
       studentsCacheTimestamp = Date.now()
     } catch (e) {
       showError('Load Failed', 'Could not load students or classes.')
@@ -106,11 +123,18 @@ export default function AdminStudents(){
       const res = await api.get(studentsNext)
       const data = res?.data
       const arr = Array.isArray(data) ? data : (Array.isArray(data?.results) ? data.results : [])
-      setStudents(prev => prev.concat(arr))
-      setStudentsNext(Array.isArray(data) ? '' : (data?.next || ''))
+      const nextUrl = Array.isArray(data) ? '' : (data?.next || '')
+      setStudents(prev => {
+        const merged = prev.concat(arr)
+        cachedStudents = merged
+        return merged
+      })
+      setStudentsNext(nextUrl)
+      cachedStudentsNext = nextUrl
     }catch(e){
       showError('Load Failed', 'Could not load more students.')
       setStudentsNext('')
+      cachedStudentsNext = ''
     }finally{
       setLoadingMore(false)
     }
@@ -131,6 +155,9 @@ export default function AdminStudents(){
     const now = Date.now()
     if (
       !searchTerm &&
+      !filterGrade &&
+      !filterClass &&
+      !filterGender &&
       cachedStudents &&
       cachedClasses &&
       cachedTab === tab &&
@@ -138,12 +165,18 @@ export default function AdminStudents(){
     ){
       setStudents(cachedStudents)
       setClasses(cachedClasses)
+      setStudentsTotal(cachedStudentsTotal || 0)
+      setStudentsNext(cachedStudentsNext || '')
       setIsLoading(false)
       try { clearLoadingHint() } catch {}
     } else {
       load()
     }
-  },[tab, searchTerm])
+  },[tab, searchTerm, filterGrade, filterClass, filterGender])
+
+  useEffect(() => {
+    setSelectedStudentIds([])
+  }, [tab, searchTerm, filterGrade, filterClass, filterGender])
 
   // Load school name for print header (once per session)
   useEffect(() => {
@@ -158,6 +191,15 @@ export default function AdminStudents(){
     try { mql.addEventListener('change', onChange) } catch { try { mql.addListener(onChange) } catch {} }
     return () => { try { mql.removeEventListener('change', onChange) } catch { try { mql.removeListener(onChange) } catch {} } }
   }, [])
+
+  useEffect(() => {
+    const v = String(searchDraft || '')
+    if (v === String(searchTerm || '')) return
+    const id = setTimeout(() => {
+      setSearchTerm(v)
+    }, 350)
+    return () => clearTimeout(id)
+  }, [searchDraft])
 
   useEffect(() => {
     if (!isCompact) return
@@ -238,10 +280,168 @@ export default function AdminStudents(){
     return genderMatch && classMatch && gradeMatch
   })
 
+  const selectedSet = new Set(selectedStudentIds)
+  const selectedCount = selectedStudentIds.length
+  const allVisibleSelected = filteredStudents.length > 0 && filteredStudents.every(s => selectedSet.has(s.id))
+
+  const toggleSelectStudent = (id) => {
+    setSelectedStudentIds(prev => {
+      const set = new Set(prev)
+      if (set.has(id)) set.delete(id)
+      else set.add(id)
+      return Array.from(set)
+    })
+  }
+
+  const toggleSelectAllVisible = () => {
+    setSelectedStudentIds(prev => {
+      const set = new Set(prev)
+      const visibleIds = filteredStudents.map(s => s.id)
+      const isAllSelected = visibleIds.length > 0 && visibleIds.every(id => set.has(id))
+      if (isAllSelected) {
+        visibleIds.forEach(id => set.delete(id))
+      } else {
+        visibleIds.forEach(id => set.add(id))
+      }
+      return Array.from(set)
+    })
+  }
+
+  const openBulk = (action) => {
+    setBulkAction(action)
+    setBulkAgree(false)
+    setBulkSubmitting(false)
+    setBulkForm({ gender: '', klass: '', boarding_status: '' })
+    setBulkOtpCode('')
+    setBulkOtpSent(false)
+    setBulkOtpError('')
+    setBulkOtpSending(false)
+    setBulkOpen(true)
+  }
+
+  const requestBulkOtp = async () => {
+    if (bulkOtpSending) return
+    try {
+      setBulkOtpSending(true)
+      setBulkOtpError('')
+      await api.post('/academics/students/bulk-otp/request/', {})
+      setBulkOtpSent(true)
+      showSuccess('Verification Code Sent', 'Check your email for the 6-digit code.')
+    } catch (e) {
+      const msg = e?.response?.data?.detail || 'Could not send verification code.'
+      setBulkOtpError(msg)
+      showError('Send Code Failed', msg)
+    } finally {
+      setBulkOtpSending(false)
+    }
+  }
+
+  const runBulk = async () => {
+    if (bulkSubmitting) return
+    if (selectedCount === 0) return
+
+    try {
+      setBulkSubmitting(true)
+      if (bulkAction === 'delete') {
+        if (!bulkAgree) return
+        await api.post('/academics/students/bulk-delete/', { student_ids: selectedStudentIds, otp_code: bulkOtpCode })
+        showSuccess('Deleted', `Deleted ${selectedCount} student(s).`)
+      } else {
+        const updates = {}
+        if (bulkAction === 'gender') updates.gender = bulkForm.gender
+        if (bulkAction === 'klass') updates.klass = bulkForm.klass
+        if (bulkAction === 'boarding_status') updates.boarding_status = bulkForm.boarding_status
+        await api.post('/academics/students/bulk-update/', { student_ids: selectedStudentIds, updates, otp_code: bulkOtpCode })
+        const label = bulkAction === 'klass' ? 'class' : (bulkAction === 'boarding_status' ? 'boarding status' : 'gender')
+        showSuccess('Updated', `Updated ${label} for ${selectedCount} student(s).`)
+      }
+      await load()
+      setSelectedStudentIds([])
+      setBulkOpen(false)
+      setBulkAction('')
+    } catch (e) {
+      const msg = e?.response?.data?.detail || 'Bulk action failed.'
+      showError('Bulk Action Failed', msg)
+    } finally {
+      setBulkSubmitting(false)
+    }
+  }
+
+  const filterStudentsForExport = (list) => {
+    return (Array.isArray(list) ? list : []).filter(student => {
+      const lower = searchTerm.toLowerCase()
+      const searchMatch = !searchTerm ||
+        String(student?.name || '').toLowerCase().includes(lower) ||
+        String(student?.admission_no || '').toLowerCase().includes(lower) ||
+        String(student?.klass_detail?.name || '').toLowerCase().includes(lower)
+
+      if (!searchMatch) return false
+
+      const klassId = student.klass || student.klass_detail?.id
+      const klassObj = classes.find(c => String(c.id) === String(klassId))
+      const studentGrade = student.klass_detail?.grade_level ?? klassObj?.grade_level ?? ''
+
+      const genderMatch = !filterGender || String(student.gender || '').toLowerCase() === String(filterGender).toLowerCase()
+      const classMatch = !filterClass || String(klassId) === String(filterClass)
+      const gradeMatch = !filterGrade || String(studentGrade) === String(filterGrade)
+
+      return genderMatch && classMatch && gradeMatch
+    })
+  }
+
+  const fetchAllStudentsForExport = async () => {
+    let base = `/academics/students/`
+    const params = new URLSearchParams()
+    params.set('page_size', '2000')
+    if (searchTerm) {
+      params.set('q', searchTerm)
+    } else if (tab === 'graduated') {
+      params.set('is_graduated', 'true')
+    } else if (tab === 'inactive') {
+      params.set('is_active', 'false')
+    } else {
+      params.set('is_graduated', 'false')
+      params.set('is_active', 'true')
+    }
+    if (filterGrade) params.set('grade', String(filterGrade))
+    if (filterClass) params.set('klass', String(filterClass))
+    if (filterGender) params.set('gender', String(filterGender))
+
+    const firstUrl = `${base}?${params.toString()}`
+    const out = []
+    let nextUrl = firstUrl
+    let guard = 0
+    while (nextUrl && guard < 200) {
+      guard += 1
+      const res = await api.get(nextUrl)
+      const data = res?.data
+      if (Array.isArray(data)) {
+        out.push(...data)
+        break
+      }
+      const arr = Array.isArray(data?.results) ? data.results : []
+      out.push(...arr)
+      nextUrl = data?.next || ''
+    }
+    return out
+  }
+
   // Handle print functionality
-  const handlePrint = () => {
+  const handlePrint = async () => {
+    if (exporting) return
     const printWindow = window.open('', '_blank')
+    if (!printWindow) {
+      showError('Print Failed', 'Please allow popups to print the students list.')
+      return
+    }
     const currentDate = new Date().toLocaleDateString()
+    try {
+      setExporting(true)
+      try { showLoadingHint('Preparing print…', 8) } catch {}
+      try { setLoadingProgress(10) } catch {}
+      const all = await fetchAllStudentsForExport()
+      const exportStudents = filterStudentsForExport(all)
+      try { setLoadingProgress(80) } catch {}
 
     const printContent = `
       <!DOCTYPE html>
@@ -267,7 +467,7 @@ export default function AdminStudents(){
           <div class="header">
             <div class="school-name">${schoolName}</div>
             <h1>Students List</h1>
-            <p>Total Students: ${students.length}</p>
+            <p>Total Students: ${exportStudents.length}</p>
             <p>Generated on: ${currentDate}</p>
           </div>
           <table>
@@ -281,7 +481,7 @@ export default function AdminStudents(){
               </tr>
             </thead>
             <tbody>
-              ${filteredStudents.map(student => `
+              ${exportStudents.map(student => `
                 <tr>
                   <td>${student.admission_no}</td>
                   <td>
@@ -307,36 +507,57 @@ export default function AdminStudents(){
     printWindow.document.write(printContent)
     printWindow.document.close()
     printWindow.print()
+    } catch (e) {
+      try { printWindow.close() } catch {}
+      showError('Print Failed', 'Could not prepare the students list for printing.')
+    } finally {
+      setExporting(false)
+      try { setLoadingProgress(100); clearLoadingHint() } catch {}
+    }
   }
 
   // Handle CSV download functionality
-  const handleDownload = () => {
-    const csvContent = [
-      // Header row
-      ['Admission No', 'Name', 'UPI Number', 'Date of Birth', 'Gender', 'Class', 'Guardian Phone'],
-      // Data rows
-      ...filteredStudents.map(student => [
-        student.admission_no,
-        student.name,
-        student.upi_number || 'N/A',
-        student.dob || 'N/A',
-        student.gender || 'N/A',
-        student.klass_detail?.name || student.klass || 'Not Assigned',
-        student.guardian_id || 'N/A'
-      ])
-    ]
-    .map(row => row.map(field => `"${field}"`).join(','))
-    .join('\n')
+  const handleDownload = async () => {
+    if (exporting) return
+    try {
+      setExporting(true)
+      try { showLoadingHint('Preparing download…', 8) } catch {}
+      try { setLoadingProgress(10) } catch {}
+      const all = await fetchAllStudentsForExport()
+      const exportStudents = filterStudentsForExport(all)
+      try { setLoadingProgress(80) } catch {}
+      const csvContent = [
+        // Header row
+        ['Admission No', 'Name', 'UPI Number', 'Date of Birth', 'Gender', 'Class', 'Guardian Phone'],
+        // Data rows
+        ...exportStudents.map(student => [
+          student.admission_no,
+          student.name,
+          student.upi_number || 'N/A',
+          student.dob || 'N/A',
+          student.gender || 'N/A',
+          student.klass_detail?.name || student.klass || 'Not Assigned',
+          student.guardian_id || 'N/A'
+        ])
+      ]
+      .map(row => row.map(field => `"${field}"`).join(','))
+      .join('\n')
 
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
-    const link = document.createElement('a')
-    const url = URL.createObjectURL(blob)
-    link.setAttribute('href', url)
-    link.setAttribute('download', `students_list_${new Date().toISOString().split('T')[0]}.csv`)
-    link.style.visibility = 'hidden'
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+      const link = document.createElement('a')
+      const url = URL.createObjectURL(blob)
+      link.setAttribute('href', url)
+      link.setAttribute('download', `students_list_${new Date().toISOString().split('T')[0]}.csv`)
+      link.style.visibility = 'hidden'
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+    } catch (e) {
+      showError('Download Failed', 'Could not prepare the students list for download.')
+    } finally {
+      setExporting(false)
+      try { setLoadingProgress(100); clearLoadingHint() } catch {}
+    }
   }
 
   return (
@@ -360,6 +581,7 @@ export default function AdminStudents(){
             </button>
             <button
               onClick={handlePrint}
+              disabled={exporting}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs rounded-md transition-colors"
             >
               <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -369,6 +591,7 @@ export default function AdminStudents(){
             </button>
             <button
               onClick={handleDownload}
+              disabled={exporting}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-xs rounded-md transition-colors"
             >
               <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -665,6 +888,12 @@ export default function AdminStudents(){
             filteredStudents.map((s) => (
               <div key={s.id} className="relative overflow-hidden rounded-2xl border border-gray-200 bg-white/90 backdrop-blur-xl supports-[backdrop-filter]:bg-white/70 shadow-card p-3">
                 <div className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    checked={selectedSet.has(s.id)}
+                    onChange={()=> toggleSelectStudent(s.id)}
+                    aria-label={`Select ${s.name}`}
+                  />
                   <div className="h-9 w-9 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-semibold text-xs shadow-soft">
                     {s.name.split(' ').map(n => n[0]).join('').toUpperCase()}
                   </div>
@@ -685,6 +914,18 @@ export default function AdminStudents(){
           )}
         </div>
 
+        {studentsNext && (
+          <div className="sm:hidden flex justify-center pt-2 pb-28">
+            <button
+              onClick={loadMore}
+              disabled={loadingMore}
+              className="px-4 py-2 text-sm rounded-md bg-blue-600 text-white disabled:opacity-60"
+            >
+              {loadingMore ? 'Loading…' : 'Load More'}
+            </button>
+          </div>
+        )}
+
         {/* Students Table (desktop) */}
         <div className="hidden sm:block bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden backdrop-blur-sm">
           <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50">
@@ -693,10 +934,46 @@ export default function AdminStudents(){
                 <h2 className="text-xl font-bold text-gray-900">{searchTerm ? 'Search Results' : (tab==='active' ? 'Active Students' : (tab==='inactive' ? 'Inactive Students' : 'Graduated Students'))}</h2>
                 <p className="text-sm text-gray-600 mt-1">
                   {filteredStudents.length} of {studentsTotal} students
-                  {searchTerm && ` matching "${searchTerm}"`}
+                  {searchTerm && ` matching \"${searchTerm}\"`}
                 </p>
               </div>
               <div className="flex items-center gap-2">
+                <button
+                  onClick={()=> openBulk('gender')}
+                  disabled={selectedCount === 0}
+                  className="px-3 py-1.5 text-xs rounded-md bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                >
+                  Bulk Gender{selectedCount ? ` (${selectedCount})` : ''}
+                </button>
+                <button
+                  onClick={()=> openBulk('klass')}
+                  disabled={selectedCount === 0}
+                  className="px-3 py-1.5 text-xs rounded-md bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                >
+                  Bulk Class{selectedCount ? ` (${selectedCount})` : ''}
+                </button>
+                <button
+                  onClick={()=> openBulk('boarding_status')}
+                  disabled={selectedCount === 0}
+                  className="px-3 py-1.5 text-xs rounded-md bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                >
+                  Bulk Boarding{selectedCount ? ` (${selectedCount})` : ''}
+                </button>
+                <button
+                  onClick={()=> openBulk('delete')}
+                  disabled={selectedCount === 0}
+                  className="px-3 py-1.5 text-xs rounded-md bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
+                >
+                  Delete Selected{selectedCount ? ` (${selectedCount})` : ''}
+                </button>
+                {selectedCount > 0 && (
+                  <button
+                    onClick={()=> setSelectedStudentIds([])}
+                    className="px-3 py-1.5 text-xs rounded-md bg-gray-100 text-gray-700 hover:bg-gray-200"
+                  >
+                    Clear Selection
+                  </button>
+                )}
                 <div className="flex items-center gap-1 text-sm text-gray-500">
                   <div className={`w-2 h-2 rounded-full ${tab==='active'?'bg-green-400': (tab==='inactive'?'bg-red-400':'bg-gray-400')}`}></div>
                   {tab==='active'?'Active': (tab==='inactive'?'Inactive':'Graduated')}
@@ -709,6 +986,14 @@ export default function AdminStudents(){
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50/80">
                 <tr>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                    <input
+                      type="checkbox"
+                      checked={allVisibleSelected}
+                      onChange={toggleSelectAllVisible}
+                      aria-label="Select all"
+                    />
+                  </th>
                   <th className="px-5 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                     Student Details
                   </th>
@@ -726,7 +1011,7 @@ export default function AdminStudents(){
               <tbody className="bg-white divide-y divide-gray-200">
                 {isLoading ? (
                   <tr>
-                    <td colSpan="4" className="px-5 py-12 text-center">
+                    <td colSpan="5" className="px-5 py-12 text-center">
                       <div className="flex items-center justify-center gap-3 text-gray-600">
                         <svg className="animate-spin h-6 w-6 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
@@ -738,7 +1023,7 @@ export default function AdminStudents(){
                   </tr>
                 ) : filteredStudents.length === 0 ? (
                   <tr>
-                    <td colSpan="4" className="px-5 py-16 text-center">
+                    <td colSpan="5" className="px-5 py-16 text-center">
                       <div className="text-gray-500">
                         <svg className="mx-auto h-12 w-12 text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
@@ -753,6 +1038,14 @@ export default function AdminStudents(){
                 ) : (
                   filteredStudents.map((s, index) => (
                     <tr key={s.id} className="hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50 transition-all duration-200 group">
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <input
+                          type="checkbox"
+                          checked={selectedSet.has(s.id)}
+                          onChange={()=> toggleSelectStudent(s.id)}
+                          aria-label={`Select ${s.name}`}
+                        />
+                      </td>
                       <td className="px-5 py-3 whitespace-nowrap">
                         <div className="flex items-center">
                           <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-semibold text-sm mr-4 shadow-md">
@@ -1061,6 +1354,124 @@ export default function AdminStudents(){
               disabled={confirmSubmitting || (!confirmTargetActive ? !confirmAgree : false)}
             >
               {confirmSubmitting ? 'Please wait...' : (confirmTargetActive ? 'Activate' : 'Deactivate')}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        open={bulkOpen}
+        onClose={()=>{ if(!bulkSubmitting){ setBulkOpen(false); setBulkAction(''); } }}
+        title={bulkAction === 'delete' ? 'Delete Selected Students' : 'Bulk Update Students'}
+        size="md"
+      >
+        <div className="space-y-4">
+          <div className="text-sm text-gray-700">
+            Selected: <span className="font-semibold">{selectedCount}</span>
+          </div>
+
+          <div className="border border-gray-200 rounded-lg p-3 bg-gray-50">
+            <div className="flex items-center justify-between gap-2">
+              <div className="text-sm font-medium text-gray-800">Admin Verification</div>
+              <button
+                onClick={requestBulkOtp}
+                disabled={bulkOtpSending}
+                className="px-3 py-1.5 text-xs rounded-md bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+              >
+                {bulkOtpSending ? 'Sending…' : (bulkOtpSent ? 'Resend Code' : 'Send Code')}
+              </button>
+            </div>
+            <div className="mt-2">
+              <label className="block text-xs font-medium text-gray-600 mb-1">6-digit code</label>
+              <input
+                value={bulkOtpCode}
+                onChange={(e)=>setBulkOtpCode(String(e.target.value || '').replace(/\D/g,'').slice(0,6))}
+                inputMode="numeric"
+                placeholder="Enter 6-digit code"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+              {bulkOtpError ? <div className="text-xs text-red-700 mt-1">{bulkOtpError}</div> : null}
+            </div>
+          </div>
+
+          {bulkAction === 'gender' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Gender</label>
+              <select
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                value={bulkForm.gender}
+                onChange={(e)=> setBulkForm(prev => ({ ...prev, gender: e.target.value }))}
+              >
+                <option value="">Select Gender</option>
+                <option value="Male">Male</option>
+                <option value="Female">Female</option>
+              </select>
+            </div>
+          )}
+
+          {bulkAction === 'klass' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Class</label>
+              <select
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                value={bulkForm.klass}
+                onChange={(e)=> setBulkForm(prev => ({ ...prev, klass: e.target.value }))}
+              >
+                <option value="">Select Class</option>
+                {classes.map(c=> (
+                  <option key={c.id} value={c.id}>{c.name} - {c.grade_level}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {bulkAction === 'boarding_status' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Boarding Status</label>
+              <select
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                value={bulkForm.boarding_status}
+                onChange={(e)=> setBulkForm(prev => ({ ...prev, boarding_status: e.target.value }))}
+              >
+                <option value="">Select Status</option>
+                <option value="day">Day</option>
+                <option value="boarding">Boarding</option>
+              </select>
+            </div>
+          )}
+
+          {bulkAction === 'delete' && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-800">
+              <p className="font-semibold mb-2">This will permanently delete the selected students.</p>
+              <label className="flex items-center gap-2 mt-2 text-red-900">
+                <input type="checkbox" checked={bulkAgree} onChange={(e)=>setBulkAgree(e.target.checked)} />
+                <span>I understand and agree to delete these students.</span>
+              </label>
+            </div>
+          )}
+
+          <div className="flex justify-end gap-2">
+            <button
+              onClick={()=>{ if(!bulkSubmitting){ setBulkOpen(false); setBulkAction(''); } }}
+              className="px-4 py-2 border rounded-lg text-gray-700 hover:bg-gray-50"
+              disabled={bulkSubmitting}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={runBulk}
+              className={`${bulkAction === 'delete' ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700'} px-4 py-2 rounded-lg text-white disabled:opacity-50`}
+              disabled={
+                bulkSubmitting ||
+                selectedCount === 0 ||
+                String(bulkOtpCode || '').length !== 6 ||
+                (bulkAction === 'delete' ? !bulkAgree : false) ||
+                (bulkAction === 'gender' ? !bulkForm.gender : false) ||
+                (bulkAction === 'klass' ? !bulkForm.klass : false) ||
+                (bulkAction === 'boarding_status' ? !bulkForm.boarding_status : false)
+              }
+            >
+              {bulkSubmitting ? 'Please wait...' : (bulkAction === 'delete' ? 'Delete' : 'Update')}
             </button>
           </div>
         </div>

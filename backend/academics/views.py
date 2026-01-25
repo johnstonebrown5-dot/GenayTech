@@ -10,12 +10,14 @@ from django.db import IntegrityError, transaction
 from django.db.models import Sum, Avg
 from django.http import HttpResponse
 from django.conf import settings
+from django.core.cache import cache
 import threading
 from io import BytesIO, StringIO
 from datetime import date
 from django.utils import timezone
 import uuid
 import requests
+import secrets
 from django.core.files.base import ContentFile
 try:
     from reportlab.lib.pagesizes import A4
@@ -4595,6 +4597,194 @@ class StudentViewSet(viewsets.ModelViewSet):
             stu.save(update_fields=['is_active'])
         # Linked user.is_active will be synced by signal
         return Response({'detail': 'updated', 'id': stu.id, 'is_active': stu.is_active})
+
+    @action(detail=False, methods=['post'], permission_classes=[IsAdmin], url_path='bulk-update')
+    def bulk_update(self, request):
+        data = getattr(request, 'data', {}) or {}
+
+        otp_err = self._verify_bulk_otp(request, data)
+        if otp_err is not None:
+            return otp_err
+
+        ids = data.get('student_ids') or data.get('students') or data.get('ids')
+        updates = data.get('updates') or {}
+
+        if not isinstance(ids, (list, tuple)) or not ids:
+            return Response({'detail': 'student_ids must be a non-empty list'}, status=400)
+        if not isinstance(updates, dict) or not updates:
+            return Response({'detail': 'updates must be a non-empty object'}, status=400)
+
+        id_list = []
+        for v in ids:
+            try:
+                id_list.append(int(v))
+            except Exception:
+                return Response({'detail': 'student_ids must contain only integers'}, status=400)
+
+        allowed_fields = {'gender', 'klass', 'boarding_status'}
+        cleaned = {k: v for k, v in updates.items() if k in allowed_fields}
+        if not cleaned:
+            return Response({'detail': 'No supported fields provided. Allowed: gender, klass, boarding_status'}, status=400)
+
+        update_kwargs = {}
+
+        if 'gender' in cleaned:
+            gender = cleaned.get('gender')
+            if isinstance(gender, str):
+                gender = gender.strip()
+            if gender not in ('Male', 'Female'):
+                return Response({'detail': 'gender must be "Male" or "Female"'}, status=400)
+            update_kwargs['gender'] = gender
+
+        if 'boarding_status' in cleaned:
+            b = cleaned.get('boarding_status')
+            if isinstance(b, str):
+                b = b.strip().lower()
+            if b not in ('day', 'boarding'):
+                return Response({'detail': 'boarding_status must be "day" or "boarding"'}, status=400)
+            update_kwargs['boarding_status'] = b
+
+        school = getattr(getattr(request, 'user', None), 'school', None)
+        if 'klass' in cleaned:
+            klass_id = cleaned.get('klass')
+            if klass_id in (None, ''):
+                return Response({'detail': 'klass is required'}, status=400)
+            try:
+                klass_id = int(klass_id)
+            except Exception:
+                return Response({'detail': 'klass must be an integer'}, status=400)
+            klass = Class.objects.filter(pk=klass_id).only('id', 'school_id').first()
+            if not klass:
+                return Response({'detail': 'Class not found'}, status=404)
+            if school and getattr(klass, 'school_id', None) != getattr(school, 'id', None):
+                return Response({'detail': 'Class must belong to your school'}, status=403)
+            update_kwargs['klass_id'] = klass_id
+            update_kwargs['school_id'] = getattr(klass, 'school_id', None)
+
+        qs = self.get_queryset().filter(id__in=id_list)
+        found_ids = list(qs.values_list('id', flat=True))
+        if not found_ids:
+            return Response({'detail': 'No students found for the provided ids'}, status=404)
+
+        try:
+            with transaction.atomic():
+                updated_count = qs.update(**update_kwargs)
+        except Exception:
+            return Response({'detail': 'Bulk update failed'}, status=400)
+
+        return Response({'updated_count': int(updated_count or 0), 'student_ids': found_ids})
+
+    @action(detail=False, methods=['post'], permission_classes=[IsAdmin], url_path='bulk-otp/request')
+    def bulk_otp_request(self, request):
+        user = getattr(request, 'user', None)
+        if not (user and getattr(user, 'is_authenticated', False)):
+            return Response({'detail': 'Not authenticated'}, status=401)
+
+        recipient = (getattr(user, 'email', None) or '').strip()
+        if not recipient:
+            return Response({'detail': 'Your account does not have an email address set.'}, status=400)
+
+        code = f"{secrets.randbelow(1000000):06d}"
+        ttl = 10 * 60
+        key = self._bulk_otp_cache_key(user)
+        attempts_key = self._bulk_otp_attempts_cache_key(user)
+        cache.set(key, code, timeout=ttl)
+        cache.set(attempts_key, 0, timeout=ttl)
+
+        subject = 'Edu-Track Bulk Action Verification Code'
+        message = (
+            'Use this 6-digit verification code to confirm the bulk students action:\n\n'
+            f'{code}\n\n'
+            'This code expires in 10 minutes.'
+        )
+
+        ok = False
+        try:
+            ok = send_email_safe(subject, message, recipient)
+        except Exception:
+            ok = False
+
+        if not ok:
+            cache.delete(key)
+            cache.delete(attempts_key)
+            return Response({'detail': 'Could not send verification email. Please try again.'}, status=400)
+
+        return Response({'detail': 'Verification code sent'} )
+
+    @action(detail=False, methods=['post'], permission_classes=[IsAdmin], url_path='bulk-delete')
+    def bulk_delete(self, request):
+        data = getattr(request, 'data', {}) or {}
+
+        otp_err = self._verify_bulk_otp(request, data)
+        if otp_err is not None:
+            return otp_err
+
+        ids = data.get('student_ids') or data.get('students') or data.get('ids')
+        if not isinstance(ids, (list, tuple)) or not ids:
+            return Response({'detail': 'student_ids must be a non-empty list'}, status=400)
+
+        id_list = []
+        for v in ids:
+            try:
+                id_list.append(int(v))
+            except Exception:
+                return Response({'detail': 'student_ids must contain only integers'}, status=400)
+
+        qs = self.get_queryset().filter(id__in=id_list)
+        found_ids = list(qs.values_list('id', flat=True))
+        if not found_ids:
+            return Response({'detail': 'No students found for the provided ids'}, status=404)
+
+        try:
+            with transaction.atomic():
+                qs.delete()
+        except Exception:
+            return Response({'detail': 'Bulk delete failed'}, status=400)
+
+        return Response({'deleted_count': len(found_ids), 'student_ids': found_ids})
+
+    def _bulk_otp_cache_key(self, user):
+        school_id = getattr(getattr(user, 'school', None), 'id', None) or 0
+        return f"bulk_students_otp:{getattr(user, 'id', 0)}:{school_id}"
+
+    def _bulk_otp_attempts_cache_key(self, user):
+        school_id = getattr(getattr(user, 'school', None), 'id', None) or 0
+        return f"bulk_students_otp_attempts:{getattr(user, 'id', 0)}:{school_id}"
+
+    def _verify_bulk_otp(self, request, data):
+        user = getattr(request, 'user', None)
+        if not (user and getattr(user, 'is_authenticated', False)):
+            return Response({'detail': 'Not authenticated'}, status=401)
+
+        provided = data.get('otp_code') or data.get('code')
+        provided = str(provided or '').strip()
+        if not provided:
+            return Response({'detail': 'Verification code is required.'}, status=403)
+
+        key = self._bulk_otp_cache_key(user)
+        attempts_key = self._bulk_otp_attempts_cache_key(user)
+
+        expected = cache.get(key)
+        if not expected:
+            return Response({'detail': 'Verification code expired. Request a new code.'}, status=403)
+
+        expected = str(expected).strip()
+        if provided != expected:
+            try:
+                attempts = int(cache.get(attempts_key) or 0)
+            except Exception:
+                attempts = 0
+            attempts += 1
+            cache.set(attempts_key, attempts, timeout=10 * 60)
+            if attempts >= 5:
+                cache.delete(key)
+                cache.delete(attempts_key)
+                return Response({'detail': 'Too many failed attempts. Request a new code.'}, status=403)
+            return Response({'detail': 'Invalid verification code.'}, status=403)
+
+        cache.delete(key)
+        cache.delete(attempts_key)
+        return None
 
     @action(detail=False, methods=['get'], permission_classes=[permissions.IsAuthenticated], url_path='my')
     def my(self, request):
