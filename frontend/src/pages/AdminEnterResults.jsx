@@ -157,16 +157,29 @@ export default function AdminEnterResults({ readOnly }){
         } catch {
           setComponentsMap({})
         }
-        // Load students with robust fallbacks (teacher may have restricted endpoints)
+        // Load students with robust fallbacks (iterate pagination to get ALL)
+        const fetchAllPaged = async (url) => {
+          let out = []
+          let next = url
+          let guard = 0
+          while (next && guard < 100){
+            const r = await api.get(next)
+            const d = r?.data
+            if (Array.isArray(d)) { out = d; break }
+            if (d && Array.isArray(d.results)) { out = out.concat(d.results); next = d.next; guard++; continue }
+            if (d && Array.isArray(d.items)) { out = out.concat(d.items); next = d.next; guard++; continue }
+            break
+          }
+          return out
+        }
+
         let studentsList = []
         try {
-          const stuRes = await api.get(`/academics/students/?klass=${encodeURIComponent(klassId)}`)
-          studentsList = Array.isArray(stuRes.data) ? stuRes.data : (Array.isArray(stuRes.data?.results) ? stuRes.data.results : [])
+          studentsList = await fetchAllPaged(`/academics/students/?klass=${encodeURIComponent(klassId)}&page_size=200`)
         } catch {}
         if (!studentsList.length) {
           try {
-            const alt = await api.get(`/academics/students/?class=${encodeURIComponent(klassId)}`)
-            studentsList = Array.isArray(alt.data) ? alt.data : (Array.isArray(alt.data?.results) ? alt.data.results : [])
+            studentsList = await fetchAllPaged(`/academics/students/?class=${encodeURIComponent(klassId)}&page_size=200`)
           } catch {}
         }
         if (!studentsList.length && klassId) {
@@ -187,11 +200,10 @@ export default function AdminEnterResults({ readOnly }){
         }
         if (!alive) return
         setStudents(studentsList)
-        // existing results (raw per-component marks)
+        // existing results (raw per-component marks) - fetch ALL pages
         let existing = []
         try{
-          const { data } = await api.get(`/academics/exam_results/?exam=${examId}`)
-          existing = Array.isArray(data) ? data : (Array.isArray(data?.results) ? data.results : [])
+          existing = await fetchAllPaged(`/academics/exam_results/?exam=${examId}&page_size=200`)
         }catch{}
         // Build per-component rows (carry forward teacher-saved out_of for validation/placeholders)
         const rows = []
