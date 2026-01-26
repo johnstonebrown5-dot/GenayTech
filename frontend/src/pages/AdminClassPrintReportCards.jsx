@@ -186,6 +186,30 @@ export default function AdminClassPrintReportCards({ classIdProp = null, embedde
     return 'bg-gray-100 text-gray-700'
   }
 
+  const subjectRemark = (score, subjectLabel) => {
+    const n = Number(score)
+    const name = String(subjectLabel || '').toLowerCase()
+    const isKiswahili = name.includes('kis') || name.includes('swahili')
+    if (!Number.isFinite(n)) return isKiswahili ? 'Hakuna alama' : 'No marks'
+    let g = 'E'
+    if (n >= 80) g = 'A'
+    else if (n >= 70) g = 'B'
+    else if (n >= 60) g = 'C'
+    else if (n >= 50) g = 'D'
+    if (isKiswahili){
+      if (g === 'A') return 'Bora sana'
+      if (g === 'B') return 'Vizuri sana'
+      if (g === 'C') return 'Vizuri'
+      if (g === 'D') return 'Wastani'
+      return 'Inahitaji juhudi'
+    }
+    if (g === 'A') return 'Excellent'
+    if (g === 'B') return 'Very good'
+    if (g === 'C') return 'Good'
+    if (g === 'D') return 'Fair'
+    return 'Needs improvement'
+  }
+
   const letterFromBands = (score, bands) => {
     const n = Number(score)
     if (!Number.isFinite(n)) return '-'
@@ -373,6 +397,7 @@ export default function AdminClassPrintReportCards({ classIdProp = null, embedde
                                 <th className="text-left py-1">Subject</th>
                                 <th className="text-right py-1">Marks</th>
                                 <th className="text-center py-1">Grade</th>
+                                <th className="text-left py-1">Remarks</th>
                               </tr>
                             </thead>
                             <tbody>
@@ -386,6 +411,7 @@ export default function AdminClassPrintReportCards({ classIdProp = null, embedde
                                     <td className="py-1 text-center border-b border-gray-200">
                                       <span className={`px-2 py-0.5 rounded-full text-xs font-medium inline-block ${gradeBadgeClass(grade)}`}>{grade}</span>
                                     </td>
+                                    <td className="py-1 border-b border-gray-200">{subjectRemark(v, s.code)}</td>
                                   </tr>
                                 )
                               })}
@@ -393,6 +419,7 @@ export default function AdminClassPrintReportCards({ classIdProp = null, embedde
                                 <td className="py-1 border-b border-gray-300 font-semibold">Total</td>
                                 <td className="py-1 text-right border-b border-gray-300 font-semibold">{Number(st.total||0).toFixed(2)}</td>
                                 <td className="py-1 text-center border-b border-gray-300 font-semibold">{gradeForAverage(st.average)}</td>
+                                <td className="py-1 border-b border-gray-300 font-semibold"></td>
                               </tr>
                             </tbody>
                           </table>

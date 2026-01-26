@@ -426,6 +426,30 @@ export default function StudentReportCardViewer({ embedded=false, hideControls=f
     return 'bg-gray-100 text-gray-700'
   }
 
+  const subjectRemark = (score, subject) => {
+    const n = Number(score)
+    const name = String(subject || '').toLowerCase()
+    const isKiswahili = name.includes('kis') || name.includes('swahili')
+    if (!Number.isFinite(n)) return isKiswahili ? 'Hakuna alama' : 'No marks'
+    let g = 'E'
+    if (n >= 80) g = 'A'
+    else if (n >= 70) g = 'B'
+    else if (n >= 60) g = 'C'
+    else if (n >= 50) g = 'D'
+    if (isKiswahili){
+      if (g === 'A') return 'Bora sana'
+      if (g === 'B') return 'Vizuri sana'
+      if (g === 'C') return 'Vizuri'
+      if (g === 'D') return 'Wastani'
+      return 'Inahitaji juhudi'
+    }
+    if (g === 'A') return 'Excellent'
+    if (g === 'B') return 'Very good'
+    if (g === 'C') return 'Good'
+    if (g === 'D') return 'Fair'
+    return 'Needs improvement'
+  }
+
   useEffect(()=>{
     let active = true
     ;(async ()=>{
@@ -740,12 +764,13 @@ export default function StudentReportCardViewer({ embedded=false, hideControls=f
                       <th className="text-left px-3 py-2 bg-gray-100">Subject</th>
                       <th className="text-center px-3 py-2 bg-gray-100">Marks</th>
                       <th className="text-center px-3 py-2 bg-gray-100">Grade</th>
+                      <th className="text-left px-3 py-2 bg-gray-100">Remarks</th>
                     </tr>
                   </thead>
                   <tbody>
                     {subjects.length === 0 ? (
                       <tr>
-                        <td colSpan={3} className="px-3 py-6 text-center text-gray-500">
+                        <td colSpan={4} className="px-3 py-6 text-center text-gray-500">
                           No marks found for the selected exam/term.
                         </td>
                       </tr>
@@ -760,6 +785,7 @@ export default function StudentReportCardViewer({ embedded=false, hideControls=f
                               <td className="px-3 py-2 text-center border-t border-gray-200">{Number.isFinite(v) ? (
                                 <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${gradeBadgeClass(toGrade(v, subj.id))}`}>{toGrade(v, subj.id)}</span>
                               ) : '-'}</td>
+                              <td className="px-3 py-2 border-t border-gray-200">{subjectRemark(v, subj.label)}</td>
                             </tr>
                           )
                         })}
@@ -769,6 +795,7 @@ export default function StudentReportCardViewer({ embedded=false, hideControls=f
                           <td className="px-3 py-2 text-center border-t border-gray-300 font-semibold">
                             {(() => { const g = letterFromBands(selectedTotals.avg, globalBands); return <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${gradeBadgeClass(g)}`}>{g}</span> })()}
                           </td>
+                          <td className="px-3 py-2 border-t border-gray-300 font-semibold"></td>
                         </tr>
                       </>
                     )}
@@ -781,11 +808,27 @@ export default function StudentReportCardViewer({ embedded=false, hideControls=f
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div className="border border-gray-300 rounded">
                   <div className="px-3 py-2 font-semibold border-b border-gray-300">Class Position</div>
-                  <div className="px-3 py-6">{currentRank ? `${currentRank.class?.position || '-'} / ${currentRank.class?.size || '-'}` : '-'}</div>
+                  <div className="px-3 py-6">
+                    {currentRank ? (
+                      <>
+                        <span className="text-lg md:text-xl font-semibold">{currentRank.class?.position || '-'}</span>
+                        <span className="mx-1 text-xs md:text-sm text-gray-600 align-baseline">out of</span>
+                        <span className="text-lg md:text-xl font-extrabold">{currentRank.class?.size || '-'}</span>
+                      </>
+                    ) : '-' }
+                  </div>
                 </div>
                 <div className="border border-gray-300 rounded">
                   <div className="px-3 py-2 font-semibold border-b border-gray-300">Grade Position</div>
-                  <div className="px-3 py-6">{currentRank ? `${currentRank.grade?.position || '-'} / ${currentRank.grade?.size || '-'}` : '-'}</div>
+                  <div className="px-3 py-6">
+                    {currentRank ? (
+                      <>
+                        <span className="text-lg md:text-xl font-semibold">{currentRank.grade?.position || '-'}</span>
+                        <span className="mx-1 text-xs md:text-sm text-gray-600 align-baseline">out of</span>
+                        <span className="text-lg md:text-xl font-extrabold">{currentRank.grade?.size || '-'}</span>
+                      </>
+                    ) : '-' }
+                  </div>
                 </div>
               </div>
 
@@ -805,7 +848,16 @@ export default function StudentReportCardViewer({ embedded=false, hideControls=f
                 </div>
                 <div className="col-span-3">
                   <div className="font-semibold">Remarks</div>
-                  <textarea className="mt-2 w-full border rounded p-2 min-h-[72px] resize-none" placeholder="" />
+                  <div className="mt-2 w-full border rounded p-2 min-h-[72px] bg-white">
+                    {(() => {
+                      const avg = Number(totals.average || 0)
+                      if (avg >= 80) return 'Excellent performance — keep it up.'
+                      if (avg >= 70) return 'Very good work.'
+                      if (avg >= 60) return 'Good, aim higher.'
+                      if (avg >= 50) return 'Fair — effort needed.'
+                      return 'Needs improvement — consult your teacher.'
+                    })()}
+                  </div>
                 </div>
               </div>
               </div>

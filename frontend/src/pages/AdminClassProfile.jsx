@@ -333,11 +333,11 @@ export default function AdminClassProfile(){
       </tr>`
     }).join('')
     const meta = `
-      <div style="display:flex;flex-wrap:wrap;gap:8px;margin:0 0 10px 0;font-size:12px;color:#374151">
-        <div style="border:1px solid #e5e7eb;background:#f9fafb;border-radius:8px;padding:6px 10px"><span style="font-size:10px;color:#6b7280">Exam</span> <span style="margin-left:8px;font-weight:600">${recentExam.name||'-'}</span></div>
-        <div style="border:1px solid #e5e7eb;background:#f9fafb;border-radius:8px;padding:6px 10px"><span style="font-size:10px;color:#6b7280">Year</span> <span style="margin-left:8px;font-weight:600">${recentExam.year||'-'}</span></div>
-        <div style="border:1px solid #e5e7eb;background:#f9fafb;border-radius:8px;padding:6px 10px"><span style="font-size:10px;color:#6b7280">Term</span> <span style="margin-left:8px;font-weight:600">T${recentExam.term||'-'}</span></div>
-        <div style="border:1px solid #e5e7eb;background:#f9fafb;border-radius:8px;padding:6px 10px"><span style="font-size:10px;color:#6b7280">Date</span> <span style="margin-left:8px;font-weight:600">${recentExam.date||'-'}</span></div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin:0 0 10px 0;font-size:18px;color:#374151">
+        <div style="border:1px solid #e5e7eb;background:#f9fafb;border-radius:8px;padding:6px 10px"><span style="font-size:15px;color:#6b7280">Exam</span> <span style="margin-left:8px;font-weight:600">${recentExam.name||'-'}</span></div>
+        <div style="border:1px solid #e5e7eb;background:#f9fafb;border-radius:8px;padding:6px 10px"><span style="font-size:15px;color:#6b7280">Year</span> <span style="margin-left:8px;font-weight:600">${recentExam.year||'-'}</span></div>
+        <div style="border:1px solid #e5e7eb;background:#f9fafb;border-radius:8px;padding:6px 10px"><span style="font-size:15px;color:#6b7280">Term</span> <span style="margin-left:8px;font-weight:600">T${recentExam.term||'-'}</span></div>
+        <div style="border:1px solid #e5e7eb;background:#f9fafb;border-radius:8px;padding:6px 10px"><span style="font-size:15px;color:#6b7280">Date</span> <span style="margin-left:8px;font-weight:600">${recentExam.date||'-'}</span></div>
       </div>`
     w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${title}</title>
       <style>
@@ -345,7 +345,7 @@ export default function AdminClassProfile(){
           thead { position: sticky; top: 0; }
           .page-break { page-break-inside: avoid; }
         }
-        table { border-collapse: collapse; width: 100%; font-size: 12px }
+        table { border-collapse: collapse; width: 100%; font-size: 18px }
         th { background:#f9fafb }
       </style>
     </head><body style="font-family:ui-sans-serif,system-ui,Segoe UI,Roboto,Helvetica,Arial">

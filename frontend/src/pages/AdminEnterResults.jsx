@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import api from '../api'
 import { useNotification } from '../components/NotificationContext'
@@ -30,6 +30,13 @@ export default function AdminEnterResults({ readOnly }){
   const isReadOnly = Boolean(readOnly) || (new URLSearchParams(location.search).get('readonly') === '1')
   const klassOverride = new URLSearchParams(location.search).get('klass')
   const [reloadKey, setReloadKey] = useState(0)
+
+  const dirtyMarksRef = useRef(new Set())
+  const dirtyOutOfRef = useRef(new Set())
+  const [dirtyVersion, setDirtyVersion] = useState(0)
+  const autoSaveTimerRef = useRef(null)
+  const autoSaveInFlightRef = useRef(false)
+  const autoSavePendingRef = useRef(false)
 
   useEffect(()=>{
     const t = setTimeout(()=>{
@@ -330,7 +337,7 @@ export default function AdminEnterResults({ readOnly }){
         .filter(r => !isNaN(r.marks))
         .map(r => ({ exam: examId, student: r.student, subject: r.subject, component: r.component, marks: r.marks, out_of: r.outOf }))
       if (!payload.length) throw new Error('Enter at least one mark to save')
-      const res = await api.post('/academics/exam_results/bulk/', { results: payload })
+      const res = await api.post('/academics/exam_results/bulk/', { results: payload }, { timeout: 30000 })
       const failed = Number(res?.data?.failed || 0)
       if (failed){
         setStatus('idle')
@@ -338,6 +345,9 @@ export default function AdminEnterResults({ readOnly }){
       } else {
         setStatus('saved')
         setTimeout(()=>setStatus('idle'), 1500)
+        dirtyMarksRef.current = new Set()
+        dirtyOutOfRef.current = new Set()
+        setDirtyVersion(v=>v+1)
       }
     }catch(err){
       setError(err?.response?.data?.detail || err?.message || 'Failed to save results')
@@ -346,6 +356,110 @@ export default function AdminEnterResults({ readOnly }){
       setSaving(false)
     }
   }
+
+  const queueDirtyMark = (key) => {
+    if (!key) return
+    dirtyMarksRef.current.add(String(key))
+    setDirtyVersion(v=>v+1)
+  }
+
+  const queueDirtyOutOf = (subjectId, componentId) => {
+    const sid = Number(subjectId)
+    if (!Number.isFinite(sid)) return
+    const cid = componentId == null ? '' : String(componentId)
+    dirtyOutOfRef.current.add(`${sid}:${cid}`)
+    setDirtyVersion(v=>v+1)
+  }
+
+  const buildAutoSavePayload = (marksKeys, outOfKeys) => {
+    const byKey = new Map()
+
+    const pushRow = (row) => {
+      if (!row) return
+      const mk = row?.marks
+      if (mk === '' || mk === null || typeof mk === 'undefined') return
+      const n = Math.round(parseFloat(mk))
+      if (Number.isNaN(n)) return
+      const key = `${row.student}-${row.subject}-${row.component ?? ''}`
+      byKey.set(key, { exam: examId, student: row.student, subject: row.subject, component: row.component, marks: n, out_of: row.outOf })
+    }
+
+    for (const k of marksKeys){
+      const key = String(k)
+      const parts = key.split('-')
+      const studentId = Number(parts[0])
+      const subjectId = Number(parts[1])
+      const compId = parts.length > 2 ? Number(parts[2]) : NaN
+      const match = results.find(r => r.student===studentId && r.subject===subjectId && ((Number.isFinite(compId) ? compId : null) === (r.component ?? null)))
+      pushRow(match)
+    }
+
+    for (const k of outOfKeys){
+      const [sidRaw, cidRaw] = String(k).split(':')
+      const sid = Number(sidRaw)
+      const cid = cidRaw === '' ? null : Number(cidRaw)
+      if (!Number.isFinite(sid)) continue
+      const rows = results.filter(r => r.subject===sid && ((cid ?? null) === (r.component ?? null)))
+      rows.forEach(pushRow)
+    }
+
+    return Array.from(byKey.values())
+  }
+
+  const flushAutoSave = async () => {
+    if (isReadOnly) return
+    if (loading) return
+    const hasInvalid = Object.values(invalid).some(Boolean)
+    if (hasInvalid) return
+
+    const marksKeys = Array.from(dirtyMarksRef.current)
+    const outOfKeys = Array.from(dirtyOutOfRef.current)
+    if (!marksKeys.length && !outOfKeys.length) return
+
+    const payload = buildAutoSavePayload(marksKeys, outOfKeys)
+    if (!payload.length){
+      dirtyMarksRef.current = new Set()
+      dirtyOutOfRef.current = new Set()
+      setDirtyVersion(v=>v+1)
+      return
+    }
+
+    if (autoSaveInFlightRef.current){
+      autoSavePendingRef.current = true
+      return
+    }
+    autoSaveInFlightRef.current = true
+
+    try{
+      await api.post('/academics/exam_results/bulk/', { results: payload }, { timeout: 30000 })
+      marksKeys.forEach(k => dirtyMarksRef.current.delete(k))
+      outOfKeys.forEach(k => dirtyOutOfRef.current.delete(k))
+      setStatus('saved')
+      setTimeout(()=>setStatus('idle'), 1200)
+    }catch(err){
+      const msg = err?.response?.data?.detail || err?.message || 'Auto-save failed'
+      showError('Auto-save failed', msg, 4000)
+      setStatus('idle')
+    }finally{
+      autoSaveInFlightRef.current = false
+      if (autoSavePendingRef.current){
+        autoSavePendingRef.current = false
+        setTimeout(()=>flushAutoSave(), 150)
+      }
+    }
+  }
+
+  useEffect(()=>{
+    if (isReadOnly) return
+    if (!dirtyVersion) return
+    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current)
+    autoSaveTimerRef.current = setTimeout(()=>{
+      flushAutoSave()
+    }, 900)
+    return ()=>{
+      if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current)
+    }
+  }, [dirtyVersion, isReadOnly, loading])
 
   const title = useMemo(()=>{
     if (!exam) return 'Enter Results'
@@ -634,6 +748,7 @@ export default function AdminEnterResults({ readOnly }){
       if ((componentId ?? null) !== (r.component ?? null)) return r
       return { ...r, outOf: Number.isFinite(outNum) && outNum > 0 ? outNum : undefined }
     }))
+    queueDirtyOutOf(subjectId, componentId)
     setInvalid(prev => {
       const copy = { ...prev }
       for (const stu of students){
@@ -1036,6 +1151,7 @@ export default function AdminEnterResults({ readOnly }){
                                         if (i>-1) copy[i] = { ...copy[i], marks: v }
                                         return copy
                                       })
+                                      queueDirtyMark(cellKey)
                                     }}
                                   />
                                 </td>
@@ -1088,6 +1204,7 @@ export default function AdminEnterResults({ readOnly }){
                                   if (i>-1) copy[i] = { ...copy[i], marks: v }
                                   return copy
                                 })
+                                queueDirtyMark(cellKey)
                               }}
                             />
                           </td>

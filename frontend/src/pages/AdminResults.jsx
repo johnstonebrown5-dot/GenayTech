@@ -41,6 +41,7 @@ export default function AdminResults(){
         <style>
           @page { size: landscape; margin: 10mm; }
           :root{
+            --print-scale: 1.5;
             --text:#111827;
             --muted:#6b7280;
             --border:#e5e7eb;
@@ -67,19 +68,19 @@ export default function AdminResults(){
             margin: 0 auto 4px;
           }
           .print-header__name{
-            font-size: 15px;
+            font-size: calc(15px * var(--print-scale));
             font-weight: 800;
             letter-spacing: 0.4px;
             margin: 0;
           }
           .print-header__motto{
-            font-size: 10px;
+            font-size: calc(10px * var(--print-scale));
             color: var(--muted);
             margin-top: 4px;
           }
           .print-title{
             text-align:center;
-            font-size: 11px;
+            font-size: calc(11px * var(--print-scale));
             margin: 6px 0 8px;
             color: var(--text);
             font-weight: 600;
@@ -88,7 +89,7 @@ export default function AdminResults(){
             display:flex;
             justify-content: space-between;
             gap: 12px;
-            font-size: 10px;
+            font-size: calc(10px * var(--print-scale));
             color: var(--muted);
             margin: 0 0 6px;
           }
@@ -97,7 +98,7 @@ export default function AdminResults(){
             width: 100%;
             border-collapse: collapse;
             border-spacing: 0;
-            font-size: 9px;
+            font-size: calc(9px * var(--print-scale));
             table-layout: fixed;
             border: 1px solid var(--border);
           }
@@ -107,7 +108,7 @@ export default function AdminResults(){
             font-weight: 700;
             text-transform: uppercase;
             letter-spacing: 0.35px;
-            font-size: 8.5px;
+            font-size: calc(8.5px * var(--print-scale));
           }
           table.print-table th,
           table.print-table td{
