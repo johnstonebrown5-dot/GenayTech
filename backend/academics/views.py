@@ -1883,10 +1883,19 @@ class ExamViewSet(viewsets.ModelViewSet):
                     else:
                         subj_pct_map[sub_id] = round(sum(parts) / len(parts), 2)
 
-            # Totals/averages to MATCH the Results page: use subject percentages
-            pct_values = list(subj_pct_map.values())
+            # Fill missing subjects with 0 so blanks are treated as zeroes
+            try:
+                all_subj_ids = [str(s['id']) for s in class_subjects]
+            except Exception:
+                all_subj_ids = list(subj_pct_map.keys())
+            for sub_id in all_subj_ids:
+                if str(sub_id) not in subj_pct_map:
+                    subj_pct_map[str(sub_id)] = 0.0
+
+            # Totals/averages to MATCH the Results page: use subject percentages across ALL class subjects
+            pct_values = [subj_pct_map.get(str(i), 0.0) for i in all_subj_ids]
             pct_sum = sum(pct_values) if pct_values else 0.0
-            pct_cnt = len(pct_values)
+            pct_cnt = len(all_subj_ids)
             pct_avg = (pct_sum / pct_cnt) if pct_cnt else 0.0
 
             # Fallbacks in case percentages are unavailable for legacy data
