@@ -41,16 +41,16 @@ export default function AdminResults(){
         <style>
           @page { size: landscape; margin: 10mm; }
           :root{
-            --print-scale: 1.5;
+            --print-scale: 1.65;
             --text:#111827;
             --muted:#6b7280;
-            --border:#e5e7eb;
-            --head:#f8fafc;
-            --stripe:#fafafa;
+            --border:#9ca3af;
+            --head:#f3f4f6;
+            --stripe:#ffffff;
           }
           html, body { height: 100%; }
           body{
-            font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+            font-family: "Times New Roman", Times, serif;
             color: var(--text);
             margin: 0;
           }
@@ -105,7 +105,7 @@ export default function AdminResults(){
           table.print-table thead th{
             background: var(--head);
             color: #111827;
-            font-weight: 700;
+            font-weight: 800;
             text-transform: uppercase;
             letter-spacing: 0.35px;
             font-size: calc(8.5px * var(--print-scale));
@@ -122,6 +122,25 @@ export default function AdminResults(){
           }
           table.print-table tbody tr:nth-child(even) td{ background: var(--stripe); }
           table.print-table td{ color: #111827; }
+
+          /* Make subject marks bold for readability */
+          table.print-table--class tbody td:nth-child(n+3):not(:nth-last-child(-n+2)),
+          table.print-table--full tbody td:nth-child(n+4):not(:nth-last-child(-n+2)){
+            font-weight: 800;
+          }
+
+          /* Student names in CAPS */
+          table.print-table--class tbody td:nth-child(2),
+          table.print-table--full tbody td:nth-child(2){
+            text-transform: uppercase;
+          }
+
+          /* Slightly smaller font for subject code headers */
+          table.print-table--class thead th:nth-child(n+3):not(:nth-last-child(-n+2)),
+          table.print-table--full thead th:nth-child(n+4):not(:nth-last-child(-n+2)){
+            font-size: calc(8px * var(--print-scale));
+            letter-spacing: 0.2px;
+          }
 
           table.print-table--class tbody td:nth-child(2),
           table.print-table--full tbody td:nth-child(2){
