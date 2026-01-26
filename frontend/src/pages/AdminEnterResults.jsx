@@ -21,10 +21,22 @@ export default function AdminEnterResults({ readOnly }){
   const [results, setResults] = useState([]) // rows: {student, subject, component|null, marks}
   const [invalid, setInvalid] = useState({}) // { 'studentId-subjectId': true }
   const [componentsMap, setComponentsMap] = useState({}) // { subjectId: [components] }
+  const [uploadOpen, setUploadOpen] = useState(true)
+  const [studentSearch, setStudentSearch] = useState('')
+  const [appliedStudentSearch, setAppliedStudentSearch] = useState('')
+  const [subjectOrder, setSubjectOrder] = useState([])
+  const [reorderOpen, setReorderOpen] = useState(false)
   const { showError, showSuccess } = useNotification?.() || { showError: ()=>{}, showSuccess: ()=>{} }
   const isReadOnly = Boolean(readOnly) || (new URLSearchParams(location.search).get('readonly') === '1')
   const klassOverride = new URLSearchParams(location.search).get('klass')
   const [reloadKey, setReloadKey] = useState(0)
+
+  useEffect(()=>{
+    const t = setTimeout(()=>{
+      setAppliedStudentSearch(String(studentSearch || '').trim())
+    }, 250)
+    return ()=>clearTimeout(t)
+  }, [studentSearch])
 
   const createUploadRow = (subjectId = '') => ({
     uid: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
@@ -491,10 +503,56 @@ export default function AdminEnterResults({ readOnly }){
     )
   }
 
+  useEffect(()=>{
+    setSubjectOrder(prev => {
+      const nextIds = (Array.isArray(subjects) ? subjects : []).map(s => Number(s?.id)).filter(id => Number.isFinite(id))
+      if (!nextIds.length) return []
+      const prevIds = (Array.isArray(prev) ? prev : []).map(Number).filter(id => Number.isFinite(id))
+      const keep = prevIds.filter(id => nextIds.includes(id))
+      const add = nextIds.filter(id => !keep.includes(id))
+      return [...keep, ...add]
+    })
+  }, [subjects])
+
+  const orderedSubjects = useMemo(()=>{
+    const arr = Array.isArray(subjects) ? subjects : []
+    const order = Array.isArray(subjectOrder) ? subjectOrder : []
+    if (!order.length) return arr
+    const byId = new Map(arr.map(s => [String(s?.id), s]))
+    return order.map(id => byId.get(String(id))).filter(Boolean)
+  }, [subjects, subjectOrder])
+
   // Subjects currently visible based on filter
   const visibleSubjects = useMemo(()=>{
-    return selectedSubject ? subjects.filter(s=> String(s.id)===String(selectedSubject)) : subjects
-  }, [subjects, selectedSubject])
+    return selectedSubject ? orderedSubjects.filter(s=> String(s.id)===String(selectedSubject)) : orderedSubjects
+  }, [orderedSubjects, selectedSubject])
+
+  const displayStudents = useMemo(()=>{
+    const q = String(appliedStudentSearch || '').trim().toLowerCase()
+    if (!q) return students
+    return (Array.isArray(students) ? students : []).filter(stu => {
+      const name = String(stu?.name || '').toLowerCase()
+      const adm = String(stu?.admission_no || '').toLowerCase()
+      return name.includes(q) || adm.includes(q)
+    })
+  }, [students, appliedStudentSearch])
+
+  const moveSubject = (subjectId, delta) => {
+    setSubjectOrder(prev => {
+      const ids = (Array.isArray(prev) && prev.length) ? [...prev] : (Array.isArray(subjects) ? subjects.map(s => s?.id) : [])
+      const i = ids.findIndex(x => String(x) === String(subjectId))
+      const j = i + delta
+      if (i < 0 || j < 0 || j >= ids.length) return ids
+      const tmp = ids[i]
+      ids[i] = ids[j]
+      ids[j] = tmp
+      return ids
+    })
+  }
+
+  const resetSubjectOrder = () => {
+    setSubjectOrder((Array.isArray(subjects) ? subjects : []).map(s => s?.id))
+  }
 
   // Helper: whether a student's row has any missing marks among visible subjects (per component)
   const isRowMissingMarks = (studentId) => {
@@ -613,13 +671,35 @@ export default function AdminEnterResults({ readOnly }){
                 onChange={e=>setSelectedSubject(e.target.value)}
               >
                 <option value="">All Subjects</option>
-                {subjects.map(s=> (<option key={s.id} value={s.id}>{s.code} — {s.name}</option>))}
+                {orderedSubjects.map(s=> (<option key={s.id} value={s.id}>{s.code} — {s.name}</option>))}
               </select>
               <svg className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 9l6 6 6-6"/></svg>
             </div>
             <span className="hidden sm:inline text-xs text-gray-500">Total {Number(exam?.total_marks||100)}</span>
           </div>
           <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              <input
+                className="border px-2 py-2 rounded-lg text-sm w-full sm:w-56"
+                value={studentSearch}
+                onChange={(e)=>setStudentSearch(e.target.value)}
+                onKeyDown={(e)=>{
+                  if (e.key === 'Enter') setAppliedStudentSearch(String(studentSearch || '').trim())
+                }}
+                placeholder="Search student…"
+                aria-label="Search student"
+              />
+              <button
+                type="button"
+                className="px-3 py-2 rounded-lg border text-sm bg-white"
+                onClick={()=>setAppliedStudentSearch(String(studentSearch || '').trim())}
+              >Search</button>
+            </div>
+            <button
+              type="button"
+              className="px-3 py-2 rounded-lg border text-sm bg-white"
+              onClick={()=>setReorderOpen(v=>!v)}
+            >Reorder</button>
             {isReadOnly && (
               <label className="text-xs text-gray-600 flex items-center gap-2">
                 <span>Class</span>
@@ -646,109 +726,157 @@ export default function AdminEnterResults({ readOnly }){
             </button>
           </div>
         </div>
-        {!isReadOnly && (
-          <div className="rounded-lg border border-gray-200 p-3 bg-gray-50/50">
+        {reorderOpen && (
+          <div className="rounded-lg border border-gray-200 bg-white p-3">
             <div className="flex items-center justify-between gap-2 flex-wrap">
-              <div className="text-sm font-medium text-gray-800">Upload grades (multiple subjects)</div>
-              <div className="flex gap-2">
-                <button type="button" className="px-3 py-2 rounded border bg-white" onClick={addUploadRow}>Add another subject</button>
-                <button type="button" className="px-3 py-2 rounded text-white bg-indigo-600 disabled:opacity-60" onClick={previewAllUploads}>Preview All</button>
-                <button type="button" className="px-3 py-2 rounded text-white bg-emerald-600 disabled:opacity-60" onClick={commitAllUploads}>Commit All</button>
+              <div className="text-sm font-medium text-gray-800">Reorder Subject Columns</div>
+              <div className="flex items-center gap-2">
+                <button type="button" className="px-3 py-1.5 rounded-lg border text-sm bg-white" onClick={resetSubjectOrder}>Reset</button>
+                <button type="button" className="px-3 py-1.5 rounded-lg border text-sm bg-white" onClick={()=>setReorderOpen(false)}>Close</button>
               </div>
             </div>
-            <div className="mt-3 grid gap-3">
-              {(Array.isArray(uploadRows) ? uploadRows : []).map((row, idx) => {
-                const subjectNum = Number(row?.subjectId || '')
-                const comps = componentsMap[subjectNum] || []
-                return (
-                  <div key={row.uid} className="rounded-lg border border-gray-200 bg-white p-3">
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="text-xs text-gray-600">Upload #{idx+1}</div>
-                      <button type="button" className="text-xs text-red-700" onClick={()=>removeUploadRow(row.uid)} disabled={(uploadRows||[]).length<=1}>Remove</button>
-                    </div>
-                    <div className="mt-2 flex flex-col md:flex-row md:items-end gap-3">
-                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 flex-1">
-                        <label className="text-xs text-gray-700 flex flex-col">
-                          <span className="mb-1">Subject</span>
-                          <select
-                            className="border rounded px-2 py-2"
-                            value={row.subjectId}
-                            onChange={e=> updateUploadRow(row.uid, { subjectId: e.target.value, componentId: '', error: '' })}
-                          >
-                            <option value="">Select subject…</option>
-                            {subjects.map(s=> (<option key={s.id} value={s.id}>{s.code} — {s.name}</option>))}
-                          </select>
-                        </label>
-                        <label className="text-xs text-gray-700 flex flex-col">
-                          <span className="mb-1">Paper/Component (optional)</span>
-                          <select
-                            className="border rounded px-2 py-2"
-                            value={row.componentId}
-                            onChange={e=> updateUploadRow(row.uid, { componentId: e.target.value, error: '' })}
-                          >
-                            <option value="">—</option>
-                            {(Array.isArray(comps) ? comps : []).map(c => (
-                              <option key={c.id} value={c.id}>{c.code || c.name}</option>
-                            ))}
-                          </select>
-                        </label>
-                        <label className="text-xs text-gray-700 flex flex-col">
-                          <span className="mb-1">Out Of (optional)</span>
-                          <input
-                            type="number"
-                            inputMode="decimal"
-                            min={1}
-                            step="1"
-                            className="border rounded px-2 py-2"
-                            value={row.outOf}
-                            onChange={e=> updateUploadRow(row.uid, { outOf: e.target.value, error: '' })}
-                            placeholder={String(Number(exam?.total_marks||100))}
-                          />
-                        </label>
-                        <label className="text-xs text-gray-700 flex flex-col">
-                          <span className="mb-1">CSV/XLSX or Image</span>
-                          <input
-                            type="file"
-                            accept=".csv,.xlsx,.xls,.png,.jpg,.jpeg"
-                            onChange={e=> updateUploadRow(row.uid, { file: e.target.files?.[0]||null, error: '' })}
-                            className="border rounded px-2 py-2 bg-white"
-                          />
-                        </label>
-                      </div>
-                      <div className="flex gap-2 md:self-start">
-                        <button
-                          type="button"
-                          className="px-3 py-2 rounded border bg-white"
-                          disabled={!row.subjectId}
-                          onClick={()=>downloadTemplate(row)}
-                        >Download Template</button>
-                        <button
-                          type="button"
-                          className="px-3 py-2 rounded text-white bg-indigo-600 disabled:opacity-60"
-                          disabled={row.uploading}
-                          onClick={()=>previewUpload(row)}
-                        >{row.uploading ? 'Previewing…' : 'Preview Fill'}</button>
-                        <button
-                          type="button"
-                          className="px-3 py-2 rounded text-white bg-emerald-600 disabled:opacity-60"
-                          disabled={row.committing}
-                          onClick={()=>commitUpload(row)}
-                        >{row.committing ? 'Saving…' : 'Commit Save'}</button>
-                      </div>
-                    </div>
-                    {row.error && (
-                      <div className="mt-2 bg-red-50 text-red-700 p-2 rounded border border-red-200 text-sm">{row.error}</div>
-                    )}
+            <div className="mt-2 grid gap-1">
+              {orderedSubjects.map((s, idx) => (
+                <div key={s.id} className="flex items-center justify-between gap-2 border rounded-lg px-2 py-1 bg-gray-50">
+                  <div className="text-sm text-gray-800 truncate">{s.code} — {s.name}</div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      type="button"
+                      className="px-2 py-1 rounded border text-xs bg-white disabled:opacity-50"
+                      disabled={idx === 0}
+                      onClick={()=>moveSubject(s.id, -1)}
+                    >Up</button>
+                    <button
+                      type="button"
+                      className="px-2 py-1 rounded border text-xs bg-white disabled:opacity-50"
+                      disabled={idx === orderedSubjects.length - 1}
+                      onClick={()=>moveSubject(s.id, 1)}
+                    >Down</button>
                   </div>
-                )
-              })}
+                </div>
+              ))}
             </div>
+          </div>
+        )}
+        {!isReadOnly && (
+          <div className="rounded-lg border border-gray-200 p-3 bg-gray-50/50">
+            <button
+              type="button"
+              className="w-full flex items-center justify-between gap-3"
+              onClick={()=>setUploadOpen(v=>!v)}
+              aria-expanded={uploadOpen}
+            >
+              <div className="text-sm font-medium text-gray-800">Upload grades (multiple subjects)</div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-600">{uploadOpen ? 'Collapse' : 'Expand'}</span>
+                <svg className={`w-4 h-4 text-gray-600 transition-transform ${uploadOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 9l6 6 6-6"/></svg>
+              </div>
+            </button>
+            {uploadOpen && (
+              <React.Fragment>
+                <div className="mt-3 flex items-center justify-end gap-2 flex-wrap">
+                  <button type="button" className="px-3 py-2 rounded border bg-white" onClick={addUploadRow}>Add another subject</button>
+                  <button type="button" className="px-3 py-2 rounded text-white bg-indigo-600 disabled:opacity-60" onClick={previewAllUploads}>Preview All</button>
+                  <button type="button" className="px-3 py-2 rounded text-white bg-emerald-600 disabled:opacity-60" onClick={commitAllUploads}>Commit All</button>
+                </div>
+                <div className="mt-3 grid gap-3">
+                  {(Array.isArray(uploadRows) ? uploadRows : []).map((row, idx) => {
+                    const subjectNum = Number(row?.subjectId || '')
+                    const comps = componentsMap[subjectNum] || []
+                    return (
+                      <div key={row.uid} className="rounded-lg border border-gray-200 bg-white p-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="text-xs text-gray-600">Upload #{idx+1}</div>
+                          <button type="button" className="text-xs text-red-700" onClick={()=>removeUploadRow(row.uid)} disabled={(uploadRows||[]).length<=1}>Remove</button>
+                        </div>
+                        <div className="mt-2 flex flex-col md:flex-row md:items-end gap-3">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 flex-1">
+                            <label className="text-xs text-gray-700 flex flex-col">
+                              <span className="mb-1">Subject</span>
+                              <select
+                                className="border rounded px-2 py-2"
+                                value={row.subjectId}
+                                onChange={e=> updateUploadRow(row.uid, { subjectId: e.target.value, componentId: '', error: '' })}
+                              >
+                                <option value="">Select subject…</option>
+                                {subjects.map(s=> (<option key={s.id} value={s.id}>{s.code} — {s.name}</option>))}
+                              </select>
+                            </label>
+                            <label className="text-xs text-gray-700 flex flex-col">
+                              <span className="mb-1">Paper/Component (optional)</span>
+                              <select
+                                className="border rounded px-2 py-2"
+                                value={row.componentId}
+                                onChange={e=> updateUploadRow(row.uid, { componentId: e.target.value, error: '' })}
+                              >
+                                <option value="">—</option>
+                                {(Array.isArray(comps) ? comps : []).map(c => (
+                                  <option key={c.id} value={c.id}>{c.code || c.name}</option>
+                                ))}
+                              </select>
+                            </label>
+                            <label className="text-xs text-gray-700 flex flex-col">
+                              <span className="mb-1">Out Of (optional)</span>
+                              <input
+                                type="number"
+                                inputMode="decimal"
+                                min={1}
+                                step="1"
+                                className="border rounded px-2 py-2"
+                                value={row.outOf}
+                                onChange={e=> updateUploadRow(row.uid, { outOf: e.target.value, error: '' })}
+                                placeholder={String(Number(exam?.total_marks||100))}
+                              />
+                            </label>
+                            <label className="text-xs text-gray-700 flex flex-col">
+                              <span className="mb-1">CSV/XLSX or Image</span>
+                              <input
+                                type="file"
+                                accept=".csv,.xlsx,.xls,.png,.jpg,.jpeg"
+                                onChange={e=> updateUploadRow(row.uid, { file: e.target.files?.[0]||null, error: '' })}
+                                className="border rounded px-2 py-2 bg-white"
+                              />
+                            </label>
+                          </div>
+                          <div className="flex gap-2 md:self-start">
+                            <button
+                              type="button"
+                              className="px-3 py-2 rounded border bg-white"
+                              disabled={!row.subjectId}
+                              onClick={()=>downloadTemplate(row)}
+                            >Download Template</button>
+                            <button
+                              type="button"
+                              className="px-3 py-2 rounded text-white bg-indigo-600 disabled:opacity-60"
+                              disabled={row.uploading}
+                              onClick={()=>previewUpload(row)}
+                            >{row.uploading ? 'Previewing…' : 'Preview Fill'}</button>
+                            <button
+                              type="button"
+                              className="px-3 py-2 rounded text-white bg-emerald-600 disabled:opacity-60"
+                              disabled={row.committing}
+                              onClick={()=>commitUpload(row)}
+                            >{row.committing ? 'Saving…' : 'Commit Save'}</button>
+                          </div>
+                        </div>
+                        {row.error && (
+                          <div className="mt-2 bg-red-50 text-red-700 p-2 rounded border border-red-200 text-sm">{row.error}</div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              </React.Fragment>
+            )}
           </div>
         )}
         {loading && <div>Loading...</div>}
         {!loading && (
           <div className="bg-white rounded-xl shadow-card border border-gray-200 p-3 overflow-auto max-h-[70vh] md:max-h-[75vh]">
             <div className="text-xs text-gray-500 mb-2">Legend: <span className="px-1 rounded bg-rose-50 border border-rose-200">Missing/0</span> • <span className="px-1 rounded border border-red-300">Out of range</span></div>
+            {appliedStudentSearch && displayStudents.length === 0 && (
+              <div className="mb-2 text-sm text-gray-700">No students match "{appliedStudentSearch}".</div>
+            )}
             <table className="min-w-full text-sm">
               <thead className="sticky top-0 bg-gray-50 z-10">
                 <tr>
@@ -857,7 +985,7 @@ export default function AdminEnterResults({ readOnly }){
                 </tr>
               </thead>
               <tbody>
-                {students.map((stu, idx) => (
+                {displayStudents.map((stu, idx) => (
                   <tr key={stu.id} className={`${isRowMissingMarks(stu.id) ? 'bg-amber-50/60' : ''} ${idx % 2 === 1 ? 'bg-gray-50/40' : ''}`}>
                     <td className="border px-2 py-1 sticky left-0 bg-white">{stu.name}</td>
                     {visibleSubjects.map(s => {
