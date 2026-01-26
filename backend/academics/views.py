@@ -1981,19 +1981,19 @@ class ExamViewSet(viewsets.ModelViewSet):
         if school:
             same_grade_exams = same_grade_exams.filter(klass__school=school)
 
-        # Build totals per student across subjects for each exam separately, then pick the exam this student belongs to
-        # For grade ranking, we compare students' totals within their respective classes but on the same exam definition
+        # Build grade ranking using percentage-based totals from _build_summary to match Results/Report views
         totals = {}
-        # Collect students for grade rank across all matching exams
-        res = (
-            ExamResult.objects
-            .filter(exam__in=same_grade_exams, subject__is_examinable=True, student__is_active=True)
-            .values('exam_id', 'student_id')
-            .annotate(total=Sum('marks'))
-        )
-        for row in res:
-            sid = row['student_id']
-            totals[sid] = float(row['total'] or 0)
+        try:
+            for ex in same_grade_exams:
+                summary_ex = self._build_summary(ex)
+                for st in summary_ex.get('students', []):
+                    sid = st.get('id')
+                    if sid is None:
+                        continue
+                    # Keep the best (should be unique per exam anyway). Use percent-total
+                    totals[int(sid)] = float(st.get('total') or 0.0)
+        except Exception:
+            totals = {}
 
         # Sort by total desc and assign ranks with ties
         ordered = sorted(([sid, sc] for sid, sc in totals.items()), key=lambda x: x[1], reverse=True)
@@ -2324,7 +2324,7 @@ class ExamViewSet(viewsets.ModelViewSet):
             class_size = len(class_students)
             class_pos = next((s.get('position') for s in class_students if str(s.get('id')) == str(student_id)), None)
 
-            # Grade rank across same school+grade_level and same exam name/year/term
+            # Grade rank across same school+grade_level and same exam name/year/term (percentage-based totals)
             grade_level = getattr(getattr(exam, 'klass', None), 'grade_level', None)
             same_grade_exams = Exam.objects.filter(
                 name=exam.name,
@@ -2335,8 +2335,19 @@ class ExamViewSet(viewsets.ModelViewSet):
             school_scope = getattr(getattr(self.request, 'user', None), 'school', None)
             if school_scope:
                 same_grade_exams = same_grade_exams.filter(klass__school=school_scope)
-            rows_ag = ExamResult.objects.filter(exam__in=same_grade_exams).values('student_id').annotate(total=Sum('marks'))
-            totals_map = {r['student_id']: float(r['total'] or 0) for r in rows_ag}
+
+            totals_map = {}
+            try:
+                for ex in same_grade_exams:
+                    sum_ex = self._build_summary(ex)
+                    for row in sum_ex.get('students', []):
+                        sid2 = row.get('id')
+                        if sid2 is None:
+                            continue
+                        totals_map[int(sid2)] = float(row.get('total') or 0.0)
+            except Exception:
+                totals_map = {}
+
             ordered = sorted(totals_map.items(), key=lambda x: x[1], reverse=True)
             grade_size = len(ordered)
             grade_pos = None
