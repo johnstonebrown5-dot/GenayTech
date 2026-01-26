@@ -7,7 +7,6 @@ import { playSound } from '../utils/sounds'
 
 const LockContext = createContext({ locked: false, lock: () => {}, unlock: async () => {} })
 
-const TEN_MINUTES = 10 * 60 * 1000
 const STORAGE_KEY = 'app_locked_at'
 
 function setLockedStorage(locked) {
@@ -23,57 +22,13 @@ function readLockedStorage() {
   } catch { return false }
 }
 
-export default function LockProvider({ children, timeoutMs = TEN_MINUTES }) {
+export default function LockProvider({ children }) {
   const { user, logout, loading } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
   const [locked, setLocked] = useState(readLockedStorage())
-  const timerRef = useRef(null)
-  const lastActivityRef = useRef(Date.now())
-  const [lastActiveAt, setLastActiveAt] = useState(new Date(lastActivityRef.current))
+  const [lastActiveAt, setLastActiveAt] = useState(new Date())
   const redirectRef = useRef(null)
-
-  const clearTimer = () => { if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null } }
-
-  const schedule = useCallback(() => {
-    clearTimer()
-    const now = Date.now()
-    const elapsed = now - lastActivityRef.current
-    const remaining = Math.max(0, timeoutMs - elapsed)
-    timerRef.current = setTimeout(() => {
-      setLocked(true)
-      setLockedStorage(true)
-      try { playSound('lock') } catch {}
-    }, remaining)
-  }, [timeoutMs])
-
-  const markActivity = useCallback(() => {
-    if (!user || locked) return
-    lastActivityRef.current = Date.now()
-    setLastActiveAt(new Date(lastActivityRef.current))
-    schedule()
-  }, [locked, schedule, user])
-
-  // Global activity listeners
-  useEffect(() => {
-    if (!user) { clearTimer(); setLocked(false); setLockedStorage(false); return }
-
-    const handler = () => markActivity()
-    const visHandler = () => { if (document.visibilityState === 'visible') handler() }
-
-    const events = ['mousemove','mousedown','keydown','scroll','touchstart','click']
-    events.forEach(e => window.addEventListener(e, handler, { passive: true }))
-    document.addEventListener('visibilitychange', visHandler)
-
-    // Initial schedule
-    schedule()
-
-    return () => {
-      clearTimer()
-      events.forEach(e => window.removeEventListener(e, handler))
-      document.removeEventListener('visibilitychange', visHandler)
-    }
-  }, [user, schedule, markActivity])
 
   // Sync lock state across tabs
   useEffect(() => {
@@ -82,18 +37,13 @@ export default function LockProvider({ children, timeoutMs = TEN_MINUTES }) {
         const isLocked = !!e.newValue
         setLocked(isLocked)
         if (!isLocked) {
-          // resume timer on unlock from another tab
-          lastActivityRef.current = Date.now()
-          setLastActiveAt(new Date(lastActivityRef.current))
-          schedule()
-        } else {
-          clearTimer()
+          setLastActiveAt(new Date())
         }
       }
     }
     window.addEventListener('storage', onStorage)
     return () => window.removeEventListener('storage', onStorage)
-  }, [schedule])
+  }, [])
 
   // Sync lock state with auth session. On logout clear lock; on login respect persisted lock and only schedule timer if not locked.
   useEffect(() => {
@@ -101,23 +51,19 @@ export default function LockProvider({ children, timeoutMs = TEN_MINUTES }) {
     if (!user) {
       setLocked(false)
       setLockedStorage(false)
-      clearTimer()
     } else {
       const persistedLocked = readLockedStorage()
       if (persistedLocked) {
         setLocked(true)
-        clearTimer()
       } else {
         setLocked(false)
         setLockedStorage(false)
-        lastActivityRef.current = Date.now()
-        setLastActiveAt(new Date(lastActivityRef.current))
-        schedule()
+        setLastActiveAt(new Date())
       }
     }
-  }, [user, loading, schedule])
+  }, [user, loading])
 
-  const lock = useCallback(() => { setLocked(true); setLockedStorage(true); clearTimer(); try { playSound('lock') } catch {} }, [])
+  const lock = useCallback(() => { setLocked(true); setLockedStorage(true); try { playSound('lock') } catch {} }, [])
 
   const unlock = useCallback(async (password) => {
     if (!user) return { ok: false, error: 'Not authenticated' }
@@ -129,9 +75,7 @@ export default function LockProvider({ children, timeoutMs = TEN_MINUTES }) {
       if (data?.refresh) localStorage.setItem('refresh', data.refresh)
       setLocked(false)
       setLockedStorage(false)
-      lastActivityRef.current = Date.now()
-      setLastActiveAt(new Date(lastActivityRef.current))
-      schedule()
+      setLastActiveAt(new Date())
       // Navigate back to intended route
       try {
         const target = redirectRef.current || sessionStorage.getItem('lock_redirect') || null
@@ -146,7 +90,7 @@ export default function LockProvider({ children, timeoutMs = TEN_MINUTES }) {
       const msg = e?.response?.data?.detail || 'Invalid password'
       return { ok: false, error: msg }
     }
-  }, [user, schedule])
+  }, [user, navigate])
 
   const value = useMemo(() => ({ locked, lock, unlock }), [locked, lock, unlock])
 
