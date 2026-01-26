@@ -306,7 +306,7 @@ function TeacherResultsLegacy(){
     const a = document.createElement('a'); a.href=url; a.download=filename; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url)
   }
   const printHTML = (title, html) => {
-    const w = window.open('', '_blank'); w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${title}</title><style>body{font-family:Arial, sans-serif; padding:16px;} table{border-collapse:collapse; width:100%;} th,td{border:1px solid #ddd; padding:6px; text-align:left;} th{background:#f8f8f8;}</style></head><body>${html}</body></html>`); w.document.close(); w.focus(); w.print()
+    const w = window.open('', '_blank'); w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${title}</title><style>body{font-family:Arial, sans-serif; padding:12px; font-size:12px;} h1{font-size:15px; margin:0 0 8px;} table{border-collapse:collapse; width:100%; table-layout:fixed; font-size:11px;} th,td{border:1px solid #ddd; padding:2px 4px; line-height:1.1; text-align:left; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;} th{background:#f8f8f8; font-size:10px; text-transform:uppercase; letter-spacing:.3px;}</style></head><body>${html}</body></html>`); w.document.close(); w.focus(); w.print()
   }
   const handleClassPrint = () => {
     if (!summary) return

@@ -95,13 +95,11 @@ export default function AdminResults(){
 
           table.print-table{
             width: 100%;
-            border-collapse: separate;
+            border-collapse: collapse;
             border-spacing: 0;
-            font-size: 8.5px;
+            font-size: 9px;
             table-layout: fixed;
             border: 1px solid var(--border);
-            border-radius: 10px;
-            overflow: hidden;
           }
           table.print-table thead th{
             background: var(--head);
@@ -109,22 +107,19 @@ export default function AdminResults(){
             font-weight: 700;
             text-transform: uppercase;
             letter-spacing: 0.35px;
-            font-size: 8px;
+            font-size: 8.5px;
           }
           table.print-table th,
           table.print-table td{
-            padding: 2px 4px;
-            line-height: 1.15;
-            border-bottom: 1px solid var(--border);
+            padding: 1px 3px;
+            line-height: 1.05;
+            border: 1px solid var(--border);
             vertical-align: top;
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
           }
-          table.print-table th:not(:last-child),
-          table.print-table td:not(:last-child){ border-right: 1px solid var(--border); }
           table.print-table tbody tr:nth-child(even) td{ background: var(--stripe); }
-          table.print-table tbody tr:last-child td{ border-bottom: 0; }
           table.print-table td{ color: #111827; }
 
           table.print-table--class tbody td:nth-child(2),
@@ -167,7 +162,7 @@ export default function AdminResults(){
           @media print {
             .no-print{ display: none !important; }
             thead { display: table-header-group; }
-            tfoot { display: table-footer-group; }
+            tfoot { display: table-row-group; }
             tr { break-inside: avoid; page-break-inside: avoid; }
           }
         </style>
@@ -800,6 +795,27 @@ export default function AdminResults(){
                   ))}
                 </tbody>
                 <tfoot>
+                  {(() => {
+                    const totals = summary.subjects.map(s => {
+                      let sum = 0
+                      for (const st of summary.students){
+                        const v = Number(st?.subject_percentages?.[String(s.id)])
+                        if (Number.isFinite(v)) sum += v
+                      }
+                      return Math.round(sum)
+                    })
+                    const overall = totals.reduce((a,b)=>a+b,0)
+                    return (
+                      <tr className="bg-gray-50">
+                        <td className="border px-2 py-1 font-medium" colSpan={2}>Grand Total</td>
+                        {totals.map((t, idx) => (
+                          <td key={`gt-${summary.subjects[idx].id}`} className="border px-2 py-1 font-medium">{t}</td>
+                        ))}
+                        <td className="border px-2 py-1 font-medium">{overall}</td>
+                        <td className="border px-2 py-1"></td>
+                      </tr>
+                    )
+                  })()}
                   <tr className="bg-gray-50">
                     <td className="border px-2 py-1 font-medium" colSpan={2}>Mean Score</td>
                     {summary.subjects.map(s => (
