@@ -320,7 +320,10 @@ export default function AdminClassPrintReportCards({ classIdProp = null, embedde
                             <tr key={st.id} className="hover:bg-gray-50">
                               <td className="border px-2 py-1 sticky left-0 bg-white">{st.name}</td>
                               {summary.subjects.map(s => (
-                                <td key={s.id} className="border px-2 py-1 text-center">{st.marks?.[String(s.id)] ?? '-'}</td>
+                                <td key={s.id} className="border px-2 py-1 text-center">{(()=>{
+                                  const v = st.subject_percentages?.[String(s.id)]
+                                  return (v !== undefined && v !== null) ? Number(v) : '-'
+                                })()}</td>
                               ))}
                               <td className="border px-2 py-1 font-medium text-right">{st.total}</td>
                               <td className="border px-2 py-1 text-center">{gradeForAverage(st.average)}</td>
@@ -402,7 +405,7 @@ export default function AdminClassPrintReportCards({ classIdProp = null, embedde
                             </thead>
                             <tbody>
                               {summary.subjects.map((s,i)=>{
-                                const v = st.marks?.[String(s.id)]
+                                const v = st.subject_percentages?.[String(s.id)]
                                 const grade = gradeForSubject(s.id, v)
                                 return (
                                   <tr key={s.id}>

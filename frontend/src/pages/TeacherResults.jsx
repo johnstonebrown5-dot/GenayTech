@@ -25,13 +25,13 @@ function TeacherResultsLegacy(){
   // Grading bands (admin-defined). We'll pick the first subject with configured bands as the global for overall Grade.
   const [globalBands, setGlobalBands] = useState(null)
 
-  // Load teacher's classes
+  // Load all classes (not just teacher's) so teachers can view any class
   useEffect(() => {
     let mounted = true
     ;(async () => {
       try{
         setLoading(true); setError('')
-        const { data } = await api.get('/academics/classes/mine/')
+        const { data } = await api.get('/academics/classes/')
         if (!mounted) return
         const list = Array.isArray(data) ? data : []
         setClasses(list)

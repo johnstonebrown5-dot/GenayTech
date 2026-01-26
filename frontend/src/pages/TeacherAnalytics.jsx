@@ -53,13 +53,13 @@ export default function TeacherAnalytics(){
   const [trendSubjects, setTrendSubjects] = useState([]) // subject ids to plot
   const trendLineRef = useRef(null)
 
-  // Load teacher's classes
+  // Load all classes so teachers can analyze any class and compare within the same grade
   useEffect(() => {
     let mounted = true
     ;(async () => {
       try{
         setError('')
-        const { data } = await api.get('/academics/classes/mine/')
+        const { data } = await api.get('/academics/classes/')
         if (!mounted) return
         const list = Array.isArray(data) ? data : []
         setClasses(list)
