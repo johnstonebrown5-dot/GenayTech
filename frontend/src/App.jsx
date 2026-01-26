@@ -67,6 +67,7 @@ import AdminAcademicCalendar from './pages/AdminAcademicCalendar'
 import AdminSubjects from './pages/AdminSubjects'
 import AdminSubjectProfile from './pages/AdminSubjectProfile'
 import AdminWebsite from './pages/AdminWebsite'
+import AdminGrading from './pages/AdminGrading'
 import ReportIssue from './pages/ReportIssue'
 import TopProgress from './components/TopProgress'
 import PublicTeachers from './pages/PublicTeachers'
@@ -232,6 +233,7 @@ export default function App() {
               <Route path="classes/:id/print-report-cards" element={<AdminClassPrintReportCards/>} />
               <Route path="fees" element={<AdminFees/>} />
               <Route path="subjects" element={<AdminSubjects/>} />
+              <Route path="grading" element={<AdminGrading/>} />
               <Route path="subjects/:id" element={<AdminSubjectProfile/>} />
               <Route path="exams" element={<AdminExams/>} />
               <Route path="exams/:id/enter" element={<AdminEnterResults/>} />

@@ -28,12 +28,28 @@ export default function StudentReportCardViewer({ embedded=false, hideControls=f
   const [ranks, setRanks] = useState({})
   const [bandsBySubject, setBandsBySubject] = useState(new Map())
   const [globalBands, setGlobalBands] = useState(null)
+  const [stageBands, setStageBands] = useState(null)
   const [selectedExamClass, setSelectedExamClass] = useState(null)
   // Summary data from Results page for the currently selected exam
   const [summarySubjects, setSummarySubjects] = useState(null)
   const [summaryStudent, setSummaryStudent] = useState(null)
   const [summaryExam, setSummaryExam] = useState(null)
   const [examMeta, setExamMeta] = useState(null)
+
+  const inferStageFromClass = (klass) => {
+    try{
+      const stg = klass?.stage
+      if (stg) return stg
+      const gl = String(klass?.grade_level || '')
+      const m = gl.match(/(\d{1,2})/)
+      const num = m ? Number(m[1]) : NaN
+      if (Number.isFinite(num)){
+        if (num >= 1 && num <= 6) return 'primary'
+        if (num >= 7 && num <= 9) return 'junior'
+      }
+      return null
+    }catch{ return null }
+  }
   const isPrivileged = useMemo(() => {
     const role = typeof user?.role === 'string' ? user.role.toLowerCase() : ''
     return role === 'admin' || role === 'teacher' || !!user?.is_staff || !!user?.is_superuser
@@ -326,6 +342,15 @@ export default function StudentReportCardViewer({ embedded=false, hideControls=f
         const res = await api.get(`/academics/classes/${klassId}/`)
         if (!active) return
         setSelectedExamClass(res.data)
+        // Load stage-wide grading bands for this class
+        try{
+          const stg = res?.data?.stage || inferStageFromClass(res?.data)
+          if (stg){
+            const sb = await api.get('/academics/stage_grading/', { params: { stage: stg, _: Date.now() } })
+            const list = Array.isArray(sb.data) ? sb.data : (Array.isArray(sb.data?.results) ? sb.data.results : [])
+            if (active){ setStageBands(list); setGlobalBands(list) }
+          } else { if (active) setStageBands(null) }
+        }catch{ if (active) setStageBands(null) }
       }catch{
         if (!active) return
         setSelectedExamClass(null)
@@ -411,9 +436,9 @@ export default function StudentReportCardViewer({ embedded=false, hideControls=f
     return 'E'
   }
 
-  const toGrade = (score, subjectId) => {
-    const bands = bandsBySubject.get?.(String(subjectId)) || globalBands
-    return letterFromBands(score, bands)
+  const toGrade = (score, _subjectId) => {
+    // Apply one common grading for the stage across all subjects
+    return letterFromBands(score, stageBands || globalBands)
   }
 
   const gradeBadgeClass = (g) => {
@@ -431,11 +456,7 @@ export default function StudentReportCardViewer({ embedded=false, hideControls=f
     const name = String(subject || '').toLowerCase()
     const isKiswahili = name.includes('kis') || name.includes('swahili')
     if (!Number.isFinite(n)) return isKiswahili ? 'Hakuna alama' : 'No marks'
-    let g = 'E'
-    if (n >= 80) g = 'A'
-    else if (n >= 70) g = 'B'
-    else if (n >= 60) g = 'C'
-    else if (n >= 50) g = 'D'
+    const g = String(toGrade(n, null) || 'E').toUpperCase()
     if (isKiswahili){
       if (g === 'A') return 'Bora sana'
       if (g === 'B') return 'Vizuri sana'
@@ -485,11 +506,11 @@ export default function StudentReportCardViewer({ embedded=false, hideControls=f
           }
         }
         setBandsBySubject(map)
-        if (first) setGlobalBands(first)
+        if (!stageBands && first) setGlobalBands(first)
       }catch{}
     })()
     return ()=>{ active = false }
-  }, [examResults, parsedTermYear, selectedExam])
+  }, [examResults, parsedTermYear, selectedExam, stageBands])
 
   // Build marks map first so it can be used by subject derivation below
   const marksByExamAndSubject = useMemo(()=>{

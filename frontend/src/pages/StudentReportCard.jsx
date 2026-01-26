@@ -19,6 +19,7 @@ export default function StudentReportCard(){
   const [prevRank, setPrevRank] = useState(null)
   const [bandsBySubject, setBandsBySubject] = useState(new Map())
   const [globalBands, setGlobalBands] = useState(null)
+  const [stageBands, setStageBands] = useState(null)
 
   // Build unique Term-Year options for published exams only, e.g., '2025-T2'
   const termYearOptions = useMemo(()=>{
@@ -86,6 +87,15 @@ export default function StudentReportCard(){
         const stRes = await api.get('/academics/students/my/')
         if (!mounted) return
         setStudent(stRes.data)
+        // Load stage-wide grading bands for the student's class
+        try{
+          const stg = stRes?.data?.klass_detail?.stage
+          if (stg){
+            const sb = await api.get('/academics/stage_grading/', { params: { stage: stg, _: Date.now() } })
+            const list = Array.isArray(sb.data) ? sb.data : (Array.isArray(sb.data?.results) ? sb.data.results : [])
+            if (mounted){ setStageBands(list); setGlobalBands(list) }
+          } else { if (mounted) setStageBands(null) }
+        }catch{ if (mounted) setStageBands(null) }
         // Try to resolve class teacher name for the on-page card
         try{
           const kd = stRes.data?.klass_detail
@@ -150,8 +160,8 @@ export default function StudentReportCard(){
     return 'E'
   }
   const toGrade = (score, subjectId) => {
-    const bands = bandsBySubject.get?.(String(subjectId)) || globalBands
-    return letterFromBands(score, bands)
+    const subjBands = bandsBySubject.get?.(String(subjectId))
+    return letterFromBands(score, (Array.isArray(subjBands) && subjBands.length) ? subjBands : stageBands || globalBands)
   }
 
   // Subjects present in the selected term across exams
@@ -193,11 +203,11 @@ export default function StudentReportCard(){
           }
         }
         setBandsBySubject(map)
-        if (first) setGlobalBands(first)
+        if (!stageBands && first) setGlobalBands(first)
       }catch{}
     })()
     return ()=>{ active = false }
-  }, [subjects])
+  }, [subjects, stageBands])
 
   // Build marks per subject per exam for rendering
   const marksByExamAndSubject = useMemo(()=>{

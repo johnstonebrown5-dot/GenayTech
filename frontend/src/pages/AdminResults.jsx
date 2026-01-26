@@ -22,6 +22,7 @@ export default function AdminResults(){
   const fullListTableRef = useRef(null)
   const [bandsBySubject, setBandsBySubject] = useState(new Map()) // subjectId -> bands[]
   const [globalBands, setGlobalBands] = useState(null) // bands[] to compute overall Grade
+  const [stageBands, setStageBands] = useState(null) // stage-wide bands for the class of selected exam
   const [school, setSchool] = useState(null)
 
   const openPrintWindow = ({ title, metaLeftHtml = '' , contentHtml }) => {
@@ -410,6 +411,28 @@ export default function AdminResults(){
       const { data } = await api.get(`/academics/exams/${examId}/summary/`)
       const hydrated = await hydrateWithRoster(examId, data)
       setSummary(hydrated)
+      // Load stage-wide bands for the class used by this exam
+      try{
+        const klassId = hydrated?.exam?.klass
+        if (klassId){
+          const kres = await api.get(`/academics/classes/${klassId}/`)
+          let stg = kres?.data?.stage
+          if (!stg){
+            // infer from grade_level, Primary (1-6) or Junior (7-9)
+            try{
+              const m = String(kres?.data?.grade_level||'').match(/(\d{1,2})/)
+              const num = m ? Number(m[1]) : NaN
+              if (Number.isFinite(num)) stg = (num>=1 && num<=6) ? 'primary' : ((num>=7 && num<=9) ? 'junior' : null)
+            }catch{}
+          }
+          if (stg){
+            const sb = await api.get('/academics/stage_grading/', { params: { stage: stg, _: Date.now() } })
+            const list = Array.isArray(sb.data) ? sb.data : (Array.isArray(sb.data?.results) ? sb.data.results : [])
+            setStageBands(list)
+            setGlobalBands(list)
+          } else { setStageBands(null) }
+        } else { setStageBands(null) }
+      }catch{ setStageBands(null) }
     } catch (e) {
       setErr(e?.response?.data ? JSON.stringify(e.response.data) : e.message)
     } finally { setLoading(false) }
@@ -574,12 +597,12 @@ export default function AdminResults(){
     const n = Number(score)
     if (!Number.isFinite(n)) return '-'
     const arr = Array.isArray(bands) ? [...bands] : []
-    arr.sort((a,b)=> (a.order??0) - (b.order??0))
+    // Consistent with report cards: higher min first
+    arr.sort((a,b)=> Number(b.min ?? -Infinity) - Number(a.min ?? -Infinity))
     for (const b of arr){
-      const min = Number(b.min), max = Number(b.max)
-      if (Number.isFinite(min) && Number.isFinite(max)){
-        if (n >= min && n <= max) return String(b.grade || '-')
-      }
+      const min = Number.isFinite(Number(b.min)) ? Number(b.min) : -Infinity
+      const max = Number.isFinite(Number(b.max)) ? Number(b.max) : Infinity
+      if (n >= min && n <= max) return String(b.grade || '-')
     }
     if (n >= 80) return 'A'
     if (n >= 70) return 'B'
@@ -700,11 +723,12 @@ export default function AdminResults(){
           }
         }
         setBandsBySubject(map)
-        if (first) setGlobalBands(first)
+        // Prefer stage bands; if unavailable, use first subject bands
+        if (!stageBands && first) setGlobalBands(first)
       }catch{}
     })()
     return () => { active = false }
-  }, [summary?.subjects])
+  }, [summary?.subjects, stageBands])
 
   return (
     <React.Fragment>

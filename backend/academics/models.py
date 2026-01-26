@@ -109,6 +109,12 @@ class Class(models.Model):
                               on_delete=models.SET_NULL, related_name='class_teacher')
     school = models.ForeignKey('accounts.School', on_delete=models.CASCADE, related_name='classes')
     subjects = models.ManyToManyField(Subject, blank=True, related_name='classes')
+    # New: classify a class by stage for quick filtering/reporting
+    STAGE_CHOICES = (
+        ('primary', 'Primary'),
+        ('junior', 'Junior Secondary'),
+    )
+    stage = models.CharField(max_length=20, choices=STAGE_CHOICES, blank=True, default='', help_text="Primary: Grades 1-6; Junior Secondary: Grades 7-9")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -138,6 +144,24 @@ class Class(models.Model):
         if grade_num.isdigit():
             return f"Grade {int(grade_num)}"
         return str(grade_level).strip()
+
+    @staticmethod
+    def compute_stage(grade_level):
+        """Return 'primary' for Grades 1-6, 'junior' for Grades 7-9. Else '' (unknown)."""
+        try:
+            import re
+            gl = Class.format_grade_level(grade_level)
+            m = re.search(r"\bgrade\s*(\d{1,2})\b", str(gl), flags=re.IGNORECASE)
+            num = int(m.group(1)) if m else None
+            if num is None:
+                return ''
+            if 1 <= num <= 6:
+                return 'primary'
+            if 7 <= num <= 9:
+                return 'junior'
+            return ''
+        except Exception:
+            return ''
     
     def clean(self):
         """Validate that required fields are present."""
@@ -175,6 +199,14 @@ class Class(models.Model):
             self.name = self.get_class_name()
         else:
             raise ValueError("Both grade_level and stream are required to generate class name")
+        # Auto-set stage when possible (do not raise on failure)
+        try:
+            computed = Class.compute_stage(self.grade_level)
+            # Update when empty or when computed differs (keeps in sync after promotions)
+            if computed and self.stage != computed:
+                self.stage = computed
+        except Exception:
+            pass
             
         # Clean and validate
         self.full_clean()
@@ -472,6 +504,28 @@ class SubjectGradingBand(models.Model):
 
     def __str__(self):
         return f"{self.subject.code} {self.grade} ({self.min}-{self.max})"
+
+class StageGradingBand(models.Model):
+    """Common grading bands per stage (Primary or Junior Secondary) at school scope.
+    Subjects can override with SubjectGradingBand; otherwise stage bands apply across subjects.
+    """
+    STAGE_CHOICES = (
+        ('primary', 'Primary'),
+        ('junior', 'Junior Secondary'),
+    )
+    school = models.ForeignKey('accounts.School', on_delete=models.CASCADE)
+    stage = models.CharField(max_length=20, choices=STAGE_CHOICES)
+    grade = models.CharField(max_length=5)
+    min = models.IntegerField()
+    max = models.IntegerField()
+    order = models.IntegerField(default=0)
+
+    class Meta:
+        ordering = ["stage", "order", "-max"]
+        unique_together = ("school", "stage", "grade")
+
+    def __str__(self):
+        return f"{self.school_id} {self.stage} {self.grade} ({self.min}-{self.max})"
 
 # ===== Academic Calendar =====
 class AcademicYear(models.Model):

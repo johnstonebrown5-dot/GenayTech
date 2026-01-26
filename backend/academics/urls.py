@@ -6,7 +6,7 @@ from .views import (
     ExamViewSet, ExamResultViewSet,
     AcademicYearViewSet, TermViewSet, StreamViewSet,
     LessonPlanViewSet, ClassSubjectTeacherViewSet, SubjectGradingBandViewSet,
-    RoomViewSet, TimetableEntryViewSet, SubjectComponentViewSet, TeacherDutyViewSet,
+    StageGradingBandViewSet, RoomViewSet, TimetableEntryViewSet, SubjectComponentViewSet, TeacherDutyViewSet,
     TimetableTemplateViewSet, PeriodSlotTemplateViewSet, TimetablePlanViewSet, TimetableClassConfigViewSet,
     ClassSubjectQuotaViewSet, TeacherAvailabilityViewSet, TimetableVersionViewSet
 )
@@ -30,6 +30,7 @@ router.register('terms', TermViewSet)
 router.register('streams', StreamViewSet)
 router.register('class_subject_teachers', ClassSubjectTeacherViewSet)
 router.register('subject_grading', SubjectGradingBandViewSet)
+router.register('stage_grading', StageGradingBandViewSet)
 router.register('rooms', RoomViewSet)
 router.register('timetable_entries', TimetableEntryViewSet)
 router.register('timetable/templates', TimetableTemplateViewSet)

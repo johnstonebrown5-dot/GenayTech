@@ -126,6 +126,7 @@ export default function AdminSubjects(){
           </div>
           <div className="flex items-center gap-2">
             <Link to="/admin/teachers" className="px-3 py-1.5 rounded border hover:bg-gray-50">Teachers</Link>
+            <Link to="/admin/grading" className="px-3 py-1.5 rounded border border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100">Grading</Link>
           </div>
         </div>
 

@@ -22,7 +22,8 @@ export default function AdminClassPrintReportCards({ classIdProp = null, embedde
   const [classRankMapApi, setClassRankMapApi] = useState(new Map()) // Map(studentId -> { position, size })
   const [gradeRankMapApi, setGradeRankMapApi] = useState(new Map()) // Map(studentId -> { position, size })
   const [bandsBySubject, setBandsBySubject] = useState(new Map()) // Map(subjectId -> bands[])
-  const [globalBands, setGlobalBands] = useState(null) // bands[] to use for overall grade mapping
+  const [globalBands, setGlobalBands] = useState(null) // bands[] to use for overall grade mapping (stage defaults)
+  const [stageBands, setStageBands] = useState(null) // stage-wide default bands
 
   useEffect(()=>{
     let active = true
@@ -33,6 +34,23 @@ export default function AdminClassPrintReportCards({ classIdProp = null, embedde
         const { data } = await api.get(`/academics/classes/${id}/`)
         if (!active) return
         setKlass(data)
+        // Load stage-wide grading bands for this class
+        try{
+          let stg = data?.stage
+          if (!stg){
+            // Infer from grade_level if stage is not set yet
+            const num = (()=>{ try{ const m = String(data?.grade_level||'').match(/(\d{1,2})/); return m? Number(m[1]) : NaN }catch{return NaN} })()
+            if (Number.isFinite(num)) stg = (num>=1 && num<=6) ? 'primary' : ((num>=7 && num<=9) ? 'junior' : null)
+          }
+          if (stg){
+            const sb = await api.get('/academics/stage_grading/', { params: { stage: stg, _ : Date.now() } })
+            const list = Array.isArray(sb.data) ? sb.data : (Array.isArray(sb.data?.results) ? sb.data.results : [])
+            setStageBands(list)
+            setGlobalBands(list)
+          } else {
+            setStageBands(null)
+          }
+        }catch{ setStageBands(null) }
         // fetch school for header/logo
         try{
           const sch = await api.get('/auth/school/info/')
@@ -124,7 +142,7 @@ export default function AdminClassPrintReportCards({ classIdProp = null, embedde
         const { data } = await api.get(`/academics/exams/${recentExam.id}/summary/`)
         if (!active) return
         setSummary(data)
-        // Fetch grading bands per subject for dynamic grade mapping
+        // Fetch grading bands per subject for dynamic grade mapping (subject overrides). Fallback to stage bands for missing subjects.
         try{
           const subjIds = (Array.isArray(data?.subjects)?data.subjects:[]).map(s=>s.id).filter(Boolean)
           const entries = await Promise.allSettled(subjIds.map(async sid => {
@@ -134,15 +152,17 @@ export default function AdminClassPrintReportCards({ classIdProp = null, embedde
           }))
           if (!active) return
           const map = new Map()
-          let picked = null
           for (const r of entries){
             if (r.status==='fulfilled'){
               map.set(r.value.sid, r.value.bands)
-              if (!picked && Array.isArray(r.value.bands) && r.value.bands.length>0) picked = r.value.bands
             }
           }
           setBandsBySubject(map)
-          setGlobalBands(picked)
+          // If no stageBands yet and at least one subject has bands, use that as global fallback
+          if (!stageBands){
+            const anyBands = [...map.values()].find(arr => Array.isArray(arr) && arr.length>0) || null
+            if (anyBands) setGlobalBands(anyBands)
+          }
         }catch{}
       }catch(_){
         if (!active) return
@@ -228,12 +248,12 @@ export default function AdminClassPrintReportCards({ classIdProp = null, embedde
     return 'E'
   }
 
-  const gradeForSubject = (sid, score) => {
-    const bands = bandsBySubject.get?.(sid)
-    return letterFromBands(score, bands)
+  const gradeForSubject = (_sid, score) => {
+    // Apply stage-wide grading across all subjects
+    return letterFromBands(score, stageBands || globalBands)
   }
 
-  const gradeForAverage = (avg) => letterFromBands(avg, globalBands)
+  const gradeForAverage = (avg) => letterFromBands(avg, stageBands || globalBands)
 
   return (
     <React.Fragment>

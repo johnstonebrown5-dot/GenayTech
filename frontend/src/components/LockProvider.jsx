@@ -1,4 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useLocation, useNavigate } from 'react-router-dom'
 import api from '../api'
 import { useAuth } from '../auth'
@@ -168,8 +169,9 @@ export default function LockProvider({ children, timeoutMs = TEN_MINUTES }) {
     <LockContext.Provider value={value}>
       {children}
       {/* Fallback overlay so lock is always visible even if routing doesn't switch to /lock */}
-      {user && locked && location.pathname !== '/lock' && (
-        <LockScreen onUnlock={unlock} onLogout={logout} user={user} lastActiveAt={lastActiveAt} />
+      {user && locked && location.pathname !== '/lock' && createPortal(
+        <LockScreen onUnlock={unlock} onLogout={logout} user={user} lastActiveAt={lastActiveAt} />,
+        typeof document !== 'undefined' ? document.body : undefined
       )}
     </LockContext.Provider>
   )

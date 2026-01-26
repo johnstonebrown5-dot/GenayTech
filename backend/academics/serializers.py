@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from .models import (
     Class, Student, Competency, Assessment, Attendance, TeacherProfile, Subject, SubjectComponent,
-    Exam, ExamResult, AcademicYear, Term, Stream, LessonPlan, ClassSubjectTeacher, SubjectGradingBand,
+    Exam, ExamResult, AcademicYear, Term, Stream, LessonPlan, ClassSubjectTeacher, SubjectGradingBand, StageGradingBand,
     Room, TimetableEntry,
     TimetableTemplate, PeriodSlotTemplate, TimetablePlan, TimetableClassConfig, ClassSubjectQuota,
     TeacherAvailability, TimetableVersion, TeacherDuty
@@ -36,6 +36,14 @@ class SubjectGradingBandSerializer(serializers.ModelSerializer):
         model = SubjectGradingBand
         fields = ['id','subject','grade','min','max','order']
 
+class StageGradingBandSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = StageGradingBand
+        fields = ['id','school','stage','grade','min','max','order']
+        extra_kwargs = {
+            'school': {'read_only': True}
+        }
+
 class TeacherUserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
@@ -67,7 +75,7 @@ class ClassSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Class
-        fields = ['id', 'name', 'grade_level', 'stream', 'stream_detail', 'teacher', 'teacher_detail', 'school', 'subjects', 'subject_ids', 'subject_teachers']
+        fields = ['id', 'name', 'grade_level', 'stage', 'stream', 'stream_detail', 'teacher', 'teacher_detail', 'school', 'subjects', 'subject_ids', 'subject_teachers']
         extra_kwargs = {
             'school': {'read_only': True},
             'name': {'read_only': True}

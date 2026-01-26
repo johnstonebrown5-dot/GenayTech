@@ -36,7 +36,7 @@ from communications.models import DeliveryLog
 from finance.models import Invoice, Payment
 from .models import (
     Class, Student, Competency, Assessment, Attendance, TeacherProfile, Subject, SubjectComponent,
-    Exam, ExamResult, AcademicYear, Term, Stream, LessonPlan, ClassSubjectTeacher, SubjectGradingBand,
+    Exam, ExamResult, AcademicYear, Term, Stream, LessonPlan, ClassSubjectTeacher, SubjectGradingBand, StageGradingBand,
     Room, TimetableEntry, TimetableTemplate, PeriodSlotTemplate, TimetablePlan, TimetableClassConfig,
     ClassSubjectQuota, TeacherAvailability, TimetableVersion, TeacherDuty, StudentClassHistory
 )
@@ -44,7 +44,7 @@ from .serializers import (
     ClassSerializer, StudentSerializer, StudentListSerializer, CompetencySerializer, AssessmentSerializer, AttendanceSerializer,
     TeacherProfileSerializer, SubjectSerializer, SubjectComponentSerializer, ExamSerializer,
     ExamResultSerializer, AcademicYearSerializer, TermSerializer, StreamSerializer, LessonPlanSerializer,
-    ClassSubjectTeacherSerializer, SubjectGradingBandSerializer, RoomSerializer, TimetableEntrySerializer,
+    ClassSubjectTeacherSerializer, SubjectGradingBandSerializer, StageGradingBandSerializer, RoomSerializer, TimetableEntrySerializer,
     TimetableTemplateSerializer, PeriodSlotTemplateSerializer, TimetablePlanSerializer, TimetableClassConfigSerializer,
     ClassSubjectQuotaSerializer, TeacherAvailabilitySerializer, TimetableVersionSerializer, TeacherDutySerializer
 )
@@ -2241,21 +2241,67 @@ class ExamViewSet(viewsets.ModelViewSet):
         if not st_row:
             return Response({'detail': 'No results found for this student in this exam'}, status=404)
 
-        # Simple helper to convert a percentage score into a performance grade.
-        # Mirrors the default frontend logic when custom grading bands are not applied.
+        # Resolve stage-wide grading bands for this class (Primary 1-6, Junior 7-9)
+        def _infer_stage(klass_obj):
+            stg = getattr(klass_obj, 'stage', None)
+            if stg:
+                return stg
+            try:
+                import re
+                gl = getattr(klass_obj, 'grade_level', '') or ''
+                m = re.search(r"(\d{1,2})", str(gl))
+                num = int(m.group(1)) if m else None
+                if num is not None:
+                    if 1 <= num <= 6:
+                        return 'primary'
+                    if 7 <= num <= 9:
+                        return 'junior'
+            except Exception:
+                pass
+            return None
+
+        def _load_stage_bands(klass_obj):
+            try:
+                stage = _infer_stage(klass_obj)
+                if not stage:
+                    return []
+                school = getattr(klass_obj, 'school', None)
+                qs = StageGradingBand.objects.all()
+                if school:
+                    qs = qs.filter(school=school)
+                qs = qs.filter(stage=stage)
+                bands = list(qs.values('grade','min','max','order'))
+                # Sort by min descending so higher grades match first
+                bands.sort(key=lambda b: float(b.get('min') or -1), reverse=True)
+                return bands
+            except Exception:
+                return []
+
+        stage_bands = _load_stage_bands(getattr(exam, 'klass', None))
+
         def _letter_from_percentage(pct: float | int | None) -> str:
+            # Use stage-wide bands when available; else default thresholds
             try:
                 n = float(pct)
             except (TypeError, ValueError):
                 return '-'
-            if n >= 80:
-                return 'A'
-            if n >= 70:
-                return 'B'
-            if n >= 60:
-                return 'C'
-            if n >= 50:
-                return 'D'
+            try:
+                if stage_bands:
+                    for b in stage_bands:
+                        try:
+                            bmin = float(b.get('min')) if b.get('min') is not None else float('-inf')
+                            bmax = float(b.get('max')) if b.get('max') is not None else float('inf')
+                            if n >= bmin and n <= bmax:
+                                return str(b.get('grade') or '-')
+                        except Exception:
+                            continue
+            except Exception:
+                pass
+            # Fallback default scale
+            if n >= 80: return 'A'
+            if n >= 70: return 'B'
+            if n >= 60: return 'C'
+            if n >= 50: return 'D'
             return 'E'
 
         from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image
@@ -2442,7 +2488,7 @@ class ExamViewSet(viewsets.ModelViewSet):
         except Exception:
             pass
 
-        # Per-subject performance table: Subject | Marks | Grade
+        # Per-subject performance table: Subject | Marks | Grade (using stage-wide bands when present)
         rows = [['Subject', 'Marks', 'Grade']]
         subject_percentages = st_row.get('subject_percentages') or {}
         for s in subjects:
@@ -5047,6 +5093,38 @@ class SubjectGradingBandViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAdmin]
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ['subject']
+
+    def get_permissions(self):
+        # Allow authenticated users to READ grading bands; restrict writes to admins
+        if self.request and self.request.method in permissions.SAFE_METHODS:
+            return [permissions.IsAuthenticated()]
+        return [IsAdmin()]
+
+class StageGradingBandViewSet(viewsets.ModelViewSet):
+    queryset = StageGradingBand.objects.all()
+    serializer_class = StageGradingBandSerializer
+    permission_classes = [IsAdmin]
+    filter_backends = [DjangoFilterBackend]
+    filterset_fields = ['stage']
+
+    def get_permissions(self):
+        # Allow authenticated users to READ stage grading bands; restrict writes to admins
+        if self.request and self.request.method in permissions.SAFE_METHODS:
+            return [permissions.IsAuthenticated()]
+        return [IsAdmin()]
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        school = getattr(getattr(self.request, 'user', None), 'school', None)
+        if school:
+            qs = qs.filter(school=school)
+        return qs
+
+    def perform_create(self, serializer):
+        school = getattr(getattr(self.request, 'user', None), 'school', None)
+        if not school:
+            raise ValidationError({'detail': 'No school context'})
+        serializer.save(school=school)
 
 class AttendanceViewSet(viewsets.ModelViewSet):
     queryset = Attendance.objects.all()
