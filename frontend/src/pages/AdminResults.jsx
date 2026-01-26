@@ -41,7 +41,7 @@ export default function AdminResults(){
         <style>
           @page { size: landscape; margin: 10mm; }
           :root{
-            --print-scale: 1.65;
+            --print-scale: 1.33;
             --text:#111827;
             --muted:#6b7280;
             --border:#9ca3af;
@@ -138,8 +138,11 @@ export default function AdminResults(){
           /* Slightly smaller font for subject code headers */
           table.print-table--class thead th:nth-child(n+3):not(:nth-last-child(-n+2)),
           table.print-table--full thead th:nth-child(n+4):not(:nth-last-child(-n+2)){
-            font-size: calc(8px * var(--print-scale));
+            font-size: calc(7px * var(--print-scale));
             letter-spacing: 0.2px;
+            white-space: normal;
+            overflow: visible;
+            text-overflow: clip;
           }
 
           table.print-table--class tbody td:nth-child(2),
@@ -160,7 +163,7 @@ export default function AdminResults(){
           table.print-table--full tbody td:nth-last-child(1){ width: 46px; text-align: center; }
           table.print-table--full thead th:nth-child(n+4):not(:nth-last-child(-n+2)),
           table.print-table--full tbody td:nth-child(n+4):not(:nth-last-child(-n+2)){
-            width: 34px;
+            width: 36px;
             text-align: center;
           }
 
@@ -168,14 +171,14 @@ export default function AdminResults(){
           table.print-table--class thead th:nth-child(1),
           table.print-table--class tbody td:nth-child(1){ width: 34px; text-align: right; }
           table.print-table--class thead th:nth-child(2),
-          table.print-table--class tbody td:nth-child(2){ width: 200px; }
+          table.print-table--class tbody td:nth-child(2){ width: 220px; }
           table.print-table--class thead th:nth-last-child(2),
           table.print-table--class tbody td:nth-last-child(2){ width: 56px; text-align: right; }
           table.print-table--class thead th:nth-last-child(1),
           table.print-table--class tbody td:nth-last-child(1){ width: 46px; text-align: center; }
           table.print-table--class thead th:nth-child(n+3):not(:nth-last-child(-n+2)),
           table.print-table--class tbody td:nth-child(n+3):not(:nth-last-child(-n+2)){
-            width: 34px;
+            width: 36px;
             text-align: center;
           }
 
@@ -775,7 +778,7 @@ export default function AdminResults(){
               <table ref={classResultsTableRef} className="min-w-full text-sm">
                 <thead className="bg-gray-50 sticky top-0 z-10">
                   <tr>
-                    <th className="border px-2 py-1 text-left">Position</th>
+                    <th className="border px-2 py-1 text-left">POS</th>
                     <th className="border px-2 py-1 text-left">Student</th>
                     {summary.subjects.map(s => (
                       <th key={s.id} className="border px-2 py-1 text-left">{s.code}</th>
@@ -973,7 +976,7 @@ export default function AdminResults(){
               <table className="min-w-full text-sm">
                 <thead>
                   <tr>
-                    <th className="border px-2 py-1 text-left">Position</th>
+                    <th className="border px-2 py-1 text-left">POS</th>
                     <th className="border px-2 py-1 text-left">Student</th>
                     <th className="border px-2 py-1 text-left">Class</th>
                     <th className="border px-2 py-1 text-left">Total</th>

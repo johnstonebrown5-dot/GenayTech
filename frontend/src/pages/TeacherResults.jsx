@@ -306,11 +306,11 @@ function TeacherResultsLegacy(){
     const a = document.createElement('a'); a.href=url; a.download=filename; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url)
   }
   const printHTML = (title, html) => {
-    const w = window.open('', '_blank'); w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${title}</title><style>:root{--print-scale:1.5;} body{font-family:Arial, sans-serif; padding:12px; font-size:calc(12px * var(--print-scale));} h1{font-size:calc(15px * var(--print-scale)); margin:0 0 8px;} table{border-collapse:collapse; width:100%; table-layout:fixed; font-size:calc(11px * var(--print-scale));} th,td{border:1px solid #ddd; padding:2px 4px; line-height:1.1; text-align:left; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;} th{background:#f8f8f8; font-size:calc(10px * var(--print-scale)); text-transform:uppercase; letter-spacing:.3px;}</style></head><body>${html}</body></html>`); w.document.close(); w.focus(); w.print()
+    const w = window.open('', '_blank'); w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${title}</title><style>:root{--print-scale:1.33;} body{font-family:Arial, sans-serif; padding:12px; font-size:calc(12px * var(--print-scale));} h1{font-size:calc(15px * var(--print-scale)); margin:0 0 8px;} table{border-collapse:collapse; width:100%; table-layout:fixed; font-size:calc(11px * var(--print-scale));} th,td{border:1px solid #ddd; padding:2px 4px; line-height:1.1; text-align:left; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;} th{background:#f8f8f8; font-size:calc(10px * var(--print-scale)); text-transform:uppercase; letter-spacing:.3px;} thead th:nth-child(n+3):not(:nth-last-child(-n+2)){font-size:calc(9px * var(--print-scale)); letter-spacing:.2px; white-space:normal; overflow:visible; text-overflow:clip;}</style></head><body>${html}</body></html>`); w.document.close(); w.focus(); w.print()
   }
   const handleClassPrint = () => {
     if (!summary) return
-    const cols = [ 'Position','Student', ...summary.subjects.map(s=> s.code || s.name), 'Total','Grade' ]
+    const cols = [ 'POS','Student', ...summary.subjects.map(s=> s.code || s.name), 'Total','Grade' ]
     const rows = summary.students.map(st=> {
       const { sum, avg } = pctTotalAndAvg(st)
       const perSubj = summary.subjects.map(s => {
@@ -326,7 +326,7 @@ function TeacherResultsLegacy(){
   }
   const handleClassCSV = () => {
     if (!summary) return
-    const header = [ 'Position','Student', ...summary.subjects.map(s=> s.code || s.name), 'Total','Grade' ]
+    const header = [ 'POS','Student', ...summary.subjects.map(s=> s.code || s.name), 'Total','Grade' ]
     const data = summary.students.map(st=> {
       const { sum, avg } = pctTotalAndAvg(st)
       const perSubj = summary.subjects.map(s => {
@@ -342,14 +342,14 @@ function TeacherResultsLegacy(){
     const classRows = gradeSummaries.map(g=> [g.className, g.mean??'', g.size??''])
     const classTable = `<h2>Classes</h2><table><thead><tr><th>Class</th><th>Mean</th><th>Students</th></tr></thead><tbody>${classRows.map(r=>`<tr>${r.map(c=>`<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table>`
     const studRows = gradeStudents.map(s=> [s.position, s.name, s.className, s.total??'', s.average??''])
-    const studTable = `<h2>Combined Student List</h2><table><thead><tr><th>Position</th><th>Student</th><th>Class</th><th>Total</th><th>Average</th></tr></thead><tbody>${studRows.map(r=>`<tr>${r.map(c=>`<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table>`
+    const studTable = `<h2>Combined Student List</h2><table><thead><tr><th>POS</th><th>Student</th><th>Class</th><th>Total</th><th>Average</th></tr></thead><tbody>${studRows.map(r=>`<tr>${r.map(c=>`<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table>`
     printHTML(title, `${classTable}${studTable}`)
   }
   const handleGradeCSV = () => {
     const classHeader = ['Class','Mean','Students']
     const classData = gradeSummaries.map(g=> [g.className, g.mean??'', g.size??''])
     downloadCSV('grade_classes_summary.csv', [classHeader, ...classData])
-    const studHeader = ['Position','Student','Class','Total','Average']
+    const studHeader = ['POS','Student','Class','Total','Average']
     const studData = gradeStudents.map(s=> [s.position, s.name, s.className, s.total??'', s.average??''])
     downloadCSV('grade_combined_students.csv', [studHeader, ...studData])
   }
@@ -472,7 +472,7 @@ function TeacherResultsLegacy(){
               <table className="min-w-full text-xs md:text-sm">
                 <thead className="bg-gray-50 sticky top-0 z-10">
                   <tr>
-                    <th className="border border-gray-200 px-2 py-2 text-left w-20">Position</th>
+                    <th className="border border-gray-200 px-2 py-2 text-left w-20">POS</th>
                     <th className="border border-gray-200 px-2 py-2 text-left w-56">Student</th>
                     {summary.subjects.map(s => (
                       <th key={s.id} className="border border-gray-200 px-2 py-2 text-left">{s.code || s.name}</th>
