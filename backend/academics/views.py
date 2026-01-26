@@ -32,7 +32,7 @@ except Exception:
 import csv, io
 from django_filters.rest_framework import DjangoFilterBackend
 from communications.utils import send_sms, send_email_safe, send_email_safe_html, send_email_with_attachment, log_delivery, create_messages_for_users, resolve_default_sender_id
-from communications.models import DeliveryLog
+from communications.models import DeliveryLog, Message, MessageRecipient
 from finance.models import Invoice, Payment
 from .models import (
     Class, Student, Competency, Assessment, Attendance, TeacherProfile, Subject, SubjectComponent,
@@ -422,7 +422,7 @@ class ClassViewSet(viewsets.ModelViewSet):
                     sender_id=sender_id,
                     body=f"Fees balances have been updated for your account. Please check portal/SMS.",
                     recipient_user_ids=list(set(recipients_in_app)),
-                    system_tag='fees_notice',
+                    system_tag=f"fees_notice:class:{klass.id}",
                 )
             except Exception:
                 pass
@@ -435,6 +435,270 @@ class ClassViewSet(viewsets.ModelViewSet):
             'email_sent_attempts': email_attempts,
             'items': items,
         })
+
+    @action(detail=True, methods=['post'], permission_classes=[IsTeacherOrAdmin], url_path='message-students')
+    def message_students(self, request, pk=None):
+        klass = self.get_object()
+        user = getattr(request, 'user', None)
+        is_admin = bool(user and (getattr(user, 'role', None) == 'admin' or user.is_staff or user.is_superuser))
+        if not is_admin:
+            if not (getattr(user, 'role', None) == 'teacher' and getattr(klass, 'teacher_id', None) == getattr(user, 'id', None)):
+                return Response({'detail': 'Only the class teacher can message students in this class'}, status=status.HTTP_403_FORBIDDEN)
+
+        body = str(request.data.get('message') or request.data.get('body') or '').strip()
+        if not body:
+            return Response({'detail': 'message is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        students = (
+            Student.objects
+            .filter(klass=klass, is_active=True)
+            .select_related('user', 'klass')
+            .order_by('name')
+        )
+        if not students.exists():
+            return Response({'detail': 'No active students found in this class'}, status=status.HTTP_400_BAD_REQUEST)
+
+        school_id = getattr(getattr(klass, 'school', None), 'id', None)
+        class_name = getattr(klass, 'name', '') or getattr(klass, 'grade_level', '') or 'Class'
+        sender_name = getattr(user, 'username', None) or 'Teacher'
+
+        # In-app (single broadcast message with many recipients)
+        in_app_message_id = None
+        in_app_recipients = 0
+        try:
+            recipient_user_ids = [int(s.user_id) for s in students if getattr(s, 'user_id', None)]
+            recipient_user_ids = list(set(recipient_user_ids))
+        except Exception:
+            recipient_user_ids = []
+        if school_id and recipient_user_ids:
+            try:
+                msg = Message.objects.create(
+                    school_id=school_id,
+                    sender_id=getattr(user, 'id', None),
+                    body=body,
+                    audience=Message.Audience.USERS,
+                    system_tag=f"class_broadcast:class:{klass.id}",
+                    is_broadcast=True,
+                )
+                recs = [MessageRecipient(message=msg, user_id=uid) for uid in recipient_user_ids]
+                if recs:
+                    MessageRecipient.objects.bulk_create(recs, ignore_conflicts=True)
+                in_app_message_id = msg.id
+                in_app_recipients = len(recipient_user_ids)
+            except Exception:
+                in_app_message_id = None
+                in_app_recipients = 0
+
+        sms_attempts = 0
+        sms_ok = 0
+        email_attempts = 0
+        email_ok = 0
+
+        for stu in students:
+            # SMS to guardian phone
+            phone = str(getattr(stu, 'guardian_id', None) or '').strip()
+            if phone:
+                sms_attempts += 1
+                ok_sms = False
+                try:
+                    ok_sms = send_sms(phone, body)
+                except Exception:
+                    ok_sms = False
+                if ok_sms:
+                    sms_ok += 1
+                try:
+                    log_delivery(
+                        school_id=school_id,
+                        channel='sms',
+                        recipient=str(phone),
+                        ok=bool(ok_sms),
+                        message=body,
+                        context=f"classmsg:class:{klass.id};student:{stu.id}",
+                    )
+                except Exception:
+                    pass
+
+            # Email to student email (or linked user email)
+            recipient_email = getattr(stu, 'email', None) or getattr(getattr(stu, 'user', None), 'email', None)
+            if recipient_email:
+                email_attempts += 1
+                ok_email = False
+                try:
+                    subj = f"Message from {sender_name} - {class_name}"
+                    ok_email = send_email_safe(subj, body, str(recipient_email), school_id=school_id)
+                except Exception:
+                    ok_email = False
+                if ok_email:
+                    email_ok += 1
+                try:
+                    log_delivery(
+                        school_id=school_id,
+                        channel='email',
+                        recipient=str(recipient_email),
+                        ok=bool(ok_email),
+                        message=body,
+                        context=f"classmsg:class:{klass.id};student:{stu.id}",
+                    )
+                except Exception:
+                    pass
+
+        return Response({
+            'detail': 'class_message_sent',
+            'class_id': klass.id,
+            'in_app_message_id': in_app_message_id,
+            'in_app_recipients': in_app_recipients,
+            'sms_attempts': sms_attempts,
+            'sms_ok': sms_ok,
+            'email_attempts': email_attempts,
+            'email_ok': email_ok,
+        })
+
+    @action(detail=True, methods=['get'], permission_classes=[IsTeacherOrAdmin], url_path='message-logs')
+    def message_logs(self, request, pk=None):
+        klass = self.get_object()
+        user = getattr(request, 'user', None)
+        is_admin = bool(user and (getattr(user, 'role', None) == 'admin' or user.is_staff or user.is_superuser))
+        if not is_admin:
+            if not (getattr(user, 'role', None) == 'teacher' and getattr(klass, 'teacher_id', None) == getattr(user, 'id', None)):
+                return Response({'detail': 'Only the class teacher can view logs for this class'}, status=status.HTTP_403_FORBIDDEN)
+
+        try:
+            limit_param = request.query_params.get('limit')
+            limit = int(limit_param) if (limit_param and str(limit_param).isdigit()) else 50
+            limit = max(1, min(limit, 200))
+        except Exception:
+            limit = 50
+
+        school_id = getattr(getattr(klass, 'school', None), 'id', None)
+        if not school_id:
+            return Response({'class_id': klass.id, 'items': []})
+
+        items = []
+
+        try:
+            msg_qs = (
+                Message.objects
+                .filter(
+                    school_id=school_id,
+                    system_tag__in=[f"class_broadcast:class:{klass.id}", f"fees_notice:class:{klass.id}"],
+                )
+                .select_related('sender')
+                .order_by('-created_at', '-id')
+            )
+            for m in msg_qs[:limit]:
+                tag = str(getattr(m, 'system_tag', '') or '')
+                category = 'class' if tag.startswith('class_broadcast:') else ('fees' if tag.startswith('fees_notice:') else 'other')
+                items.append({
+                    'id': f"inapp:{m.id}",
+                    'category': category,
+                    'channel': 'in_app',
+                    'ok': True,
+                    'recipient': 'students',
+                    'message': (getattr(m, 'body', '') or ''),
+                    'created_at': getattr(m, 'created_at', None),
+                    'sender': getattr(getattr(m, 'sender', None), 'username', None),
+                })
+        except Exception:
+            pass
+
+        try:
+            dl_qs = (
+                DeliveryLog.objects
+                .filter(
+                    school_id=school_id,
+                )
+                .filter(
+                    Q(context__contains=f"classmsg:class:{klass.id};") |
+                    Q(context__contains=f"fees:class:{klass.id};")
+                )
+                .only('id', 'channel', 'recipient', 'ok', 'message_snippet', 'context', 'created_at')
+                .order_by('-created_at', '-id')
+            )
+            for rec in dl_qs[:limit]:
+                ctx = str(getattr(rec, 'context', '') or '')
+                category = 'fees' if ctx.startswith('fees:') else ('class' if ctx.startswith('classmsg:') else 'other')
+                items.append({
+                    'id': f"dl:{rec.id}",
+                    'category': category,
+                    'channel': getattr(rec, 'channel', None),
+                    'ok': bool(getattr(rec, 'ok', False)),
+                    'recipient': getattr(rec, 'recipient', None),
+                    'message': getattr(rec, 'message_snippet', None),
+                    'created_at': getattr(rec, 'created_at', None),
+                    'sender': None,
+                })
+        except Exception:
+            pass
+
+        items.sort(key=lambda x: (x.get('created_at') is not None, x.get('created_at')), reverse=True)
+        return Response({'class_id': klass.id, 'items': items[:limit]})
+
+    @action(detail=True, methods=['post'], permission_classes=[IsTeacherOrAdmin], url_path='retry-delivery-logs')
+    def retry_delivery_logs(self, request, pk=None):
+        klass = self.get_object()
+        user = getattr(request, 'user', None)
+        is_admin = bool(user and (getattr(user, 'role', None) == 'admin' or user.is_staff or user.is_superuser))
+        if not is_admin:
+            if not (getattr(user, 'role', None) == 'teacher' and getattr(klass, 'teacher_id', None) == getattr(user, 'id', None)):
+                return Response({'detail': 'Only the class teacher can retry delivery logs for this class'}, status=status.HTTP_403_FORBIDDEN)
+
+        school_id = getattr(getattr(klass, 'school', None), 'id', None)
+        if not school_id:
+            return Response({'detail': 'No school'}, status=status.HTTP_400_BAD_REQUEST)
+
+        ids = request.data.get('ids') or request.data.get('id')
+        if ids is None:
+            return Response({'detail': 'ids is required'}, status=status.HTTP_400_BAD_REQUEST)
+        if not isinstance(ids, (list, tuple)):
+            ids = [ids]
+
+        cleaned = []
+        for x in ids:
+            try:
+                cleaned.append(int(x))
+            except Exception:
+                continue
+        if not cleaned:
+            return Response({'detail': 'No valid ids'}, status=status.HTTP_400_BAD_REQUEST)
+
+        logs = DeliveryLog.objects.filter(id__in=cleaned, school_id=school_id, channel__in=['sms', 'email'])
+
+        results = []
+        for rec in logs:
+            ctx = str(getattr(rec, 'context', '') or '')
+            if (f"classmsg:class:{klass.id};" not in ctx) and (f"fees:class:{klass.id};" not in ctx):
+                continue
+
+            msg = str(getattr(rec, 'message_snippet', '') or '').strip()
+            if not msg:
+                results.append({'id': rec.id, 'ok': False, 'channel': rec.channel, 'recipient': rec.recipient, 'detail': 'empty_message'})
+                continue
+
+            ok = False
+            try:
+                if rec.channel == 'sms':
+                    ok = send_sms(str(rec.recipient), msg)
+                elif rec.channel == 'email':
+                    ok = send_email_safe('Delivery retry', msg, str(rec.recipient), school_id=school_id)
+            except Exception:
+                ok = False
+
+            try:
+                new_ctx = (f"retry_of:{rec.id};" + (ctx or ''))[:100]
+                log_delivery(
+                    school_id=school_id,
+                    channel=str(rec.channel),
+                    recipient=str(rec.recipient),
+                    ok=bool(ok),
+                    message=msg,
+                    context=new_ctx,
+                )
+            except Exception:
+                pass
+
+            results.append({'id': rec.id, 'ok': bool(ok), 'channel': rec.channel, 'recipient': rec.recipient})
+
+        return Response({'results': results})
 
     @action(detail=True, methods=['get'], permission_classes=[IsTeacherOrAdmin], url_path='fees-balances')
     def fees_balances(self, request, pk=None):

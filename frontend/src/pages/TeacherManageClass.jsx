@@ -54,12 +54,14 @@ export default function TeacherManageClass(){
         <TabButton active={tab==='info'} onClick={()=>setTab('info')}>Class Info</TabButton>
         <TabButton active={tab==='add'} onClick={()=>setTab('add')}>Add Student</TabButton>
         <TabButton active={tab==='edit'} onClick={()=>setTab('edit')}>Edit Students</TabButton>
+        <TabButton active={tab==='message'} onClick={()=>setTab('message')}>Message Students</TabButton>
         <TabButton active={tab==='fees'} onClick={()=>setTab('fees')}>Send Fees Notifications</TabButton>
         <TabButton active={tab==='reportcards'} onClick={()=>setTab('reportcards')}>Report Cards</TabButton>
       </div>
       {tab === 'info' && <ClassInfoPanel classId={myClass.id} initialInnerTab={initialInnerView} />}
       {tab === 'add' && <AddStudentPanel classId={myClass.id} />}
       {tab === 'edit' && <EditStudentsPanel classId={myClass.id} />}
+      {tab === 'message' && <MessageStudentsPanel classId={myClass.id} />}
       {tab === 'fees' && <FeesNotifyPanel classId={myClass.id} />}
       {tab === 'reportcards' && <TeacherClassReportCardsPanel classId={myClass.id} />}
     </div>
@@ -260,6 +262,305 @@ function StudentEditForm({ student, onSaved }){
         {msg && <div className="text-sm text-slate-600">{msg}</div>}
       </div>
     </form>
+  )
+}
+
+function MessageStudentsPanel({ classId }){
+  const [message, setMessage] = useState('')
+  const [sending, setSending] = useState(false)
+  const [error, setError] = useState('')
+  const [result, setResult] = useState(null)
+
+  const [logs, setLogs] = useState([])
+  const [logsLoading, setLogsLoading] = useState(false)
+  const [logsError, setLogsError] = useState('')
+  const [category, setCategory] = useState('all')
+  const [channel, setChannel] = useState('all')
+  const [statusFilter, setStatusFilter] = useState('all')
+  const [sortMode, setSortMode] = useState('newest')
+  const [selected, setSelected] = useState(() => new Set())
+  const [resending, setResending] = useState(false)
+  const [resendMsg, setResendMsg] = useState('')
+
+  const loadLogs = async () => {
+    setLogsLoading(true); setLogsError('')
+    try{
+      const { data } = await api.get(`/academics/classes/${classId}/message-logs/?limit=200`)
+      setLogs(Array.isArray(data?.items) ? data.items : [])
+    }catch(err){
+      setLogs([])
+      setLogsError(err?.response?.data?.detail || 'Failed to load logs')
+    }finally{
+      setLogsLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    loadLogs()
+  }, [classId])
+
+  const filteredLogs = useMemo(() => {
+    return (logs || []).filter(it => {
+      if (category !== 'all' && String(it?.category || '') !== category) return false
+      if (channel !== 'all' && String(it?.channel || '') !== channel) return false
+      if (statusFilter !== 'all'){
+        const ok = Boolean(it?.ok)
+        if (statusFilter === 'ok' && !ok) return false
+        if (statusFilter === 'fail' && ok) return false
+      }
+      return true
+    })
+  }, [logs, category, channel, statusFilter])
+
+  const sortedLogs = useMemo(() => {
+    const arr = Array.isArray(filteredLogs) ? [...filteredLogs] : []
+    const toTime = (x) => {
+      try{
+        return x?.created_at ? new Date(x.created_at).getTime() : 0
+      }catch{ return 0 }
+    }
+    if (sortMode === 'oldest'){
+      arr.sort((a,b) => toTime(a) - toTime(b))
+      return arr
+    }
+    if (sortMode === 'failed_first'){
+      arr.sort((a,b) => {
+        const af = (a?.channel !== 'in_app') && (a?.ok === false)
+        const bf = (b?.channel !== 'in_app') && (b?.ok === false)
+        if (af !== bf) return af ? -1 : 1
+        return toTime(b) - toTime(a)
+      })
+      return arr
+    }
+    arr.sort((a,b) => toTime(b) - toTime(a))
+    return arr
+  }, [filteredLogs, sortMode])
+
+  const selectableIds = useMemo(() => {
+    const ids = []
+    for (const it of (sortedLogs || [])){
+      const id = String(it?.id || '')
+      const isDl = id.startsWith('dl:')
+      const ch = String(it?.channel || '')
+      const isFailed = (it?.ok === false)
+      if (isDl && (ch === 'sms' || ch === 'email') && isFailed){
+        ids.push(id)
+      }
+    }
+    return ids
+  }, [sortedLogs])
+
+  const toggleOne = (id) => {
+    setSelected(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const toggleAllVisibleFailed = () => {
+    setSelected(prev => {
+      const next = new Set(prev)
+      const allSelected = selectableIds.length > 0 && selectableIds.every(x => next.has(x))
+      if (allSelected){
+        selectableIds.forEach(x => next.delete(x))
+      }else{
+        selectableIds.forEach(x => next.add(x))
+      }
+      return next
+    })
+  }
+
+  const resendSelected = async () => {
+    const ids = Array.from(selected)
+      .map(x => String(x).startsWith('dl:') ? String(x).slice(3) : '')
+      .filter(Boolean)
+    if (ids.length === 0) return
+    setResending(true)
+    setResendMsg('')
+    try{
+      const { data } = await api.post(`/academics/classes/${classId}/retry-delivery-logs/`, { ids })
+      const results = Array.isArray(data?.results) ? data.results : []
+      const okCount = results.filter(r => r?.ok).length
+      setResendMsg(`Resent ${okCount}/${results.length}`)
+      setSelected(new Set())
+      loadLogs()
+    }catch(err){
+      setResendMsg(err?.response?.data?.detail || 'Resend failed')
+    }finally{
+      setResending(false)
+    }
+  }
+
+  const submit = async (e) => {
+    e?.preventDefault?.()
+    setSending(true); setError(''); setResult(null)
+    try{
+      const body = { message: String(message || '').trim() }
+      const { data } = await api.post(`/academics/classes/${classId}/message-students/`, body)
+      setResult(data)
+      setMessage('')
+      loadLogs()
+    }catch(err){
+      setError(err?.response?.data?.detail || 'Failed to send message')
+    }finally{
+      setSending(false)
+    }
+  }
+
+  return (
+    <div className="rounded-none sm:rounded-xl border-t border-b sm:border border-gray-200 bg-white p-4 shadow w-full">
+      <div className="font-medium mb-3">Message all students in this class</div>
+      {error && <div className="mb-3 text-sm text-red-700 bg-red-50 border border-red-200 rounded p-2">{String(error)}</div>}
+      {result && (
+        <div className="mb-3 text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded p-2">
+          Sent. In-app recipients: {result?.in_app_recipients || 0}. SMS OK: {result?.sms_ok || 0}/{result?.sms_attempts || 0}. Email OK: {result?.email_ok || 0}/{result?.email_attempts || 0}.
+        </div>
+      )}
+      <form onSubmit={submit} className="grid grid-cols-1 gap-3">
+        <label className="grid gap-1 text-sm">
+          <span className="text-slate-700">Message *</span>
+          <textarea
+            value={message}
+            onChange={(e)=>setMessage(e.target.value)}
+            required
+            rows={5}
+            className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-200"
+            placeholder="Type your message to all students..."
+          />
+        </label>
+        <div className="flex items-center gap-2">
+          <button type="submit" disabled={sending} className="px-4 py-2 rounded bg-blue-600 text-white">{sending? 'Sending...' : 'Send Message'}</button>
+        </div>
+      </form>
+
+      <div className="mt-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2">
+          <div className="font-medium">Sent Messages Logs</div>
+          <div className="flex items-center gap-2">
+            <button type="button" onClick={loadLogs} className="text-sm px-3 py-1.5 rounded border">Refresh</button>
+          </div>
+        </div>
+
+        <div className="flex flex-col md:flex-row md:items-end gap-3 mb-3">
+          <Select
+            label="Category"
+            value={category}
+            onChange={setCategory}
+            options={[{value:'all',label:'All'},{value:'class',label:'Class Messages'},{value:'fees',label:'Fees Notifications'}]}
+          />
+          <Select
+            label="Channel"
+            value={channel}
+            onChange={setChannel}
+            options={[{value:'all',label:'All'},{value:'in_app',label:'In-app'},{value:'sms',label:'SMS'},{value:'email',label:'Email'}]}
+          />
+          <Select
+            label="Status"
+            value={statusFilter}
+            onChange={setStatusFilter}
+            options={[{value:'all',label:'All'},{value:'ok',label:'OK'},{value:'fail',label:'Failed'}]}
+          />
+          <Select
+            label="Sort"
+            value={sortMode}
+            onChange={setSortMode}
+            options={[{value:'newest',label:'Newest first'},{value:'oldest',label:'Oldest first'},{value:'failed_first',label:'Failed first'}]}
+          />
+        </div>
+
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-3">
+          <div className="text-sm text-slate-600">
+            Failed deliveries: {selectableIds.length}
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={()=> { setStatusFilter('fail'); setSortMode('failed_first') }}
+              className="text-sm px-3 py-1.5 rounded border"
+            >
+              Failed Only
+            </button>
+            <button
+              type="button"
+              disabled={resending || selected.size === 0}
+              onClick={resendSelected}
+              className={`${(resending || selected.size === 0) ? 'opacity-50 cursor-not-allowed' : ''} text-sm px-3 py-1.5 rounded bg-blue-600 text-white`}
+            >
+              {resending ? 'Resending...' : `Resend Selected (${selected.size})`}
+            </button>
+          </div>
+        </div>
+
+        {resendMsg && <div className="mb-3 text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded p-2">{String(resendMsg)}</div>}
+
+        {logsError && <div className="mb-3 text-sm text-red-700 bg-red-50 border border-red-200 rounded p-2">{String(logsError)}</div>}
+        {logsLoading ? (
+          <div className="text-sm text-slate-600">Loading logs...</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50/80">
+                <tr>
+                  <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                    <input
+                      type="checkbox"
+                      onChange={toggleAllVisibleFailed}
+                      checked={selectableIds.length > 0 && selectableIds.every(x => selected.has(x))}
+                      disabled={selectableIds.length === 0}
+                    />
+                  </th>
+                  <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">When</th>
+                  <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Category</th>
+                  <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Channel</th>
+                  <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Status</th>
+                  <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Recipient</th>
+                  <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Message</th>
+                  <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Sender</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-100">
+                {sortedLogs.length === 0 ? (
+                  <tr><td colSpan="8" className="px-4 py-8 text-center text-gray-500">No logs found</td></tr>
+                ) : sortedLogs.map(it => {
+                  const when = it?.created_at ? new Date(it.created_at).toLocaleString() : '-'
+                  const ok = Boolean(it?.ok)
+                  const statusText = (String(it?.channel || '') === 'in_app') ? 'OK' : (ok ? 'OK' : 'FAILED')
+                  const id = String(it?.id || '')
+                  const isDl = id.startsWith('dl:')
+                  const ch = String(it?.channel || '')
+                  const canSelect = isDl && (ch === 'sms' || ch === 'email') && (it?.ok === false)
+                  return (
+                    <tr key={it.id} className="hover:bg-gray-50">
+                      <td className="px-4 py-2">
+                        <input
+                          type="checkbox"
+                          disabled={!canSelect}
+                          checked={canSelect && selected.has(id)}
+                          onChange={()=> toggleOne(id)}
+                        />
+                      </td>
+                      <td className="px-4 py-2 text-xs text-slate-600 whitespace-nowrap">{when}</td>
+                      <td className="px-4 py-2 text-sm text-slate-700 capitalize">{String(it?.category || '-')}</td>
+                      <td className="px-4 py-2 text-sm text-slate-700">{String(it?.channel || '-')}</td>
+                      <td className="px-4 py-2 text-sm">
+                        <span className={`${statusText==='OK'? 'text-emerald-700 bg-emerald-50 border-emerald-200' : 'text-red-700 bg-red-50 border-red-200'} text-xs px-2 py-1 rounded border`}>{statusText}</span>
+                      </td>
+                      <td className="px-4 py-2 text-xs text-slate-600">{String(it?.recipient || 'students')}</td>
+                      <td className="px-4 py-2 text-sm text-slate-800 max-w-[520px]">
+                        <div className="line-clamp-2">{String(it?.message || '')}</div>
+                      </td>
+                      <td className="px-4 py-2 text-xs text-slate-600">{String(it?.sender || '-')}</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
   )
 }
 
