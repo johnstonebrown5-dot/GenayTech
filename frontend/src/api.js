@@ -22,6 +22,21 @@ let refreshPromise = null
 const subscribers = []
 function subscribeTokenRefresh(cb){ subscribers.push(cb) }
 
+// Guarded redirect to login to avoid reload loops when already on the login page
+let lastRedirectTs = 0
+function redirectToLoginIfNeeded(){
+  try{
+    if (typeof window === 'undefined') return
+    const now = Date.now()
+    if (now - lastRedirectTs < 800) return // debounce rapid redirects
+    const p = String(window.location?.pathname || '')
+    // If we are already on login or a public landing route, do not redirect again
+    if (p === '/login' || p === '/' || p.startsWith('/login')) return
+    lastRedirectTs = now
+    window.location.href = '/login'
+  }catch{}
+}
+
 // Build low/medium/high image candidates by appending resize/quality query params.
 // If the backend/CDN doesn't support them, it will still return the original;
 // URLs remain distinct for caching and progressive upgrade.
@@ -55,7 +70,7 @@ api.interceptors.response.use(
       const refresh = localStorage.getItem('refresh')
       if (!refresh) {
         try { localStorage.removeItem('access'); localStorage.removeItem('refresh') } catch {}
-        if (typeof window !== 'undefined') window.location.href = '/login'
+        redirectToLoginIfNeeded()
         try { if (typeof window !== 'undefined') window.dispatchEvent(new Event('api:request:error')) } catch {}
         return Promise.reject(err)
       }
@@ -68,7 +83,7 @@ api.interceptors.response.use(
               if (newAccess) { localStorage.setItem('access', newAccess) }
               isRefreshing = false; onRefreshed(newAccess); return newAccess
             })
-            .catch(e => { isRefreshing = false; try { localStorage.removeItem('access'); localStorage.removeItem('refresh') } catch {}; if (typeof window !== 'undefined') window.location.href = '/login'; throw e })
+            .catch(e => { isRefreshing = false; try { localStorage.removeItem('access'); localStorage.removeItem('refresh') } catch {}; redirectToLoginIfNeeded(); throw e })
         }
         const newTok = await refreshPromise
         return new Promise(resolve => {

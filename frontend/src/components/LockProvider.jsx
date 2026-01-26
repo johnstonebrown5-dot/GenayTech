@@ -167,6 +167,10 @@ export default function LockProvider({ children, timeoutMs = TEN_MINUTES }) {
   return (
     <LockContext.Provider value={value}>
       {children}
+      {/* Fallback overlay so lock is always visible even if routing doesn't switch to /lock */}
+      {user && locked && location.pathname !== '/lock' && (
+        <LockScreen onUnlock={unlock} onLogout={logout} user={user} lastActiveAt={lastActiveAt} />
+      )}
     </LockContext.Provider>
   )
 }
