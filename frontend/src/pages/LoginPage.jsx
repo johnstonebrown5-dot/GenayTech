@@ -349,7 +349,7 @@ export default function LoginPage() {
                 {/* Left hero panel */}
                 <div className="relative overflow-hidden">
                   <div
-                    className="absolute inset-0 bg-cover bg-center"
+                    className="absolute inset-0"
                     style={heroImages[0]
                       ? {
                           backgroundImage:
@@ -358,6 +358,9 @@ export default function LoginPage() {
                             // Subtle white glow towards the right for smoother blend into the form side
                             `linear-gradient(to right, rgba(255,255,255,0.08), rgba(255,255,255,0.22)), ` +
                             `url(${heroImages[0]})`,
+                          backgroundSize: 'cover',
+                          backgroundPosition: 'center',
+                          backgroundRepeat: 'no-repeat',
                         }
                       : undefined}
                   />
