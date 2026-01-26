@@ -97,7 +97,7 @@ export default function AdminResults(){
             width: 100%;
             border-collapse: separate;
             border-spacing: 0;
-            font-size: 9.5px;
+            font-size: 8.5px;
             table-layout: fixed;
             border: 1px solid var(--border);
             border-radius: 10px;
@@ -109,11 +109,12 @@ export default function AdminResults(){
             font-weight: 700;
             text-transform: uppercase;
             letter-spacing: 0.35px;
-            font-size: 9px;
+            font-size: 8px;
           }
           table.print-table th,
           table.print-table td{
-            padding: 4px 6px;
+            padding: 2px 4px;
+            line-height: 1.15;
             border-bottom: 1px solid var(--border);
             vertical-align: top;
             overflow: hidden;
@@ -125,6 +126,11 @@ export default function AdminResults(){
           table.print-table tbody tr:nth-child(even) td{ background: var(--stripe); }
           table.print-table tbody tr:last-child td{ border-bottom: 0; }
           table.print-table td{ color: #111827; }
+
+          table.print-table--class tbody td:nth-child(2),
+          table.print-table--full tbody td:nth-child(2){
+            font-weight: 800;
+          }
 
           /* Full list column sizing: # | Student | Class | [subjects...] | Total | Grade */
           table.print-table--full thead th:nth-child(1),
