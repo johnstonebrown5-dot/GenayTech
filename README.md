@@ -1,4 +1,10 @@
-# EDU- TRACK School Management System (CBC-ready)
+# EDU-TRACK School Management System (CBC-ready)
+
+## Vendor (Company) Contact
+
+- **Company:** EDUTRACK
+- **Email:** edutrack46@gmail.com
+- **Phone:** 0796031071
 
 Monorepo structure:
 - backend/ (Django 5, DRF, JWT, PostgreSQL, S3 storage, M-Pesa placeholders)

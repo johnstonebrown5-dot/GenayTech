@@ -332,9 +332,16 @@ export default function AdminStudents(){
     try {
       setBulkOtpSending(true)
       setBulkOtpError('')
-      await api.post('/academics/students/bulk-otp/request/', {})
+      const res = await api.post('/academics/students/bulk-otp/request/', {})
       setBulkOtpSent(true)
-      showSuccess('Verification Code Sent', 'Check your email for the 6-digit code.')
+      const code = res?.data?.code
+      const loopback = !!res?.data?.loopback
+      if (loopback && code) {
+        setBulkOtpCode(String(code || '').replace(/\D/g, '').slice(0, 6))
+        showSuccess('Verification Code Sent', 'Verification code generated on server (loopback). It has been filled in for you.')
+      } else {
+        showSuccess('Verification Code Sent', 'Check your email for the 6-digit code.')
+      }
     } catch (e) {
       const msg = e?.response?.data?.detail || 'Could not send verification code.'
       setBulkOtpError(msg)

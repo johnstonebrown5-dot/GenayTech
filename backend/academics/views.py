@@ -5078,6 +5078,9 @@ class StudentViewSet(viewsets.ModelViewSet):
         cache.set(key, code, timeout=ttl)
         cache.set(attempts_key, 0, timeout=ttl)
 
+        if loopback:
+            return Response({'detail': 'Verification code sent', 'code': code, 'loopback': True})
+
         subject = 'Edu-Track Bulk Action Verification Code'
         message = (
             'Use this 6-digit verification code to confirm the bulk students action:\n\n'
