@@ -4392,16 +4392,26 @@ class StudentViewSet(viewsets.ModelViewSet):
         qs = super().get_queryset()
         user = getattr(self.request, 'user', None)
         school = getattr(user, 'school', None)
-        if school:
-            # Include:
-            # - students currently in classes of this school
-            # - students explicitly scoped to this school (e.g., graduated)
-            # - unassigned, not-graduated students with no school set yet (common on import)
-            qs = qs.filter(
-                Q(klass__school=school) |
-                Q(school=school) |
-                Q(klass__isnull=True, school__isnull=True, is_graduated=False)
-            )
+
+        # Special server-side filter: unassigned students only
+        unassigned = str(self.request.query_params.get('unassigned', 'false')).lower() in ('1','true','yes','on')
+        if unassigned:
+            qs = qs.filter(klass__isnull=True)
+            if school:
+                # Include students with no class that either belong to this school
+                # or have no school set yet (e.g., freshly imported records)
+                qs = qs.filter(Q(school=school) | Q(school__isnull=True))
+        else:
+            if school:
+                # Include:
+                # - students currently in classes of this school
+                # - students explicitly scoped to this school (e.g., graduated)
+                # - unassigned, not-graduated students with no school set yet (common on import)
+                qs = qs.filter(
+                    Q(klass__school=school) |
+                    Q(school=school) |
+                    Q(klass__isnull=True, school__isnull=True, is_graduated=False)
+                )
         # Support multiple alias query params for filtering by class id
         try:
             qp = self.request.query_params
