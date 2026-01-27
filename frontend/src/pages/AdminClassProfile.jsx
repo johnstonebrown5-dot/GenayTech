@@ -163,7 +163,7 @@ export default function AdminClassProfile(){
           url = next
         }
       }
-      const filtered = all.filter(s => !s.klass && !s.is_graduated && s.is_active !== false)
+      const filtered = all.filter(s => !s.klass)
       setUnassigned(filtered)
     } catch {
       setUnassigned([])
@@ -1576,7 +1576,7 @@ export default function AdminClassProfile(){
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <input className="border rounded px-3 py-2 text-sm" placeholder="Admission No" value={addNewForm.admission_no} onChange={e=>setAddNew('admission_no', e.target.value)} />
                 <input className="border rounded px-3 py-2 text-sm" placeholder="Full Name" value={addNewForm.name} onChange={e=>setAddNew('name', e.target.value)} />
-                <input type="date" className="border rounded px-3 py-2 text-sm" placeholder="DOB" value={addNewForm.dob} onChange={e=>setAddNew('dob', e.target.value)} />
+                <input type="date" className="border rounded px-3 py-2 text-sm" placeholder="DOB (optional)" value={addNewForm.dob} onChange={e=>setAddNew('dob', e.target.value)} />
                 <select className="border rounded px-3 py-2 text-sm" value={addNewForm.gender} onChange={e=>setAddNew('gender', e.target.value)}>
                   <option value="">Select Gender</option>
                   <option value="male">Male</option>
@@ -1589,7 +1589,7 @@ export default function AdminClassProfile(){
               </div>
               <div className="flex justify-end gap-2 pt-2">
                 <button onClick={()=>setShowAddStudents(false)} className="px-4 py-2 border rounded">Cancel</button>
-                <button onClick={saveAddNewStudent} disabled={addNewSaving || !addNewForm.admission_no || !addNewForm.name || !addNewForm.dob || !addNewForm.gender} className="px-5 py-2 rounded text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60">{addNewSaving ? 'Saving…' : 'Create & Assign'}</button>
+                <button onClick={saveAddNewStudent} disabled={addNewSaving || !addNewForm.admission_no || !addNewForm.name || !addNewForm.gender} className="px-5 py-2 rounded text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60">{addNewSaving ? 'Saving…' : 'Create & Assign'}</button>
               </div>
             </>
           )}

@@ -267,18 +267,18 @@ class ClassViewSet(viewsets.ModelViewSet):
             if not (getattr(user, 'role', None) == 'teacher' and getattr(klass, 'teacher_id', None) == getattr(user, 'id', None)):
                 return Response({'detail': 'Only the class teacher can add students to this class'}, status=status.HTTP_403_FORBIDDEN)
 
-        # Collect and validate payload
+        # Collect and validate payload, then create via serializer so a linked User is created.
         data = getattr(request, 'data', {}) or {}
-        required = ['admission_no', 'name', 'dob', 'gender']
+        required = ['admission_no', 'name', 'gender']
         missing = [k for k in required if not str(data.get(k, '')).strip()]
         if missing:
             return Response({'detail': 'Missing required fields', 'missing': missing}, status=status.HTTP_400_BAD_REQUEST)
 
-        payload = {
-            'admission_no': str(data.get('admission_no')).strip(),
-            'name': str(data.get('name')).strip(),
+        initial = {
+            'admission_no': str(data.get('admission_no') or '').strip(),
+            'name': str(data.get('name') or '').strip(),
             'dob': data.get('dob'),
-            'gender': str(data.get('gender')).strip(),
+            'gender': str(data.get('gender') or '').strip(),
             'upi_number': str(data.get('upi_number') or '').strip(),
             'guardian_id': str(data.get('guardian_id') or '').strip(),
             'guardian_name': str(data.get('guardian_name') or '').strip(),
@@ -287,21 +287,15 @@ class ClassViewSet(viewsets.ModelViewSet):
             'phone': str(data.get('phone') or '').strip(),
             'email': str(data.get('email') or '').strip(),
             'address': str(data.get('address') or '').strip(),
-            'klass': klass,
-            'school': getattr(klass, 'school', None),
+            # attach the class so the student is enrolled and school inferred
+            'klass': getattr(klass, 'id', None) or klass,
         }
 
-        # Create student; enforce unique admission_no within the model uniqueness
-        try:
-            with transaction.atomic():
-                stu = Student.objects.create(**payload)
-        except IntegrityError:
-            return Response({'detail': 'Admission number already exists'}, status=status.HTTP_400_BAD_REQUEST)
-        except Exception as e:
-            return Response({'detail': 'Failed to create student', 'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
-
-        ser = StudentSerializer(stu, context={'request': request})
-        return Response(ser.data, status=status.HTTP_201_CREATED)
+        serializer = StudentSerializer(data=initial, context={'request': request})
+        serializer.is_valid(raise_exception=True)
+        with transaction.atomic():
+            student = serializer.save()
+        return Response(StudentSerializer(student, context={'request': request}).data, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=['post'], permission_classes=[IsTeacherOrAdmin], url_path='share-fees')
     def share_fees(self, request, pk=None):

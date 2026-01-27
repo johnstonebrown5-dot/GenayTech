@@ -251,7 +251,7 @@ class TeacherProfile(models.Model):
 class Student(models.Model):
     admission_no = models.CharField(max_length=50, unique=True)
     name = models.CharField(max_length=255)
-    dob = models.DateField()
+    dob = models.DateField(null=True, blank=True)
     gender = models.CharField(max_length=20)
     upi_number = models.CharField(max_length=50, blank=True)
     guardian_id = models.CharField(max_length=100, blank=True)

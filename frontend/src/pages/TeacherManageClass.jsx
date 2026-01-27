@@ -128,7 +128,7 @@ function AddStudentPanel({ classId }){
       <form onSubmit={submit} className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <Text label="Admission No" value={form.admission_no} onChange={v=>set('admission_no', v)} required />
         <Text label="Full Name" value={form.name} onChange={v=>set('name', v)} required />
-        <Text label="Date of Birth" type="date" value={form.dob} onChange={v=>set('dob', v)} required />
+        <Text label="Date of Birth (optional)" type="date" value={form.dob} onChange={v=>set('dob', v)} />
         <Select label="Gender" value={form.gender} onChange={v=>set('gender', v)} options={[{value:'male',label:'Male'},{value:'female',label:'Female'}]} required />
         <Text label="Guardian Phone" value={form.guardian_id||''} onChange={v=>set('guardian_id', v)} />
         <Text label="Guardian Name" value={form.guardian_name||''} onChange={v=>set('guardian_name', v)} />
