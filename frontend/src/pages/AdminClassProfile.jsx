@@ -183,7 +183,9 @@ export default function AdminClassProfile(){
     try {
       setAddNewSaving(true)
       setAddNewError('')
-      await api.post(`/academics/classes/${id}/add-student/`, addNewForm)
+      const payload = { ...addNewForm }
+      if (!String(payload.dob || '').trim()) payload.dob = null
+      await api.post(`/academics/classes/${id}/add-student/`, payload)
       const res = await api.get(`/academics/classes/${id}/students/`)
       setStudents(Array.isArray(res.data) ? res.data : [])
       setShowAddStudents(false)

@@ -96,7 +96,9 @@ function AddStudentPanel({ classId }){
     e?.preventDefault?.()
     setSaving(true); setError(''); setDone(null)
     try{
-      const { data } = await api.post(`/academics/classes/${classId}/add-student/`, form)
+      const payload = { ...form }
+      if (!String(payload.dob || '').trim()) payload.dob = null
+      const { data } = await api.post(`/academics/classes/${classId}/add-student/`, payload)
       setDone(data)
       setForm({ admission_no:'', name:'', dob:'', gender:'' })
     }catch(err){ setError(err?.response?.data?.detail || 'Failed to add student') }

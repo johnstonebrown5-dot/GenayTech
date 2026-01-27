@@ -89,6 +89,7 @@ class ClassLiteSerializer(serializers.ModelSerializer):
 
 class StudentSerializer(serializers.ModelSerializer):
     user_id = serializers.PrimaryKeyRelatedField(queryset=User.objects.all(), source='user', write_only=True, required=False, allow_null=True)
+    dob = serializers.DateField(required=False, allow_null=True)
     # Include class details for better display on dashboards
     klass_detail = ClassSerializer(source='klass', read_only=True)
     photo_url = serializers.SerializerMethodField(read_only=True)

@@ -274,10 +274,14 @@ class ClassViewSet(viewsets.ModelViewSet):
         if missing:
             return Response({'detail': 'Missing required fields', 'missing': missing}, status=status.HTTP_400_BAD_REQUEST)
 
+        dob_val = data.get('dob')
+        if isinstance(dob_val, str) and not dob_val.strip():
+            dob_val = None
+
         initial = {
             'admission_no': str(data.get('admission_no') or '').strip(),
             'name': str(data.get('name') or '').strip(),
-            'dob': data.get('dob'),
+            'dob': dob_val,
             'gender': str(data.get('gender') or '').strip(),
             'upi_number': str(data.get('upi_number') or '').strip(),
             'guardian_id': str(data.get('guardian_id') or '').strip(),
