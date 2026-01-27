@@ -32,6 +32,21 @@ services:
         value: Africa/Nairobi
       - key: USE_S3
         value: "False"
+      # Email (SMTP) configuration for verification codes/notifications
+      - key: EMAIL_HOST
+        value: smtp.gmail.com
+      - key: EMAIL_PORT
+        value: "587"
+      - key: EMAIL_USE_TLS
+        value: "True"
+      - key: EMAIL_HOST_USER
+        value:
+      - key: EMAIL_HOST_PASSWORD
+        value:
+      - key: DEFAULT_FROM_EMAIL
+        value:
+      - key: EMAIL_LOOPBACK
+        value: "False"
       # S3/Spaces credentials (fill with your values)
       - key: AWS_ACCESS_KEY_ID
       - key: AWS_SECRET_ACCESS_KEY

@@ -12,6 +12,7 @@ from django.http import HttpResponse
 from django.conf import settings
 from django.core.cache import cache
 from django.template.loader import render_to_string
+import logging
 import threading
 from io import BytesIO, StringIO
 from datetime import date
@@ -5057,6 +5058,19 @@ class StudentViewSet(viewsets.ModelViewSet):
         if not recipient:
             return Response({'detail': 'Your account does not have an email address set.'}, status=400)
 
+        try:
+            loopback = bool(getattr(settings, 'EMAIL_LOOPBACK', False))
+        except Exception:
+            loopback = False
+        if not loopback:
+            host_user = (getattr(settings, 'EMAIL_HOST_USER', '') or '').strip()
+            host_pass = (getattr(settings, 'EMAIL_HOST_PASSWORD', '') or '').strip()
+            if not host_user or not host_pass:
+                return Response(
+                    {'detail': 'Email is not configured on the server. Please set EMAIL_HOST_USER and EMAIL_HOST_PASSWORD.'},
+                    status=503,
+                )
+
         code = f"{secrets.randbelow(1000000):06d}"
         ttl = 10 * 60
         key = self._bulk_otp_cache_key(user)
@@ -5070,27 +5084,34 @@ class StudentViewSet(viewsets.ModelViewSet):
             f'{code}\n\n'
             'This code expires in 10 minutes. If you did not request this, you can safely ignore this email.'
         )
-        html_message = render_to_string(
-            'verification_code_email.html',
-            {
-                'brand': 'EduTrack',
-                'title': 'Verify your email address',
-                'intro': 'To confirm the bulk students action, please enter the verification code below in the app.',
-                'code': code,
-                'footer': 'This code expires in 10 minutes. If you did not request this, you can safely ignore this email.',
-            },
-        )
+        try:
+            html_message = render_to_string(
+                'verification_code_email.html',
+                {
+                    'brand': 'EduTrack',
+                    'title': 'Verify your email address',
+                    'intro': 'To confirm the bulk students action, please enter the verification code below in the app.',
+                    'code': code,
+                    'footer': 'This code expires in 10 minutes. If you did not request this, you can safely ignore this email.',
+                },
+            )
+        except Exception:
+            cache.delete(key)
+            cache.delete(attempts_key)
+            logging.getLogger(__name__).exception('Failed to render bulk OTP verification email template')
+            return Response({'detail': 'Email service error. Please contact support.'}, status=500)
 
         ok = False
         try:
             ok = send_email_safe_html(subject, message, html_message, recipient, school_id=getattr(user, 'school_id', None))
         except Exception:
+            logging.getLogger(__name__).exception('Bulk OTP email send raised an exception')
             ok = False
 
         if not ok:
             cache.delete(key)
             cache.delete(attempts_key)
-            return Response({'detail': 'Could not send verification email. Please try again.'}, status=400)
+            return Response({'detail': 'Could not send verification email. Please try again later.'}, status=502)
 
         return Response({'detail': 'Verification code sent'} )
 
