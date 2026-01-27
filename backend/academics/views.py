@@ -233,14 +233,9 @@ class ClassViewSet(viewsets.ModelViewSet):
         school = getattr(getattr(self.request, 'user', None), 'school', None)
         if school:
             qs = qs.filter(school=school)
-        # Hide only empty Grade 9 classes (graduated), keep other empty classes visible for enrollment
-        try:
-            from .models import Class as ClassModel
-            grade9 = ClassModel.format_grade_level('9')  # 'Grade 9'
-            qs = qs.exclude(grade_level=grade9, student__isnull=True).distinct()
-        except Exception:
-            # Fallback: if anything goes wrong, do not exclude
-            pass
+        # NOTE: Previously we excluded empty Grade 9 classes here. This caused Grade 9 classes
+        # to be hidden from the Manage Classes page when they had no students. We now return
+        # all classes without special-casing Grade 9.
         # Optimize list: only basic fields needed by filters
         act = getattr(self, 'action', None)
         if act == 'list':
@@ -699,6 +694,52 @@ class ClassViewSet(viewsets.ModelViewSet):
             results.append({'id': rec.id, 'ok': bool(ok), 'channel': rec.channel, 'recipient': rec.recipient})
 
         return Response({'results': results})
+
+    @action(detail=True, methods=['post'], permission_classes=[IsTeacherOrAdmin], url_path='delete-old-logs')
+    def delete_old_logs(self, request, pk=None):
+        klass = self.get_object()
+        user = getattr(request, 'user', None)
+        is_admin = bool(user and (getattr(user, 'role', None) == 'admin' or user.is_staff or user.is_superuser))
+        if not is_admin:
+            if not (getattr(user, 'role', None) == 'teacher' and getattr(klass, 'teacher_id', None) == getattr(user, 'id', None)):
+                return Response({'detail': 'Only the class teacher can delete logs for this class'}, status=status.HTTP_403_FORBIDDEN)
+
+        school_id = getattr(getattr(klass, 'school', None), 'id', None)
+        if not school_id:
+            return Response({'detail': 'No school'}, status=status.HTTP_400_BAD_REQUEST)
+
+        days_param = request.data.get('days') or request.query_params.get('days')
+        before_param = request.data.get('before') or request.query_params.get('before')
+        cutoff = None
+        if before_param:
+            try:
+                from django.utils.dateparse import parse_datetime
+                dt = parse_datetime(str(before_param))
+                if dt:
+                    cutoff = dt
+            except Exception:
+                cutoff = None
+        if cutoff is None:
+            try:
+                days = int(days_param) if days_param is not None else 30
+            except Exception:
+                days = 30
+            cutoff = timezone.now() - timezone.timedelta(days=max(1, days))
+
+        qs = (
+            DeliveryLog.objects
+            .filter(school_id=school_id, created_at__lt=cutoff)
+            .filter(
+                Q(context__contains=f"classmsg:class:{klass.id};") |
+                Q(context__contains=f"fees:class:{klass.id};")
+            )
+        )
+        try:
+            deleted_count, _ = qs.delete()
+        except Exception:
+            return Response({'detail': 'delete_failed'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        return Response({'deleted': int(deleted_count), 'cutoff': cutoff})
 
     @action(detail=True, methods=['get'], permission_classes=[IsTeacherOrAdmin], url_path='fees-balances')
     def fees_balances(self, request, pk=None):

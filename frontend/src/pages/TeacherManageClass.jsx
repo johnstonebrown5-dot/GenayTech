@@ -103,6 +103,23 @@ function AddStudentPanel({ classId }){
     finally{ setSaving(false) }
   }
 
+  const deleteOldLogs = async () => {
+    setDeleting(true)
+    setDeleteMsg('')
+    try{
+      const days = parseInt(String(deleteDays||'').trim(), 10)
+      const body = Number.isFinite(days) && days > 0 ? { days } : { days: 30 }
+      const { data } = await api.post(`/academics/classes/${classId}/delete-old-logs/`, body)
+      const n = Number(data?.deleted || 0)
+      setDeleteMsg(`Deleted ${n} old log(s)`) 
+      loadLogs()
+    }catch(err){
+      setDeleteMsg(err?.response?.data?.detail || 'Delete failed')
+    }finally{
+      setDeleting(false)
+    }
+  }
+
   return (
     <div className="rounded-none sm:rounded-xl border-t border-b sm:border border-gray-200 bg-white p-4 shadow w-full">
       <div className="font-medium mb-3">Add a new student to this class</div>
@@ -281,6 +298,9 @@ function MessageStudentsPanel({ classId }){
   const [selected, setSelected] = useState(() => new Set())
   const [resending, setResending] = useState(false)
   const [resendMsg, setResendMsg] = useState('')
+  const [deleteDays, setDeleteDays] = useState('30')
+  const [deleting, setDeleting] = useState(false)
+  const [deleteMsg, setDeleteMsg] = useState('')
 
   const loadLogs = async () => {
     setLogsLoading(true); setLogsError('')
@@ -490,10 +510,17 @@ function MessageStudentsPanel({ classId }){
             >
               {resending ? 'Resending...' : `Resend Selected (${selected.size})`}
             </button>
+            <div className="flex items-end gap-2">
+              <label className="grid text-xs">
+                <span className="text-slate-600">Delete logs older than (days)</span>
+                <input type="number" min="1" value={deleteDays} onChange={e=>setDeleteDays(e.target.value)} className="px-2 py-1 border rounded" />
+              </label>
+              <button type="button" disabled={deleting} onClick={deleteOldLogs} className={`${deleting? 'opacity-50 cursor-not-allowed':''} text-sm px-3 py-1.5 rounded border`}>{deleting? 'Deleting...' : 'Delete Old Logs'}</button>
+            </div>
           </div>
         </div>
 
-        {resendMsg && <div className="mb-3 text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded p-2">{String(resendMsg)}</div>}
+        {(resendMsg || deleteMsg) && <div className="mb-3 text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded p-2">{String(resendMsg || deleteMsg)}</div>}
 
         {logsError && <div className="mb-3 text-sm text-red-700 bg-red-50 border border-red-200 rounded p-2">{String(logsError)}</div>}
         {logsLoading ? (
@@ -532,13 +559,13 @@ function MessageStudentsPanel({ classId }){
                   const ch = String(it?.channel || '')
                   const canSelect = isDl && (ch === 'sms' || ch === 'email') && (it?.ok === false)
                   return (
-                    <tr key={it.id} className="hover:bg-gray-50">
+                    <tr key={it.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => { if (canSelect) toggleOne(id) }}>
                       <td className="px-4 py-2">
                         <input
                           type="checkbox"
                           disabled={!canSelect}
                           checked={canSelect && selected.has(id)}
-                          onChange={()=> toggleOne(id)}
+                          onChange={(e)=> { e.stopPropagation(); toggleOne(id) }}
                         />
                       </td>
                       <td className="px-4 py-2 text-xs text-slate-600 whitespace-nowrap">{when}</td>

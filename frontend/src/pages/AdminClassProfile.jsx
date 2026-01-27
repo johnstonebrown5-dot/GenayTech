@@ -139,6 +139,9 @@ export default function AdminClassProfile(){
     setShowAddStudents(true)
     setAddStudentsError('')
     setSelectedUnassigned([])
+    setAddMode('existing')
+    setAddNewError('')
+    setAddNewForm({ admission_no:'', name:'', dob:'', gender:'' , guardian_id:'', guardian_name:'', email:'', address:''})
     try {
       const all = []
       let url = '/academics/students/'
@@ -184,6 +187,29 @@ export default function AdminClassProfile(){
       setAddStudentsError(e?.response?.data?.detail || 'Failed to add students')
     } finally {
       setAddingStudents(false)
+    }
+  }
+
+  // Create-new-student-in-class flow
+  const [addMode, setAddMode] = useState('existing')
+  const [addNewForm, setAddNewForm] = useState({ admission_no:'', name:'', dob:'', gender:'', guardian_id:'', guardian_name:'', email:'', address:'' })
+  const [addNewSaving, setAddNewSaving] = useState(false)
+  const [addNewError, setAddNewError] = useState('')
+
+  const setAddNew = (k,v)=> setAddNewForm(prev => ({ ...prev, [k]: v }))
+
+  const saveAddNewStudent = async () => {
+    try {
+      setAddNewSaving(true)
+      setAddNewError('')
+      await api.post(`/academics/classes/${id}/add-student/`, addNewForm)
+      const res = await api.get(`/academics/classes/${id}/students/`)
+      setStudents(Array.isArray(res.data) ? res.data : [])
+      setShowAddStudents(false)
+    } catch (e) {
+      setAddNewError(e?.response?.data?.detail || 'Failed to create student')
+    } finally {
+      setAddNewSaving(false)
     }
   }
 
@@ -1501,41 +1527,72 @@ export default function AdminClassProfile(){
       <Modal open={showAddStudents} onClose={()=>setShowAddStudents(false)} title={`Add Students to ${klass?.name||'Class'}`} size="lg">
         <div className="space-y-3">
           {addStudentsError && <div className="text-sm text-red-600">{addStudentsError}</div>}
-          <div className="flex items-center gap-2">
-            <input className="w-full border rounded px-3 py-2 text-sm" placeholder="Search by name or admission no" value={unassignedSearch} onChange={e=>setUnassignedSearch(e.target.value)} />
-            <div className="text-xs text-gray-500">{selectedUnassigned.length} selected</div>
+          <div className="flex items-center gap-2 border-b pb-2">
+            <button onClick={()=>setAddMode('existing')} className={`text-sm px-3 py-1.5 rounded ${addMode==='existing'?'bg-indigo-50 text-indigo-700 border border-indigo-200':'border'}`}>Select Existing</button>
+            <button onClick={()=>setAddMode('new')} className={`text-sm px-3 py-1.5 rounded ${addMode==='new'?'bg-indigo-50 text-indigo-700 border border-indigo-200':'border'}`}>Create New</button>
           </div>
-          <div className="max-h-80 overflow-auto border rounded">
-            <table className="min-w-full text-sm">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-3 py-2 text-left w-8"></th>
-                  <th className="px-3 py-2 text-left">Admission No</th>
-                  <th className="px-3 py-2 text-left">Name</th>
-                  <th className="px-3 py-2 text-left">Guardian Phone</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(() => {
-                  const q = unassignedSearch.trim().toLowerCase()
-                  const list = q ? unassigned.filter(s => String(s.admission_no||'').toLowerCase().includes(q) || String(s.name||'').toLowerCase().includes(q)) : unassigned
-                  if (!list.length) return (<tr><td className="px-3 py-3 text-gray-500" colSpan={4}>No unassigned students found.</td></tr>)
-                  return list.map(s => (
-                    <tr key={s.id} className="border-t">
-                      <td className="px-3 py-2"><input type="checkbox" checked={selectedUnassigned.includes(s.id)} onChange={()=>toggleUnassigned(s.id)} /></td>
-                      <td className="px-3 py-2">{s.admission_no}</td>
-                      <td className="px-3 py-2">{s.name}</td>
-                      <td className="px-3 py-2">{s.guardian_id || '-'}</td>
+
+          {addMode === 'existing' ? (
+            <>
+              <div className="flex items-center gap-2">
+                <input className="w-full border rounded px-3 py-2 text-sm" placeholder="Search by name or admission no" value={unassignedSearch} onChange={e=>setUnassignedSearch(e.target.value)} />
+                <div className="text-xs text-gray-500">{selectedUnassigned.length} selected</div>
+              </div>
+              <div className="max-h-80 overflow-auto border rounded">
+                <table className="min-w-full text-sm">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-3 py-2 text-left w-8"></th>
+                      <th className="px-3 py-2 text-left">Admission No</th>
+                      <th className="px-3 py-2 text-left">Name</th>
+                      <th className="px-3 py-2 text-left">Guardian Phone</th>
                     </tr>
-                  ))
-                })()}
-              </tbody>
-            </table>
-          </div>
-          <div className="flex justify-end gap-2 pt-2">
-            <button onClick={()=>setShowAddStudents(false)} className="px-4 py-2 border rounded">Cancel</button>
-            <button onClick={saveAddStudents} disabled={addingStudents || selectedUnassigned.length===0} className="px-5 py-2 rounded text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60">{addingStudents ? 'Adding…' : 'Add Selected'}</button>
-          </div>
+                  </thead>
+                  <tbody>
+                    {(() => {
+                      const q = unassignedSearch.trim().toLowerCase()
+                      const list = q ? unassigned.filter(s => String(s.admission_no||'').toLowerCase().includes(q) || String(s.name||'').toLowerCase().includes(q)) : unassigned
+                      if (!list.length) return (<tr><td className="px-3 py-3 text-gray-500" colSpan={4}>No unassigned students found.</td></tr>)
+                      return list.map(s => (
+                        <tr key={s.id} className="border-t">
+                          <td className="px-3 py-2"><input type="checkbox" checked={selectedUnassigned.includes(s.id)} onChange={()=>toggleUnassigned(s.id)} /></td>
+                          <td className="px-3 py-2">{s.admission_no}</td>
+                          <td className="px-3 py-2">{s.name}</td>
+                          <td className="px-3 py-2">{s.guardian_id || '-'}</td>
+                        </tr>
+                      ))
+                    })()}
+                  </tbody>
+                </table>
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <button onClick={()=>setShowAddStudents(false)} className="px-4 py-2 border rounded">Cancel</button>
+                <button onClick={saveAddStudents} disabled={addingStudents || selectedUnassigned.length===0} className="px-5 py-2 rounded text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60">{addingStudents ? 'Adding…' : 'Add Selected'}</button>
+              </div>
+            </>
+          ) : (
+            <>
+              {addNewError && <div className="text-sm text-red-600">{addNewError}</div>}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <input className="border rounded px-3 py-2 text-sm" placeholder="Admission No" value={addNewForm.admission_no} onChange={e=>setAddNew('admission_no', e.target.value)} />
+                <input className="border rounded px-3 py-2 text-sm" placeholder="Full Name" value={addNewForm.name} onChange={e=>setAddNew('name', e.target.value)} />
+                <input type="date" className="border rounded px-3 py-2 text-sm" placeholder="DOB" value={addNewForm.dob} onChange={e=>setAddNew('dob', e.target.value)} />
+                <select className="border rounded px-3 py-2 text-sm" value={addNewForm.gender} onChange={e=>setAddNew('gender', e.target.value)}>
+                  <option value="">Select Gender</option>
+                  <option value="male">Male</option>
+                  <option value="female">Female</option>
+                </select>
+                <input className="border rounded px-3 py-2 text-sm" placeholder="Guardian Phone" value={addNewForm.guardian_id} onChange={e=>setAddNew('guardian_id', e.target.value)} />
+                <input className="border rounded px-3 py-2 text-sm" placeholder="Guardian Name" value={addNewForm.guardian_name} onChange={e=>setAddNew('guardian_name', e.target.value)} />
+                <input className="border rounded px-3 py-2 text-sm" placeholder="Email" value={addNewForm.email} onChange={e=>setAddNew('email', e.target.value)} />
+                <input className="border rounded px-3 py-2 text-sm" placeholder="Address" value={addNewForm.address} onChange={e=>setAddNew('address', e.target.value)} />
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <button onClick={()=>setShowAddStudents(false)} className="px-4 py-2 border rounded">Cancel</button>
+                <button onClick={saveAddNewStudent} disabled={addNewSaving || !addNewForm.admission_no || !addNewForm.name || !addNewForm.dob || !addNewForm.gender} className="px-5 py-2 rounded text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60">{addNewSaving ? 'Saving…' : 'Create & Assign'}</button>
+              </div>
+            </>
+          )}
         </div>
       </Modal>
     </React.Fragment>
