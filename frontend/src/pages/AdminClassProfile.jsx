@@ -143,28 +143,9 @@ export default function AdminClassProfile(){
     setAddNewError('')
     setAddNewForm({ admission_no:'', name:'', dob:'', gender:'' , guardian_id:'', guardian_name:'', email:'', address:''})
     try {
-      const all = []
-      let url = '/academics/students/'
-      for (let i = 0; i < 50; i++) {
-        const res = await api.get(url)
-        const data = res.data
-        if (Array.isArray(data)) {
-          all.push(...data)
-          break
-        }
-        const pageItems = Array.isArray(data?.results) ? data.results : []
-        all.push(...pageItems)
-        const next = data?.next
-        if (!next) break
-        try {
-          const nextUrl = new URL(next, window.location.origin)
-          url = nextUrl.pathname + nextUrl.search
-        } catch {
-          url = next
-        }
-      }
-      const filtered = all.filter(s => !s.klass)
-      setUnassigned(filtered)
+      const { data } = await api.get('/academics/students?unassigned=true')
+      const list = Array.isArray(data) ? data : (Array.isArray(data?.results) ? data.results : [])
+      setUnassigned(list)
     } catch {
       setUnassigned([])
     }
@@ -207,7 +188,15 @@ export default function AdminClassProfile(){
       setStudents(Array.isArray(res.data) ? res.data : [])
       setShowAddStudents(false)
     } catch (e) {
-      setAddNewError(e?.response?.data?.detail || 'Failed to create student')
+      const data = e?.response?.data
+      let msg = data?.detail || ''
+      if (!msg && data && typeof data === 'object') {
+        const firstKey = Object.keys(data)[0]
+        const val = data[firstKey]
+        if (Array.isArray(val)) msg = val.join(', ')
+        else if (typeof val === 'string') msg = val
+      }
+      setAddNewError(msg || 'Failed to create student')
     } finally {
       setAddNewSaving(false)
     }
