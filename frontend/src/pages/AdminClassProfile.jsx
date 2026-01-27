@@ -3,10 +3,12 @@ import { useParams, useNavigate, Link, useSearchParams } from 'react-router-dom'
 import Modal from '../components/Modal'
 import api from '../api'
 import AdminClassPrintReportCards from './AdminClassPrintReportCards'
+import { useNotification } from '../components/NotificationContext'
 
 export default function AdminClassProfile(){
   const { id } = useParams()
   const navigate = useNavigate()
+  const { showSuccess, showError } = useNotification()
   const [klass, setKlass] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -141,7 +143,7 @@ export default function AdminClassProfile(){
     setSelectedUnassigned([])
     setAddMode('existing')
     setAddNewError('')
-    setAddNewForm({ admission_no:'', name:'', dob:'', gender:'' , guardian_id:'', guardian_name:'', email:'', address:''})
+    setAddNewForm({ admission_no:'', name:'', dob:'', gender:'', guardian_id:'', guardian_name:'', email:'', address:''})
     try {
       const { data } = await api.get('/academics/students?unassigned=true')
       const list = Array.isArray(data) ? data : (Array.isArray(data?.results) ? data.results : [])
@@ -156,16 +158,29 @@ export default function AdminClassProfile(){
   }
 
   const saveAddStudents = async () => {
-    if (!selectedUnassigned.length) { setShowAddStudents(false); return }
+    if (!selectedUnassigned.length) {
+      setAddStudentsError('Select at least one student to add.')
+      return
+    }
     try {
       setAddingStudents(true)
       setAddStudentsError('')
       await api.post(`/academics/classes/${id}/add-students/`, { students: selectedUnassigned })
       const res = await api.get(`/academics/classes/${id}/students/`)
       setStudents(Array.isArray(res.data) ? res.data : [])
-      setShowAddStudents(false)
+      try {
+        const { data } = await api.get('/academics/students?unassigned=true')
+        const list = Array.isArray(data) ? data : (Array.isArray(data?.results) ? data.results : [])
+        setUnassigned(list)
+      } catch {
+        setUnassigned([])
+      }
+      setSelectedUnassigned([])
+      showSuccess('Students Added', 'Students have been added successfully.')
     } catch (e) {
-      setAddStudentsError(e?.response?.data?.detail || 'Failed to add students')
+      const msg = e?.response?.data?.detail || 'Failed to add students'
+      setAddStudentsError(msg)
+      showError('Add Students Failed', msg)
     } finally {
       setAddingStudents(false)
     }
@@ -188,7 +203,8 @@ export default function AdminClassProfile(){
       await api.post(`/academics/classes/${id}/add-student/`, payload)
       const res = await api.get(`/academics/classes/${id}/students/`)
       setStudents(Array.isArray(res.data) ? res.data : [])
-      setShowAddStudents(false)
+      setAddNewForm({ admission_no:'', name:'', dob:'', gender:'', guardian_id:'', guardian_name:'', email:'', address:'' })
+      showSuccess('Student Added', 'Student has been created and assigned successfully.')
     } catch (e) {
       const data = e?.response?.data
       let msg = data?.detail || ''
@@ -198,7 +214,9 @@ export default function AdminClassProfile(){
         if (Array.isArray(val)) msg = val.join(', ')
         else if (typeof val === 'string') msg = val
       }
-      setAddNewError(msg || 'Failed to create student')
+      const finalMsg = msg || 'Failed to create student'
+      setAddNewError(finalMsg)
+      showError('Create Student Failed', finalMsg)
     } finally {
       setAddNewSaving(false)
     }
