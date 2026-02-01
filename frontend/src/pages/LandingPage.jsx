@@ -340,7 +340,7 @@ export default function LandingPage() {
                 <div><span className="font-medium">WhatsApp:</span> <a className="text-indigo-700 hover:underline" href={whatsappLink} target="_blank" rel="noreferrer">Chat on WhatsApp</a></div>
               </div>
               <div className="mt-8 flex gap-3">
-                <a href="mailto:EduTrack46@gmail.com?subject=EduTrack%20Demo%20Request" className="px-5 py-3 rounded-lg bg-indigo-600 text-white font-medium hover:bg-indigo-700">Request a Demo</a>
+                <Link to="/trial" className="px-5 py-3 rounded-lg bg-indigo-600 text-white font-medium hover:bg-indigo-700">Request a Demo</Link>
                 <Link to="/login" className="px-5 py-3 rounded-lg border border-gray-300 text-gray-700 font-medium hover:bg-gray-100">Sign in</Link>
               </div>
             </div>
