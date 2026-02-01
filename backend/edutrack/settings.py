@@ -14,8 +14,19 @@ load_dotenv(dotenv_path=BASE_DIR / '.env', override=True)
 SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'dev-secret-key-change-me')
 DEBUG = os.getenv('DEBUG', 'True') == 'True'
 
+TENANT_BASE_DOMAIN = os.getenv('TENANT_BASE_DOMAIN', 'edutrack.local').strip().lower().lstrip('.')
+
 ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
 CSRF_TRUSTED_ORIGINS = [h for h in os.getenv('CSRF_TRUSTED_ORIGINS', 'http://localhost').split(',') if h]
+
+if TENANT_BASE_DOMAIN and (f".{TENANT_BASE_DOMAIN}" not in ALLOWED_HOSTS):
+    ALLOWED_HOSTS.append(f".{TENANT_BASE_DOMAIN}")
+
+if DEBUG:
+    if '.localhost' not in ALLOWED_HOSTS:
+        ALLOWED_HOSTS.append('.localhost')
+    if '.lvh.me' not in ALLOWED_HOSTS:
+        ALLOWED_HOSTS.append('.lvh.me')
 
 # Render deployments expose a hostname in RENDER_EXTERNAL_HOSTNAME.
 RENDER_HOSTNAME = os.getenv('RENDER_EXTERNAL_HOSTNAME')
@@ -105,6 +116,7 @@ MIDDLEWARE = [
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
+    'accounts.middleware.SchoolDomainMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',

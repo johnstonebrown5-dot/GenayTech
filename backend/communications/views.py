@@ -23,6 +23,48 @@ from django.core.files.storage import default_storage
 from django.core.files.base import ContentFile
 import os, time
 
+
+class PublicAlertBannerView(APIView):
+    permission_classes = [permissions.AllowAny]
+    parser_classes = [JSONParser, FormParser]
+
+    def get(self, request):
+        code = str(request.query_params.get('code') or '').strip()
+        school = None
+        if code:
+            try:
+                from accounts.models import School
+                school = School.objects.filter(code=code).first()
+            except Exception:
+                school = None
+        if not school:
+            school = getattr(request, 'school', None)
+
+        if not school:
+            try:
+                if getattr(request, 'user', None) is not None and request.user.is_authenticated:
+                    school = getattr(request.user, 'school', None)
+            except Exception:
+                school = None
+
+        if not school:
+            return Response({'id': None, 'message': '', 'created_at': None}, status=status.HTTP_200_OK)
+
+        try:
+            msg = (
+                Message.objects
+                .filter(school_id=getattr(school, 'id', None), system_tag__iexact='alert', is_broadcast=True)
+                .order_by('-created_at', '-id')
+                .first()
+            )
+        except Exception:
+            msg = None
+
+        if not msg:
+            return Response({'id': None, 'message': '', 'created_at': None}, status=status.HTTP_200_OK)
+
+        return Response({'id': msg.id, 'message': msg.body or '', 'created_at': msg.created_at}, status=status.HTTP_200_OK)
+
 class NotificationViewSet(viewsets.ModelViewSet):
     queryset = Notification.objects.all()
     serializer_class = NotificationSerializer
@@ -177,7 +219,7 @@ class DeliveryLogViewSet(viewsets.ReadOnlyModelViewSet):
             ok = False
             try:
                 if rec.channel == 'sms':
-                    ok = send_sms(rec.recipient, rec.message_snippet or '')
+                    ok = send_sms(rec.recipient, rec.message_snippet or '', school_id=getattr(rec, 'school_id', None) or school_id)
                 elif rec.channel == 'email':
                     subj = "Delivery retry"
                     ok = send_email_safe(subj, rec.message_snippet or '', rec.recipient, school_id=getattr(rec, 'school_id', None))

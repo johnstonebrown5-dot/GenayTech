@@ -10,7 +10,7 @@ class SchoolSerializer(serializers.ModelSerializer):
     class Meta:
         model = School
         fields = [
-            "id","name","code","address","motto","aim","logo","logo_url","social_links","homepage",
+            "id","name","code","is_active","address","motto","aim","logo","logo_url","social_links","homepage",
             "is_trial","trial_expires_at","trial_student_limit","feature_flags",
         ]
 

@@ -175,7 +175,22 @@ export default function SchoolHome() {
     let mounted = true
     ;(async () => {
       try {
-        const { data } = await api.get('/auth/school/public/?code=sfk')
+        let code = ''
+        try {
+          const params = new URLSearchParams(String(window?.location?.search || ''))
+          code = (params.get('code') || '').trim()
+        } catch {}
+        if (!code) {
+          try {
+            const hostname = String(window?.location?.hostname || '').toLowerCase()
+            const parts = hostname.split('.').filter(Boolean)
+            if (parts.length >= 2 && hostname.endsWith('.localhost')) code = parts[0]
+            else if (parts.length >= 2 && hostname.endsWith('.lvh.me')) code = parts[0]
+            else if (parts.length >= 3) code = parts[0]
+          } catch {}
+        }
+        const url = code ? `/auth/school/public/?code=${encodeURIComponent(code)}` : '/auth/school/public/'
+        const { data } = await api.get(url)
         if (!mounted) return
         const merged = {
           name: data?.name || school.name,

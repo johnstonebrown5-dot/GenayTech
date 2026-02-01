@@ -5,10 +5,13 @@ import { NotificationProvider } from './components/NotificationContext'
 import NotificationContainer from './components/NotificationContainer'
 import MessageNotifier from './components/MessageNotifier'
 import BrowserNotificationPrompt from './components/BrowserNotificationPrompt'
+import api from './api'
 import LoginPage from './pages/LoginPage'
 import SchoolHome from './pages/SchoolHome'
+import LandingPage from './pages/LandingPage'
 import FeaturedPost from './pages/FeaturedPost'
 import TrialOnboarding from './pages/TrialOnboarding'
+import VerifyEmail from './pages/VerifyEmail'
 import AdminDashboard from './pages/AdminDashboard'
 import TeacherDashboard from './pages/TeacherDashboard'
 import TeacherClasses from './pages/TeacherClasses'
@@ -82,6 +85,12 @@ import TeacherTimetableView from './pages/TeacherTimetableView'
 import TeacherTimetable from './pages/TeacherTimetable'
 import TeacherBlockTimetable from './pages/TeacherBlockTimetable'
 import TeacherEvents from './pages/TeacherEvents'
+import SuperAdminLayout from './components/SuperAdminLayout'
+import SuperAdminDashboard from './pages/SuperAdminDashboard'
+import SuperAdminDemoRequests from './pages/SuperAdminDemoRequests'
+import SuperAdminSchools from './pages/SuperAdminSchools'
+import SuperAdminAnalysis from './pages/SuperAdminAnalysis'
+import SuperAdminMaintenance from './pages/SuperAdminMaintenance'
 import { AssistantProvider } from './components/Assistant/AssistantContext'
 import FloatingButton from './components/Assistant/FloatingButton'
 import AssistantPanel from './components/Assistant/AssistantPanel'
@@ -89,6 +98,8 @@ import FloatingActions from './components/FloatingActions'
 import ReportIssuePrompt from './components/ReportIssuePrompt'
 import LockProvider from './components/LockProvider'
 import PublicReceipt from './pages/PublicReceipt'
+import OneTimeLicenseDetails from './pages/OneTimeLicenseDetails'
+import PerStudentMonthlyDetails from './pages/PerStudentMonthlyDetails'
 import NotFound from './pages/NotFound'
 import Unauthorized from './pages/Unauthorized'
 import ReAuth from './pages/ReAuth'
@@ -122,13 +133,73 @@ function ProtectedRoute({ children, roles, ownerRole }) {
 function RoleRedirect() {
   const { user } = useAuth()
   if (!user) return <Navigate to="/login" />
+  if (user?.is_superuser) return <Navigate to="/superadmin" />
   return <Navigate to={`/${user.role}`} />
+}
+
+function SuperuserRoute({ children }) {
+  const { user, loading } = useAuth()
+  const location = useLocation()
+  if (loading) return <div className="p-8">Loading...</div>
+  if (!user) return <Navigate to="/login?super=1" />
+  if (!user?.is_superuser) return <Navigate to="/unauthorized" state={{ from: location.pathname }} replace />
+  return children
+}
+
+function PublicRoot() {
+  const [loading, setLoading] = React.useState(true)
+  const [hasSchool, setHasSchool] = React.useState(false)
+  const [code, setCode] = React.useState(() => {
+    try {
+      const params = new URLSearchParams(String(window?.location?.search || ''))
+      const qp = (params.get('code') || '').trim()
+      if (qp) return qp
+      const hostname = String(window?.location?.hostname || '').toLowerCase()
+      const parts = hostname.split('.').filter(Boolean)
+      const systemSubdomains = new Set(['www', 'app', 'admin', 'api'])
+      const sub = parts[0]
+      if (!sub || systemSubdomains.has(sub)) return ''
+      if (parts.length >= 2 && hostname.endsWith('.localhost')) return sub
+      if (parts.length >= 2 && hostname.endsWith('.lvh.me')) return sub
+      if (parts.length >= 3) return sub
+    } catch {}
+    return ''
+  })
+
+  React.useEffect(() => {
+    let mounted = true
+    ;(async () => {
+      try {
+        const c = code
+        if (mounted) setCode(c)
+        const res = await api.get('/auth/site-context/', {
+          params: c ? { code: c } : {},
+          _skipGlobalLoading: true,
+        })
+        const data = res?.data
+        if (!mounted) return
+        setHasSchool(Boolean(data?.has_school))
+      } catch {
+        if (!mounted) return
+        setHasSchool(Boolean(code))
+      } finally {
+        if (mounted) setLoading(false)
+      }
+    })()
+    return () => { mounted = false }
+  }, [code])
+
+  // If a school code is implied by the URL (subdomain or ?code=), show the school website immediately.
+  if (code) return <SchoolHome />
+  if (loading) return <LandingPage />
+  return hasSchool ? <SchoolHome /> : <LandingPage />
 }
 
 export default function App() {
   const { pathname } = useLocation()
   const nav = useNavigate()
   const [blockLandscape, setBlockLandscape] = React.useState(false)
+  const [maintenanceNotice, setMaintenanceNotice] = React.useState({ loaded: false, enabled: maintenanceEnabled, message: maintenanceMessage })
   const hideAssistant = pathname === '/login' || pathname === '/' || pathname === '/report-issue'
   const isPublicLanding = pathname === '/'
   const prevPathRef = React.useRef(pathname)
@@ -177,8 +248,29 @@ export default function App() {
     } catch {}
   }, [pathname, nav])
 
-  if (maintenanceEnabled) {
-    return <MaintenancePage message={maintenanceMessage} helpPath={helpCenterPath} />
+  React.useEffect(() => {
+    let mounted = true
+    ;(async () => {
+      try {
+        const res = await api.get('/auth/maintenance/', { _skipGlobalLoading: true })
+        const data = res?.data || {}
+        if (!mounted) return
+        setMaintenanceNotice({
+          loaded: true,
+          enabled: !!data.enabled,
+          message: data.message || maintenanceMessage,
+        })
+      } catch {
+        if (!mounted) return
+        setMaintenanceNotice((s) => ({ ...s, loaded: true }))
+      }
+    })()
+    return () => { mounted = false }
+  }, [])
+
+  const maintenanceBypass = pathname.startsWith('/superadmin') || pathname.startsWith('/login') || pathname.startsWith('/help')
+  if (maintenanceNotice?.enabled && !maintenanceBypass) {
+    return <MaintenancePage message={maintenanceNotice?.message || maintenanceMessage} helpPath={helpCenterPath} />
   }
   return (
     <NotificationProvider>
@@ -205,7 +297,9 @@ export default function App() {
             )}
             <Routes>
             {/* Public landing page */}
-            <Route path="/" element={<SchoolHome />} />
+            <Route path="/" element={<PublicRoot />} />
+            <Route path="/pricing/one-time-license" element={<OneTimeLicenseDetails />} />
+            <Route path="/pricing/per-student-monthly" element={<PerStudentMonthlyDetails />} />
             <Route path="/receipt/:id" element={<PublicReceipt />} />
             <Route path="/teachers" element={<PublicTeachers />} />
             <Route path="/teachers/:id" element={<PublicTeacherProfile />} />
@@ -213,9 +307,17 @@ export default function App() {
             <Route path="/news/:id" element={<PublicNewsDetail />} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/trial" element={<TrialOnboarding />} />
+            <Route path="/verify-email" element={<VerifyEmail />} />
             <Route path="/help" element={<ProtectedRoute roles={["admin","teacher","student","finance"]}><HelpCenter/></ProtectedRoute>} />
             <Route path="/lock" element={<ProtectedRoute roles={["admin","teacher","student","finance"]}><LockPage/></ProtectedRoute>} />
             <Route path="/app" element={<RoleRedirect />} />
+            <Route path="/superadmin" element={<SuperuserRoute><SuperAdminLayout><Outlet/></SuperAdminLayout></SuperuserRoute>}>
+              <Route index element={<SuperAdminDashboard/>} />
+              <Route path="demo-requests" element={<SuperAdminDemoRequests/>} />
+              <Route path="schools" element={<SuperAdminSchools/>} />
+              <Route path="analysis" element={<SuperAdminAnalysis/>} />
+              <Route path="maintenance" element={<SuperAdminMaintenance/>} />
+            </Route>
             <Route path="/admin" element={<ProtectedRoute roles={["admin"]}><AdminLayout><Outlet/></AdminLayout></ProtectedRoute>}>
               <Route index element={<AdminDashboard/>} />
               <Route path="students" element={<AdminStudents/>} />

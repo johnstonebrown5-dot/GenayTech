@@ -1,10 +1,21 @@
 from django.contrib import admin
-from .models import School, User, NonTeachingStaff
+from .models import School, SchoolDomain, SchoolIntegrationSettings, User, NonTeachingStaff
+
+
+class SchoolDomainInline(admin.TabularInline):
+    model = SchoolDomain
+    extra = 1
+
+
+class SchoolIntegrationSettingsInline(admin.StackedInline):
+    model = SchoolIntegrationSettings
+    extra = 0
 
 @admin.register(School)
 class SchoolAdmin(admin.ModelAdmin):
     list_display = ("id", "code", "name")
     search_fields = ("code", "name")
+    inlines = (SchoolDomainInline, SchoolIntegrationSettingsInline)
 
 @admin.register(User)
 class UserAdmin(admin.ModelAdmin):

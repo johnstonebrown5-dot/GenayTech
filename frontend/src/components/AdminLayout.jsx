@@ -177,7 +177,8 @@ export default function AdminLayout({ children }){
           const bCount = computeUnread(bOnly)
           setBroadcastUnread(bCount)
           const latest = Array.isArray(bOnly) && bOnly.length > 0 ? bOnly[0] : null
-          const candidate = latest && !dismissedIds.includes(latest.id) ? latest : null
+          const latestBody = String(latest?.body || '').trim()
+          const candidate = latest && latestBody && !dismissedIds.includes(latest.id) ? latest : null
           setBroadcastBanner(candidate)
         }
       } catch {

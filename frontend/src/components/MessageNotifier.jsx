@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import api from '../api'
 import { useNotification } from './NotificationContext'
 import { useAuth } from '../auth'
@@ -12,10 +12,64 @@ export default function MessageNotifier(){
   const lastChatTsRef = useRef(null)
   const lastSystemTsRef = useRef(null)
   const timerRef = useRef(null)
+  const [banner, setBanner] = useState(null)
+  const [dismissedBannerId, setDismissedBannerId] = useState(null)
+  const [publicBanner, setPublicBanner] = useState(null)
+  const [dismissedPublicBannerId, setDismissedPublicBannerId] = useState(null)
 
   // keys per-user to persist last seen across reloads
   const chatKey = user?.id ? `notify:lastChatTs:${user.id}` : null
   const sysKey = user?.id ? `notify:lastSystemTs:${user.id}` : null
+  const bannerDismissKey = user?.id ? `notify:dismissedBannerId:${user.id}` : null
+  const publicBannerDismissKey = 'notify:dismissedPublicBannerId'
+
+  const bannerVisible = useMemo(() => {
+    if (!banner) return false
+    if (!user || locked) return false
+    if (dismissedBannerId && String(dismissedBannerId) === String(banner.id)) return false
+    if (!String(banner.body || '').trim()) return false
+    return true
+  }, [banner, dismissedBannerId, locked, user])
+
+  const publicBannerVisible = useMemo(() => {
+    if (!publicBanner) return false
+    if (locked) return false
+    if (dismissedPublicBannerId && String(dismissedPublicBannerId) === String(publicBanner.id)) return false
+    return Boolean(String(publicBanner.message || '').trim())
+  }, [dismissedPublicBannerId, locked, publicBanner])
+
+  useEffect(() => {
+    try {
+      setDismissedPublicBannerId(localStorage.getItem(publicBannerDismissKey) || null)
+    } catch {}
+
+    let mounted = true
+    const tick = async () => {
+      try {
+        const res = await api.get('/communications/alerts/banner/', { _skipGlobalLoading: true })
+        const data = res?.data || {}
+        if (!mounted) return
+        const msgText = String(data?.message || '').trim()
+        if (data?.id && msgText) {
+          setPublicBanner({ id: data.id, message: msgText, created_at: data.created_at || null })
+        } else {
+          setPublicBanner(null)
+        }
+      } catch {
+        if (!mounted) return
+      }
+    }
+
+    tick()
+    const t = setInterval(tick, 15000)
+    const onRefresh = () => { try { tick() } catch {} }
+    try { window.addEventListener('alerts:refresh', onRefresh) } catch {}
+    return () => {
+      mounted = false
+      clearInterval(t)
+      try { window.removeEventListener('alerts:refresh', onRefresh) } catch {}
+    }
+  }, [locked])
 
   useEffect(()=>{
     if(!user || locked) return
@@ -23,6 +77,7 @@ export default function MessageNotifier(){
     try{
       if(chatKey){ lastChatTsRef.current = localStorage.getItem(chatKey) || null }
       if(sysKey){ lastSystemTsRef.current = localStorage.getItem(sysKey) || null }
+      if(bannerDismissKey){ setDismissedBannerId(localStorage.getItem(bannerDismissKey) || null) }
     }catch{}
 
     const tick = async()=>{
@@ -79,6 +134,32 @@ export default function MessageNotifier(){
         // System messages (role/broadcast)
         const sys = await api.get('/communications/messages/system/')
         const systemMessages = Array.isArray(sys.data) ? sys.data : (sys.data?.results||[])
+
+        // Banner: show latest broadcast Alert message (created via Django admin)
+        try{
+          const alert = systemMessages
+            .filter(m => {
+              const tag = String(m?.system_tag || '').trim().toLowerCase()
+              return Boolean(tag) && tag === 'alert' && (m?.is_broadcast === true)
+            })
+            .sort((a,b) => {
+              const at = new Date(a?.created_at || 0).getTime()
+              const bt = new Date(b?.created_at || 0).getTime()
+              return bt - at
+            })[0]
+          if (alert && alert?.id) {
+            setBanner({
+              id: alert.id,
+              body: String(alert.body || ''),
+              created_at: alert.created_at,
+            })
+          } else {
+            setBanner(null)
+          }
+        } catch {
+          setBanner(null)
+        }
+
         const latestSys = systemMessages.reduce((max, m)=>{
           const ts = new Date(m.created_at).toISOString()
           return ts > max ? ts : max
@@ -128,5 +209,61 @@ export default function MessageNotifier(){
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id, locked])
 
-  return null
+  const dismissBanner = async () => {
+    if (!banner || !user?.id) return
+    const id = banner.id
+    setDismissedBannerId(String(id))
+    try{ if (bannerDismissKey) localStorage.setItem(bannerDismissKey, String(id)) }catch{}
+    try{
+      await api.post(`/communications/messages/${id}/mark-read/`, {}, { _skipGlobalLoading: true })
+    }catch{}
+  }
+
+  const dismissPublicBanner = () => {
+    if (!publicBanner?.id) return
+    const id = String(publicBanner.id)
+    setDismissedPublicBannerId(id)
+    try { localStorage.setItem(publicBannerDismissKey, id) } catch {}
+  }
+
+  if (!bannerVisible && !publicBannerVisible) return null
+
+  return (
+    <div className="fixed top-0 left-0 right-0 z-[9999] w-full">
+      {publicBannerVisible && (
+        <div className="bg-red-600 text-white border-b border-red-700">
+          <div className="mx-auto max-w-7xl px-3 py-2 flex items-start gap-3">
+            <div className="mt-0.5 h-5 w-5 rounded-full bg-white/15 grid place-items-center text-xs font-black">!</div>
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-semibold">{String(publicBanner.message || '').trim() || 'System alert'}</div>
+            </div>
+            <button
+              type="button"
+              onClick={dismissPublicBanner}
+              className="shrink-0 px-2 py-1 rounded-lg text-xs font-semibold bg-white/15 hover:bg-white/20"
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
+      {bannerVisible && !publicBannerVisible && (
+        <div className="bg-red-600 text-white border-b border-red-700">
+          <div className="mx-auto max-w-7xl px-3 py-2 flex items-start gap-3">
+            <div className="mt-0.5 h-5 w-5 rounded-full bg-white/15 grid place-items-center text-xs font-black">!</div>
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-semibold">{String(banner.body || '').trim() || 'System alert'}</div>
+            </div>
+            <button
+              type="button"
+              onClick={dismissBanner}
+              className="shrink-0 px-2 py-1 rounded-lg text-xs font-semibold bg-white/15 hover:bg-white/20"
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
 }

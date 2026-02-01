@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import AppLogo from '../components/AppLogo'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../auth'
 import { useNotification } from '../components/NotificationContext'
 import api, { toAbsoluteUrl } from '../api'
@@ -9,6 +9,7 @@ import api, { toAbsoluteUrl } from '../api'
 export default function LoginPage() {
   const { login } = useAuth()
   const nav = useNavigate()
+  const location = useLocation()
   const { showError } = useNotification()
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
@@ -38,6 +39,16 @@ export default function LoginPage() {
   const [resetResending, setResetResending] = useState(false)
   const [resetCodeConfirmed, setResetCodeConfirmed] = useState(false)
   const [resetPasswordModalOpen, setResetPasswordModalOpen] = useState(false)
+
+  const superMode = (() => {
+    try { return new URLSearchParams(location.search).get('super') === '1' } catch { return false }
+  })()
+
+  useEffect(() => {
+    if (!superMode) return
+    setRole('staff')
+    setFormStep('credentials')
+  }, [superMode])
 
   const notifyError = (message, title = 'Login error') => {
     setError(message)
@@ -256,7 +267,11 @@ export default function LoginPage() {
           return
         }
         // Route staff to their dashboard by actual role
-        if (isAdminUser) { nav('/admin'); return }
+        if (isAdminUser) {
+          if (me?.is_superuser) { nav('/superadmin'); return }
+          nav('/admin')
+          return
+        }
         if (isTeacher) { nav('/teacher'); return }
         if (isFinance) { nav('/finance'); return }
         // Fallback to role-based path
@@ -278,7 +293,8 @@ export default function LoginPage() {
       if (e.response) {
         // The request was made and the server responded with a status code
         // that falls out of the range of 2xx
-        notifyError('Invalid credentials', 'Login failed');
+        const msg = e?.response?.data?.detail || 'Invalid credentials'
+        notifyError(msg, 'Login failed');
       } else if (e.request) {
         // The request was made but no response was received
         notifyError('Network error. Please check your connection or try again later.', 'Network issue');
@@ -337,6 +353,7 @@ export default function LoginPage() {
           }
         : undefined}
     >
+      <a href="/login?super=1" className="sr-only">Super admin login</a>
       {/* Dark / blur overlay to keep content readable */}
       <div className="absolute inset-0 -z-10 bg-slate-950/60 backdrop-blur-[3px]" />
 

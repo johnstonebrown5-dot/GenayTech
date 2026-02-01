@@ -20,6 +20,26 @@ from .models import Invoice, Payment, FeeCategory, ClassFee, MpesaConfig, Expens
 from .serializers import InvoiceSerializer, PaymentSerializer, FeeCategorySerializer, ClassFeeSerializer, MpesaConfigSerializer, ExpenseCategorySerializer, ExpenseSerializer, PocketMoneyWalletSerializer, PocketMoneyTransactionSerializer, PaymentMethodSerializer, IncomingPaymentSerializer, StudentFeeSerializer, StaffPayrollSerializer, StaffPayslipSerializer
 from academics.models import Student
 
+
+def _log_payment_health_event(*, school_id: int | None, method: str, ok: bool, context: str = '') -> None:
+    try:
+        from accounts.models import SystemHealthEvent
+        m = str(method or '').lower()
+        if m == 'mpesa':
+            comp = SystemHealthEvent.Component.PAYMENT_MPESA
+        elif m == 'bank':
+            comp = SystemHealthEvent.Component.PAYMENT_BANK
+        else:
+            return
+        SystemHealthEvent.objects.create(
+            school_id=school_id,
+            component=comp,
+            ok=bool(ok),
+            context=(context or '')[:255],
+        )
+    except Exception:
+        pass
+
 class IsFinanceOrAdmin(permissions.BasePermission):
     def has_permission(self, request, view):
         return request.user and request.user.is_authenticated and request.user.role in ('finance','admin')
@@ -400,6 +420,7 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         try:
             invoice = self.get_queryset().get(pk=pk)
         except Invoice.DoesNotExist:
+            _log_payment_health_event(school_id=None, method=str(request.data.get('method') or ''), ok=False, context='invoice_not_found')
             return Response({'detail': 'Invoice not found'}, status=404)
 
         user = request.user
@@ -407,13 +428,16 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         # Permission: students must own the invoice
         if user.role not in ('admin','finance'):
             if not student_id or invoice.student_id != student_id:
+                _log_payment_health_event(school_id=getattr(getattr(invoice.student, 'klass', None), 'school_id', None), method=str(request.data.get('method') or ''), ok=False, context='forbidden')
                 return Response({'detail': 'Forbidden'}, status=403)
 
         try:
             amount = float(request.data.get('amount', 0))
         except (TypeError, ValueError):
+            _log_payment_health_event(school_id=getattr(getattr(invoice.student, 'klass', None), 'school_id', None), method=str(request.data.get('method') or ''), ok=False, context='invalid_amount')
             return Response({'detail': 'Invalid amount'}, status=400)
         if amount <= 0:
+            _log_payment_health_event(school_id=getattr(getattr(invoice.student, 'klass', None), 'school_id', None), method=str(request.data.get('method') or ''), ok=False, context='amount_le_0')
             return Response({'detail': 'Amount must be greater than 0'}, status=400)
 
         method = request.data.get('method') or 'mpesa'
@@ -421,9 +445,11 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         school = getattr(invoice.student.klass, 'school', None)
         enabled = self._enabled_methods_for_school(school)
         if str(method).lower() not in enabled:
+            _log_payment_health_event(school_id=getattr(school, 'id', None), method=str(method), ok=False, context='method_disabled')
             return Response({'detail': f'Payment method "{method}" is disabled by admin'}, status=400)
         # Students can only record M-Pesa payments; Bank/Cash restricted to Admin/Finance
         if user.role not in ('admin','finance') and str(method).lower() != 'mpesa':
+            _log_payment_health_event(school_id=getattr(school, 'id', None), method=str(method), ok=False, context='student_restricted')
             return Response({'detail': 'Only M-Pesa payments are allowed for students'}, status=403)
         reference = request.data.get('reference') or ''
         attachment = request.FILES.get('attachment')
@@ -437,6 +463,8 @@ class InvoiceViewSet(viewsets.ModelViewSet):
             attachment=attachment,
             recorded_by=user if user.is_authenticated else None,
         )
+
+        _log_payment_health_event(school_id=getattr(school, 'id', None), method=str(method), ok=True, context=f"payment_id:{pay.id}")
 
         # Update invoice status based on total paid
         totals = invoice.payments.aggregate(s=Sum('amount'))
@@ -1226,6 +1254,7 @@ class IncomingPaymentViewSet(viewsets.ModelViewSet):
             'simulate': simulate,
         })
         if simulate:
+            _log_payment_health_event(school_id=getattr(getattr(invoice.student.klass, 'school', None), 'id', None), method='mpesa', ok=True, context='stk_pending_simulated')
             # Simulation mode: do NOT create a payment. Just acknowledge request.
             # Frontend may show progress and will not find a new payment unless created manually.
             return Response({
@@ -1261,8 +1290,10 @@ class IncomingPaymentViewSet(viewsets.ModelViewSet):
                 }, status=202)
             except Exception as e:
                 logger.exception("STK initiation failed", extra={'invoice_id': invoice.id})
+                _log_payment_health_event(school_id=getattr(getattr(invoice.student.klass, 'school', None), 'id', None), method='mpesa', ok=False, context='stk_initiation_failed')
                 return Response({'detail': f'STK error: {e}'}, status=500)
         # Fallback mocked when credentials missing
+        _log_payment_health_event(school_id=getattr(getattr(invoice.student.klass, 'school', None), 'id', None), method='mpesa', ok=True, context='stk_pending_no_creds')
         return Response({'status':'pending','message':'STK credentials not configured; set MPESA_* env vars or use simulate=true.'}, status=202)
 
     @action(detail=False, methods=['post'], url_path='pay_balance_stk', permission_classes=[permissions.IsAuthenticated])
@@ -1302,9 +1333,11 @@ class IncomingPaymentViewSet(viewsets.ModelViewSet):
             return Response({'detail': 'Mpesa payments are disabled by admin'}, status=400)
 
         if simulate:
+            _log_payment_health_event(school_id=getattr(sch, 'id', None), method='bank', ok=True, context='coop_stk_pending_simulated')
             return Response({'status': 'pending', 'message': 'Balance STK simulated. Configure COOP_* env vars or set simulate=false.'}, status=202)
 
         if not have_creds:
+            _log_payment_health_event(school_id=getattr(sch, 'id', None), method='bank', ok=True, context='coop_stk_pending_no_creds')
             return Response({'status': 'pending', 'message': 'Co-op credentials not configured; set COOP_* env vars or use simulate=true.'}, status=202)
 
         try:
@@ -1361,6 +1394,7 @@ class IncomingPaymentViewSet(viewsets.ModelViewSet):
             'simulate': simulate,
         })
         if simulate:
+            _log_payment_health_event(school_id=getattr(getattr(invoice.student.klass, 'school', None), 'id', None), method='bank', ok=True, context='coop_stk_pending_simulated')
             return Response({'status': 'pending', 'message': 'Co-op STK simulated. Configure COOP_* env vars or set simulate=false.'}, status=202)
 
         if have_creds:
@@ -1375,8 +1409,10 @@ class IncomingPaymentViewSet(viewsets.ModelViewSet):
                 return Response({'status': 'pending', 'message': 'STK initiated', 'coop': resp}, status=202)
             except Exception as e:
                 logger.exception("Co-op STK initiation failed", extra={'invoice_id': invoice.id})
+                _log_payment_health_event(school_id=getattr(getattr(invoice.student.klass, 'school', None), 'id', None), method='bank', ok=False, context='coop_stk_initiation_failed')
                 return Response({'detail': f'Co-op STK error: {e}'}, status=500)
 
+        _log_payment_health_event(school_id=getattr(getattr(invoice.student.klass, 'school', None), 'id', None), method='bank', ok=True, context='coop_stk_pending_no_creds')
         return Response({'status': 'pending', 'message': 'Co-op credentials not configured; set COOP_* env vars or use simulate=true.'}, status=202)
 
 class PaymentViewSet(viewsets.ModelViewSet):

@@ -365,7 +365,7 @@ class ClassViewSet(viewsets.ModelViewSet):
             phone = getattr(stu, 'guardian_id', None)
             if phone:
                 try:
-                    ok_sms = send_sms(phone, body)
+                    ok_sms = send_sms(phone, body, school_id=school_id)
                 except Exception:
                     ok_sms = False
                 try:
@@ -495,7 +495,7 @@ class ClassViewSet(viewsets.ModelViewSet):
                 sms_attempts += 1
                 ok_sms = False
                 try:
-                    ok_sms = send_sms(phone, body)
+                    ok_sms = send_sms(phone, body, school_id=school_id)
                 except Exception:
                     ok_sms = False
                 if ok_sms:
@@ -917,7 +917,7 @@ class ClassViewSet(viewsets.ModelViewSet):
             if not phone:
                 return Response({'detail': 'No guardian phone on record'}, status=status.HTTP_400_BAD_REQUEST)
             try:
-                ok = send_sms(phone, body)
+                ok = send_sms(phone, body, school_id=school_id)
             except Exception:
                 ok = False
             try:
@@ -1324,7 +1324,7 @@ class ClassViewSet(viewsets.ModelViewSet):
             if phone and channel in ('sms', 'both'):
                 ok_sms = False
                 try:
-                    ok_sms = send_sms(phone, msg)
+                    ok_sms = send_sms(phone, msg, school_id=school_id)
                 except Exception:
                     ok_sms = False
                 try:

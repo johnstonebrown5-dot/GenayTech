@@ -6,6 +6,7 @@ export default function TrialOnboarding() {
   const navigate = useNavigate()
   const [form, setForm] = useState({
     school_name: '',
+    domain: '',
     admin_email: '',
     admin_password: '',
     admin_first_name: '',
@@ -48,14 +49,11 @@ export default function TrialOnboarding() {
     try {
       setLoading(true)
       const payload = { ...form, website: honeypot }
-      const { data } = await api.post('/auth/trial-signup/', payload)
-      localStorage.setItem('access', data.access)
-      localStorage.setItem('refresh', data.refresh)
+      await api.post('/auth/request-demo/', payload)
       setSuccess(true)
-      // small delay to show success state
-      setTimeout(() => navigate('/app'), 600)
+      setTimeout(() => navigate('/login'), 900)
     } catch (err) {
-      const msg = err?.response?.data?.detail || 'Failed to create trial account. Please try again.'
+      const msg = err?.response?.data?.detail || 'Failed to submit demo request. Please try again.'
       setError(msg)
     } finally {
       setLoading(false)
@@ -75,29 +73,34 @@ export default function TrialOnboarding() {
 
       <main className="mx-auto max-w-5xl px-6 py-12">
         <div className="max-w-2xl">
-          <h1 className="text-3xl font-bold text-gray-900">Start your free 14‑day trial</h1>
-          <p className="mt-3 text-gray-600">No credit card required. Get full access to academics, finance, messaging, and analytics. You can cancel anytime.</p>
+          <h1 className="text-3xl font-bold text-gray-900">Request a demo</h1>
+          <p className="mt-3 text-gray-600">Submit your details and we will review your request. Once approved, you will receive an email with a verification link to activate your account.</p>
         </div>
 
         <div className="mt-8 grid md:grid-cols-2 gap-6">
           <div className="rounded-2xl border border-gray-200 p-6 bg-white">
-            <h2 className="text-lg font-semibold text-gray-900">What you'll get</h2>
+            <h2 className="text-lg font-semibold text-gray-900">What happens next</h2>
             <ul className="mt-4 space-y-2 text-sm text-gray-700">
-              <li>• Full access to all modules</li>
-              <li>• Up to 100 students for trial</li>
-              <li>• Sample data to explore</li>
-              <li>• Email support</li>
+              <li>• Your request is reviewed by a super admin</li>
+              <li>• After approval, you receive a verification email</li>
+              <li>• After verifying, you can log in with your email and password</li>
+              <li>• Your school is provisioned as a 14‑day trial</li>
             </ul>
           </div>
           <div className="rounded-2xl border border-gray-200 p-6 bg-white">
-            <h2 className="text-lg font-semibold text-gray-900">Create your trial</h2>
+            <h2 className="text-lg font-semibold text-gray-900">Request demo</h2>
             {error && (<div className="mt-3 rounded-md bg-rose-50 text-rose-700 text-sm px-3 py-2 border border-rose-200">{error}</div>)}
-            {success && (<div className="mt-3 rounded-md bg-emerald-50 text-emerald-700 text-sm px-3 py-2 border border-emerald-200">Trial created! Redirecting…</div>)}
+            {success && (<div className="mt-3 rounded-md bg-emerald-50 text-emerald-700 text-sm px-3 py-2 border border-emerald-200">Request submitted! You will receive an email after approval.</div>)}
             <form className="mt-4 space-y-3" onSubmit={handleSubmit}>
               <div>
                 <label className="block text-sm font-medium text-gray-700">School name *</label>
                 <input name="school_name" value={form.school_name} onChange={onChange} className={`mt-1 w-full rounded-lg border px-3 py-2 focus:outline-none focus:ring-2 ${fieldErrors.school_name ? 'border-rose-300 focus:ring-rose-500' : 'border-gray-300 focus:ring-indigo-600'}`} placeholder="e.g., Greenfield Academy" />
                 {fieldErrors.school_name && <div className="mt-1 text-xs text-rose-600">{fieldErrors.school_name}</div>}
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Domain (optional)</label>
+                <input name="domain" value={form.domain} onChange={onChange} className={`mt-1 w-full rounded-lg border px-3 py-2 focus:outline-none focus:ring-2 ${fieldErrors.domain ? 'border-rose-300 focus:ring-rose-500' : 'border-gray-300 focus:ring-indigo-600'}`} placeholder="e.g., greenfieldacademy.ac.ke" />
+                {fieldErrors.domain && <div className="mt-1 text-xs text-rose-600">{fieldErrors.domain}</div>}
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -130,7 +133,7 @@ export default function TrialOnboarding() {
                 <input name="website" value={honeypot} onChange={(e)=>setHoneypot(e.target.value)} />
               </div>
               <button type="submit" disabled={loading} className={`w-full inline-flex justify-center items-center h-10 px-4 rounded-lg font-medium text-white ${loading ? 'bg-indigo-400' : 'bg-indigo-600 hover:bg-indigo-700'}`}>
-                {loading ? 'Creating…' : 'Create Trial'}
+                {loading ? 'Submitting…' : 'Submit request'}
               </button>
             </form>
             <div className="mt-4 text-sm text-gray-600">Already have an account? <Link className="text-indigo-700 hover:underline" to="/login">Sign in</Link></div>

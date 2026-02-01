@@ -167,6 +167,14 @@ class MessageSerializer(serializers.ModelSerializer):
             reply_to=reply_to if reply_to else None,
         )
 
+        if audience == Message.Audience.ALL:
+            try:
+                msg.system_tag = 'Alert'
+                msg.is_broadcast = True
+                msg.save(update_fields=['system_tag', 'is_broadcast'])
+            except Exception:
+                pass
+
         # Resolve recipients according to audience with role constraints
         recipients_qs = User.objects.none()
         if audience == Message.Audience.ALL:

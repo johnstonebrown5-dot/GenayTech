@@ -56,19 +56,6 @@ export default function LandingPage() {
     { bg: 'bg-lime-600/10', text: 'text-lime-700' },
     { bg: 'bg-teal-600/10', text: 'text-teal-700' },
   ]
-  // pricing cycle: 'monthly' or 'annual' (annual = 2 months free)
-  const [billingCycle, setBillingCycle] = useState(() => {
-    const params = new URLSearchParams(window.location.search)
-    const qp = params.get('billing')
-    const stored = localStorage.getItem('billingCycle')
-    return (qp === 'annual' || qp === 'monthly') ? qp : (stored || 'monthly')
-  })
-  useEffect(() => {
-    try { localStorage.setItem('billingCycle', billingCycle) } catch {}
-    const url = new URL(window.location.href)
-    url.searchParams.set('billing', billingCycle)
-    window.history.replaceState({}, '', url)
-  }, [billingCycle])
   return (
     <div className="min-h-screen bg-white text-gray-800">
       {/* Header */}
@@ -81,7 +68,7 @@ export default function LandingPage() {
           <nav className="hidden md:flex items-center gap-8 text-sm text-gray-600">
             <a href="#features" className="hover:text-gray-900">Features</a>
             <a href="#advantages" className="hover:text-gray-900">Advantages</a>
-            <a href="#plan-pro" className="hover:text-gray-900">Pricing</a>
+            <a href="#pricing" className="hover:text-gray-900">Pricing</a>
             <a href="#contact" className="hover:text-gray-900">Contact</a>
           </nav>
           <div className="hidden md:flex items-center gap-3">
@@ -108,7 +95,7 @@ export default function LandingPage() {
             <div className="px-6 py-4 flex flex-col gap-3 text-gray-700">
               <a href="#features" onClick={() => setMobileOpen(false)} className="py-2">Features</a>
               <a href="#advantages" onClick={() => setMobileOpen(false)} className="py-2">Advantages</a>
-              <a href="#plan-pro" onClick={() => setMobileOpen(false)} className="py-2">Pricing</a>
+              <a href="#pricing" onClick={() => setMobileOpen(false)} className="py-2">Pricing</a>
               <a href="#contact" onClick={() => setMobileOpen(false)} className="py-2">Contact</a>
               <div className="flex gap-3 pt-2">
                 <Link to="/login" onClick={() => setMobileOpen(false)} className="flex-1 px-4 py-2 text-sm font-medium text-gray-700 border border-gray-200 rounded-lg text-center">Sign in</Link>
@@ -175,40 +162,30 @@ export default function LandingPage() {
             <thead className="bg-gray-50 text-gray-700">
               <tr>
                 <th className="px-4 py-3">Feature</th>
-                <th className="px-4 py-3">Starter</th>
-                <th className="px-4 py-3">Pro</th>
-                <th className="px-4 py-3">Growth</th>
-                <th className="px-4 py-3">Enterprise</th>
+                <th className="px-4 py-3">Per Student Monthly</th>
+                <th className="px-4 py-3">One-time License</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
               <tr>
-                <td className="px-4 py-3 text-gray-700">Students limit</td>
-                <td className="px-4 py-3">Up to 200</td>
-                <td className="px-4 py-3">Unlimited</td>
-                <td className="px-4 py-3">Unlimited</td>
-                <td className="px-4 py-3">Unlimited</td>
+                <td className="px-4 py-3 text-gray-700">Pricing</td>
+                <td className="px-4 py-3">KSh 30 / student / month</td>
+                <td className="px-4 py-3">KSh 500,000 one-time</td>
               </tr>
               <tr>
-                <td className="px-4 py-3 text-gray-700">Finance suite</td>
-                <td className="px-4 py-3">Basic (no POS)</td>
-                <td className="px-4 py-3">Full</td>
-                <td className="px-4 py-3">Full</td>
-                <td className="px-4 py-3">Full + custom</td>
-              </tr>
-              <tr>
-                <td className="px-4 py-3 text-gray-700">Messaging</td>
-                <td className="px-4 py-3">Email only</td>
-                <td className="px-4 py-3">Email + notifications</td>
-                <td className="px-4 py-3">Email + notifications</td>
-                <td className="px-4 py-3">All channels</td>
+                <td className="px-4 py-3 text-gray-700">Rights & permissions</td>
+                <td className="px-4 py-3">Standard subscription rights</td>
+                <td className="px-4 py-3">All rights & permissions</td>
               </tr>
               <tr>
                 <td className="px-4 py-3 text-gray-700">Support</td>
-                <td className="px-4 py-3">Email</td>
-                <td className="px-4 py-3">Priority</td>
-                <td className="px-4 py-3">Priority</td>
-                <td className="px-4 py-3">Dedicated manager</td>
+                <td className="px-4 py-3">Available while subscribed</td>
+                <td className="px-4 py-3">1 year support included</td>
+              </tr>
+              <tr>
+                <td className="px-4 py-3 text-gray-700">Training & startup</td>
+                <td className="px-4 py-3">Optional</td>
+                <td className="px-4 py-3">Free training & startup</td>
               </tr>
             </tbody>
           </table>
@@ -283,67 +260,30 @@ export default function LandingPage() {
       <section id="pricing" className="mx-auto max-w-7xl px-6 py-16">
         <div className="text-center max-w-3xl mx-auto">
           <h2 className="text-3xl font-bold text-gray-900">Simple, transparent billing</h2>
-          <p className="mt-3 text-gray-600">Start small and scale as you grow. No hidden fees. Cancel anytime.</p>
+          <p className="mt-3 text-gray-600">Choose a one-time license or a per-student monthly plan.</p>
         </div>
-        {/* Billing cycle toggle */}
-        <div className="mt-6 flex items-center justify-center">
-          <div className="inline-flex rounded-lg border border-gray-200 bg-white p-1 text-sm shadow-sm dark:bg-gray-900 dark:border-gray-800" role="tablist" aria-label="Billing Cycle">
-            <button
-              type="button"
-              onClick={() => setBillingCycle('monthly')}
-              className={`px-3 py-1.5 rounded-md transition ${billingCycle === 'monthly' ? 'bg-indigo-600 text-white shadow' : 'text-gray-700 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-800'}`}
-              aria-pressed={billingCycle === 'monthly'}
-            >
-              Monthly
-            </button>
-            <button
-              type="button"
-              onClick={() => setBillingCycle('annual')}
-              className={`ml-1 px-3 py-1.5 rounded-md transition ${billingCycle === 'annual' ? 'bg-indigo-600 text-white shadow' : 'text-gray-700 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-800'}`}
-              aria-pressed={billingCycle === 'annual'}
-            >
-              Annual <span className="ml-1 text-xs text-indigo-700 bg-indigo-100 rounded px-1 py-0.5 align-middle">2 months free</span>
-            </button>
-          </div>
-        </div>
-        <div className="mt-10 grid sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-6">
+        <div className="mt-10 grid sm:grid-cols-2 lg:grid-cols-2 gap-6">
           {[
             {
-              slug: 'trial', name: 'Free Trial', trial: true, highlight: false,
-              features: ['Full access for 14 days', 'Up to 100 students', 'No credit card required', 'Cancel anytime']
+              slug: 'one-time',
+              name: 'One-time License',
+              priceText: 'KSh 500,000',
+              highlight: true,
+              ribbon: 'One-time',
+              detailsPath: '/pricing/one-time-license',
+              features: ['All rights & permissions', '1 year support', 'Free training & startup', 'All modules included']
             },
             {
-              slug: 'starter', name: 'Starter', priceMonthly: 4999, highlight: false,
-              features: [
-                'Up to 200 students',
-                'Core academics & timetable',
-                'Invoices & payments (no point-of-sale fee payments)',
-                'In-app messages (email only; no instant SMS)'
-              ]
-            },
-            {
-              slug: 'pro', name: 'Pro', priceMonthly: 9999, highlight: true, ribbon: 'Most popular',
-              features: ['Unlimited students', 'Full finance suite', 'Messaging & notifications', 'Advanced reports']
-            },
-            {
-              slug: 'growth', name: 'Growth', priceMonthly: 14999, highlight: false,
-              features: ['Unlimited students', 'Advanced timetable & calendars', 'Enhanced analytics', 'Priority email support']
-            },
-            {
-              slug: 'enterprise', name: 'Enterprise', custom: true, highlight: false,
-              features: ['Multi‑campus', 'Dedicated success manager', 'Priority support', 'Custom integrations']
+              slug: 'per-student',
+              name: 'Per Student Monthly',
+              priceText: 'KSh 30 / student / month',
+              highlight: false,
+              ribbon: 'Hot',
+              detailsPath: '/pricing/per-student-monthly',
+              features: ['Billed monthly based on active students', 'Platform access & updates', 'Ideal for growing schools', 'Support available while subscribed']
             }
           ].map((p) => {
-            const isAnnual = billingCycle === 'annual'
-            const monthly = p.priceMonthly
-            const annualAmount = monthly ? monthly * 10 : null // 2 months free
-            const priceText = p.trial
-              ? 'Free · 14 days'
-              : p.custom
-                ? 'Custom'
-                : isAnnual
-                  ? `KSh ${annualAmount?.toLocaleString()}/yr`
-                  : `KSh ${monthly?.toLocaleString()}/mo`
+            const priceText = p.priceText
             return (
             <div
               id={`plan-${p.slug || p.name.toLowerCase()}`}
@@ -352,21 +292,23 @@ export default function LandingPage() {
             >
               {/* Ribbon */}
               {(p.ribbon || p.highlight) && (
-                <span className="pointer-events-none absolute -right-10 top-6 rotate-45 bg-indigo-600 text-white text-xs font-semibold px-10 py-1 shadow-sm">{p.ribbon || 'Recommended'}</span>
+                <span className={`pointer-events-none absolute -right-10 top-6 rotate-45 text-white text-xs font-semibold px-10 py-1 shadow-sm ${p.ribbon === 'Hot' ? 'bg-amber-500' : 'bg-indigo-600'}`}>{p.ribbon || 'Recommended'}</span>
               )}
               <div className="flex items-center justify-between">
                 <h3 className="text-lg font-semibold text-gray-900">{p.name}</h3>
-                {p.highlight && <span className="text-xs font-semibold text-indigo-700 bg-indigo-100 px-2 py-1 rounded-full">{p.ribbon || 'Most popular'}</span>}
+                <div className="flex items-center gap-2">
+                  {p.highlight && <span className="text-xs font-semibold text-indigo-700 bg-indigo-100 px-2 py-1 rounded-full">{p.ribbon || 'Most popular'}</span>}
+                  <Link to={p.detailsPath} className="text-xs font-semibold px-2 py-1 rounded-full border border-gray-200 text-gray-700 hover:bg-gray-50">
+                    Learn more
+                  </Link>
+                </div>
               </div>
               <div className="mt-4 text-3xl font-extrabold text-gray-900 tracking-tight">
                 <span className="inline-block transition-all duration-300 will-change-transform" key={priceText}>{priceText}</span>
               </div>
-              {(!p.trial && !p.custom && isAnnual) && (
-                <div className="mt-1 text-xs text-indigo-700">Billed annually · 2 months free</div>
-              )}
               <ul className="mt-6 space-y-2 text-sm text-gray-700 flex-1 dark:text-gray-300">
                 {p.features.map((f) => {
-                  const tooltip = f.includes('no point-of-sale') ? 'POS fee payments are not available on Starter' : (f.includes('no instant SMS') ? 'Starter does not include instant SMS delivery' : '')
+                  const tooltip = ''
                   return (
                     <li key={f} className="flex gap-2" title={tooltip}>
                       <Check />
@@ -375,19 +317,11 @@ export default function LandingPage() {
                   )
                 })}
               </ul>
-              {p.trial ? (
-                <div className="mt-6">
-                  <Link to="/trial" className="w-full inline-flex justify-center items-center h-10 px-4 rounded-lg font-medium bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm">
-                    Start Free Trial
-                  </Link>
-                </div>
-              ) : (
-                <div className="mt-6">
-                  <a href={`mailto:EduTrack46@gmail.com?subject=EduTrack%20Pricing%20-%20${p.name}`} className={`w-full inline-flex justify-center items-center h-10 px-4 rounded-lg font-medium ${p.highlight ? 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm' : 'border border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-gray-400 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800'}`}>
-                    Talk to Sales
-                  </a>
-                </div>
-              )}
+              <div className="mt-6">
+                <a href={`mailto:EduTrack46@gmail.com?subject=EduTrack%20Pricing%20-%20${p.name}`} className={`w-full inline-flex justify-center items-center h-10 px-4 rounded-lg font-medium ${p.highlight ? 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm' : 'border border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-gray-400 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800'}`}>
+                  Talk to Sales
+                </a>
+              </div>
             </div>
           )})}
         </div>
@@ -414,11 +348,11 @@ export default function LandingPage() {
             </div>
             <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
               <h3 className="text-lg font-semibold text-gray-900">Billing information</h3>
-              <p className="mt-2 text-sm text-gray-600">We offer monthly subscriptions billed in Kenyan Shillings (KSh). Invoices are issued automatically via the Finance module and can be settled by bank, M-Pesa, or card. Annual billing discounts are available.</p>
+              <p className="mt-2 text-sm text-gray-600">We offer a one-time license (KSh 500,000) with all rights & permissions, 1 year support, and free training & startup—plus a per-student monthly plan (KSh 30 per student per month). Invoices can be settled by bank, M-Pesa, or card.</p>
               <ul className="mt-4 space-y-2 text-sm text-gray-700">
-                <li className="flex gap-2"><span className="text-indigo-600">•</span> No setup fees</li>
-                <li className="flex gap-2"><span className="text-indigo-600">•</span> Cancel anytime</li>
-                <li className="flex gap-2"><span className="text-indigo-600">•</span> Transparent pricing</li>
+                <li className="flex gap-2"><span className="text-indigo-600">•</span> One-time license available</li>
+                <li className="flex gap-2"><span className="text-indigo-600">•</span> Per-student monthly billing available</li>
+                <li className="flex gap-2"><span className="text-indigo-600">•</span> Free training & startup included with one-time license</li>
               </ul>
               <div className="mt-6">
                 <a href="mailto:EduTrack46@gmail.com?subject=EduTrack%20Billing%20Inquiry" className="inline-flex items-center gap-2 text-indigo-700 hover:underline">Contact billing →</a>

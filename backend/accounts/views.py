@@ -13,8 +13,14 @@ from django.db.models import Q
 from django.utils.text import slugify
 from django.utils.crypto import get_random_string
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.views import TokenObtainPairView
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
-from .models import School, EmailVerificationToken, NonTeachingStaff, PasswordResetCode
+from .models import School, SchoolDomain, SchoolIntegrationSettings, EmailVerificationToken, DemoRequest, NonTeachingStaff, PasswordResetCode, SystemHealthEvent, MaintenanceNotice
+from django.contrib.auth.hashers import make_password
+from rest_framework.exceptions import AuthenticationFailed
+from django.apps import apps as django_apps
+from django.db.models import ForeignKey, OneToOneField
 from django.core.cache import cache
 from django.template.loader import render_to_string
 from django.conf import settings
@@ -23,13 +29,78 @@ import secrets
 from django.utils import timezone
 from academics.models import Class as Klass
 from academics.models import Student
-from django.db.models import Q
 from django.core.files.storage import default_storage
 from django.core.files.base import ContentFile
 import requests
 from communications.utils import send_email_safe_html, send_email_safe
+from django.utils.dateparse import parse_datetime, parse_date
+from time import perf_counter
+from django.db import connection
+import os
 
 User = get_user_model()
+
+
+def _log_system_health_event(*, school_id: int | None, component: str, ok: bool, context: str = '') -> None:
+    try:
+        SystemHealthEvent.objects.create(
+            school_id=school_id,
+            component=component,
+            ok=bool(ok),
+            context=(context or '')[:255],
+        )
+    except Exception:
+        pass
+
+
+class TokenObtainPairViewWithLogging(TokenObtainPairView):
+    class Serializer(TokenObtainPairSerializer):
+        def validate(self, attrs):
+            data = super().validate(attrs)
+            u = getattr(self, 'user', None)
+            if u is not None:
+                if not (getattr(u, 'is_superuser', False) or getattr(u, 'is_staff', False)):
+                    try:
+                        sch = getattr(u, 'school', None)
+                        is_trial_school = bool(getattr(sch, 'is_trial', False)) if sch is not None else False
+                    except Exception:
+                        is_trial_school = False
+                    if is_trial_school and str(getattr(u, 'role', '') or '').lower() == 'admin':
+                        if not bool(getattr(u, 'email_verified', False)):
+                            raise AuthenticationFailed('Email not verified')
+            return data
+
+    serializer_class = Serializer
+
+    def post(self, request, *args, **kwargs):
+        username = None
+        try:
+            username = (request.data or {}).get('username') or (request.data or {}).get('email')
+        except Exception:
+            username = None
+
+        school_id = None
+        if username:
+            try:
+                u = User.objects.filter(username__iexact=str(username)).only('id', 'school_id').first()
+                school_id = getattr(u, 'school_id', None)
+            except Exception:
+                school_id = None
+
+        try:
+            resp = super().post(request, *args, **kwargs)
+        except Exception as e:
+            _log_system_health_event(school_id=school_id, component=SystemHealthEvent.Component.LOGIN, ok=False, context=f"exception:{type(e).__name__}")
+            raise
+
+        ok = int(getattr(resp, 'status_code', 500) or 500) < 400
+        _log_system_health_event(
+            school_id=school_id,
+            component=SystemHealthEvent.Component.LOGIN,
+            ok=bool(ok),
+            context=f"status:{getattr(resp, 'status_code', '')}",
+        )
+        return resp
 
 @api_view(["GET","PATCH"]) 
 @permission_classes([IsAuthenticated])
@@ -40,6 +111,13 @@ def me(request):
     any of the keys: 'profile_picture', 'avatar', or 'photo'.
     """
     user = request.user
+    try:
+        if not getattr(user, 'is_superuser', False):
+            sch = getattr(user, 'school', None)
+            if sch is not None and getattr(sch, 'is_active', True) is False:
+                return Response({"detail": "School is inactive"}, status=403)
+    except Exception:
+        pass
     if request.method == 'GET':
         return Response(UserSerializer(user, context={"request": request}).data)
 
@@ -901,8 +979,9 @@ def school_teachers_public(request):
     if code:
         qs = qs.filter(school__code=code)
     else:
-        # Prefer school with id=1, else fallback to oldest
-        school = School.objects.filter(id=1).first() or School.objects.order_by('id').first()
+        school = getattr(request, 'school', None)
+        if not school:
+            school = School.objects.filter(id=1).first() or School.objects.order_by('id').first()
         if school:
             qs = qs.filter(school_id=school.id)
         else:
@@ -975,6 +1054,140 @@ def teacher_public_detail(request, id: int):
 
 @api_view(["GET"])
 @permission_classes([AllowAny])
+def site_context(request):
+    """Return whether the current request host resolves to a school.
+
+    Optional query params:
+      - code: school.code to explicitly select a school
+
+    Unlike school_public, this does NOT fall back to the first school.
+    """
+    code = (request.query_params.get('code') or '').strip()
+    school = None
+    if code:
+        school = School.objects.filter(code=code).first()
+    if not school:
+        school = getattr(request, 'school', None)
+    try:
+        if school is not None and getattr(school, 'is_active', True) is False:
+            school = None
+    except Exception:
+        school = None
+    return Response({
+        'has_school': bool(school),
+        'school_id': getattr(school, 'id', None) if school else None,
+        'school_code': getattr(school, 'code', None) if school else None,
+        'school_name': getattr(school, 'name', None) if school else None,
+    })
+
+
+def _get_or_create_maintenance_notice():
+    notice = MaintenanceNotice.objects.order_by('id').first()
+    if notice is not None:
+        return notice
+    try:
+        return MaintenanceNotice.objects.create(enabled=False, message='')
+    except Exception:
+        return MaintenanceNotice.objects.order_by('id').first()
+
+
+def _broadcast_maintenance_alert_to_all_schools(*, sender, body: str) -> None:
+    try:
+        from communications.models import Message, MessageRecipient
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+    except Exception:
+        return
+
+    schools = School.objects.filter(is_active=True).only('id')
+    for s in schools:
+        try:
+            msg = Message.objects.create(
+                school_id=s.id,
+                sender=sender,
+                body=str(body or ''),
+                audience=Message.Audience.ALL,
+                recipient_role=None,
+                reply_to=None,
+                system_tag='Alert',
+                is_broadcast=True,
+            )
+        except Exception:
+            continue
+
+        try:
+            batch = []
+            it = User.objects.filter(school_id=s.id).values_list('id', flat=True).iterator(chunk_size=2000)
+            for uid in it:
+                batch.append(MessageRecipient(message_id=msg.id, user_id=uid))
+                if len(batch) >= 1000:
+                    MessageRecipient.objects.bulk_create(batch, ignore_conflicts=True)
+                    batch = []
+            if batch:
+                MessageRecipient.objects.bulk_create(batch, ignore_conflicts=True)
+        except Exception:
+            pass
+
+
+def _clear_all_alert_broadcasts() -> None:
+    try:
+        from communications.models import Message
+        # Uncheck is_broadcast for all Alert-tagged messages across all schools
+        Message.objects.filter(system_tag__iexact='alert', is_broadcast=True).update(is_broadcast=False)
+    except Exception:
+        pass
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def maintenance_notice(request):
+    notice = _get_or_create_maintenance_notice()
+    return Response({
+        'enabled': bool(getattr(notice, 'enabled', False)),
+        'message': getattr(notice, 'message', '') or '',
+        'updated_at': getattr(notice, 'updated_at', None),
+    })
+
+
+@api_view(["GET", "PATCH"])
+@permission_classes([IsAuthenticated])
+def superadmin_maintenance_notice(request):
+    denied = _require_superuser(request)
+    if denied is not None:
+        return denied
+
+    notice = _get_or_create_maintenance_notice()
+    if notice is None:
+        return Response({'detail': 'Maintenance notice not available'}, status=500)
+
+    if request.method == 'PATCH':
+        data = request.data or {}
+        if 'enabled' in data:
+            notice.enabled = bool(data.get('enabled'))
+        if 'message' in data:
+            notice.message = str(data.get('message') or '')
+        notice.save(update_fields=['enabled', 'message', 'updated_at'])
+        try:
+            if bool(notice.enabled):
+                _broadcast_maintenance_alert_to_all_schools(
+                    sender=request.user,
+                    body=(notice.message or ''),
+                )
+            else:
+                _clear_all_alert_broadcasts()
+            
+        except Exception:
+            pass
+
+    return Response({
+        'enabled': bool(notice.enabled),
+        'message': notice.message or '',
+        'updated_at': notice.updated_at,
+    })
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
 def school_public(request):
     """Public read-only school info for the landing page.
     Optional query params:
@@ -986,7 +1199,8 @@ def school_public(request):
     if code:
         school = School.objects.filter(code=code).first()
     if not school:
-        # Prefer school with id=1, else fallback to oldest
+        school = getattr(request, 'school', None)
+    if not school:
         school = School.objects.filter(id=1).first() or School.objects.order_by('id').first()
     if not school:
         return Response({
@@ -1040,16 +1254,18 @@ def school_info(request):
     return Response(SchoolSerializer(school, context={"request": request}).data)
 
 
-# Public endpoint: create a trial school + admin
-@api_view(["POST"])
-@permission_classes([AllowAny])
-@parser_classes([JSONParser])
-def trial_signup(request):
-    """
-    Create a trial School and an Admin user.
-    Body: {school_name, admin_email, admin_password, admin_first_name, admin_last_name, phone}
-    Returns: {access, refresh, user, school}
-    """
+def _frontend_verify_url(request, token: str) -> str:
+    try:
+        base = getattr(settings, 'FRONTEND_URL', '') or ''
+    except Exception:
+        base = ''
+    base = str(base).rstrip('/')
+    if base:
+        return f"{base}/verify-email?token={token}"
+    return request.build_absolute_uri(f"/api/auth/verify-email/?token={token}")
+
+
+def _handle_demo_request(request):
     data = request.data or {}
     school_name = (data.get('school_name') or '').strip()
     admin_email = (data.get('admin_email') or '').strip().lower()
@@ -1057,92 +1273,54 @@ def trial_signup(request):
     admin_first_name = (data.get('admin_first_name') or '').strip()
     admin_last_name = (data.get('admin_last_name') or '').strip()
     phone = (data.get('phone') or '').strip()
+    domain = (data.get('domain') or '').strip()
     honeypot = (data.get('website') or '').strip()
 
     if not school_name or not admin_email or not admin_password:
         return Response({"detail": "school_name, admin_email and admin_password are required"}, status=400)
-
-    # Honeypot: reject bots that fill hidden field
     if honeypot:
         return Response({"detail": "Invalid submission"}, status=400)
 
-    # Simple IP rate limiting: max 5 attempts per hour per IP
     ip = request.META.get('HTTP_X_FORWARDED_FOR', '').split(',')[0].strip() or request.META.get('REMOTE_ADDR', '')
-    cache_key = f"trial_signup:{ip}"
+    cache_key = f"demo_request:{ip}"
     attempts = cache.get(cache_key, 0)
-    if attempts and int(attempts) >= 5:
+    if attempts and int(attempts) >= 10:
         return Response({"detail": "Rate limit exceeded. Please try again later."}, status=429)
     cache.set(cache_key, int(attempts) + 1, 60 * 60)
 
-    # Generate a unique school code
-    base_code = slugify(school_name)[:30] or 'school'
-    code = base_code
-    i = 1
-    while School.objects.filter(code=code).exists():
-        code = f"{base_code}-{i}"
-        i += 1
+    normalized_domain = _normalize_domain(domain)
+    if normalized_domain and SchoolDomain.objects.filter(domain__iexact=normalized_domain).exists():
+        return Response({"detail": "Domain already in use"}, status=400)
 
-    # Create school
-    # Create school with trial flags
-    school = School.objects.create(
-        name=school_name,
-        code=code,
-        is_trial=True,
-        trial_expires_at=timezone.now() + timedelta(days=14),
-        trial_student_limit=100,
-        feature_flags={"pos": False, "sms": False},
-    )
+    if DemoRequest.objects.filter(admin_email__iexact=admin_email, status=DemoRequest.Status.PENDING).exists():
+        return Response({"detail": "A demo request for this email is already pending"}, status=400)
 
-    # Create admin user
-    username = admin_email
-    if User.objects.filter(username=username).exists():
-        return Response({"detail": "A user with this email already exists"}, status=400)
-
-    user = User.objects.create_user(
-        username=username,
-        email=admin_email,
-        password=admin_password,
-        role='admin',
-        first_name=admin_first_name,
-        last_name=admin_last_name,
+    DemoRequest.objects.create(
+        school_name=school_name,
+        domain=normalized_domain,
+        admin_email=admin_email,
+        admin_first_name=admin_first_name,
+        admin_last_name=admin_last_name,
         phone=phone,
-        school=school,
+        password_hash=make_password(admin_password),
+        status=DemoRequest.Status.PENDING,
     )
+    return Response({"detail": "Demo request submitted"}, status=201)
 
-    # Issue auth tokens
-    refresh = RefreshToken.for_user(user)
-    payload = {
-        "access": str(refresh.access_token),
-        "refresh": str(refresh),
-        "user": UserSerializer(user, context={"request": request}).data,
-        "school": SchoolSerializer(school, context={"request": request}).data,
-    }
-    # Create verification token
-    token = secrets.token_urlsafe(48)
-    EmailVerificationToken.objects.create(
-        user=user,
-        token=token,
-        expires_at=timezone.now() + timedelta(days=3),
-    )
-    verify_url = request.build_absolute_uri(f"/api/auth/verify-email/?token={token}")
-    # Send welcome email (best-effort)
-    try:
-        send_email_safe(
-            subject="Welcome to EduTrack — Your 14‑day trial",
-            message=(
-                f"Hi {admin_first_name or 'there'},\n\n"
-                f"Your trial school '{school.name}' has been created. You can sign in with {admin_email}.\n\n"
-                f"Trial ends on {school.trial_expires_at.date() if school.trial_expires_at else ''}.\n\n"
-                "Please verify your email by opening this link: " + verify_url + "\n\n"
-                "Thanks for trying EduTrack!"
-            ),
-            recipient=admin_email,
-            school_id=getattr(school, 'id', None),
-        )
-    except Exception:
-        pass
 
-    return Response(payload, status=201)
+@api_view(["POST"])
+@permission_classes([AllowAny])
+@parser_classes([JSONParser])
+def request_demo(request):
+    return _handle_demo_request(request)
+
+
+# Public endpoint: create a trial school + admin
+@api_view(["POST"])
+@permission_classes([AllowAny])
+@parser_classes([JSONParser])
+def trial_signup(request):
+    return _handle_demo_request(request)
 
 
 @api_view(["GET"])
@@ -1160,7 +1338,8 @@ def verify_email(request):
         return Response({"detail": "Token expired"}, status=400)
     user = rec.user
     user.email_verified = True
-    user.save(update_fields=['email_verified'])
+    user.is_active = True
+    user.save(update_fields=['email_verified', 'is_active'])
     rec.delete()
     return Response({"detail": "Email verified"})
 
@@ -1198,3 +1377,1122 @@ def logout_all(request):
         return Response({"detail": "Logged out from all sessions", "blacklisted": count})
     except Exception as e:
         return Response({"detail": "Failed to logout all"}, status=500)
+
+
+def _normalize_domain(raw: str) -> str:
+    normalized_domain = str(raw or '').strip().lower()
+    if normalized_domain.startswith('http://'):
+        normalized_domain = normalized_domain[7:]
+    elif normalized_domain.startswith('https://'):
+        normalized_domain = normalized_domain[8:]
+    normalized_domain = normalized_domain.split('/', 1)[0].strip()
+    normalized_domain = normalized_domain.split(':', 1)[0].strip()
+    if normalized_domain.startswith('www.'):
+        normalized_domain = normalized_domain[4:]
+    return normalized_domain
+
+
+def _default_domain_for_school(school) -> str:
+    base = _normalize_domain(getattr(settings, 'TENANT_BASE_DOMAIN', '') or '')
+    if not base:
+        return ''
+    code = (getattr(school, 'code', None) or '').strip().lower()
+    if not code:
+        return ''
+    return f"{code}.{base}"
+
+
+def _create_primary_domain_for_school(school, preferred_domain: str = ''):
+    normalized = _normalize_domain(preferred_domain or '')
+    if normalized:
+        if SchoolDomain.objects.filter(domain__iexact=normalized).exists():
+            raise ValueError('Domain already in use')
+        return SchoolDomain.objects.create(school=school, domain=normalized, is_primary=True)
+
+    base_candidate = _default_domain_for_school(school)
+    if not base_candidate:
+        return None
+    candidate = _normalize_domain(base_candidate)
+    if not candidate:
+        return None
+    if not SchoolDomain.objects.filter(domain__iexact=candidate).exists():
+        return SchoolDomain.objects.create(school=school, domain=candidate, is_primary=True)
+
+    sid = getattr(school, 'id', None)
+    if sid:
+        candidate2 = _normalize_domain(f"{getattr(school, 'code', 'school')}-{sid}.{_normalize_domain(getattr(settings, 'TENANT_BASE_DOMAIN', '') or '')}")
+        if candidate2 and not SchoolDomain.objects.filter(domain__iexact=candidate2).exists():
+            return SchoolDomain.objects.create(school=school, domain=candidate2, is_primary=True)
+
+    i = 2
+    base = _normalize_domain(getattr(settings, 'TENANT_BASE_DOMAIN', '') or '')
+    while base:
+        candidateN = _normalize_domain(f"{getattr(school, 'code', 'school')}-{i}.{base}")
+        if candidateN and not SchoolDomain.objects.filter(domain__iexact=candidateN).exists():
+            return SchoolDomain.objects.create(school=school, domain=candidateN, is_primary=True)
+        i += 1
+        if i > 50:
+            break
+    return None
+
+
+def _require_superuser(request):
+    if not getattr(request.user, 'is_superuser', False):
+        return Response({"detail": "Not allowed"}, status=403)
+    return None
+
+
+def _purge_school_from_db(*, school_id: int) -> None:
+    """Hard-delete a school and as much dependent data as possible."""
+    with transaction.atomic():
+        school = School.objects.select_for_update().filter(id=school_id).first()
+        if school is None:
+            return
+
+        # Resolve core related IDs
+        try:
+            from academics.models import Student, Class as Klass
+        except Exception:
+            Student = None  # type: ignore
+            Klass = None  # type: ignore
+
+        class_ids = []
+        if Klass is not None:
+            try:
+                class_ids = list(Klass.objects.filter(school_id=school_id).values_list('id', flat=True))
+            except Exception:
+                class_ids = []
+
+        student_ids = []
+        if Student is not None:
+            try:
+                student_ids = list(
+                    Student.objects.filter(Q(school_id=school_id) | Q(klass__school_id=school_id)).values_list('id', flat=True)
+                )
+            except Exception:
+                student_ids = []
+
+        user_qs = User.objects.filter(school_id=school_id).exclude(is_superuser=True)
+        user_ids = []
+        try:
+            user_ids = list(user_qs.values_list('id', flat=True))
+        except Exception:
+            user_ids = []
+
+        # Communications
+        try:
+            from communications.models import Message, ArrearsMessageCampaign, Event, DeliveryLog, ServiceReview
+            Message.objects.filter(school_id=school_id).delete()
+            ArrearsMessageCampaign.objects.filter(school_id=school_id).delete()
+            Event.objects.filter(school_id=school_id).delete()
+            DeliveryLog.objects.filter(school_id=school_id).delete()
+            ServiceReview.objects.filter(school_id=school_id).delete()
+        except Exception:
+            pass
+
+        # Finance
+        try:
+            from finance.models import (
+                FeeCategory,
+                ClassFee,
+                StudentFee,
+                Invoice,
+                PaymentMethod,
+                MpesaConfig,
+                IncomingPayment,
+                ExpenseCategory,
+                Expense,
+                StaffPayroll,
+                StaffPayslip,
+                PocketMoneyWallet,
+            )
+            if student_ids:
+                # Invoice delete cascades payments
+                Invoice.objects.filter(student_id__in=student_ids).delete()
+                StudentFee.objects.filter(student_id__in=student_ids).delete()
+                PocketMoneyWallet.objects.filter(student_id__in=student_ids).delete()
+                IncomingPayment.objects.filter(
+                    Q(matched_student_id__in=student_ids) | Q(matched_invoice__student_id__in=student_ids)
+                ).delete()
+            if class_ids:
+                ClassFee.objects.filter(klass_id__in=class_ids).delete()
+
+            StaffPayslip.objects.filter(school_id=school_id).delete()
+            StaffPayroll.objects.filter(school_id=school_id).delete()
+            Expense.objects.filter(school_id=school_id).delete()
+            ExpenseCategory.objects.filter(school_id=school_id).delete()
+            PaymentMethod.objects.filter(school_id=school_id).delete()
+            MpesaConfig.objects.filter(school_id=school_id).delete()
+            # QuerySet.delete bypasses FeeCategory.delete override (which blocks protected categories)
+            FeeCategory.objects.filter(school_id=school_id).delete()
+        except Exception:
+            pass
+
+        # Accounts app dependents
+        try:
+            from .models import NonTeachingStaff
+            NonTeachingStaff.objects.filter(school_id=school_id).delete()
+        except Exception:
+            pass
+        try:
+            EmailVerificationToken.objects.filter(user_id__in=user_ids).delete()
+        except Exception:
+            pass
+        try:
+            DemoRequest.objects.filter(created_school_id=school_id).delete()
+        except Exception:
+            pass
+
+        # Generic cleanup for any other models that directly FK/OneToOne to School.
+        # This covers most academics/reports/etc tables without having to list them manually.
+        for model in django_apps.get_models():
+            try:
+                if model is School or model is User:
+                    continue
+                for field in model._meta.fields:
+                    if isinstance(field, (ForeignKey, OneToOneField)) and getattr(field.remote_field, 'model', None) is School:
+                        model.objects.filter(**{field.name: school_id}).delete()
+                        break
+            except Exception:
+                continue
+
+        # Academics: students are SET_NULL to school/class in a few places; explicitly remove them
+        if Student is not None:
+            try:
+                Student.objects.filter(Q(school_id=school_id) | Q(klass__school_id=school_id)).delete()
+            except Exception:
+                pass
+
+        # Finally remove users and school
+        try:
+            user_qs.delete()
+        except Exception:
+            pass
+        school.delete()
+
+
+def _generate_unique_school_code(school_name: str) -> str:
+    base_code = slugify(school_name)[:30] or 'school'
+    code = base_code
+    i = 1
+    while School.objects.filter(code=code).exists():
+        code = f"{base_code}-{i}"
+        i += 1
+    return code
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def superadmin_demo_requests(request):
+    denied = _require_superuser(request)
+    if denied is not None:
+        return denied
+
+    status_filter = (request.query_params.get('status') or '').strip().lower()
+    q = (request.query_params.get('q') or '').strip()
+
+    qs = DemoRequest.objects.all().select_related('approved_by', 'rejected_by', 'created_school', 'created_user')
+    if status_filter:
+        qs = qs.filter(status__iexact=status_filter)
+    if q:
+        qs = qs.filter(
+            Q(school_name__icontains=q) |
+            Q(admin_email__icontains=q) |
+            Q(domain__icontains=q)
+        )
+    qs = qs.order_by('-created_at', '-id')
+
+    out = []
+    for r in qs[:500]:
+        out.append({
+            'id': r.id,
+            'school_name': r.school_name,
+            'domain': r.domain,
+            'admin_email': r.admin_email,
+            'admin_first_name': r.admin_first_name,
+            'admin_last_name': r.admin_last_name,
+            'phone': r.phone,
+            'status': r.status,
+            'created_at': r.created_at,
+            'approved_at': r.approved_at,
+            'approved_by': getattr(getattr(r, 'approved_by', None), 'username', None),
+            'rejected_at': r.rejected_at,
+            'rejected_by': getattr(getattr(r, 'rejected_by', None), 'username', None),
+            'rejection_reason': r.rejection_reason,
+            'created_school_id': getattr(r.created_school, 'id', None),
+            'created_user_id': getattr(r.created_user, 'id', None),
+        })
+    return Response({'results': out})
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+@parser_classes([JSONParser])
+def superadmin_demo_request_approve(request, id: int):
+    denied = _require_superuser(request)
+    if denied is not None:
+        return denied
+
+    try:
+        with transaction.atomic():
+            try:
+                r = DemoRequest.objects.select_for_update().get(id=id)
+            except DemoRequest.DoesNotExist:
+                return Response({'detail': 'Not found'}, status=404)
+            if r.status != DemoRequest.Status.PENDING:
+                return Response({'detail': 'Only pending requests can be approved'}, status=400)
+
+            if User.objects.filter(username__iexact=r.admin_email).exists():
+                return Response({'detail': 'A user with this email already exists'}, status=400)
+
+            if r.domain and SchoolDomain.objects.filter(domain__iexact=r.domain).exists():
+                return Response({'detail': 'Domain already in use'}, status=400)
+
+            code = _generate_unique_school_code(r.school_name)
+            school = School.objects.create(
+                name=r.school_name,
+                code=code,
+                is_trial=True,
+                trial_expires_at=timezone.now() + timedelta(days=14),
+                trial_student_limit=100,
+                feature_flags={"pos": False, "sms": False},
+            )
+            if r.domain or getattr(settings, 'TENANT_BASE_DOMAIN', None):
+                _create_primary_domain_for_school(school, r.domain)
+
+            user = User(
+                username=r.admin_email,
+                email=r.admin_email,
+                role='admin',
+                first_name=r.admin_first_name,
+                last_name=r.admin_last_name,
+                phone=r.phone,
+                school=school,
+                is_active=True,
+                email_verified=False,
+            )
+            user.password = r.password_hash
+            user.save()
+
+            token = secrets.token_urlsafe(48)
+            EmailVerificationToken.objects.create(
+                user=user,
+                token=token,
+                expires_at=timezone.now() + timedelta(days=3),
+            )
+            verify_url = _frontend_verify_url(request, token)
+
+            r.status = DemoRequest.Status.APPROVED
+            r.approved_at = timezone.now()
+            r.approved_by = request.user
+            r.created_school = school
+            r.created_user = user
+            r.save(update_fields=['status', 'approved_at', 'approved_by', 'created_school', 'created_user'])
+
+        try:
+            send_email_safe(
+                subject='EduTrack demo approved — verify your email',
+                message=(
+                    f"Hi {r.admin_first_name or 'there'},\n\n"
+                    f"Your EduTrack demo request for '{r.school_name}' has been approved.\n\n"
+                    "Please verify your email using this link:\n"
+                    f"{verify_url}\n\n"
+                    "After verifying your email, you can log in using your email and password."
+                ),
+                recipient=r.admin_email,
+                school_id=getattr(school, 'id', None),
+            )
+        except Exception:
+            pass
+
+        return Response({'detail': 'Approved and verification email sent'})
+    except ValueError:
+        return Response({'detail': 'Domain already in use'}, status=400)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+@parser_classes([JSONParser])
+def superadmin_demo_request_reject(request, id: int):
+    denied = _require_superuser(request)
+    if denied is not None:
+        return denied
+
+    with transaction.atomic():
+        try:
+            r = DemoRequest.objects.select_for_update().get(id=id)
+        except DemoRequest.DoesNotExist:
+            return Response({'detail': 'Not found'}, status=404)
+        if r.status != DemoRequest.Status.PENDING:
+            return Response({'detail': 'Only pending requests can be rejected'}, status=400)
+
+        reason = (request.data or {}).get('reason')
+        reason = str(reason or '').strip()
+
+        r.status = DemoRequest.Status.REJECTED
+        r.rejected_at = timezone.now()
+        r.rejected_by = request.user
+        r.rejection_reason = reason
+        r.save(update_fields=['status', 'rejected_at', 'rejected_by', 'rejection_reason'])
+    return Response({'detail': 'Rejected'})
+
+
+@api_view(["GET", "POST"])
+@permission_classes([IsAuthenticated])
+def superadmin_schools(request):
+    denied = _require_superuser(request)
+    if denied is not None:
+        return denied
+
+    if request.method == 'GET':
+        qs = School.objects.all().order_by('id').prefetch_related('domains')
+        data = []
+        for s in qs:
+            domains = list(s.domains.all().order_by('-is_primary', 'id').values('id', 'domain', 'is_primary', 'created_at'))
+            primary = None
+            for d in domains:
+                if d.get('is_primary'):
+                    primary = d.get('domain')
+                    break
+            data.append({
+                'id': s.id,
+                'name': s.name,
+                'code': s.code,
+                'is_active': getattr(s, 'is_active', True),
+                'address': s.address,
+                'motto': s.motto,
+                'aim': s.aim,
+                'social_links': s.social_links,
+                'homepage': s.homepage,
+                'is_trial': s.is_trial,
+                'trial_expires_at': s.trial_expires_at,
+                'trial_student_limit': s.trial_student_limit,
+                'feature_flags': s.feature_flags,
+                'domains': domains,
+                'primary_domain': primary,
+            })
+        return Response({'results': data})
+
+    data = request.data or {}
+    name = (data.get('name') or '').strip()
+    code = (data.get('code') or '').strip()
+    domain = (data.get('domain') or '').strip()
+    if not name:
+        return Response({"detail": "name is required"}, status=400)
+    if not code:
+        base_code = slugify(name)[:30] or 'school'
+        code = base_code
+        i = 1
+        while School.objects.filter(code=code).exists():
+            code = f"{base_code}-{i}"
+            i += 1
+    normalized_domain = _normalize_domain(domain)
+    if normalized_domain and SchoolDomain.objects.filter(domain__iexact=normalized_domain).exists():
+        return Response({"detail": "Domain already in use"}, status=400)
+
+    try:
+        is_trial = bool(data.get('is_trial')) if data.get('is_trial') is not None else True
+    except Exception:
+        is_trial = True
+    try:
+        trial_student_limit = int(data.get('trial_student_limit')) if data.get('trial_student_limit') is not None else 100
+    except Exception:
+        trial_student_limit = 100
+    try:
+        feature_flags = data.get('feature_flags') if isinstance(data.get('feature_flags'), dict) else {}
+    except Exception:
+        feature_flags = {}
+
+    try:
+        with transaction.atomic():
+            school = School.objects.create(
+                name=name,
+                code=code,
+                is_active=True,
+                address=(data.get('address') or ''),
+                motto=(data.get('motto') or ''),
+                aim=(data.get('aim') or ''),
+                social_links=data.get('social_links') if isinstance(data.get('social_links'), dict) else {},
+                homepage=data.get('homepage') if isinstance(data.get('homepage'), dict) else {},
+                is_trial=is_trial,
+                trial_student_limit=trial_student_limit,
+                feature_flags=feature_flags,
+            )
+            if normalized_domain or getattr(settings, 'TENANT_BASE_DOMAIN', None):
+                _create_primary_domain_for_school(school, normalized_domain)
+    except ValueError:
+        return Response({"detail": "Domain already in use"}, status=400)
+
+    return Response({'id': school.id}, status=201)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def superadmin_system_analysis(request):
+    denied = _require_superuser(request)
+    if denied is not None:
+        return denied
+
+    from django.db.models import Max, Count
+    from finance.models import Invoice, Payment
+    from communications.models import Event, DeliveryLog
+
+    def _db_size_bytes():
+        try:
+            vendor = getattr(connection, 'vendor', '')
+        except Exception:
+            vendor = ''
+        try:
+            if vendor == 'postgresql':
+                with connection.cursor() as cur:
+                    cur.execute("SELECT pg_database_size(current_database())")
+                    row = cur.fetchone()
+                    return int(row[0] or 0) if row else 0
+            if vendor == 'sqlite':
+                db_name = (settings.DATABASES.get('default') or {}).get('NAME')
+                if db_name and os.path.exists(db_name):
+                    return int(os.path.getsize(db_name) or 0)
+                return 0
+            if vendor == 'mysql':
+                db = (settings.DATABASES.get('default') or {}).get('NAME')
+                if not db:
+                    return 0
+                with connection.cursor() as cur:
+                    cur.execute(
+                        "SELECT COALESCE(SUM(data_length+index_length),0) FROM information_schema.tables WHERE table_schema=%s",
+                        [db],
+                    )
+                    row = cur.fetchone()
+                    return int(row[0] or 0) if row else 0
+        except Exception:
+            return 0
+        return 0
+
+    now = timezone.now()
+    try:
+        days_param = request.query_params.get('days')
+        window_days = int(days_param) if (days_param and str(days_param).isdigit()) else 30
+        window_days = max(1, min(window_days, 365))
+    except Exception:
+        window_days = 30
+    window_start = now - timedelta(days=window_days)
+
+    deliv_agg = {}
+    try:
+        for row in (
+            DeliveryLog.objects
+            .filter(created_at__gte=window_start)
+            .values('school_id', 'channel', 'ok')
+            .annotate(c=Count('id'))
+        ):
+            sid = row.get('school_id')
+            channel = row.get('channel')
+            ok = bool(row.get('ok'))
+            c = int(row.get('c') or 0)
+            deliv_agg.setdefault(sid, {}).setdefault(channel, {}).setdefault(ok, 0)
+            deliv_agg[sid][channel][ok] += c
+    except Exception:
+        deliv_agg = {}
+
+    event_agg = {}
+    try:
+        for row in (
+            SystemHealthEvent.objects
+            .filter(created_at__gte=window_start)
+            .values('school_id', 'component', 'ok')
+            .annotate(c=Count('id'))
+        ):
+            sid = row.get('school_id')
+            comp = row.get('component')
+            ok = bool(row.get('ok'))
+            c = int(row.get('c') or 0)
+            event_agg.setdefault(sid, {}).setdefault(comp, {}).setdefault(ok, 0)
+            event_agg[sid][comp][ok] += c
+    except Exception:
+        event_agg = {}
+
+    out = []
+    total_db_bytes = _db_size_bytes()
+
+    schools = School.objects.all().order_by('id')
+    for s in schools:
+        sid = s.id
+        is_active = bool(getattr(s, 'is_active', True))
+
+        lat = {}
+        t0 = perf_counter()
+        students_qs = Student.objects.filter(Q(school_id=sid) | Q(klass__school_id=sid)).filter(is_graduated=False).distinct()
+        students_count = students_qs.count()
+        lat['students_count_ms'] = round((perf_counter() - t0) * 1000.0, 2)
+
+        t0 = perf_counter()
+        classes_count = Klass.objects.filter(school_id=sid).count()
+        lat['classes_count_ms'] = round((perf_counter() - t0) * 1000.0, 2)
+
+        t0 = perf_counter()
+        teachers_count = User.objects.filter(role='teacher', school_id=sid, is_active=True).count()
+        lat['teachers_count_ms'] = round((perf_counter() - t0) * 1000.0, 2)
+
+        t0 = perf_counter()
+        invoices_qs = Invoice.objects.filter(student__klass__school_id=sid)
+        invoices_count = invoices_qs.count()
+        lat['invoices_count_ms'] = round((perf_counter() - t0) * 1000.0, 2)
+
+        t0 = perf_counter()
+        payments_qs = Payment.objects.filter(invoice__student__klass__school_id=sid)
+        payments_count = payments_qs.count()
+        lat['payments_count_ms'] = round((perf_counter() - t0) * 1000.0, 2)
+
+        events_qs = Event.objects.filter(school_id=sid)
+        events_count = events_qs.count()
+
+        delivery_qs = DeliveryLog.objects.filter(school_id=sid)
+        delivery_total = delivery_qs.count()
+        delivery_failed = delivery_qs.filter(ok=False).count()
+        delivery_fail_rate = round((delivery_failed / delivery_total) * 100.0, 2) if delivery_total else 0.0
+
+        last_invoice_at = invoices_qs.aggregate(m=Max('created_at')).get('m')
+        last_payment_at = payments_qs.aggregate(m=Max('created_at')).get('m')
+        last_event_at = events_qs.aggregate(m=Max('updated_at')).get('m')
+        last_delivery_at = delivery_qs.aggregate(m=Max('created_at')).get('m')
+
+        last_activity_at = None
+        for dt in [last_payment_at, last_invoice_at, last_event_at, last_delivery_at]:
+            if dt and (last_activity_at is None or dt > last_activity_at):
+                last_activity_at = dt
+
+        days_since_activity = None
+        if last_activity_at:
+            try:
+                days_since_activity = (now - last_activity_at).days
+            except Exception:
+                days_since_activity = None
+
+        data_points = int(
+            (students_count or 0)
+            + (teachers_count or 0)
+            + (classes_count or 0)
+            + (invoices_count or 0)
+            + (payments_count or 0)
+            + (events_count or 0)
+            + (delivery_total or 0)
+        )
+
+        avg_latency_ms = round((sum(lat.values()) / len(lat.values())) if lat else 0.0, 2)
+
+        sms_ok = int(((deliv_agg.get(sid, {}).get('sms', {}) or {}).get(True, 0)) or 0)
+        sms_fail = int(((deliv_agg.get(sid, {}).get('sms', {}) or {}).get(False, 0)) or 0)
+        sms_total = sms_ok + sms_fail
+
+        email_ok = int(((deliv_agg.get(sid, {}).get('email', {}) or {}).get(True, 0)) or 0)
+        email_fail = int(((deliv_agg.get(sid, {}).get('email', {}) or {}).get(False, 0)) or 0)
+        email_total = email_ok + email_fail
+
+        login_ok = int(((event_agg.get(sid, {}).get(SystemHealthEvent.Component.LOGIN, {}) or {}).get(True, 0)) or 0)
+        login_fail = int(((event_agg.get(sid, {}).get(SystemHealthEvent.Component.LOGIN, {}) or {}).get(False, 0)) or 0)
+        login_total = login_ok + login_fail
+
+        mpesa_ok = int(((event_agg.get(sid, {}).get(SystemHealthEvent.Component.PAYMENT_MPESA, {}) or {}).get(True, 0)) or 0)
+        mpesa_fail = int(((event_agg.get(sid, {}).get(SystemHealthEvent.Component.PAYMENT_MPESA, {}) or {}).get(False, 0)) or 0)
+        mpesa_total = mpesa_ok + mpesa_fail
+
+        bank_ok = int(((event_agg.get(sid, {}).get(SystemHealthEvent.Component.PAYMENT_BANK, {}) or {}).get(True, 0)) or 0)
+        bank_fail = int(((event_agg.get(sid, {}).get(SystemHealthEvent.Component.PAYMENT_BANK, {}) or {}).get(False, 0)) or 0)
+        bank_total = bank_ok + bank_fail
+
+        query_threshold_ms = 25.0
+        query_ok = bool(avg_latency_ms <= query_threshold_ms)
+
+        score = 100.0
+        if not is_active:
+            score = 0.0
+        else:
+            if delivery_total >= 10:
+                score -= min(30.0, (delivery_fail_rate / 100.0) * 60.0)
+            if days_since_activity is None:
+                score -= 30.0
+            else:
+                score -= min(40.0, float(max(0, days_since_activity)) * 2.0)
+            score -= min(20.0, avg_latency_ms / 50.0)
+        score = max(0.0, min(100.0, score))
+
+        out.append({
+            'id': sid,
+            'name': s.name,
+            'code': s.code,
+            'is_active': is_active,
+            'is_trial': bool(getattr(s, 'is_trial', False)),
+            'trial_expires_at': s.trial_expires_at,
+            'trial_student_limit': getattr(s, 'trial_student_limit', None),
+            'counts': {
+                'students': students_count,
+                'teachers': teachers_count,
+                'classes': classes_count,
+                'invoices': invoices_count,
+                'payments': payments_count,
+                'events': events_count,
+                'delivery_logs': delivery_total,
+            },
+            'delivery': {
+                'total': delivery_total,
+                'failed': delivery_failed,
+                'fail_rate_pct': delivery_fail_rate,
+                'last_at': last_delivery_at,
+            },
+            'activity': {
+                'last_activity_at': last_activity_at,
+                'days_since_activity': days_since_activity,
+                'last_payment_at': last_payment_at,
+                'last_invoice_at': last_invoice_at,
+                'last_event_at': last_event_at,
+            },
+            'performance': {
+                'avg_latency_ms': avg_latency_ms,
+                'breakdown_ms': lat,
+            },
+            'storage': {
+                'data_points': data_points,
+                'estimated_db_bytes': 0,
+                'estimated_db_gb': 0,
+            },
+            'health_score': round(score, 1),
+            'components': {
+                'window_days': window_days,
+                'sms': {
+                    'total': sms_total,
+                    'failed': sms_fail,
+                    'fail_rate_pct': round((sms_fail / sms_total) * 100.0, 2) if sms_total else 0.0,
+                },
+                'email': {
+                    'total': email_total,
+                    'failed': email_fail,
+                    'fail_rate_pct': round((email_fail / email_total) * 100.0, 2) if email_total else 0.0,
+                },
+                'login': {
+                    'total': login_total,
+                    'failed': login_fail,
+                    'fail_rate_pct': round((login_fail / login_total) * 100.0, 2) if login_total else 0.0,
+                },
+                'payment_mpesa': {
+                    'total': mpesa_total,
+                    'failed': mpesa_fail,
+                    'fail_rate_pct': round((mpesa_fail / mpesa_total) * 100.0, 2) if mpesa_total else 0.0,
+                },
+                'payment_bank': {
+                    'total': bank_total,
+                    'failed': bank_fail,
+                    'fail_rate_pct': round((bank_fail / bank_total) * 100.0, 2) if bank_total else 0.0,
+                },
+                'queries': {
+                    'total': 1,
+                    'failed': 0 if query_ok else 1,
+                    'fail_rate_pct': 0.0 if query_ok else 100.0,
+                    'avg_latency_ms': avg_latency_ms,
+                    'threshold_ms': query_threshold_ms,
+                },
+            },
+        })
+
+    total_points = sum((i.get('storage') or {}).get('data_points') or 0 for i in out) or 0
+    if total_db_bytes > 0 and total_points > 0:
+        for i in out:
+            pts = (i.get('storage') or {}).get('data_points') or 0
+            est = int((total_db_bytes * float(pts)) / float(total_points)) if pts else 0
+            i['storage']['estimated_db_bytes'] = est
+            i['storage']['estimated_db_gb'] = round(est / (1024**3), 4)
+
+    totals = {
+        'schools': len(out),
+        'data_points': total_points,
+        'db_size_bytes': total_db_bytes,
+        'db_size_gb': round(total_db_bytes / (1024**3), 4) if total_db_bytes else 0,
+        'students': sum((i.get('counts') or {}).get('students') or 0 for i in out),
+        'teachers': sum((i.get('counts') or {}).get('teachers') or 0 for i in out),
+        'classes': sum((i.get('counts') or {}).get('classes') or 0 for i in out),
+        'invoices': sum((i.get('counts') or {}).get('invoices') or 0 for i in out),
+        'payments': sum((i.get('counts') or {}).get('payments') or 0 for i in out),
+        'events': sum((i.get('counts') or {}).get('events') or 0 for i in out),
+        'avg_latency_ms': round((sum((i.get('performance') or {}).get('avg_latency_ms') or 0 for i in out) / len(out)) if out else 0.0, 2),
+    }
+
+    def _sum_component(key: str, field: str) -> int:
+        return int(sum((((i.get('components') or {}).get(key) or {}).get(field) or 0) for i in out) or 0)
+
+    query_slow = int(sum(1 for i in out if (((i.get('components') or {}).get('queries') or {}).get('failed') or 0) == 1))
+    components = {
+        'window_days': window_days,
+        'sms': {
+            'total': _sum_component('sms', 'total'),
+            'failed': _sum_component('sms', 'failed'),
+        },
+        'email': {
+            'total': _sum_component('email', 'total'),
+            'failed': _sum_component('email', 'failed'),
+        },
+        'login': {
+            'total': _sum_component('login', 'total'),
+            'failed': _sum_component('login', 'failed'),
+        },
+        'payment_mpesa': {
+            'total': _sum_component('payment_mpesa', 'total'),
+            'failed': _sum_component('payment_mpesa', 'failed'),
+        },
+        'payment_bank': {
+            'total': _sum_component('payment_bank', 'total'),
+            'failed': _sum_component('payment_bank', 'failed'),
+        },
+        'queries': {
+            'total': len(out),
+            'failed': query_slow,
+            'threshold_ms': 25.0,
+        },
+    }
+
+    for k, v in components.items():
+        if k in ('window_days', 'queries'):
+            continue
+        t = int(v.get('total') or 0)
+        f = int(v.get('failed') or 0)
+        v['fail_rate_pct'] = round((f / t) * 100.0, 2) if t else 0.0
+    try:
+        qt = int(components.get('queries', {}).get('total') or 0)
+        qf = int(components.get('queries', {}).get('failed') or 0)
+        components['queries']['fail_rate_pct'] = round((qf / qt) * 100.0, 2) if qt else 0.0
+    except Exception:
+        pass
+
+    return Response({
+        'generated_at': now,
+        'totals': totals,
+        'components': components,
+        'schools': out,
+    })
+
+
+@api_view(["GET", "PATCH", "DELETE"])
+@permission_classes([IsAuthenticated])
+def superadmin_school_detail(request, id: int):
+    denied = _require_superuser(request)
+    if denied is not None:
+        return denied
+
+    try:
+        school = School.objects.prefetch_related('domains').get(id=id)
+    except School.DoesNotExist:
+        return Response({"detail": "Not found"}, status=404)
+
+    if request.method == 'GET':
+        domains = list(school.domains.all().order_by('-is_primary', 'id').values('id', 'domain', 'is_primary', 'created_at'))
+        return Response({
+            'id': school.id,
+            'name': school.name,
+            'code': school.code,
+            'is_active': getattr(school, 'is_active', True),
+            'address': school.address,
+            'motto': school.motto,
+            'aim': school.aim,
+            'social_links': school.social_links,
+            'homepage': school.homepage,
+            'is_trial': school.is_trial,
+            'trial_expires_at': school.trial_expires_at,
+            'trial_student_limit': school.trial_student_limit,
+            'feature_flags': school.feature_flags,
+            'domains': domains,
+        })
+
+    if request.method == 'DELETE':
+        try:
+            _purge_school_from_db(school_id=school.id)
+            return Response(status=204)
+        except Exception as e:
+            return Response({"detail": "Failed to delete school", "error": str(e)}, status=500)
+
+    data = request.data or {}
+    update_fields = []
+    for field in ('name', 'code', 'address', 'motto', 'aim'):
+        if field in data and data.get(field) is not None:
+            setattr(school, field, data.get(field))
+            update_fields.append(field)
+    for field in ('social_links', 'homepage', 'feature_flags'):
+        if field in data and isinstance(data.get(field), dict):
+            setattr(school, field, data.get(field))
+            update_fields.append(field)
+    if 'is_active' in data and data.get('is_active') is not None:
+        school.is_active = bool(data.get('is_active'))
+        update_fields.append('is_active')
+    if 'is_trial' in data and data.get('is_trial') is not None:
+        school.is_trial = bool(data.get('is_trial'))
+        update_fields.append('is_trial')
+    if 'trial_student_limit' in data and data.get('trial_student_limit') is not None:
+        try:
+            school.trial_student_limit = int(data.get('trial_student_limit'))
+            update_fields.append('trial_student_limit')
+        except Exception:
+            return Response({"detail": "Invalid trial_student_limit"}, status=400)
+    if 'trial_expires_at' in data:
+        raw = data.get('trial_expires_at')
+        if raw in (None, ''):
+            school.trial_expires_at = None
+            update_fields.append('trial_expires_at')
+        else:
+            parsed = parse_datetime(str(raw))
+            if parsed is None:
+                d = parse_date(str(raw))
+                if d is not None:
+                    parsed = timezone.datetime(d.year, d.month, d.day, 0, 0, 0)
+            if parsed is None:
+                return Response({"detail": "Invalid trial_expires_at"}, status=400)
+            school.trial_expires_at = parsed
+            update_fields.append('trial_expires_at')
+    if update_fields:
+        school.save(update_fields=list(set(update_fields)))
+    return Response({"detail": "updated"})
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def superadmin_school_add_domain(request, id: int):
+    denied = _require_superuser(request)
+    if denied is not None:
+        return denied
+
+    try:
+        school = School.objects.get(id=id)
+    except School.DoesNotExist:
+        return Response({"detail": "Not found"}, status=404)
+
+    data = request.data or {}
+    domain = _normalize_domain(data.get('domain') or '')
+    if not domain:
+        return Response({"detail": "domain is required"}, status=400)
+    if SchoolDomain.objects.filter(domain__iexact=domain).exists():
+        return Response({"detail": "Domain already in use"}, status=400)
+    try:
+        is_primary = bool(data.get('is_primary'))
+    except Exception:
+        is_primary = False
+
+    with transaction.atomic():
+        if is_primary:
+            SchoolDomain.objects.filter(school_id=school.id, is_primary=True).update(is_primary=False)
+        d = SchoolDomain.objects.create(school=school, domain=domain, is_primary=is_primary)
+    return Response({"id": d.id, "domain": d.domain, "is_primary": d.is_primary}, status=201)
+
+
+@api_view(["PATCH", "DELETE"])
+@permission_classes([IsAuthenticated])
+def superadmin_domain_detail(request, id: int):
+    denied = _require_superuser(request)
+    if denied is not None:
+        return denied
+
+    try:
+        dom = SchoolDomain.objects.select_related('school').get(id=id)
+    except SchoolDomain.DoesNotExist:
+        return Response({"detail": "Not found"}, status=404)
+
+    if request.method == 'DELETE':
+        dom.delete()
+        return Response(status=204)
+
+    data = request.data or {}
+    if 'domain' in data and data.get('domain') is not None:
+        new_domain = _normalize_domain(data.get('domain') or '')
+        if not new_domain:
+            return Response({"detail": "Invalid domain"}, status=400)
+        if SchoolDomain.objects.exclude(id=dom.id).filter(domain__iexact=new_domain).exists():
+            return Response({"detail": "Domain already in use"}, status=400)
+        dom.domain = new_domain
+    if 'is_primary' in data and data.get('is_primary') is not None:
+        make_primary = bool(data.get('is_primary'))
+        with transaction.atomic():
+            if make_primary:
+                SchoolDomain.objects.filter(school_id=dom.school_id, is_primary=True).exclude(id=dom.id).update(is_primary=False)
+            dom.is_primary = make_primary
+            dom.save(update_fields=['domain', 'is_primary'] if 'domain' in data else ['is_primary'])
+        return Response({"detail": "updated"})
+
+    dom.save(update_fields=['domain'])
+    return Response({"detail": "updated"})
+
+
+@api_view(["GET", "PATCH"])
+@permission_classes([IsAuthenticated])
+def superadmin_school_integrations(request, id: int):
+    denied = _require_superuser(request)
+    if denied is not None:
+        return denied
+
+    try:
+        school = School.objects.get(id=id)
+    except School.DoesNotExist:
+        return Response({"detail": "Not found"}, status=404)
+
+    obj, _ = SchoolIntegrationSettings.objects.get_or_create(school=school)
+
+    if request.method == 'GET':
+        return Response({
+            'school_id': school.id,
+            'smtp_host': obj.smtp_host,
+            'smtp_port': obj.smtp_port,
+            'smtp_username': obj.smtp_username,
+            'smtp_use_tls': obj.smtp_use_tls,
+            'smtp_use_ssl': obj.smtp_use_ssl,
+            'smtp_from_email': obj.smtp_from_email,
+            'smtp_password_set': bool(obj.smtp_password),
+            'sms_provider': obj.sms_provider,
+            'at_username': obj.at_username,
+            'at_sender_id': obj.at_sender_id,
+            'at_api_key_set': bool(obj.at_api_key),
+            'updated_at': obj.updated_at,
+        })
+
+    data = request.data or {}
+    update_fields = []
+    for field in ('smtp_host', 'smtp_username', 'smtp_from_email', 'sms_provider', 'at_username', 'at_sender_id'):
+        if field in data and data.get(field) is not None:
+            setattr(obj, field, str(data.get(field) or ''))
+            update_fields.append(field)
+    if 'smtp_port' in data and data.get('smtp_port') is not None:
+        try:
+            obj.smtp_port = int(data.get('smtp_port'))
+            update_fields.append('smtp_port')
+        except Exception:
+            return Response({"detail": "Invalid smtp_port"}, status=400)
+    if 'smtp_use_tls' in data and data.get('smtp_use_tls') is not None:
+        obj.smtp_use_tls = bool(data.get('smtp_use_tls'))
+        update_fields.append('smtp_use_tls')
+    if 'smtp_use_ssl' in data and data.get('smtp_use_ssl') is not None:
+        obj.smtp_use_ssl = bool(data.get('smtp_use_ssl'))
+        update_fields.append('smtp_use_ssl')
+    if 'smtp_password' in data:
+        raw = data.get('smtp_password')
+        if raw is None:
+            pass
+        else:
+            obj.smtp_password = str(raw)
+            update_fields.append('smtp_password')
+    if 'at_api_key' in data:
+        raw = data.get('at_api_key')
+        if raw is None:
+            pass
+        else:
+            obj.at_api_key = str(raw)
+            update_fields.append('at_api_key')
+
+    if update_fields:
+        obj.save(update_fields=list(set(update_fields)))
+    return Response({"detail": "updated"})
+
+
+@api_view(["GET", "PATCH"])
+@permission_classes([IsAuthenticated])
+def superadmin_school_payment_methods(request, id: int):
+    denied = _require_superuser(request)
+    if denied is not None:
+        return denied
+
+    try:
+        school = School.objects.get(id=id)
+    except School.DoesNotExist:
+        return Response({"detail": "Not found"}, status=404)
+
+    from finance.models import PaymentMethod
+
+    if not PaymentMethod.objects.filter(school=school).exists():
+        for key in ['cash', 'mpesa', 'bank', 'cheque']:
+            PaymentMethod.objects.get_or_create(school=school, key=key, defaults={'enabled': True})
+
+    if request.method == 'GET':
+        rows = list(PaymentMethod.objects.filter(school=school).order_by('key').values('id', 'key', 'enabled', 'updated_at'))
+        return Response({'school_id': school.id, 'results': rows})
+
+    data = request.data or {}
+    methods = data.get('methods') if isinstance(data.get('methods'), dict) else None
+    if methods is None:
+        methods = {}
+        for k in ['cash', 'mpesa', 'bank', 'cheque']:
+            if k in data:
+                methods[k] = data.get(k)
+    if not isinstance(methods, dict) or not methods:
+        return Response({"detail": "No methods provided"}, status=400)
+
+    with transaction.atomic():
+        for key, enabled in methods.items():
+            k = str(key).strip().lower()
+            if k not in ('cash', 'mpesa', 'bank', 'cheque'):
+                continue
+            PaymentMethod.objects.update_or_create(
+                school=school,
+                key=k,
+                defaults={'enabled': bool(enabled)},
+            )
+
+    rows = list(PaymentMethod.objects.filter(school=school).order_by('key').values('id', 'key', 'enabled', 'updated_at'))
+    return Response({'school_id': school.id, 'results': rows})
+
+
+@api_view(["GET", "PATCH"])
+@permission_classes([IsAuthenticated])
+def superadmin_school_mpesa_config(request, id: int):
+    denied = _require_superuser(request)
+    if denied is not None:
+        return denied
+
+    try:
+        school = School.objects.get(id=id)
+    except School.DoesNotExist:
+        return Response({"detail": "Not found"}, status=404)
+
+    from finance.models import MpesaConfig
+
+    cfg = MpesaConfig.objects.filter(school=school).first()
+
+    if request.method == 'GET':
+        if not cfg:
+            return Response({'school_id': school.id, 'exists': False})
+        return Response({
+            'school_id': school.id,
+            'exists': True,
+            'environment': cfg.environment,
+            'short_code': cfg.short_code,
+            'callback_url': cfg.callback_url,
+            'consumer_key': cfg.consumer_key,
+            'consumer_secret_set': bool(cfg.consumer_secret),
+            'passkey_set': bool(cfg.passkey),
+            'updated_at': cfg.updated_at,
+        })
+
+    data = request.data or {}
+    fields = {}
+    for k in ('consumer_key', 'short_code', 'callback_url', 'environment'):
+        if k in data and data.get(k) is not None:
+            fields[k] = str(data.get(k) or '')
+    for k in ('consumer_secret', 'passkey'):
+        if k in data:
+            raw = data.get(k)
+            if raw is None:
+                continue
+            fields[k] = str(raw)
+
+    if not cfg:
+        required = ['consumer_key', 'consumer_secret', 'short_code', 'passkey']
+        if not all(fields.get(r) for r in required):
+            return Response({"detail": "Missing required fields"}, status=400)
+        cfg = MpesaConfig.objects.create(school=school, **fields)
+    else:
+        for k, v in fields.items():
+            setattr(cfg, k, v)
+        cfg.save()
+
+    return Response({
+        'school_id': school.id,
+        'exists': True,
+        'environment': cfg.environment,
+        'short_code': cfg.short_code,
+        'callback_url': cfg.callback_url,
+        'consumer_key': cfg.consumer_key,
+        'consumer_secret_set': bool(cfg.consumer_secret),
+        'passkey_set': bool(cfg.passkey),
+        'updated_at': cfg.updated_at,
+    })

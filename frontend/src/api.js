@@ -12,6 +12,15 @@ const api = axios.create({
 api.interceptors.request.use(config => {
   const token = localStorage.getItem('access')
   if (token) config.headers.Authorization = `Bearer ${token}`
+  try {
+    if (typeof window !== 'undefined') {
+      const h = String(window.location?.host || '').trim()
+      if (h) {
+        config.headers = config.headers || {}
+        if (!config.headers['X-Forwarded-Host']) config.headers['X-Forwarded-Host'] = h
+      }
+    }
+  } catch {}
   try { if (!config._skipGlobalLoading && typeof window !== 'undefined') window.dispatchEvent(new Event('api:request:start')) } catch {}
   return config
 })
