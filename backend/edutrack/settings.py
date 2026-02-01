@@ -2,6 +2,7 @@ import os
 from pathlib import Path
 from datetime import timedelta
 from dotenv import load_dotenv
+from corsheaders.defaults import default_headers
 import dj_database_url
 from urllib.parse import urlparse
 
@@ -267,6 +268,11 @@ else:
 
 CORS_ALLOW_ALL_ORIGINS = os.getenv('CORS_ALLOW_ALL_ORIGINS', 'True') == 'True'
 CORS_ALLOWED_ORIGINS = [o for o in os.getenv('CORS_ALLOWED_ORIGINS', '').split(',') if o]
+
+# Allow frontend to send host hint for multi-tenant resolution
+CORS_ALLOW_HEADERS = list(default_headers) + [
+    'x-forwarded-host',
+]
 
 # Ensure ngrok origin is allowed for CORS when not fully open
 if not CORS_ALLOW_ALL_ORIGINS:
