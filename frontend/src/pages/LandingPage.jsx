@@ -271,7 +271,7 @@ export default function LandingPage() {
               highlight: true,
               ribbon: 'One-time',
               detailsPath: '/pricing/one-time-license',
-              features: ['All rights & permissions', '1 year support', 'Free training & startup', 'All modules included']
+              features: ['All rights & permissions', '1 year support', 'Free training & startup', 'All modules included', 'Domain (System Domain) required']
             },
             {
               slug: 'per-student',
@@ -280,7 +280,7 @@ export default function LandingPage() {
               highlight: false,
               ribbon: 'Hot',
               detailsPath: '/pricing/per-student-monthly',
-              features: ['Billed monthly based on active students', 'Platform access & updates', 'Ideal for growing schools', 'Support available while subscribed']
+              features: ['Billed monthly based on active students', 'Platform access & updates', 'Ideal for growing schools', 'Support available while subscribed', 'Domain (System Domain) required']
             }
           ].map((p) => {
             const priceText = p.priceText

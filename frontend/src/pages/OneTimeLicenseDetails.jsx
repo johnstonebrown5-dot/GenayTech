@@ -50,6 +50,13 @@ export default function OneTimeLicenseDetails() {
             </section>
 
             <section>
+              <h2 className="text-lg font-semibold text-slate-900">Account setup requirements</h2>
+              <ul className="mt-3 list-disc pl-5 text-sm text-slate-700 space-y-2">
+                <li>Domain (System Domain) must be configured in account settings.</li>
+              </ul>
+            </section>
+
+            <section>
               <h2 className="text-lg font-semibold text-slate-900">Terms & conditions (summary)</h2>
               <ul className="mt-3 list-disc pl-5 text-sm text-slate-700 space-y-2">
                 <li>Payment is a one-time license fee of KSh 500,000.</li>

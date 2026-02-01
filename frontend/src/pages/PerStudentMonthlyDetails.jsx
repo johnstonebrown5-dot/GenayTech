@@ -50,6 +50,13 @@ export default function PerStudentMonthlyDetails() {
             </section>
 
             <section>
+              <h2 className="text-lg font-semibold text-slate-900">Account setup requirements</h2>
+              <ul className="mt-3 list-disc pl-5 text-sm text-slate-700 space-y-2">
+                <li>Domain (System Domain) must be configured in account settings.</li>
+              </ul>
+            </section>
+
+            <section>
               <h2 className="text-lg font-semibold text-slate-900">Support</h2>
               <ul className="mt-3 list-disc pl-5 text-sm text-slate-700 space-y-2">
                 <li>Support is available while subscribed.</li>
