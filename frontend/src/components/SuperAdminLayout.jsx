@@ -18,6 +18,7 @@ export default function SuperAdminLayout({ children }){
   const navigate = useNavigate()
   const { user, logout } = useAuth()
   const [displayUser, setDisplayUser] = useState(user)
+  const [avatarUrl, setAvatarUrl] = useState('')
   const [isOpen, setIsOpen] = useState(true)
   const [isMobileOpen, setIsMobileOpen] = useState(false)
 
@@ -26,15 +27,27 @@ export default function SuperAdminLayout({ children }){
   useEffect(() => { setDisplayUser(user) }, [user])
 
   useEffect(() => {
+    const u = displayUser || user || {}
+    const a = u.avatar_url || u.profile_picture_url || ''
+    if (a) setAvatarUrl(a)
+  }, [displayUser, user])
+
+  useEffect(() => {
     const onUpdated = (e) => {
       const email = e?.detail?.email
       const username = e?.detail?.username
+      const url = e?.detail?.avatar_url
+      if (url) setAvatarUrl(url)
       if (email || username) {
         setDisplayUser(prev => ({ ...(prev || {}), ...(email ? { email } : {}), ...(username ? { username } : {}) }))
-        return
+        if (url) return
       }
       api.get('/auth/me/', { _skipGlobalLoading: true })
-        .then(res => { setDisplayUser(res?.data || user) })
+        .then(res => {
+          setDisplayUser(res?.data || user)
+          const a = res?.data?.avatar_url || res?.data?.profile_picture_url || ''
+          if (a) setAvatarUrl(a)
+        })
         .catch(() => {})
     }
     try { window.addEventListener('profile:updated', onUpdated) } catch {}
@@ -99,7 +112,13 @@ export default function SuperAdminLayout({ children }){
 
           <div className="mt-auto p-3 border-t border-slate-200">
             <div className={`items-center gap-3 ${isOpen ? 'flex' : 'hidden'}`}>
-              <div className="h-9 w-9 rounded-xl bg-slate-100" />
+              <div className="h-9 w-9 rounded-xl overflow-hidden bg-slate-100 flex items-center justify-center">
+                {avatarUrl ? (
+                  <img src={avatarUrl} alt="Avatar" className="h-full w-full object-cover" />
+                ) : (
+                  <span className="text-slate-700 text-xs font-semibold">{String((displayUser?.first_name || displayUser?.username || 'U')[0] || 'U').toUpperCase()}</span>
+                )}
+              </div>
               <div className="min-w-0">
                 <div className="text-xs font-semibold text-slate-700 truncate">{displayUser?.email || displayUser?.username || ''}</div>
                 <div className="text-[11px] text-slate-500 truncate">Signed in</div>
