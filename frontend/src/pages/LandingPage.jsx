@@ -296,12 +296,7 @@ export default function LandingPage() {
               )}
               <div className="flex items-center justify-between">
                 <h3 className="text-lg font-semibold text-gray-900">{p.name}</h3>
-                <div className="flex items-center gap-2">
-                  {p.highlight && <span className="text-xs font-semibold text-indigo-700 bg-indigo-100 px-2 py-1 rounded-full">{p.ribbon || 'Most popular'}</span>}
-                  <Link to={p.detailsPath} className="text-xs font-semibold px-2 py-1 rounded-full border border-gray-200 text-gray-700 hover:bg-gray-50">
-                    Learn more
-                  </Link>
-                </div>
+                {p.highlight && <span className="text-xs font-semibold text-indigo-700 bg-indigo-100 px-2 py-1 rounded-full">{p.ribbon || 'Most popular'}</span>}
               </div>
               <div className="mt-4 text-3xl font-extrabold text-gray-900 tracking-tight">
                 <span className="inline-block transition-all duration-300 will-change-transform" key={priceText}>{priceText}</span>
@@ -317,10 +312,13 @@ export default function LandingPage() {
                   )
                 })}
               </ul>
-              <div className="mt-6">
-                <a href={`mailto:EduTrack46@gmail.com?subject=EduTrack%20Pricing%20-%20${p.name}`} className={`w-full inline-flex justify-center items-center h-10 px-4 rounded-lg font-medium ${p.highlight ? 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm' : 'border border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-gray-400 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800'}`}>
+              <div className="mt-6 flex gap-3">
+                <a href={`mailto:EduTrack46@gmail.com?subject=EduTrack%20Pricing%20-%20${p.name}`} className={`flex-1 inline-flex justify-center items-center h-10 px-4 rounded-lg font-medium ${p.highlight ? 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm' : 'border border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-gray-400 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800'}`}>
                   Talk to Sales
                 </a>
+                <Link to={p.detailsPath} className="inline-flex justify-center items-center h-10 px-4 rounded-lg font-medium border border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-gray-400">
+                  Learn more
+                </Link>
               </div>
             </div>
           )})}

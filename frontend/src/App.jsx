@@ -147,8 +147,6 @@ function SuperuserRoute({ children }) {
 }
 
 function PublicRoot() {
-  const [loading, setLoading] = React.useState(true)
-  const [hasSchool, setHasSchool] = React.useState(false)
   const [code, setCode] = React.useState(() => {
     try {
       const params = new URLSearchParams(String(window?.location?.search || ''))
@@ -166,33 +164,10 @@ function PublicRoot() {
     return ''
   })
 
-  React.useEffect(() => {
-    let mounted = true
-    ;(async () => {
-      try {
-        const c = code
-        if (mounted) setCode(c)
-        const res = await api.get('/auth/site-context/', {
-          params: c ? { code: c } : {},
-          _skipGlobalLoading: true,
-        })
-        const data = res?.data
-        if (!mounted) return
-        setHasSchool(Boolean(data?.has_school))
-      } catch {
-        if (!mounted) return
-        setHasSchool(Boolean(code))
-      } finally {
-        if (mounted) setLoading(false)
-      }
-    })()
-    return () => { mounted = false }
-  }, [code])
-
-  // If a school code is implied by the URL (subdomain or ?code=), show the school website immediately.
+  // If a school code is implied by the URL (subdomain or ?code=), show the school website.
+  // Otherwise always show the public landing page at '/'.
   if (code) return <SchoolHome />
-  if (loading) return <LandingPage />
-  return hasSchool ? <SchoolHome /> : <LandingPage />
+  return <LandingPage />
 }
 
 export default function App() {
