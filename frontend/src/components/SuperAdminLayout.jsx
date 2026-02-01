@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth'
+import api from '../api'
 
 const navItems = [
   { to: '/superadmin', label: 'Dashboard', icon: '🛡️' },
@@ -9,16 +10,36 @@ const navItems = [
   { to: '/superadmin/analysis', label: 'System Analysis', icon: '📊' },
   { to: '/superadmin/maintenance', label: 'Maintenance', icon: '🛠️' },
   { to: '/superadmin/system-config', label: 'System Domain', icon: '🌐' },
+  { to: '/superadmin/profile', label: 'My Profile', icon: '👤' },
 ]
 
 export default function SuperAdminLayout({ children }){
   const { pathname } = useLocation()
   const navigate = useNavigate()
   const { user, logout } = useAuth()
+  const [displayUser, setDisplayUser] = useState(user)
   const [isOpen, setIsOpen] = useState(true)
   const [isMobileOpen, setIsMobileOpen] = useState(false)
 
   useEffect(() => { setIsMobileOpen(false) }, [pathname])
+
+  useEffect(() => { setDisplayUser(user) }, [user])
+
+  useEffect(() => {
+    const onUpdated = (e) => {
+      const email = e?.detail?.email
+      const username = e?.detail?.username
+      if (email || username) {
+        setDisplayUser(prev => ({ ...(prev || {}), ...(email ? { email } : {}), ...(username ? { username } : {}) }))
+        return
+      }
+      api.get('/auth/me/', { _skipGlobalLoading: true })
+        .then(res => { setDisplayUser(res?.data || user) })
+        .catch(() => {})
+    }
+    try { window.addEventListener('profile:updated', onUpdated) } catch {}
+    return () => { try { window.removeEventListener('profile:updated', onUpdated) } catch {} }
+  }, [user])
 
   const Item = ({ to, label, icon, forceLabel = false }) => {
     const normalizePath = (p) => String(p || '').replace(/\/+$/, '') || '/'
@@ -80,7 +101,7 @@ export default function SuperAdminLayout({ children }){
             <div className={`items-center gap-3 ${isOpen ? 'flex' : 'hidden'}`}>
               <div className="h-9 w-9 rounded-xl bg-slate-100" />
               <div className="min-w-0">
-                <div className="text-xs font-semibold text-slate-700 truncate">{user?.email || user?.username || ''}</div>
+                <div className="text-xs font-semibold text-slate-700 truncate">{displayUser?.email || displayUser?.username || ''}</div>
                 <div className="text-[11px] text-slate-500 truncate">Signed in</div>
               </div>
             </div>

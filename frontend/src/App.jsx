@@ -91,6 +91,7 @@ import SuperAdminDemoRequests from './pages/SuperAdminDemoRequests'
 import SuperAdminSchools from './pages/SuperAdminSchools'
 import SuperAdminAnalysis from './pages/SuperAdminAnalysis'
 import SuperAdminMaintenance from './pages/SuperAdminMaintenance'
+import SuperAdminProfile from './pages/SuperAdminProfile'
 import { AssistantProvider } from './components/Assistant/AssistantContext'
 import FloatingButton from './components/Assistant/FloatingButton'
 import AssistantPanel from './components/Assistant/AssistantPanel'
@@ -317,6 +318,7 @@ export default function App() {
               <Route path="analysis" element={<SuperAdminAnalysis/>} />
               <Route path="maintenance" element={<SuperAdminMaintenance/>} />
               <Route path="system-config" element={<SuperAdminSystemConfig/>} />
+              <Route path="profile" element={<SuperAdminProfile/>} />
             </Route>
             <Route path="/admin" element={<ProtectedRoute roles={["admin"]}><AdminLayout><Outlet/></AdminLayout></ProtectedRoute>}>
               <Route index element={<AdminDashboard/>} />
