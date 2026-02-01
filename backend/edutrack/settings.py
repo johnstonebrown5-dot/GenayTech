@@ -297,7 +297,10 @@ EMAIL_LOOPBACK = os.getenv('EMAIL_LOOPBACK', 'False') == 'True'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Frontend base URL for welcome page login button
-FRONTEND_URL = os.getenv('FRONTEND_URL', os.getenv('VITE_API_BASE_URL', 'http://localhost:5173'))
+if DEBUG:
+    FRONTEND_URL = os.getenv('FRONTEND_URL', os.getenv('VITE_API_BASE_URL', 'http://localhost:5173'))
+else:
+    FRONTEND_URL = os.getenv('FRONTEND_URL', '')
 
 # Africa's Talking (SMS) configuration
 AT_USERNAME = os.getenv('AT_USERNAME', 'sandbox')

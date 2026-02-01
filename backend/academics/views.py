@@ -671,7 +671,7 @@ class ClassViewSet(viewsets.ModelViewSet):
             ok = False
             try:
                 if rec.channel == 'sms':
-                    ok = send_sms(str(rec.recipient), msg)
+                    ok = send_sms(str(rec.recipient), msg, school_id=school_id)
                 elif rec.channel == 'email':
                     ok = send_email_safe('Delivery retry', msg, str(rec.recipient), school_id=school_id)
             except Exception:
@@ -2975,9 +2975,15 @@ class ExamViewSet(viewsets.ModelViewSet):
                     avg = round(total / data['count'], 2) if data['count'] else 0.0
                     # Build dashboard URL for students
                     try:
-                        frontend_base = getattr(settings, 'FRONTEND_URL', 'http://localhost:5173')
+                        frontend_base = getattr(settings, 'FRONTEND_URL', '')
                     except Exception:
-                        frontend_base = 'http://localhost:5173'
+                        frontend_base = ''
+                    frontend_base = str(frontend_base or '').rstrip('/')
+                    if not frontend_base:
+                        if getattr(settings, 'DEBUG', False):
+                            frontend_base = 'http://localhost:5173'
+                        else:
+                            frontend_base = request.build_absolute_uri('/').rstrip('/')
                     dashboard_url = f"{frontend_base.rstrip('/')}/student"
 
                     # SMS with per-subject marks

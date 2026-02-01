@@ -222,7 +222,7 @@ class DeliveryLogViewSet(viewsets.ReadOnlyModelViewSet):
                     ok = send_sms(rec.recipient, rec.message_snippet or '', school_id=getattr(rec, 'school_id', None) or school_id)
                 elif rec.channel == 'email':
                     subj = "Delivery retry"
-                    ok = send_email_safe(subj, rec.message_snippet or '', rec.recipient, school_id=getattr(rec, 'school_id', None))
+                    ok = send_email_safe(subj, rec.message_snippet or '', rec.recipient, school_id=getattr(rec, 'school_id', None) or school_id)
             except Exception:
                 ok = False
             try:

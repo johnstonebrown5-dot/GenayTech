@@ -15,7 +15,13 @@ def health(_request):
 
 def spa_redirect(request, path: str = ""):
     # Redirect any non-API route to the frontend, preserving path and query
-    frontend = getattr(settings, 'FRONTEND_URL', 'http://localhost:5173').rstrip('/')
+    frontend = str(getattr(settings, 'FRONTEND_URL', '') or '').rstrip('/')
+    if not frontend:
+        if getattr(settings, 'DEBUG', False):
+            frontend = 'http://localhost:5173'
+        else:
+            # Fallback to current request origin (behind proxies, SECURE_PROXY_SSL_HEADER handles scheme)
+            frontend = request.build_absolute_uri('/').rstrip('/')
     target = f"{frontend}/{path}" if path else f"{frontend}/"
     query = request.META.get('QUERY_STRING')
     if query:

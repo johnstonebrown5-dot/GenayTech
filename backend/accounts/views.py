@@ -1313,7 +1313,9 @@ def _frontend_verify_url(request, token: str) -> str:
     except Exception:
         base = ''
     base = str(base).rstrip('/')
-    if base:
+    # Never emit localhost-based links (common when env vars are missing in production)
+    lowered = base.lower()
+    if base and (('localhost' not in lowered) and ('127.0.0.1' not in lowered)):
         return f"{base}/verify-email?token={token}"
     return request.build_absolute_uri(f"/api/auth/verify-email/?token={token}")
 
