@@ -8,6 +8,7 @@ const navItems = [
   { to: '/superadmin/schools', label: 'Schools', icon: '🏫' },
   { to: '/superadmin/analysis', label: 'System Analysis', icon: '📊' },
   { to: '/superadmin/maintenance', label: 'Maintenance', icon: '🛠️' },
+  { to: '/superadmin/system-config', label: 'System Domain', icon: '🌐' },
 ]
 
 export default function SuperAdminLayout({ children }){

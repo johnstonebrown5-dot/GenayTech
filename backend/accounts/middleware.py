@@ -20,6 +20,19 @@ class SchoolDomainMiddleware(MiddlewareMixin):
 
         host_no_www = host[4:] if host.startswith('www.') else host
 
+        base = str(getattr(settings, 'TENANT_BASE_DOMAIN', '') or '').strip().lower().lstrip('.')
+        try:
+            from .models import SystemConfig
+            cfg = SystemConfig.objects.order_by('id').only('default_domain').first()
+            if cfg is not None and str(getattr(cfg, 'default_domain', '') or '').strip():
+                base = str(getattr(cfg, 'default_domain') or '').strip().lower().lstrip('.')
+        except Exception:
+            pass
+
+        if base and host_no_www in (base, f"www.{base}"):
+            request.school = None
+            return None
+
         try:
             domain_obj = (
                 SchoolDomain.objects.select_related('school')
@@ -33,7 +46,6 @@ class SchoolDomainMiddleware(MiddlewareMixin):
                     .first()
                 )
 
-            base = str(getattr(settings, 'TENANT_BASE_DOMAIN', '') or '').strip().lower().lstrip('.')
             is_tenant_subdomain = False
             try:
                 if base and host.endswith(f".{base}") and host not in (base, f"www.{base}"):

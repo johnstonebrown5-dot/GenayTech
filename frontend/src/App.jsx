@@ -100,6 +100,7 @@ import LockProvider from './components/LockProvider'
 import PublicReceipt from './pages/PublicReceipt'
 import OneTimeLicenseDetails from './pages/OneTimeLicenseDetails'
 import PerStudentMonthlyDetails from './pages/PerStudentMonthlyDetails'
+import SuperAdminSystemConfig from './pages/SuperAdminSystemConfig'
 import NotFound from './pages/NotFound'
 import Unauthorized from './pages/Unauthorized'
 import ReAuth from './pages/ReAuth'
@@ -147,27 +148,50 @@ function SuperuserRoute({ children }) {
 }
 
 function PublicRoot() {
-  const [code, setCode] = React.useState(() => {
-    try {
-      const params = new URLSearchParams(String(window?.location?.search || ''))
-      const qp = (params.get('code') || '').trim()
-      if (qp) return qp
-      const hostname = String(window?.location?.hostname || '').toLowerCase()
-      const parts = hostname.split('.').filter(Boolean)
-      const systemSubdomains = new Set(['www', 'app', 'admin', 'api'])
-      const sub = parts[0]
-      if (!sub || systemSubdomains.has(sub)) return ''
-      if (parts.length >= 2 && hostname.endsWith('.localhost')) return sub
-      if (parts.length >= 2 && hostname.endsWith('.lvh.me')) return sub
-      if (parts.length >= 3) return sub
-    } catch {}
-    return ''
-  })
+  const [state, setState] = React.useState({ loading: true, showSchool: false })
 
-  // If a school code is implied by the URL (subdomain or ?code=), show the school website.
-  // Otherwise always show the public landing page at '/'.
-  if (code) return <SchoolHome />
-  return <LandingPage />
+  React.useEffect(() => {
+    let mounted = true
+    ;(async () => {
+      try {
+        const params = new URLSearchParams(String(window?.location?.search || ''))
+        const qpCode = (params.get('code') || '').trim()
+        if (qpCode) {
+          if (mounted) setState({ loading: false, showSchool: true })
+          return
+        }
+
+        const host = String(window?.location?.hostname || '').trim().toLowerCase()
+
+        let defaultDomain = ''
+        try {
+          const res = await api.get('/auth/system-config/', { _skipGlobalLoading: true })
+          defaultDomain = String(res?.data?.default_domain || '').trim().toLowerCase()
+        } catch {
+          defaultDomain = ''
+        }
+
+        const hostNoWww = host.startsWith('www.') ? host.slice(4) : host
+        const defaultNoWww = defaultDomain.startsWith('www.') ? defaultDomain.slice(4) : defaultDomain
+        const isDefaultHost = Boolean(defaultNoWww) && hostNoWww === defaultNoWww
+        if (isDefaultHost) {
+          if (mounted) setState({ loading: false, showSchool: false })
+          return
+        }
+
+        const ctx = await api.get('/auth/site-context/', { _skipGlobalLoading: true })
+        const hasSchool = Boolean(ctx?.data?.has_school)
+        if (mounted) setState({ loading: false, showSchool: hasSchool })
+      } catch {
+        if (mounted) setState({ loading: false, showSchool: false })
+      }
+    })()
+
+    return () => { mounted = false }
+  }, [])
+
+  if (state.loading) return <LandingPage />
+  return state.showSchool ? <SchoolHome /> : <LandingPage />
 }
 
 export default function App() {
@@ -292,6 +316,7 @@ export default function App() {
               <Route path="schools" element={<SuperAdminSchools/>} />
               <Route path="analysis" element={<SuperAdminAnalysis/>} />
               <Route path="maintenance" element={<SuperAdminMaintenance/>} />
+              <Route path="system-config" element={<SuperAdminSystemConfig/>} />
             </Route>
             <Route path="/admin" element={<ProtectedRoute roles={["admin"]}><AdminLayout><Outlet/></AdminLayout></ProtectedRoute>}>
               <Route index element={<AdminDashboard/>} />

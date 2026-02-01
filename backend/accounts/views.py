@@ -16,7 +16,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
-from .models import School, SchoolDomain, SchoolIntegrationSettings, EmailVerificationToken, DemoRequest, NonTeachingStaff, PasswordResetCode, SystemHealthEvent, MaintenanceNotice
+from .models import School, SchoolDomain, SchoolIntegrationSettings, EmailVerificationToken, DemoRequest, NonTeachingStaff, PasswordResetCode, SystemHealthEvent, MaintenanceNotice, SystemConfig
 from django.contrib.auth.hashers import make_password
 from rest_framework.exceptions import AuthenticationFailed
 from django.apps import apps as django_apps
@@ -1149,6 +1149,36 @@ def maintenance_notice(request):
     })
 
 
+def _get_or_create_system_config():
+    cfg = SystemConfig.objects.order_by('id').first()
+    if cfg is not None:
+        return cfg
+    try:
+        return SystemConfig.objects.create(default_domain='')
+    except Exception:
+        return SystemConfig.objects.order_by('id').first()
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def system_config_public(request):
+    cfg = _get_or_create_system_config()
+    default_domain = ''
+    try:
+        default_domain = (cfg.default_domain or '').strip().lower()
+    except Exception:
+        default_domain = ''
+    if not default_domain:
+        try:
+            default_domain = str(getattr(settings, 'TENANT_BASE_DOMAIN', '') or '').strip().lower().lstrip('.')
+        except Exception:
+            default_domain = ''
+    return Response({
+        'default_domain': default_domain or '',
+        'updated_at': getattr(cfg, 'updated_at', None) if cfg else None,
+    })
+
+
 @api_view(["GET", "PATCH"])
 @permission_classes([IsAuthenticated])
 def superadmin_maintenance_notice(request):
@@ -1183,6 +1213,29 @@ def superadmin_maintenance_notice(request):
         'enabled': bool(notice.enabled),
         'message': notice.message or '',
         'updated_at': notice.updated_at,
+    })
+
+
+@api_view(["GET", "PATCH"])
+@permission_classes([IsAuthenticated])
+def superadmin_system_config(request):
+    denied = _require_superuser(request)
+    if denied is not None:
+        return denied
+
+    cfg = _get_or_create_system_config()
+    if cfg is None:
+        return Response({'detail': 'System config not available'}, status=500)
+
+    if request.method == 'PATCH':
+        data = request.data or {}
+        if 'default_domain' in data:
+            cfg.default_domain = str(data.get('default_domain') or '')
+        cfg.save(update_fields=['default_domain', 'updated_at'])
+
+    return Response({
+        'default_domain': cfg.default_domain or '',
+        'updated_at': cfg.updated_at,
     })
 
 

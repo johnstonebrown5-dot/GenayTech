@@ -203,3 +203,25 @@ class MaintenanceNotice(models.Model):
 
     def __str__(self):
         return f"Maintenance: {'ON' if self.enabled else 'OFF'}"
+
+
+class SystemConfig(models.Model):
+    default_domain = models.CharField(max_length=255, blank=True, default='')
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def save(self, *args, **kwargs):
+        if self.default_domain:
+            d = str(self.default_domain).strip().lower()
+            if d.startswith('http://'):
+                d = d[7:]
+            elif d.startswith('https://'):
+                d = d[8:]
+            d = d.split('/', 1)[0].strip()
+            d = d.split(':', 1)[0].strip()
+            if d.startswith('www.'):
+                d = d[4:]
+            self.default_domain = d
+        return super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"SystemConfig({self.default_domain or 'unset'})"
