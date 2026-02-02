@@ -400,6 +400,9 @@ class Exam(models.Model):
     # Derive school from class -> school for scoping
     published = models.BooleanField(default=False)
     published_at = models.DateTimeField(null=True, blank=True)
+    is_deleted = models.BooleanField(default=False, db_index=True)
+    deleted_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    deleted_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='deleted_exams')
     # Snapshot the grade level at the time the exam was created to avoid issues after promotions
     grade_level_tag = models.CharField(max_length=20, blank=True, db_index=True, help_text="Grade level at the time the exam was set (e.g., 'Grade 4')")
 
@@ -534,6 +537,9 @@ class AcademicYear(models.Model):
     start_date = models.DateField()
     end_date = models.DateField()
     is_current = models.BooleanField(default=False)
+    is_deleted = models.BooleanField(default=False, db_index=True)
+    deleted_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    deleted_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='deleted_academic_years')
 
     class Meta:
         unique_together = ("school", "label")
@@ -889,6 +895,9 @@ class Term(models.Model):
     start_date = models.DateField()
     end_date = models.DateField()
     is_current = models.BooleanField(default=False)
+    is_deleted = models.BooleanField(default=False, db_index=True)
+    deleted_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    deleted_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='deleted_terms')
 
     class Meta:
         unique_together = ("academic_year", "number")

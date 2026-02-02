@@ -315,9 +315,9 @@ export default function SuperAdminSchools(){
     if (!s?.id) return
     const ok = window.confirm(`Delete school "${s?.name || s.id}"?
 
-This will permanently remove the school and all its data (users, students, finance, messages, etc.) from the database.
+This will move the school to the Recycle Bin.
 
-This cannot be undone.`)
+The data is not deleted completely until you purge it from the Recycle Bin.`)
     if (!ok) return
     setError('')
     try {

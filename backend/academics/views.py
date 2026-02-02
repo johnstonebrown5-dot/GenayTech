@@ -1799,6 +1799,10 @@ class ExamViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         qs = super().get_queryset().select_related('klass')
+        try:
+            qs = qs.filter(is_deleted=False)
+        except Exception:
+            pass
         school = getattr(getattr(self.request, 'user', None), 'school', None)
         # Admins can see all; others are scoped to their school
         if school and not self._is_admin(self.request):
@@ -2100,7 +2104,24 @@ class ExamViewSet(viewsets.ModelViewSet):
         # Non-admins cannot delete published exams
         if (getattr(exam, 'published', False) or str(getattr(exam, 'status', '')).lower() == 'published') and not self._is_admin(request):
             return Response({'detail': 'Cannot delete a published exam'}, status=status.HTTP_400_BAD_REQUEST)
-        return super().destroy(request, *args, **kwargs)
+        if bool(getattr(exam, 'is_deleted', False)):
+            return Response({'detail': 'Already deleted'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            Exam.objects.filter(id=exam.id).update(
+                is_deleted=True,
+                deleted_at=timezone.now(),
+                deleted_by=getattr(request, 'user', None),
+            )
+        except Exception:
+            # Fallback to instance update
+            exam.is_deleted = True
+            exam.deleted_at = timezone.now()
+            try:
+                exam.deleted_by = getattr(request, 'user', None)
+            except Exception:
+                pass
+            exam.save(update_fields=['is_deleted', 'deleted_at', 'deleted_by'])
+        return Response({'detail': 'Moved to recycle bin'})
 
     def _build_summary(self, exam):
         # Prefer examinable subjects; if none flagged, fallback to all subjects
@@ -3419,6 +3440,10 @@ class ExamResultViewSet(viewsets.ModelViewSet):
         school = getattr(getattr(self.request, 'user', None), 'school', None)
         if school:
             qs = qs.filter(exam__klass__school=school)
+        try:
+            qs = qs.filter(exam__is_deleted=False)
+        except Exception:
+            pass
         # optional filters (accept alternate parameter names for robustness)
         qp = self.request.query_params
         exam_id = qp.get('exam') or qp.get('exam_id')
@@ -5598,6 +5623,10 @@ class AcademicYearViewSet(viewsets.ModelViewSet):
         school = getattr(getattr(self.request, 'user', None), 'school', None)
         if school:
             qs = qs.filter(school=school)
+        try:
+            qs = qs.filter(is_deleted=False)
+        except Exception:
+            pass
         return qs
 
     def perform_create(self, serializer):
@@ -5613,10 +5642,10 @@ class AcademicYearViewSet(viewsets.ModelViewSet):
             return Response({'detail': 'No school associated with user'}, status=400)
         today = timezone.localdate()
         # Prefer calendar-based detection
-        obj = AcademicYear.objects.filter(school=school, start_date__lte=today, end_date__gte=today).first()
+        obj = AcademicYear.objects.filter(school=school, is_deleted=False, start_date__lte=today, end_date__gte=today).first()
         # Fallback to flag if date-based not found
         if not obj:
-            obj = AcademicYear.objects.filter(school=school, is_current=True).first()
+            obj = AcademicYear.objects.filter(school=school, is_deleted=False, is_current=True).first()
         if not obj:
             return Response({'detail': 'Current academic year not found for today and no fallback set'}, status=404)
         return Response(self.get_serializer(obj).data)
@@ -5627,13 +5656,52 @@ class AcademicYearViewSet(viewsets.ModelViewSet):
         school = getattr(request.user, 'school', None)
         if not school:
             return Response({'detail': 'No school associated with user'}, status=400)
-        qs = AcademicYear.objects.filter(school=school).order_by('-start_date')
+        qs = AcademicYear.objects.filter(school=school, is_deleted=False).order_by('-start_date')
         page = self.paginate_queryset(qs)
         if page is not None:
             ser = self.get_serializer(page, many=True)
             return self.get_paginated_response(ser.data)
         ser = self.get_serializer(qs, many=True)
         return Response(ser.data)
+
+    def destroy(self, request, *args, **kwargs):
+        ay = self.get_object()
+        if bool(getattr(ay, 'is_deleted', False)):
+            return Response({'detail': 'Already deleted'}, status=status.HTTP_400_BAD_REQUEST)
+        now = timezone.now()
+        # Soft-delete the year and its terms
+        try:
+            AcademicYear.objects.filter(id=ay.id).update(
+                is_deleted=True,
+                deleted_at=now,
+                deleted_by=getattr(request, 'user', None),
+                is_current=False,
+            )
+        except Exception:
+            ay.is_deleted = True
+            ay.deleted_at = now
+            try:
+                ay.deleted_by = getattr(request, 'user', None)
+            except Exception:
+                pass
+            ay.is_current = False
+            ay.save(update_fields=['is_deleted', 'deleted_at', 'deleted_by', 'is_current'])
+        try:
+            Term.objects.filter(academic_year_id=ay.id).update(
+                is_deleted=True,
+                deleted_at=now,
+                deleted_by=getattr(request, 'user', None),
+                is_current=False,
+            )
+        except Exception:
+            pass
+        # Remove calendar events generated for this academic year
+        try:
+            from communications.models import Event
+            Event.objects.filter(school=ay.school, title__startswith=f"{ay.label} - ").delete()
+        except Exception:
+            pass
+        return Response({'detail': 'Moved to recycle bin'})
 
     @action(detail=True, methods=['post'], permission_classes=[IsAdmin], url_path='set-current')
     def set_current(self, request, pk=None):
@@ -5658,6 +5726,10 @@ class TermViewSet(viewsets.ModelViewSet):
         school = getattr(getattr(self.request, 'user', None), 'school', None)
         if school:
             qs = qs.filter(academic_year__school=school)
+        try:
+            qs = qs.filter(is_deleted=False)
+        except Exception:
+            pass
         return qs
 
     @action(detail=False, methods=['get'], permission_classes=[IsTeacherOrAdmin], url_path='current')
@@ -5667,15 +5739,15 @@ class TermViewSet(viewsets.ModelViewSet):
             return Response({'detail': 'No school associated with user'}, status=400)
         today = timezone.localdate()
         # Determine current AY by date, fallback to is_current
-        ay = AcademicYear.objects.filter(school=school, start_date__lte=today, end_date__gte=today).first()
+        ay = AcademicYear.objects.filter(school=school, is_deleted=False, start_date__lte=today, end_date__gte=today).first()
         if not ay:
-            ay = AcademicYear.objects.filter(school=school, is_current=True).first()
+            ay = AcademicYear.objects.filter(school=school, is_deleted=False, is_current=True).first()
         if not ay:
             return Response({'detail': 'Current academic year not found for today and no fallback set'}, status=404)
         # Determine current term by date, fallback to is_current
-        term = Term.objects.filter(academic_year=ay, start_date__lte=today, end_date__gte=today).first()
+        term = Term.objects.filter(academic_year=ay, is_deleted=False, start_date__lte=today, end_date__gte=today).first()
         if not term:
-            term = Term.objects.filter(academic_year=ay, is_current=True).first()
+            term = Term.objects.filter(academic_year=ay, is_deleted=False, is_current=True).first()
         if not term:
             return Response({'detail': 'Current term not found for today and no fallback set'}, status=404)
         return Response(self.get_serializer(term).data)
@@ -5687,18 +5759,53 @@ class TermViewSet(viewsets.ModelViewSet):
         if not school:
             return Response({'detail': 'No school associated with user'}, status=400)
         today = timezone.localdate()
-        ay = AcademicYear.objects.filter(school=school, start_date__lte=today, end_date__gte=today).first()
+        ay = AcademicYear.objects.filter(school=school, is_deleted=False, start_date__lte=today, end_date__gte=today).first()
         if not ay:
-            ay = AcademicYear.objects.filter(school=school, is_current=True).first()
+            ay = AcademicYear.objects.filter(school=school, is_deleted=False, is_current=True).first()
         if not ay:
             return Response({'detail': 'Current academic year not found for today and no fallback set'}, status=404)
-        qs = Term.objects.filter(academic_year=ay).order_by('number')
+        qs = Term.objects.filter(academic_year=ay, is_deleted=False).order_by('number')
         page = self.paginate_queryset(qs)
         if page is not None:
             ser = self.get_serializer(page, many=True)
             return self.get_paginated_response(ser.data)
         ser = self.get_serializer(qs, many=True)
         return Response(ser.data)
+
+    def destroy(self, request, *args, **kwargs):
+        term = self.get_object()
+        if bool(getattr(term, 'is_deleted', False)):
+            return Response({'detail': 'Already deleted'}, status=status.HTTP_400_BAD_REQUEST)
+        now = timezone.now()
+        # Remove corresponding calendar event
+        try:
+            from communications.models import Event
+            title = f"{term.academic_year.label} - Term {term.number}"
+            Event.objects.filter(
+                school=term.academic_year.school,
+                title=title,
+                start__date=term.start_date,
+                end__date=term.end_date,
+            ).delete()
+        except Exception:
+            pass
+        try:
+            Term.objects.filter(id=term.id).update(
+                is_deleted=True,
+                deleted_at=now,
+                deleted_by=getattr(request, 'user', None),
+                is_current=False,
+            )
+        except Exception:
+            term.is_deleted = True
+            term.deleted_at = now
+            try:
+                term.deleted_by = getattr(request, 'user', None)
+            except Exception:
+                pass
+            term.is_current = False
+            term.save(update_fields=['is_deleted', 'deleted_at', 'deleted_by', 'is_current'])
+        return Response({'detail': 'Moved to recycle bin'})
 
     @action(detail=True, methods=['post'], permission_classes=[IsAdmin], url_path='set-current')
     def set_current(self, request, pk=None):

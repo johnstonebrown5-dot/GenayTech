@@ -69,9 +69,9 @@ class SchoolDomainMiddleware(MiddlewareMixin):
                     if not domain_obj:
                         try:
                             from .models import School
-                            school = School.objects.filter(code__iexact=sub).first()
+                            school = School.objects.filter(code__iexact=sub, is_deleted=False).first()
                             try:
-                                if school is not None and getattr(school, 'is_active', True) is False:
+                                if school is not None and (getattr(school, 'is_active', True) is False or getattr(school, 'is_deleted', False) is True):
                                     school = None
                             except Exception:
                                 pass
@@ -81,7 +81,7 @@ class SchoolDomainMiddleware(MiddlewareMixin):
                             pass
             school = getattr(domain_obj, 'school', None)
             try:
-                if school is not None and getattr(school, 'is_active', True) is False:
+                if school is not None and (getattr(school, 'is_active', True) is False or getattr(school, 'is_deleted', False) is True):
                     school = None
             except Exception:
                 pass

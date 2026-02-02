@@ -24,7 +24,7 @@ from django.db.models import ForeignKey, OneToOneField
 from django.core.cache import cache
 from django.template.loader import render_to_string
 from django.conf import settings
-from datetime import timedelta
+from datetime import timedelta, datetime
 import secrets
 from django.utils import timezone
 from academics.models import Class as Klass
@@ -1250,11 +1250,11 @@ def school_public(request):
     code = (request.query_params.get('code') or '').strip()
     school = None
     if code:
-        school = School.objects.filter(code=code).first()
+        school = School.objects.filter(code=code, is_deleted=False).first()
     if not school:
         school = getattr(request, 'school', None)
     if not school:
-        school = School.objects.filter(id=1).first() or School.objects.order_by('id').first()
+        school = School.objects.filter(is_deleted=False).filter(id=1).first() or School.objects.filter(is_deleted=False).order_by('id').first()
     if not school:
         return Response({
             "name": "",
@@ -1800,7 +1800,7 @@ def superadmin_schools(request):
         return denied
 
     if request.method == 'GET':
-        qs = School.objects.all().order_by('id').prefetch_related('domains')
+        qs = School.objects.filter(is_deleted=False).order_by('id').prefetch_related('domains')
         data = []
         for s in qs:
             domains = list(s.domains.all().order_by('-is_primary', 'id').values('id', 'domain', 'is_primary', 'created_at'))
@@ -1969,7 +1969,7 @@ def superadmin_system_analysis(request):
     out = []
     total_db_bytes = _db_size_bytes()
 
-    schools = School.objects.all().order_by('id')
+    schools = School.objects.filter(is_deleted=False).order_by('id')
     for s in schools:
         sid = s.id
         is_active = bool(getattr(s, 'is_active', True))
@@ -2224,6 +2224,170 @@ def superadmin_system_analysis(request):
     })
 
 
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def superadmin_delivery_logs(request):
+    denied = _require_superuser(request)
+    if denied is not None:
+        return denied
+
+    from communications.models import DeliveryLog
+
+    qs = DeliveryLog.objects.all().select_related('school').order_by('-created_at', 'id')
+
+    ch = (request.query_params.get('channel') or '').strip().lower()
+    if ch in ('sms', 'email'):
+        qs = qs.filter(channel=ch)
+
+    ok_param = request.query_params.get('ok')
+    if ok_param is not None and str(ok_param).strip() != '':
+        s = str(ok_param).strip().lower()
+        if s in ('1', 'true', 'yes', 'ok'):
+            qs = qs.filter(ok=True)
+        elif s in ('0', 'false', 'no', 'fail'):
+            qs = qs.filter(ok=False)
+
+    school_id = request.query_params.get('school_id')
+    if school_id is not None and str(school_id).strip() != '':
+        try:
+            qs = qs.filter(school_id=int(school_id))
+        except Exception:
+            pass
+
+    q = (request.query_params.get('q') or '').strip()
+    if q:
+        qs = qs.filter(
+            Q(recipient__icontains=q)
+            | Q(message_snippet__icontains=q)
+            | Q(context__icontains=q)
+            | Q(school__name__icontains=q)
+            | Q(school__code__icontains=q)
+        )
+
+    since = request.query_params.get('since')
+    if since:
+        dt = parse_datetime(str(since))
+        if not dt:
+            d = parse_date(str(since))
+            if d:
+                dt = datetime(d.year, d.month, d.day, 0, 0, 0)
+        if dt:
+            if timezone.is_naive(dt):
+                dt = timezone.make_aware(dt, timezone.get_current_timezone())
+            qs = qs.filter(created_at__gte=dt)
+
+    until = request.query_params.get('until')
+    if until:
+        dt = parse_datetime(str(until))
+        if not dt:
+            d = parse_date(str(until))
+            if d:
+                dt = datetime(d.year, d.month, d.day, 23, 59, 59)
+        if dt:
+            if timezone.is_naive(dt):
+                dt = timezone.make_aware(dt, timezone.get_current_timezone())
+            qs = qs.filter(created_at__lte=dt)
+
+    paginator = CustomPageNumberPagination()
+    page = paginator.paginate_queryset(qs, request)
+    rows = []
+    for rec in page:
+        sch = getattr(rec, 'school', None)
+        rows.append({
+            'id': rec.id,
+            'school_id': getattr(rec, 'school_id', None),
+            'school_name': getattr(sch, 'name', '') if sch else '',
+            'school_code': getattr(sch, 'code', '') if sch else '',
+            'channel': rec.channel,
+            'recipient': rec.recipient,
+            'ok': bool(rec.ok),
+            'message_snippet': rec.message_snippet,
+            'context': rec.context,
+            'created_at': rec.created_at,
+        })
+    return paginator.get_paginated_response(rows)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def superadmin_system_health_events(request):
+    denied = _require_superuser(request)
+    if denied is not None:
+        return denied
+
+    qs = SystemHealthEvent.objects.all().select_related('school').order_by('-created_at', 'id')
+
+    comp = (request.query_params.get('component') or '').strip().lower()
+    if comp:
+        allowed = {c[0] for c in SystemHealthEvent.Component.choices}
+        if comp in allowed:
+            qs = qs.filter(component=comp)
+
+    ok_param = request.query_params.get('ok')
+    if ok_param is not None and str(ok_param).strip() != '':
+        s = str(ok_param).strip().lower()
+        if s in ('1', 'true', 'yes', 'ok'):
+            qs = qs.filter(ok=True)
+        elif s in ('0', 'false', 'no', 'fail'):
+            qs = qs.filter(ok=False)
+
+    school_id = request.query_params.get('school_id')
+    if school_id is not None and str(school_id).strip() != '':
+        try:
+            qs = qs.filter(school_id=int(school_id))
+        except Exception:
+            pass
+
+    q = (request.query_params.get('q') or '').strip()
+    if q:
+        qs = qs.filter(
+            Q(context__icontains=q)
+            | Q(school__name__icontains=q)
+            | Q(school__code__icontains=q)
+        )
+
+    since = request.query_params.get('since')
+    if since:
+        dt = parse_datetime(str(since))
+        if not dt:
+            d = parse_date(str(since))
+            if d:
+                dt = datetime(d.year, d.month, d.day, 0, 0, 0)
+        if dt:
+            if timezone.is_naive(dt):
+                dt = timezone.make_aware(dt, timezone.get_current_timezone())
+            qs = qs.filter(created_at__gte=dt)
+
+    until = request.query_params.get('until')
+    if until:
+        dt = parse_datetime(str(until))
+        if not dt:
+            d = parse_date(str(until))
+            if d:
+                dt = datetime(d.year, d.month, d.day, 23, 59, 59)
+        if dt:
+            if timezone.is_naive(dt):
+                dt = timezone.make_aware(dt, timezone.get_current_timezone())
+            qs = qs.filter(created_at__lte=dt)
+
+    paginator = CustomPageNumberPagination()
+    page = paginator.paginate_queryset(qs, request)
+    rows = []
+    for rec in page:
+        sch = getattr(rec, 'school', None)
+        rows.append({
+            'id': rec.id,
+            'school_id': getattr(rec, 'school_id', None),
+            'school_name': getattr(sch, 'name', '') if sch else '',
+            'school_code': getattr(sch, 'code', '') if sch else '',
+            'component': rec.component,
+            'ok': bool(rec.ok),
+            'context': rec.context,
+            'created_at': rec.created_at,
+        })
+    return paginator.get_paginated_response(rows)
+
+
 @api_view(["GET", "PATCH", "DELETE"])
 @permission_classes([IsAuthenticated])
 def superadmin_school_detail(request, id: int):
@@ -2256,11 +2420,17 @@ def superadmin_school_detail(request, id: int):
         })
 
     if request.method == 'DELETE':
+        if bool(getattr(school, 'is_deleted', False)):
+            return Response({"detail": "Already deleted"}, status=400)
+        school.is_deleted = True
+        school.deleted_at = timezone.now()
+        school.deleted_by = request.user
         try:
-            _purge_school_from_db(school_id=school.id)
-            return Response(status=204)
-        except Exception as e:
-            return Response({"detail": "Failed to delete school", "error": str(e)}, status=500)
+            school.is_active = False
+        except Exception:
+            pass
+        school.save(update_fields=['is_deleted', 'deleted_at', 'deleted_by', 'is_active'])
+        return Response({"detail": "Moved to recycle bin"}, status=200)
 
     data = request.data or {}
     update_fields = []
@@ -2369,6 +2539,401 @@ def superadmin_domain_detail(request, id: int):
 
     dom.save(update_fields=['domain'])
     return Response({"detail": "updated"})
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def superadmin_recycle_bin_schools(request):
+    denied = _require_superuser(request)
+    if denied is not None:
+        return denied
+
+    qs = School.objects.filter(is_deleted=True).prefetch_related('domains').order_by('-deleted_at', '-id')
+    data = []
+    for s in qs[:1000]:
+        domains = list(s.domains.all().order_by('-is_primary', 'id').values('id', 'domain', 'is_primary', 'created_at'))
+        primary = None
+        for d in domains:
+            if d.get('is_primary'):
+                primary = d.get('domain')
+                break
+        data.append({
+            'id': s.id,
+            'name': s.name,
+            'code': s.code,
+            'is_active': getattr(s, 'is_active', True),
+            'deleted_at': getattr(s, 'deleted_at', None),
+            'deleted_by': getattr(getattr(s, 'deleted_by', None), 'username', None),
+            'domains': domains,
+            'primary_domain': primary,
+        })
+    return Response({'results': data})
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+@parser_classes([JSONParser])
+def superadmin_recycle_bin_school_restore(request, id: int):
+    denied = _require_superuser(request)
+    if denied is not None:
+        return denied
+
+    try:
+        school = School.objects.get(id=id)
+    except School.DoesNotExist:
+        return Response({"detail": "Not found"}, status=404)
+    if not bool(getattr(school, 'is_deleted', False)):
+        return Response({"detail": "Not in recycle bin"}, status=400)
+
+    school.is_deleted = False
+    school.deleted_at = None
+    school.deleted_by = None
+    try:
+        school.is_active = True
+    except Exception:
+        pass
+    school.save(update_fields=['is_deleted', 'deleted_at', 'deleted_by', 'is_active'])
+    return Response({"detail": "restored"})
+
+
+@api_view(["DELETE"])
+@permission_classes([IsAuthenticated])
+def superadmin_recycle_bin_school_purge(request, id: int):
+    denied = _require_superuser(request)
+    if denied is not None:
+        return denied
+
+    try:
+        school = School.objects.only('id', 'is_deleted').get(id=id)
+    except School.DoesNotExist:
+        return Response({"detail": "Not found"}, status=404)
+    if not bool(getattr(school, 'is_deleted', False)):
+        return Response({"detail": "Not in recycle bin"}, status=400)
+    try:
+        _purge_school_from_db(school_id=school.id)
+        return Response(status=204)
+    except Exception as e:
+        return Response({"detail": "Failed to purge school", "error": str(e)}, status=500)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def superadmin_recycle_bin_exams(request):
+    denied = _require_superuser(request)
+    if denied is not None:
+        return denied
+
+    from academics.models import Exam
+    qs = Exam.objects.filter(is_deleted=True).select_related('klass', 'klass__school', 'klass__stream').order_by('-deleted_at', '-id')
+    out = []
+    for e in qs[:2000]:
+        school = getattr(getattr(e, 'klass', None), 'school', None)
+        out.append({
+            'id': e.id,
+            'school_id': getattr(school, 'id', None),
+            'school_name': getattr(school, 'name', '') if school else '',
+            'name': e.name,
+            'year': e.year,
+            'term': e.term,
+            'date': e.date,
+            'klass_id': getattr(e, 'klass_id', None),
+            'klass_name': getattr(getattr(e, 'klass', None), 'name', '') if getattr(e, 'klass', None) else '',
+            'published': bool(getattr(e, 'published', False)),
+            'deleted_at': getattr(e, 'deleted_at', None),
+            'deleted_by': getattr(getattr(e, 'deleted_by', None), 'username', None),
+        })
+    return Response({'results': out})
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+@parser_classes([JSONParser])
+def superadmin_recycle_bin_exam_restore(request, id: int):
+    denied = _require_superuser(request)
+    if denied is not None:
+        return denied
+
+    from academics.models import Exam
+    try:
+        exam = Exam.objects.get(id=id)
+    except Exam.DoesNotExist:
+        return Response({"detail": "Not found"}, status=404)
+    if not bool(getattr(exam, 'is_deleted', False)):
+        return Response({"detail": "Not in recycle bin"}, status=400)
+    Exam.objects.filter(id=exam.id).update(is_deleted=False, deleted_at=None, deleted_by=None)
+    return Response({"detail": "restored"})
+
+
+@api_view(["DELETE"])
+@permission_classes([IsAuthenticated])
+def superadmin_recycle_bin_exam_purge(request, id: int):
+    denied = _require_superuser(request)
+    if denied is not None:
+        return denied
+
+    from academics.models import Exam
+    try:
+        exam = Exam.objects.only('id', 'is_deleted').get(id=id)
+    except Exam.DoesNotExist:
+        return Response({"detail": "Not found"}, status=404)
+    if not bool(getattr(exam, 'is_deleted', False)):
+        return Response({"detail": "Not in recycle bin"}, status=400)
+    exam.delete()
+    return Response(status=204)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def superadmin_recycle_bin_academic_years(request):
+    denied = _require_superuser(request)
+    if denied is not None:
+        return denied
+
+    from academics.models import AcademicYear
+    qs = AcademicYear.objects.filter(is_deleted=True).select_related('school').order_by('-deleted_at', '-id')
+    out = []
+    for ay in qs[:2000]:
+        school = getattr(ay, 'school', None)
+        out.append({
+            'id': ay.id,
+            'school_id': getattr(ay, 'school_id', None),
+            'school_name': getattr(school, 'name', '') if school else '',
+            'label': ay.label,
+            'start_date': ay.start_date,
+            'end_date': ay.end_date,
+            'is_current': bool(getattr(ay, 'is_current', False)),
+            'deleted_at': getattr(ay, 'deleted_at', None),
+            'deleted_by': getattr(getattr(ay, 'deleted_by', None), 'username', None),
+        })
+    return Response({'results': out})
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+@parser_classes([JSONParser])
+def superadmin_recycle_bin_academic_year_restore(request, id: int):
+    denied = _require_superuser(request)
+    if denied is not None:
+        return denied
+
+    from academics.models import AcademicYear, Term
+    try:
+        ay = AcademicYear.objects.get(id=id)
+    except AcademicYear.DoesNotExist:
+        return Response({"detail": "Not found"}, status=404)
+    if not bool(getattr(ay, 'is_deleted', False)):
+        return Response({"detail": "Not in recycle bin"}, status=400)
+    AcademicYear.objects.filter(id=ay.id).update(is_deleted=False, deleted_at=None, deleted_by=None)
+    # Best-effort restore of terms under that year
+    try:
+        Term.objects.filter(academic_year_id=ay.id).update(is_deleted=False, deleted_at=None, deleted_by=None)
+    except Exception:
+        pass
+    return Response({"detail": "restored"})
+
+
+@api_view(["DELETE"])
+@permission_classes([IsAuthenticated])
+def superadmin_recycle_bin_academic_year_purge(request, id: int):
+    denied = _require_superuser(request)
+    if denied is not None:
+        return denied
+
+    from academics.models import AcademicYear
+    try:
+        ay = AcademicYear.objects.only('id', 'is_deleted').get(id=id)
+    except AcademicYear.DoesNotExist:
+        return Response({"detail": "Not found"}, status=404)
+    if not bool(getattr(ay, 'is_deleted', False)):
+        return Response({"detail": "Not in recycle bin"}, status=400)
+    ay.delete()
+    return Response(status=204)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def superadmin_recycle_bin_terms(request):
+    denied = _require_superuser(request)
+    if denied is not None:
+        return denied
+
+    from academics.models import Term
+    qs = Term.objects.filter(is_deleted=True).select_related('academic_year', 'academic_year__school').order_by('-deleted_at', '-id')
+    out = []
+    for t in qs[:2000]:
+        ay = getattr(t, 'academic_year', None)
+        school = getattr(ay, 'school', None) if ay else None
+        out.append({
+            'id': t.id,
+            'school_id': getattr(school, 'id', None),
+            'school_name': getattr(school, 'name', '') if school else '',
+            'academic_year_id': getattr(t, 'academic_year_id', None),
+            'academic_year_label': getattr(ay, 'label', '') if ay else '',
+            'number': t.number,
+            'name': t.name,
+            'start_date': t.start_date,
+            'end_date': t.end_date,
+            'is_current': bool(getattr(t, 'is_current', False)),
+            'deleted_at': getattr(t, 'deleted_at', None),
+            'deleted_by': getattr(getattr(t, 'deleted_by', None), 'username', None),
+        })
+    return Response({'results': out})
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+@parser_classes([JSONParser])
+def superadmin_recycle_bin_term_restore(request, id: int):
+    denied = _require_superuser(request)
+    if denied is not None:
+        return denied
+
+    from academics.models import Term
+    try:
+        t = Term.objects.get(id=id)
+    except Term.DoesNotExist:
+        return Response({"detail": "Not found"}, status=404)
+    if not bool(getattr(t, 'is_deleted', False)):
+        return Response({"detail": "Not in recycle bin"}, status=400)
+    Term.objects.filter(id=t.id).update(is_deleted=False, deleted_at=None, deleted_by=None)
+    return Response({"detail": "restored"})
+
+
+@api_view(["DELETE"])
+@permission_classes([IsAuthenticated])
+def superadmin_recycle_bin_term_purge(request, id: int):
+    denied = _require_superuser(request)
+    if denied is not None:
+        return denied
+
+    from academics.models import Term
+    try:
+        t = Term.objects.only('id', 'is_deleted').get(id=id)
+    except Term.DoesNotExist:
+        return Response({"detail": "Not found"}, status=404)
+    if not bool(getattr(t, 'is_deleted', False)):
+        return Response({"detail": "Not in recycle bin"}, status=400)
+    t.delete()
+    return Response(status=204)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+@parser_classes([JSONParser])
+def superadmin_recycle_bin_clear(request):
+    denied = _require_superuser(request)
+    if denied is not None:
+        return denied
+
+    purged = 0
+    failed = 0
+
+    # Purge academics first (for non-deleted schools)
+    try:
+        from academics.models import Exam, AcademicYear, Term
+        exam_ids = list(Exam.objects.filter(is_deleted=True).values_list('id', flat=True)[:1000])
+        for eid in exam_ids:
+            try:
+                Exam.objects.filter(id=int(eid), is_deleted=True).delete()
+                purged += 1
+            except Exception:
+                failed += 1
+
+        term_ids = list(Term.objects.filter(is_deleted=True).values_list('id', flat=True)[:1000])
+        for tid in term_ids:
+            try:
+                Term.objects.filter(id=int(tid), is_deleted=True).delete()
+                purged += 1
+            except Exception:
+                failed += 1
+
+        ay_ids = list(AcademicYear.objects.filter(is_deleted=True).values_list('id', flat=True)[:1000])
+        for aid in ay_ids:
+            try:
+                AcademicYear.objects.filter(id=int(aid), is_deleted=True).delete()
+                purged += 1
+            except Exception:
+                failed += 1
+    except Exception:
+        pass
+
+    # Purge deleted schools last (cascades everything under them)
+    school_ids = list(School.objects.filter(is_deleted=True).values_list('id', flat=True)[:500])
+    for sid in school_ids:
+        try:
+            _purge_school_from_db(school_id=int(sid))
+            purged += 1
+        except Exception:
+            failed += 1
+    return Response({'purged': purged, 'failed': failed, 'attempted': (len(school_ids) or 0)})
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+@parser_classes([JSONParser])
+def superadmin_create_school_admin(request):
+    """Superuser-only: Create a School Admin and allocate to a school.
+    Body: username (required), password (optional), email, first_name, last_name, phone, school_id (required)
+    Returns the created user.
+    """
+    denied = _require_superuser(request)
+    if denied is not None:
+        return denied
+
+    data = request.data or {}
+    username = data.get('username')
+    school_id = data.get('school_id')
+    if not username or not school_id:
+        return Response({"detail": "username and school_id are required"}, status=400)
+    password = data.get('password') or get_random_string(12)
+    try:
+        with transaction.atomic():
+            # Validate school exists
+            school = School.objects.filter(id=school_id, is_deleted=False).only('id').first()
+            if not school:
+                return Response({"detail": "School not found"}, status=404)
+            user = User.objects.create_user(
+                username=username,
+                password=password,
+                role='admin',
+                email=data.get('email',''),
+                first_name=data.get('first_name',''),
+                last_name=data.get('last_name',''),
+                phone=data.get('phone',''),
+                school_id=school.id,
+            )
+    except IntegrityError as e:
+        return Response({"detail": "Username already exists or violates a constraint", "error": str(e)}, status=400)
+    return Response(UserSerializer(user, context={"request": request}).data, status=201)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+@parser_classes([JSONParser])
+def superadmin_assign_school_admin(request):
+    """Superuser-only: Assign an existing user as School Admin to a school.
+    Body: user_id (required), school_id (required)
+    Sets role to 'admin' and assigns the school.
+    """
+    denied = _require_superuser(request)
+    if denied is not None:
+        return denied
+
+    uid = request.data.get('user_id')
+    school_id = request.data.get('school_id')
+    if not uid or not school_id:
+        return Response({"detail": "user_id and school_id are required"}, status=400)
+    user = User.objects.filter(id=uid).first()
+    if not user:
+        return Response({"detail": "User not found"}, status=404)
+    school = School.objects.filter(id=school_id, is_deleted=False).only('id').first()
+    if not school:
+        return Response({"detail": "School not found"}, status=404)
+    # Update
+    user.role = 'admin'
+    user.school_id = school.id
+    user.save(update_fields=['role','school'])
+    return Response(UserSerializer(user, context={"request": request}).data)
 
 
 @api_view(["GET", "PATCH"])
