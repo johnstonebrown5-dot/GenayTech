@@ -3,6 +3,7 @@ from django.urls import path
 from .views import InvoiceViewSet, PaymentViewSet, FeeCategoryViewSet, ClassFeeViewSet, mpesa_callback, coop_mpesa_callback, MpesaConfigViewSet, ExpenseCategoryViewSet, ExpenseViewSet, PocketMoneyWalletViewSet, PocketMoneyTransactionViewSet, PaymentMethodViewSet, IncomingPaymentViewSet, StudentFeeViewSet, StaffPayrollViewSet, StaffPayslipViewSet
 
 router = DefaultRouter()
+router.trailing_slash = '/?'
 router.register('invoices', InvoiceViewSet)
 router.register('payments', PaymentViewSet)
 router.register('fee-categories', FeeCategoryViewSet)

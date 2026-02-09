@@ -268,6 +268,20 @@ def send_sms(phone: str, message: str, school_id: int | None = None) -> bool:
 
     integ = _get_school_integration_settings(school_id)
 
+    # If a school has integration settings, do not fall back to global credentials.
+    # This guarantees that a school's outbound messages use only channels configured by superuser.
+    try:
+        if integ is not None:
+            provider = str(getattr(integ, 'sms_provider', '') or '').strip().lower() or 'africastalking'
+            if provider and provider not in ('africastalking',):
+                logger.warning("Unsupported SMS provider '%s' for school_id=%s", provider, school_id)
+                return False
+            if not (getattr(integ, 'at_username', None) and getattr(integ, 'at_api_key', None)):
+                logger.warning("School SMS channel not configured; skipping SMS to %s (school_id=%s)", phone, school_id)
+                return False
+    except Exception:
+        pass
+
     at_username = getattr(settings, 'AT_USERNAME', None)
     at_api_key = getattr(settings, 'AT_API_KEY', None)
     at_sender = getattr(settings, 'AT_SENDER_ID', None) or None
@@ -416,31 +430,28 @@ def send_email_safe(subject: str, message: str, recipient: str, reply_to: list[s
     except Exception:
         pass
     integ = _get_school_integration_settings(school_id)
-    host = getattr(settings, 'EMAIL_HOST', 'smtp.gmail.com')
-    port = int(getattr(settings, 'EMAIL_PORT', 587) or 587)
-    use_tls = bool(getattr(settings, 'EMAIL_USE_TLS', True))
-    use_ssl = bool(getattr(settings, 'EMAIL_USE_SSL', False))
-    host_user = getattr(settings, 'EMAIL_HOST_USER', '')
-    host_pass = getattr(settings, 'EMAIL_HOST_PASSWORD', '')
-
-    try:
-        if integ is not None:
-            if getattr(integ, 'smtp_host', None):
-                host = str(getattr(integ, 'smtp_host', '') or host)
-            if getattr(integ, 'smtp_port', None):
-                port = int(getattr(integ, 'smtp_port', port) or port)
-            if getattr(integ, 'smtp_username', None):
-                host_user = str(getattr(integ, 'smtp_username', '') or host_user)
-            if getattr(integ, 'smtp_password', None):
-                host_pass = str(getattr(integ, 'smtp_password', '') or host_pass)
-            use_tls = bool(getattr(integ, 'smtp_use_tls', use_tls))
-            use_ssl = bool(getattr(integ, 'smtp_use_ssl', use_ssl))
-    except Exception:
-        pass
+    if integ is not None:
+        if not (getattr(integ, 'smtp_username', None) and getattr(integ, 'smtp_password', None)):
+            logger.warning("School email channel not configured; skipping email to %s (school_id=%s)", recipient, school_id)
+            return False
+        host = getattr(integ, 'smtp_host', 'smtp.gmail.com')
+        port = int(getattr(integ, 'smtp_port', 587) or 587)
+        use_tls = bool(getattr(integ, 'smtp_use_tls', True))
+        use_ssl = bool(getattr(integ, 'smtp_use_ssl', False))
+        host_user = getattr(integ, 'smtp_username', '')
+        host_pass = getattr(integ, 'smtp_password', '')
+        base_from = getattr(integ, 'smtp_from_email', host_user or 'no-reply@example.com')
+    else:
+        host = getattr(settings, 'EMAIL_HOST', 'smtp.gmail.com')
+        port = int(getattr(settings, 'EMAIL_PORT', 587) or 587)
+        use_tls = bool(getattr(settings, 'EMAIL_USE_TLS', True))
+        use_ssl = bool(getattr(settings, 'EMAIL_USE_SSL', False))
+        host_user = getattr(settings, 'EMAIL_HOST_USER', '')
+        host_pass = getattr(settings, 'EMAIL_HOST_PASSWORD', '')
+        base_from = getattr(settings, 'DEFAULT_FROM_EMAIL', host_user or 'no-reply@example.com')
     if not host_user or not host_pass:
         logger.warning("Email credentials missing; skipping email to %s", recipient)
         return False
-    base_from = getattr(settings, 'DEFAULT_FROM_EMAIL', host_user or 'no-reply@example.com')
     try:
         if integ is not None and getattr(integ, 'smtp_from_email', None):
             base_from = str(getattr(integ, 'smtp_from_email', '') or base_from)
@@ -565,6 +576,15 @@ def send_email_safe_html(
          pass
 
      integ = _get_school_integration_settings(school_id)
+
+     # If a school has integration settings, do not fall back to global SMTP.
+     try:
+         if integ is not None:
+             if not (getattr(integ, 'smtp_username', None) and getattr(integ, 'smtp_password', None)):
+                 logger.warning("School email channel not configured; skipping email to %s (school_id=%s)", recipient, school_id)
+                 return False
+     except Exception:
+         pass
      host = getattr(settings, 'EMAIL_HOST', 'smtp.gmail.com')
      port = int(getattr(settings, 'EMAIL_PORT', 587) or 587)
      use_tls = bool(getattr(settings, 'EMAIL_USE_TLS', True))
@@ -714,28 +734,28 @@ def send_email_with_attachment(subject: str, message: str, recipient: str, filen
         return False
     try:
         integ = _get_school_integration_settings(school_id)
-        host = getattr(settings, 'EMAIL_HOST', 'smtp.gmail.com')
-        port = int(getattr(settings, 'EMAIL_PORT', 587) or 587)
-        use_tls = bool(getattr(settings, 'EMAIL_USE_TLS', True))
-        use_ssl = bool(getattr(settings, 'EMAIL_USE_SSL', False))
-        host_user = getattr(settings, 'EMAIL_HOST_USER', '')
-        host_pass = getattr(settings, 'EMAIL_HOST_PASSWORD', '')
-        try:
-            if integ is not None:
-                if getattr(integ, 'smtp_host', None):
-                    host = str(getattr(integ, 'smtp_host', '') or host)
-                if getattr(integ, 'smtp_port', None):
-                    port = int(getattr(integ, 'smtp_port', port) or port)
-                if getattr(integ, 'smtp_username', None):
-                    host_user = str(getattr(integ, 'smtp_username', '') or host_user)
-                if getattr(integ, 'smtp_password', None):
-                    host_pass = str(getattr(integ, 'smtp_password', '') or host_pass)
-                use_tls = bool(getattr(integ, 'smtp_use_tls', use_tls))
-                use_ssl = bool(getattr(integ, 'smtp_use_ssl', use_ssl))
-        except Exception:
-            pass
 
-        base_from = getattr(settings, 'DEFAULT_FROM_EMAIL', host_user or 'no-reply@example.com')
+        # If a school has integration settings, do not fall back to global SMTP.
+        if integ is not None:
+            if not (getattr(integ, 'smtp_username', None) and getattr(integ, 'smtp_password', None)):
+                logger.warning("School email channel not configured; skipping email to %s (school_id=%s)", recipient, school_id)
+                return False
+            host = getattr(integ, 'smtp_host', 'smtp.gmail.com')
+            port = int(getattr(integ, 'smtp_port', 587) or 587)
+            use_tls = bool(getattr(integ, 'smtp_use_tls', True))
+            use_ssl = bool(getattr(integ, 'smtp_use_ssl', False))
+            host_user = getattr(integ, 'smtp_username', '')
+            host_pass = getattr(integ, 'smtp_password', '')
+            base_from = getattr(integ, 'smtp_from_email', host_user or 'no-reply@example.com')
+        else:
+            host = getattr(settings, 'EMAIL_HOST', 'smtp.gmail.com')
+            port = int(getattr(settings, 'EMAIL_PORT', 587) or 587)
+            use_tls = bool(getattr(settings, 'EMAIL_USE_TLS', True))
+            use_ssl = bool(getattr(settings, 'EMAIL_USE_SSL', False))
+            host_user = getattr(settings, 'EMAIL_HOST_USER', '')
+            host_pass = getattr(settings, 'EMAIL_HOST_PASSWORD', '')
+            base_from = getattr(settings, 'DEFAULT_FROM_EMAIL', host_user or 'no-reply@example.com')
+
         try:
             if integ is not None and getattr(integ, 'smtp_from_email', None):
                 base_from = str(getattr(integ, 'smtp_from_email', '') or base_from)

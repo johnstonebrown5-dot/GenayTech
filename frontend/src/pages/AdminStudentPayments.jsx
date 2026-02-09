@@ -7,18 +7,32 @@ export default function AdminStudentPayments(){
   const { id } = useParams()
   const [payments, setPayments] = useState([])
   const [invoices, setInvoices] = useState([])
+  const [student, setStudent] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [showPay, setShowPay] = useState(false)
+  const [showVerify, setShowVerify] = useState(false)
   const [showReceipt, setShowReceipt] = useState(false)
   const [receipt, setReceipt] = useState(null)
   const [receiptLoading, setReceiptLoading] = useState(false)
   const [paying, setPaying] = useState(false)
   const [stkStatus, setStkStatus] = useState('idle') // idle | initiating | sent | polling | fetching | success | failed
   const [payForm, setPayForm] = useState({ invoice: '', amount: '', method: 'mpesa', reference: '', phone: '', attachment: null })
+  const [verifyReceipt, setVerifyReceipt] = useState('')
   // Always use real STK (Co-op)
   const [payError, setPayError] = useState('')
   const [enabledMethods, setEnabledMethods] = useState(['cash','mpesa','bank','cheque'])
+
+  async function refreshLists(){
+    const [payRes, invRes] = await Promise.all([
+      api.get(`/finance/payments/?invoice__student=${id}`),
+      api.get(`/finance/invoices/?student=${id}`)
+    ])
+    const payList = Array.isArray(payRes.data) ? payRes.data : (Array.isArray(payRes.data?.results) ? payRes.data.results : [])
+    const invList = Array.isArray(invRes.data) ? invRes.data : (Array.isArray(invRes.data?.results) ? invRes.data.results : [])
+    setPayments(payList)
+    setInvoices(invList)
+  }
 
   useEffect(()=>{
     let alive = true
@@ -26,16 +40,18 @@ export default function AdminStudentPayments(){
       try{
         setLoading(true)
         setError('')
-        const [payRes, invRes, methodsRes] = await Promise.all([
+        const [payRes, invRes, methodsRes, stRes] = await Promise.all([
           api.get(`/finance/payments/?invoice__student=${id}`),
           api.get(`/finance/invoices/?student=${id}`),
-          api.get('/finance/payment-methods/')
+          api.get('/finance/payment-methods/'),
+          api.get(`/academics/students/${id}/`)
         ])
         if (!alive) return
         const payList = Array.isArray(payRes.data) ? payRes.data : (Array.isArray(payRes.data?.results) ? payRes.data.results : [])
         const invList = Array.isArray(invRes.data) ? invRes.data : (Array.isArray(invRes.data?.results) ? invRes.data.results : [])
         setPayments(payList)
         setInvoices(invList)
+        setStudent(stRes?.data || null)
         const mlist = Array.isArray(methodsRes.data)? methodsRes.data : (methodsRes.data?.results||[])
         const enabled = mlist.filter(m=>m.enabled).map(m=>String(m.key).toLowerCase())
         if (enabled.length>0) setEnabledMethods(enabled)
@@ -47,6 +63,10 @@ export default function AdminStudentPayments(){
       }finally{
         alive && setLoading(false)
       }
+    }
+    load()
+    return ()=>{ alive = false }
+  }, [id])
 
   async function openReceipt(paymentId){
     setReceipt(null)
@@ -67,10 +87,33 @@ export default function AdminStudentPayments(){
       window.print()
     }catch{}
   }
+
+  async function verifyPayment(){
+    setPayError('')
+    const receipt = String(verifyReceipt || '').trim()
+    if (!receipt) { setPayError('Enter the M-Pesa Transaction ID to verify'); return }
+    try{
+      setPaying(true)
+      const { data } = await api.post('/finance/incoming-payments/verify_mpesa/', {
+        receipt,
+        student_id: id
+      })
+      await refreshLists()
+      if (data?.status === 'exists') {
+        setPayError('Payment exists for this M-Pesa Transaction ID.')
+      } else if (data?.status === 'verified') {
+        setPayError('Payment applied.')
+      } else {
+        setPayError('Verification complete.')
+      }
+      setShowVerify(false)
+      setVerifyReceipt('')
+    }catch(e){
+      setPayError(e?.response?.data?.detail || e?.message || 'Failed to verify payment')
+    }finally{
+      setPaying(false)
     }
-    load()
-    return ()=>{ alive = false }
-  }, [id])
+  }
 
   function money(n){
     try { return new Intl.NumberFormat('en-KE', { style:'currency', currency:'KES' }).format(Number(n||0)) } catch { return `Ksh. ${n}` }
@@ -119,7 +162,6 @@ export default function AdminStudentPayments(){
 
   async function submitStkPush(){
     setPayError('')
-    if (!payForm.invoice) { setPayError('Please select an invoice'); return }
     const amountNum = parseFloat(payForm.amount)
     if (!(amountNum > 0)) { setPayError('Enter a valid amount greater than 0'); return }
     if (!payForm.phone) { setPayError('Phone number required for STK'); return }
@@ -127,12 +169,13 @@ export default function AdminStudentPayments(){
       setPaying(true)
       setStkStatus('initiating')
       // baseline count before push
-      const before = await api.get(`/finance/payments/?invoice=${payForm.invoice}`)
+      const before = await api.get(`/finance/payments/?invoice__student=${id}`)
       const baselineCount = Array.isArray(before.data) ? before.data.length : 0
 
-      const { data } = await api.post(`/finance/invoices/${payForm.invoice}/coop_stk/`, {
+      const { data } = await api.post(`/finance/invoices/pay-balance-stk/`, {
         phone: payForm.phone,
         amount: amountNum,
+        student_id: id,
         simulate: false
       })
       // Mark as sent
@@ -143,7 +186,7 @@ export default function AdminStudentPayments(){
       let found = false
       while (Date.now() - started < 60000) { // up to 60s
         await new Promise(r => setTimeout(r, 3000))
-        const poll = await api.get(`/finance/payments/?invoice=${payForm.invoice}`)
+        const poll = await api.get(`/finance/payments/?invoice__student=${id}`)
         const countNow = Array.isArray(poll.data) ? poll.data.length : 0
         if (countNow > baselineCount) {
           found = true
@@ -181,9 +224,17 @@ export default function AdminStudentPayments(){
         <div className="flex items-center justify-between">
           <h1 className="text-lg font-semibold">Student Payments</h1>
           <div className="flex items-center gap-3">
-            <button onClick={()=>setShowPay(true)} className="inline-flex items-center gap-2 px-3 py-2 rounded bg-green-600 text-white hover:bg-green-700">
+            <button onClick={()=>{
+              setPayError('')
+              const phone = String(student?.guardian_id || student?.phone || '').trim()
+              setPayForm({ invoice: '', amount: '', method: 'mpesa', reference: '', phone, attachment: null })
+              setShowPay(true)
+            }} className="inline-flex items-center gap-2 px-3 py-2 rounded bg-green-600 text-white hover:bg-green-700">
               <span>➕</span>
               <span>Make Payment</span>
+            </button>
+            <button onClick={()=>{ setPayError(''); setVerifyReceipt(''); setShowVerify(true) }} className="inline-flex items-center gap-2 px-3 py-2 rounded border bg-white hover:bg-gray-50">
+              <span>Verify</span>
             </button>
             <Link to={`/admin/students/${id}`} className="text-sm text-blue-600 hover:underline">Back to Dashboard</Link>
           </div>
@@ -230,30 +281,13 @@ export default function AdminStudentPayments(){
 
         {/* Make Payment Modal */}
         <Modal open={showPay} onClose={()=>setShowPay(false)} title="Make Payment" size="md">
-          <form onSubmit={submitPayment} className="grid gap-3">
+          <form onSubmit={(e)=>{ e.preventDefault(); submitStkPush(); }} className="grid gap-3">
             {payError && (<div className="bg-red-50 text-red-700 text-sm p-2 rounded">{payError}</div>)}
-            <div>
-              <label className="block text-sm text-gray-600 mb-1">Invoice</label>
-              <select className="border p-2 rounded w-full" value={payForm.invoice} onChange={e=>setPayForm({ ...payForm, invoice: e.target.value })} required>
-                <option value="">Select invoice</option>
-                {invoices
-                  .filter(inv => inv.status !== 'paid')
-                  .map(inv => (
-                    <option key={inv.id} value={inv.id}>
-                      #{inv.id} • {money(inv.amount)} • {inv.status}
-                    </option>
-                  ))}
-              </select>
-            </div>
             {/* Payment mode selection removed: default to M-Pesa STK via Co-op */}
-            <div className="grid md:grid-cols-2 gap-3">
+            <div>
               <div>
                 <label className="block text-sm text-gray-600 mb-1">Amount</label>
                 <input type="number" min="0" step="0.01" className="border p-2 rounded w-full" value={payForm.amount} onChange={e=>setPayForm({ ...payForm, amount: e.target.value })} required />
-              </div>
-              <div>
-                <label className="block text-sm text-gray-600 mb-1">Reference</label>
-                <input className="border p-2 rounded w-full" placeholder={payForm.method==='mpesa' ? 'M-Pesa Code' : 'Bank Slip/Ref'} value={payForm.reference} onChange={e=>setPayForm({ ...payForm, reference: e.target.value })} />
               </div>
             </div>
             {/* Always require phone for STK */}
@@ -284,6 +318,23 @@ export default function AdminStudentPayments(){
             {stkStatus==='failed' && (
               <div className="text-xs text-red-600 mt-1">STK failed or timed out. Please verify the phone number and try again.</div>
             )}
+          </form>
+        </Modal>
+
+        {/* Verify Payment Modal */}
+        <Modal open={showVerify} onClose={()=>setShowVerify(false)} title="Verify Payment" size="sm">
+          <form onSubmit={(e)=>{ e.preventDefault(); verifyPayment(); }} className="grid gap-3">
+            {payError && (<div className="bg-red-50 text-red-700 text-sm p-2 rounded">{payError}</div>)}
+            <div>
+              <label className="block text-sm text-gray-600 mb-1">Mpesa Transaction ID</label>
+              <input className="border p-2 rounded w-full" placeholder="e.g. QWERTY123" value={verifyReceipt} onChange={e=>setVerifyReceipt(e.target.value)} />
+            </div>
+            <div className="flex justify-end gap-2 mt-2">
+              <button type="button" onClick={()=>setShowVerify(false)} className="px-4 py-2 rounded border">Cancel</button>
+              <button type="submit" className="px-4 py-2 rounded bg-sky-600 text-white disabled:opacity-60" disabled={paying}>
+                Verify
+              </button>
+            </div>
           </form>
         </Modal>
       </div>

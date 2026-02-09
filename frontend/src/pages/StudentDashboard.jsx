@@ -274,7 +274,7 @@ export default function StudentDashboard(){
 
   const openPay = (invoice) => {
     setSelectedInvoice(invoice)
-    setPayForm({ amount: '', method: 'mpesa', reference: '' })
+    setPayForm({ amount: '', method: 'mpesa', reference: '', phone: '' })
     setPayError('')
     setPaySimulate(true)
     setShowPay(true)
@@ -764,16 +764,15 @@ export default function StudentDashboard(){
         />
       </div>
       <div className="space-y-1">
-        <label className="block text-sm font-medium text-slate-700">Phone (M-Pesa)</label>
+        <div className="text-xs text-slate-600 mb-1">Phone (M-Pesa)</div>
         <input
           type="tel"
           className="w-full border border-slate-300 rounded px-3 py-2 text-sm"
           value={payForm.phone}
           onChange={e => setPayForm({ ...payForm, phone: e.target.value })}
-          placeholder="07XXXXXXXX"
-          maxLength={10}
-          pattern="0\\d{9}"
-          title="Enter a 10-digit phone starting with 0"
+          placeholder="07XXXXXXXX or 2547XXXXXXXX"
+          inputMode="tel"
+          pattern="^(0[0-9]{9}|\\+?2547[0-9]{8})$"
         />
       </div>
       <div className="flex items-center justify-between pt-1 text-xs text-slate-500">
@@ -782,7 +781,13 @@ export default function StudentDashboard(){
       </div>
       <div className="flex justify-end gap-2">
         <button type="button" className="px-4 py-1.5 rounded border text-sm" onClick={() => !paySubmitting && setShowPay(false)} disabled={paySubmitting}>Cancel</button>
-        <button type="submit" className="px-4 py-1.5 rounded bg-emerald-600 text-white text-sm disabled:opacity-60" disabled={paySubmitting || !(Number(payForm.amount) > 0 && /^0\d{9}$/.test(String(payForm.phone||'').trim()))}>{paySubmitting ? 'Processing…' : 'Pay Now'}</button>
+        <button
+          type="submit"
+          className="px-4 py-1.5 rounded bg-emerald-600 text-white text-sm disabled:opacity-60"
+          disabled={paySubmitting || !(Number(payForm.amount) > 0 && /^(0[0-9]{9}|\+?2547[0-9]{8})$/.test(String(payForm.phone||'').trim()))}
+        >
+          {paySubmitting ? 'Processing…' : 'Pay Now'}
+        </button>
       </div>
     </form>
   </Modal>

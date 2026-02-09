@@ -12,15 +12,15 @@ from django.views.decorators.csrf import csrf_exempt
 import json
 import os
 import logging
-from communications.utils import notify_payment_received, create_message_for_role, resolve_default_sender_id
+from communications.utils import notify_payment_received, create_message_for_role, resolve_default_sender_id, send_sms, send_email_safe
+from academics.models import Student, Subject
+
+
 from .mpesa import MpesaClient
 from .coop_stk import CoopStkClient
 from .coop_api import CoopApiClient
 from .models import Invoice, Payment, FeeCategory, ClassFee, MpesaConfig, ExpenseCategory, Expense, PocketMoneyWallet, PocketMoneyTransaction, PaymentMethod, IncomingPayment, StudentFee, StaffPayroll, StaffPayslip
 from .serializers import InvoiceSerializer, PaymentSerializer, FeeCategorySerializer, ClassFeeSerializer, MpesaConfigSerializer, ExpenseCategorySerializer, ExpenseSerializer, PocketMoneyWalletSerializer, PocketMoneyTransactionSerializer, PaymentMethodSerializer, IncomingPaymentSerializer, StudentFeeSerializer, StaffPayrollSerializer, StaffPayslipSerializer
-from academics.models import Student
-
-
 def _log_payment_health_event(*, school_id: int | None, method: str, ok: bool, context: str = '') -> None:
     try:
         from accounts.models import SystemHealthEvent
@@ -56,7 +56,7 @@ class InvoiceViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         # Actions that only require authentication (student-facing)
         relaxed = {
-            'my', 'my_summary', 'stk_push', 'coop_stk',
+            'my', 'my_summary', 'stk_push', 'pay_balance_stk',
             'student_summary', 'summary', 'arrears', 'arrears_export'
         }
         if getattr(self, 'action', None) in relaxed:
@@ -100,10 +100,15 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         if school:
             pay_qs = pay_qs.filter(invoice__student__klass__school=school)
         total_paid = pay_qs.aggregate(s=Sum('amount'))['s'] or 0
-        balance = (total_billed or 0) - (total_paid or 0)
+        prepaid_qs = IncomingPayment.objects.filter(matched_student_id=student_id, source='mpesa')
+        if school:
+            prepaid_qs = prepaid_qs.filter(matched_student__klass__school=school)
+        prepaid_total = prepaid_qs.filter(status__in=['matched', 'reconciled'], notes__icontains='prepaid').aggregate(s=Sum('amount'))['s'] or 0
+        balance = (total_billed or 0) - (total_paid or 0) - (prepaid_total or 0)
         return Response({
             'total_billed': float(total_billed),
             'total_paid': float(total_paid),
+            'prepaid': float(prepaid_total or 0),
             'balance': float(balance),
         })
 
@@ -148,10 +153,15 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         if school:
             pay_qs = pay_qs.filter(invoice__student__klass__school=school)
         total_paid = pay_qs.aggregate(s=Sum('amount'))['s'] or 0
-        balance = (total_billed or 0) - (total_paid or 0)
+        prepaid_qs = IncomingPayment.objects.filter(matched_student_id=student_id, source='mpesa')
+        if school:
+            prepaid_qs = prepaid_qs.filter(matched_student__klass__school=school)
+        prepaid_total = prepaid_qs.filter(status__in=['matched', 'reconciled'], notes__icontains='prepaid').aggregate(s=Sum('amount'))['s'] or 0
+        balance = (total_billed or 0) - (total_paid or 0) - (prepaid_total or 0)
         return Response({
             'total_billed': float(total_billed),
             'total_paid': float(total_paid),
+            'prepaid': float(prepaid_total or 0),
             'balance': float(balance),
         })
 
@@ -569,6 +579,185 @@ class InvoiceViewSet(viewsets.ModelViewSet):
             'amount_unallocated': float(remaining),
         }, status=201)
 
+    @action(detail=True, methods=['post'], url_path='stk_push')
+    def stk_push(self, request, pk=None):
+        """Initiate an Mpesa Daraja STK push for this invoice.
+        Body: { phone: string, amount?: number, simulate?: bool }
+        """
+        invoice = Invoice.objects.select_related('student', 'student__klass').filter(pk=pk).first()
+        if not invoice:
+            return Response({'detail': 'Invoice not found'}, status=404)
+
+        try:
+            logger = logging.getLogger(__name__)
+            user = request.user
+            if getattr(user, 'role', None) not in ('admin', 'finance'):
+                from academics.models import Student as _Student
+                stu_id = _Student.objects.filter(user=user).values_list('id', flat=True).first()
+                if not stu_id or invoice.student_id != stu_id:
+                    return Response({'detail': 'Forbidden'}, status=403)
+
+            phone = (request.data.get('phone') or '').strip()
+            if phone.startswith('+'):
+                phone = phone[1:]
+            if phone.startswith('0') and len(phone) == 10:
+                phone = '254' + phone[1:]
+            if not phone:
+                return Response({'detail': 'phone is required'}, status=400)
+            try:
+                amount = float(request.data.get('amount') or invoice.amount)
+            except (TypeError, ValueError):
+                return Response({'detail': 'Invalid amount'}, status=400)
+
+            school_id = getattr(getattr(invoice.student.klass, 'school', None), 'id', None)
+            config = MpesaConfig.objects.filter(school_id=invoice.student.klass.school_id).first() if school_id else None
+            required = ('MPESA_CONSUMER_KEY', 'MPESA_CONSUMER_SECRET', 'MPESA_SHORT_CODE', 'MPESA_PASSKEY')
+            env_have_creds = all(os.getenv(k) for k in required)
+            have_cfg_creds = False
+            if config:
+                # Guard against common misconfiguration: bogus shortcode/passkey saved in DB
+                try:
+                    sc = str(getattr(config, 'short_code', '') or '').strip()
+                    pk = str(getattr(config, 'passkey', '') or '').strip()
+                    looks_valid = sc.isdigit() and len(sc) >= 5 and len(pk) >= 10
+                except Exception:
+                    looks_valid = False
+                have_cfg_creds = looks_valid and all([config.consumer_key, config.consumer_secret, config.short_code, config.passkey])
+            have_creds = have_cfg_creds or env_have_creds
+            default_sim = 'false' if have_creds else 'true'
+            simulate = str(request.data.get('simulate', default_sim)).lower() in ('1', 'true', 'yes')
+        except Exception as e:
+            return Response({'detail': f'Invalid request: {e}'}, status=400)
+
+        sch = getattr(invoice.student.klass, 'school', None)
+        enabled = self._enabled_methods_for_school(sch)
+        if 'mpesa' not in enabled:
+            return Response({'detail': 'Mpesa payments are disabled by admin'}, status=400)
+
+        logger.info("STK request init", extra={
+            'invoice_id': invoice.id,
+            'phone': phone[-4:],
+            'amount': amount,
+            'simulate': simulate,
+        })
+        if simulate:
+            _log_payment_health_event(school_id=school_id, method='mpesa', ok=True, context='stk_pending_simulated')
+            return Response({'status': 'pending', 'message': 'STK simulated.'}, status=202)
+
+        if not have_creds:
+            _log_payment_health_event(school_id=school_id, method='mpesa', ok=True, context='stk_pending_no_creds')
+            return Response({'status': 'pending', 'message': 'STK credentials not configured; set MPESA_* env vars.'}, status=202)
+
+        try:
+            # Prefer per-school config if it looks valid; otherwise fall back to env.
+            # If Daraja OAuth fails for config, also fall back to env automatically.
+            if config and have_cfg_creds:
+                try:
+                    client = MpesaClient(
+                        consumer_key=config.consumer_key,
+                        consumer_secret=config.consumer_secret,
+                        short_code=config.short_code,
+                        passkey=config.passkey,
+                        callback_url=(config.callback_url or os.getenv('MPESA_CALLBACK_URL')),
+                        environment=config.environment,
+                    )
+                    resp = client.stk_push(phone=str(phone), amount=amount, account_ref=f"INV{invoice.id}")
+                except Exception:
+                    client = MpesaClient()
+                    resp = client.stk_push(phone=str(phone), amount=amount, account_ref=f"INV{invoice.id}")
+            else:
+                client = MpesaClient()
+                resp = client.stk_push(phone=str(phone), amount=amount, account_ref=f"INV{invoice.id}")
+            checkout_id = resp.get('CheckoutRequestID') or ''
+            if checkout_id:
+                invoice.mpesa_transaction_id = checkout_id
+                invoice.save(update_fields=['mpesa_transaction_id'])
+            logger.info("STK initiated", extra={'invoice_id': invoice.id, 'checkout_request_id': checkout_id})
+            return Response({'status': 'pending', 'message': 'STK initiated', 'daraja': resp}, status=202)
+        except Exception as e:
+            logger.exception("STK initiation failed", extra={'invoice_id': invoice.id})
+            _log_payment_health_event(school_id=school_id, method='mpesa', ok=False, context='stk_initiation_failed')
+            return Response({'detail': f'STK error: {e}'}, status=500)
+
+    @action(detail=False, methods=['post'], url_path='pay-balance-stk')
+    def pay_balance_stk(self, request):
+        """Initiate an STK push to pay against overall balance (no specific invoice).
+        Body: { phone: string, amount: number, simulate?: bool, student_id?: id }
+        """
+        user = request.user
+        sid = request.data.get('student_id')
+        if sid and getattr(user, 'role', None) in ('admin', 'finance'):
+            stu = Student.objects.filter(id=sid).first()
+        else:
+            stu = Student.objects.filter(user=user).first()
+        if not stu:
+            return Response({'detail': 'Student not found or not specified'}, status=403)
+
+        try:
+            phone = (str(request.data.get('phone') or '').strip())
+            if phone.startswith('+'):
+                phone = phone[1:]
+            if phone.startswith('0') and len(phone) == 10:
+                phone = '254' + phone[1:]
+            if not phone:
+                return Response({'detail': 'phone is required'}, status=400)
+            amount = float(request.data.get('amount') or 0)
+            if amount <= 0:
+                return Response({'detail': 'Amount must be greater than 0'}, status=400)
+        except Exception as e:
+            return Response({'detail': f'Invalid request: {e}'}, status=400)
+
+        school = getattr(stu.klass, 'school', None)
+        config = MpesaConfig.objects.filter(school=school).first() if school else None
+        required = ('MPESA_CONSUMER_KEY', 'MPESA_CONSUMER_SECRET', 'MPESA_SHORT_CODE', 'MPESA_PASSKEY')
+        env_have_creds = all(os.getenv(k) for k in required)
+        have_cfg_creds = False
+        if config:
+            try:
+                sc = str(getattr(config, 'short_code', '') or '').strip()
+                pk = str(getattr(config, 'passkey', '') or '').strip()
+                looks_valid = sc.isdigit() and len(sc) >= 5 and len(pk) >= 10
+            except Exception:
+                looks_valid = False
+            have_cfg_creds = looks_valid and all([config.consumer_key, config.consumer_secret, config.short_code, config.passkey])
+        have_creds = have_cfg_creds or env_have_creds
+
+        default_sim = 'false' if have_creds else 'true'
+        simulate = str(request.data.get('simulate', default_sim)).lower() in ('1', 'true', 'yes')
+
+        enabled = self._enabled_methods_for_school(school)
+        if 'mpesa' not in enabled:
+            return Response({'detail': 'Mpesa payments are disabled'}, status=400)
+        if simulate:
+            _log_payment_health_event(school_id=getattr(school, 'id', None), method='mpesa', ok=True, context='stk_simulated')
+            return Response({'status': 'pending', 'message': 'STK simulated.'}, status=202)
+        if not have_creds:
+            return Response({'detail': 'Mpesa credentials not configured'}, status=400)
+
+        try:
+            account_ref = stu.admission_no or f"STU{stu.id}"
+            if config and have_cfg_creds:
+                try:
+                    client = MpesaClient(
+                        consumer_key=config.consumer_key,
+                        consumer_secret=config.consumer_secret,
+                        short_code=config.short_code,
+                        passkey=config.passkey,
+                        callback_url=(config.callback_url or os.getenv('MPESA_CALLBACK_URL')),
+                        environment=config.environment,
+                    )
+                    resp = client.stk_push(phone=str(phone), amount=amount, account_ref=account_ref)
+                except Exception:
+                    client = MpesaClient()
+                    resp = client.stk_push(phone=str(phone), amount=amount, account_ref=account_ref)
+            else:
+                client = MpesaClient()
+                resp = client.stk_push(phone=str(phone), amount=amount, account_ref=account_ref)
+            return Response({'status': 'pending', 'message': 'STK initiated', 'daraja': resp}, status=202)
+        except Exception as e:
+            logging.getLogger(__name__).exception('STK initiation failed')
+            return Response({'detail': f'STK error: {e}'}, status=500)
+
 
 class IncomingPaymentViewSet(viewsets.ModelViewSet):
     queryset = IncomingPayment.objects.all()
@@ -655,6 +844,92 @@ class IncomingPaymentViewSet(viewsets.ModelViewSet):
             inv.save(update_fields=['status'])
             remaining -= alloc
         return created_ids, remaining
+
+    @action(detail=False, methods=['post'], url_path='verify_mpesa')
+    def verify_mpesa(self, request):
+        receipt = str(request.data.get('receipt') or request.data.get('reference') or '').strip()
+        if not receipt:
+            return Response({'detail': 'receipt (M-Pesa code) is required'}, status=400)
+        raw_amount = request.data.get('amount', None)
+        amount = None
+        if raw_amount is not None and str(raw_amount).strip() != '':
+            try:
+                amount = float(raw_amount)
+            except (TypeError, ValueError):
+                return Response({'detail': 'Invalid amount'}, status=400)
+            if amount <= 0:
+                return Response({'detail': 'Amount must be greater than 0'}, status=400)
+        sid = request.data.get('student_id') or request.data.get('student')
+        if not sid:
+            return Response({'detail': 'student_id is required'}, status=400)
+
+        school = getattr(getattr(request, 'user', None), 'school', None)
+        stu_qs = Student.objects.filter(id=sid)
+        if school:
+            stu_qs = stu_qs.filter(klass__school=school)
+        student = stu_qs.first()
+        if not student:
+            return Response({'detail': 'Student not found'}, status=404)
+
+        existing_pay = Payment.objects.filter(reference__iexact=receipt, invoice__student=student).order_by('-id').first()
+        if existing_pay:
+            return Response({'status': 'exists', 'payment': PaymentSerializer(existing_pay).data}, status=200)
+
+        # Receipt-only mode: just check existence and return not_found (no allocation possible without amount)
+        if amount is None:
+            existing_inc = IncomingPayment.objects.filter(reference__iexact=receipt, matched_student=student).order_by('-id').first()
+            if existing_inc:
+                return Response({'status': 'exists', 'incoming_payment': IncomingPaymentSerializer(existing_inc).data}, status=200)
+            return Response({'status': 'not_found', 'detail': 'No payment found for this M-Pesa Transaction ID.'}, status=404)
+
+        phone = str(request.data.get('phone') or '').strip()
+        account_ref = str(request.data.get('account_ref') or request.data.get('accountReference') or (student.admission_no or '')).strip()
+
+        inc = IncomingPayment.objects.create(
+            source='mpesa',
+            external_id=receipt[:100],
+            amount=float(amount),
+            currency='KES',
+            reference=receipt[:100],
+            narration='Manual verify',
+            account_ref=account_ref[:100],
+            phone=phone[:50],
+            matched_student=student,
+            status='matched',
+            notes='verified manually',
+        )
+
+        created_ids, remaining = self._allocate_fifo(student, float(amount), 'mpesa', receipt, request.user)
+        if created_ids:
+            inc.status = 'reconciled'
+            inc.matched_invoice = Invoice.objects.filter(student=student).order_by('-created_at', '-id').first()
+            inc.save(update_fields=['status', 'matched_invoice'])
+
+        if remaining > 0:
+            try:
+                IncomingPayment.objects.create(
+                    source='mpesa',
+                    external_id=f"{receipt[:90]}_PREPAID",
+                    amount=float(remaining),
+                    currency='KES',
+                    reference=receipt[:100],
+                    narration='Manual verify',
+                    account_ref=account_ref[:100],
+                    phone=phone[:50],
+                    matched_student=student,
+                    status='matched',
+                    notes='prepaid credit (manual verify)',
+                )
+            except Exception:
+                pass
+
+        return Response({
+            'status': 'verified',
+            'incoming_payment': IncomingPaymentSerializer(inc).data,
+            'created_payments': created_ids,
+            'amount_allocated': float(amount - remaining),
+            'amount_unallocated': float(remaining),
+        }, status=201)
 
     @action(detail=False, methods=['post'], url_path='ingest', parser_classes=[JSONParser])
     def ingest(self, request):
@@ -1192,11 +1467,10 @@ class IncomingPaymentViewSet(viewsets.ModelViewSet):
             'created_ids': created_ids[:50],
         }, status=201 if created else 200)
 
-    @action(detail=True, methods=['post'], url_path='stk_push', permission_classes=[permissions.IsAuthenticated])
+    @action(detail=True, methods=['post'], url_path='stk_push')
     def stk_push(self, request, pk=None):
         """Initiate an Mpesa STK push for this invoice.
         Body: { phone: string, amount?: number, simulate?: bool }
-        For demo, if simulate is true (default), record payment immediately.
         """
         # Fetch by primary key directly; enforce authorization checks below
         invoice = Invoice.objects.select_related('student', 'student__klass').filter(pk=pk).first()
@@ -1296,17 +1570,26 @@ class IncomingPaymentViewSet(viewsets.ModelViewSet):
         _log_payment_health_event(school_id=getattr(getattr(invoice.student.klass, 'school', None), 'id', None), method='mpesa', ok=True, context='stk_pending_no_creds')
         return Response({'status':'pending','message':'STK credentials not configured; set MPESA_* env vars or use simulate=true.'}, status=202)
 
-    @action(detail=False, methods=['post'], url_path='pay_balance_stk', permission_classes=[permissions.IsAuthenticated])
+    @action(detail=False, methods=['post'], url_path='pay-balance-stk')
     def pay_balance_stk(self, request):
-        """Initiate a Co-op STK push to pay against overall balance (no specific invoice).
-        Body: { phone: string, amount: number, simulate?: bool }
-        Uses AccountReference = student's admission number so callback can auto-allocate FIFO.
+        """Initiate an STK push to pay against overall balance (no specific invoice).
+        Body: { phone: string, amount: number, simulate?: bool, student_id?: id }
+        - If student_id is provided and requester is admin/finance, it initiates for that student.
+        - Otherwise it initiates for the current logged-in student.
         """
-        # Resolve current student
         user = request.user
-        stu = Student.objects.filter(user=user).first()
-        if not stu and getattr(user, 'role', None) not in ('admin','finance'):
-            return Response({'detail': 'Not a student account'}, status=403)
+        stu = None
+        
+        # Resolve student
+        sid = request.data.get('student_id')
+        if sid and user.role in ('admin', 'finance'):
+            stu = Student.objects.filter(id=sid).first()
+        else:
+            stu = Student.objects.filter(user=user).first()
+
+        if not stu:
+            return Response({'detail': 'Student not found or not specified'}, status=403)
+        
         try:
             phone = (str(request.data.get('phone') or '').strip())
             if phone.startswith('+'):
@@ -1321,40 +1604,59 @@ class IncomingPaymentViewSet(viewsets.ModelViewSet):
         except Exception as e:
             return Response({'detail': f'Invalid request: {e}'}, status=400)
 
-        # Determine credentials for Co-op
-        have_creds = all(os.getenv(k) for k in ('COOP_CLIENT_ID','COOP_CLIENT_SECRET','COOP_BASE_URL','COOP_TOKEN_URL','COOP_SHORT_CODE','COOP_PASSKEY'))
+        # Determine credentials
+        school = getattr(stu.klass, 'school', None)
+        config = MpesaConfig.objects.filter(school=school).first() if school else None
+        
+        if config:
+            have_creds = all([config.consumer_key, config.consumer_secret, config.short_code, config.passkey])
+        else:
+            required = ('MPESA_CONSUMER_KEY','MPESA_CONSUMER_SECRET','MPESA_SHORT_CODE','MPESA_PASSKEY')
+            have_creds = all(os.getenv(k) for k in required)
+            
         default_sim = 'false' if have_creds else 'true'
         simulate = str(request.data.get('simulate', default_sim)).lower() in ('1','true','yes')
 
-        # Ensure Mpesa method is enabled for the school if a student is provided
-        sch = getattr(getattr(stu, 'klass', None), 'school', None) if stu else None
-        enabled = self._enabled_methods_for_school(sch)
+        # Check if enabled
+        enabled = self._enabled_methods_for_school(school)
         if 'mpesa' not in enabled:
-            return Response({'detail': 'Mpesa payments are disabled by admin'}, status=400)
+            return Response({'detail': 'Mpesa payments are disabled'}, status=400)
 
         if simulate:
-            _log_payment_health_event(school_id=getattr(sch, 'id', None), method='bank', ok=True, context='coop_stk_pending_simulated')
-            return Response({'status': 'pending', 'message': 'Balance STK simulated. Configure COOP_* env vars or set simulate=false.'}, status=202)
+            _log_payment_health_event(school_id=getattr(school, 'id', None), method='mpesa', ok=True, context='stk_simulated')
+            return Response({'status': 'pending', 'message': 'STK simulated.'}, status=202)
 
         if not have_creds:
-            _log_payment_health_event(school_id=getattr(sch, 'id', None), method='bank', ok=True, context='coop_stk_pending_no_creds')
-            return Response({'status': 'pending', 'message': 'Co-op credentials not configured; set COOP_* env vars or use simulate=true.'}, status=202)
+            return Response({'detail': 'Mpesa credentials not configured'}, status=400)
 
         try:
-            client = CoopStkClient()
-            account_ref = (getattr(stu, 'admission_no', None) or f"STU{getattr(stu, 'id', '0')}")
+            if config:
+                client = MpesaClient(
+                    consumer_key=config.consumer_key,
+                    consumer_secret=config.consumer_secret,
+                    short_code=config.short_code,
+                    passkey=config.passkey,
+                    callback_url=(config.callback_url or os.getenv('MPESA_CALLBACK_URL')),
+                    environment=config.environment,
+                )
+            else:
+                client = MpesaClient()
+            
+            account_ref = stu.admission_no or f"STU{stu.id}"
             resp = client.stk_push(phone=str(phone), amount=amount, account_ref=account_ref)
-            return Response({'status': 'pending', 'message': 'STK initiated', 'coop': resp}, status=202)
+            return Response({'status': 'pending', 'message': 'STK initiated', 'daraja': resp}, status=202)
         except Exception as e:
-            logging.getLogger(__name__).exception('Balance STK initiation failed')
-            return Response({'detail': f'Co-op STK error: {e}'}, status=500)
+            logging.getLogger(__name__).exception('STK initiation failed')
+            return Response({'detail': f'STK error: {e}'}, status=500)
 
-    @action(detail=True, methods=['post'], url_path='coop_stk', permission_classes=[permissions.IsAuthenticated])
+    @action(detail=True, methods=['post'], url_path='coop_stk')
     def coop_stk(self, request, pk=None):
         """Initiate a Co-op Bank gateway STK push for this invoice.
         Body: { phone: string, amount?: number, simulate?: bool }
         Uses env vars COOP_* set in backend or server env.
         """
+        if str(os.getenv('ENABLE_COOP_STK', '') or '').lower() not in ('1', 'true', 'yes'):
+            return Response({'detail': 'Co-op STK is disabled. Use stk_push (Daraja) instead.'}, status=410)
         # Fetch by primary key directly; enforce authorization checks below
         invoice = Invoice.objects.select_related('student', 'student__klass').filter(pk=pk).first()
         if not invoice:
@@ -1921,6 +2223,7 @@ def mpesa_callback(request):
             recorded_by=None,
         )
         logger.info("Payment recorded from callback", extra={'invoice_id': invoice.id, 'payment_id': pay.id, 'receipt': receipt})
+        
         # Update invoice status
         totals = invoice.payments.aggregate(s=Sum('amount'))
         total_paid = float(totals['s'] or 0)
@@ -1932,8 +2235,20 @@ def mpesa_callback(request):
             invoice.status = 'unpaid'
         invoice.save(update_fields=['status'])
 
+        # Notify student and guardian
+        try:
+            student = invoice.student
+            msg = f"Dear {student.name}, payment of KES {amount} received for {invoice.category.name if invoice.category else 'Fees'}. Receipt: {receipt}. Balance: KES {float(invoice.amount) - total_paid}."
+            if student.phone:
+                send_sms(student.phone, msg, school_id=student.school_id)
+            if student.email:
+                send_email_safe("Fee Payment Received", msg, student.email, school_id=student.school_id)
+        except Exception as e:
+            logger.error(f"Notification failed: {e}")
+
     elif result_code == 0 and amount and not invoice:
-        # Attempt to auto-allocate FIFO by student admission number in account_ref; fallback to inbox
+        # Attempt to auto-allocate FIFO by student admission number in account_ref.
+        # If there is no outstanding invoice balance, record as prepaid credit.
         allocated = False
         stu = None
         if account_ref:
@@ -1967,6 +2282,23 @@ def mpesa_callback(request):
                     inv.status = 'unpaid'
                 inv.save(update_fields=['status'])
                 allocated = True
+            if remaining > 0:
+                try:
+                    IncomingPayment.objects.create(
+                        source='mpesa',
+                        external_id=str(checkout_id or ''),
+                        amount=float(remaining),
+                        currency='KES',
+                        reference=str(receipt or ''),
+                        narration='STK Callback',
+                        account_ref=str(account_ref or ''),
+                        phone=str(phone or ''),
+                        matched_student=stu,
+                        status='matched',
+                        notes='prepaid credit (no outstanding balance at time of payment)',
+                    )
+                except Exception:
+                    pass
         if not allocated:
             try:
                 IncomingPayment.objects.create(
