@@ -2209,21 +2209,23 @@ def mpesa_callback(request):
     if request.method != 'POST':
         return JsonResponse({'detail': 'Method not allowed'}, status=405)
     try:
-        data = json.loads(request.body.decode('utf-8') or '{}')
-    except Exception:
-        data = {}
-
+        data = json.loads(request.body)
+        logger.info(f"MPESA CALLBACK DATA: {json.dumps(data)}")
+    except Exception as e:
+        logger.exception("MPESA CALLBACK CRITICAL ERROR")
+        return JsonResponse({"ResultCode": 1, "ResultDesc": "Failed"})
     # Expected structure: { Body: { stkCallback: { CheckoutRequestID, ResultCode, ResultDesc, CallbackMetadata: { Item: [ {Name, Value}, ... ] } } } }
-    stk_cb = (
-        data.get('Body', {})
-            .get('stkCallback', {})
-    )
+    stk_cb = data.get('Body', {}).get('stkCallback', {})
     checkout_id = stk_cb.get('CheckoutRequestID')
     result_code_raw = stk_cb.get('ResultCode')
+    
+    logger.info(f"PROCESSING CALLBACK: CheckoutID={checkout_id}, ResultCode={result_code_raw}")
+    
     try:
         result_code = int(result_code_raw)
-    except Exception:
+    except (TypeError, ValueError):
         result_code = result_code_raw
+    
     # Build a lookup for metadata items
     meta_items = stk_cb.get('CallbackMetadata', {}).get('Item', []) if isinstance(stk_cb.get('CallbackMetadata', {}), dict) else []
     meta = {item.get('Name'): item.get('Value') for item in meta_items if isinstance(item, dict)}
@@ -2232,12 +2234,16 @@ def mpesa_callback(request):
     phone = meta.get('PhoneNumber') or meta.get('MSISDN')
     account_ref = meta.get('AccountReference') or meta.get('BillRefNumber')
 
+    logger.info(f"CALLBACK METADATA: Receipt={receipt}, Amount={amount}, Phone={phone}, Ref={account_ref}")
+
     # Find invoice by previously saved CheckoutRequestID
     invoice = None
     if checkout_id:
         invoice = Invoice.objects.filter(mpesa_transaction_id=checkout_id).first()
-
-    logger.info("STK callback received", extra={'checkout_request_id': checkout_id, 'result_code': result_code})
+        if invoice:
+            logger.info(f"MATCHED INVOICE: ID={invoice.id}, Student={invoice.student.name}")
+        else:
+            logger.info(f"NO INVOICE MATCHED FOR CheckoutID={checkout_id}")
     # If payment successful, record it
     if result_code == 0 and invoice and amount:
         # Avoid duplicates on callback retries
@@ -2279,22 +2285,31 @@ def mpesa_callback(request):
 
     elif result_code == 0 and amount and not invoice:
         # Reconcile balance payments by CheckoutRequestID (preferred), then account_ref.
+        logger.info(f"Attempting balance reconciliation for CheckoutID={checkout_id}")
         allocated = False
         stu = None
         ip = None
         try:
             if checkout_id:
                 ip = IncomingPayment.objects.filter(source='mpesa', external_id=str(checkout_id)).select_related('matched_student').first()
-                if ip and getattr(ip, 'matched_student', None):
-                    stu = ip.matched_student
-        except Exception:
+                if ip:
+                    logger.info(f"FOUND IncomingPayment: ID={ip.id}, matched_student={ip.matched_student}")
+                    if ip.matched_student:
+                        stu = ip.matched_student
+        except Exception as e:
+            logger.error(f"Error looking up IncomingPayment: {e}")
             ip = None
 
         if not stu and account_ref:
+            logger.info(f"Fallback to account_ref lookup: {account_ref}")
             stu = Student.objects.filter(admission_no__iexact=str(account_ref).strip()).first()
+            if stu:
+                logger.info(f"MATCHED STUDENT by account_ref: {stu.name}")
+
         if stu:
             remaining = float(amount)
             inv_qs = Invoice.objects.filter(student=stu).order_by('due_date', 'created_at', 'id')
+            logger.info(f"Allocating KES {remaining} to {inv_qs.count()} invoices for {stu.name}")
             for inv in inv_qs:
                 if remaining <= 0:
                     break
@@ -2305,9 +2320,11 @@ def mpesa_callback(request):
                 alloc = min(remaining, inv_balance)
                 # Avoid duplicates if callback replays
                 if receipt and Payment.objects.filter(reference=str(receipt), invoice=inv).exists():
+                    logger.info(f"Duplicate payment detected for Invoice {inv.id}, skipping alloc")
                     remaining -= alloc
                     allocated = True
                     continue
+                
                 Payment.objects.create(
                     invoice=inv,
                     amount=float(alloc),
@@ -2315,6 +2332,7 @@ def mpesa_callback(request):
                     reference=receipt or (checkout_id or ''),
                     recorded_by=None,
                 )
+                logger.info(f"Allocated {alloc} to Invoice {inv.id}")
                 remaining -= alloc
                 # update invoice status
                 new_paid = paid_so_far + float(alloc)
@@ -2326,23 +2344,27 @@ def mpesa_callback(request):
                     inv.status = 'unpaid'
                 inv.save(update_fields=['status'])
                 allocated = True
+            
             if remaining > 0:
+                logger.info(f"Remaining amount KES {remaining} after allocation; recording as prepaid credit")
                 try:
-                    IncomingPayment.objects.create(
-                        source='mpesa',
-                        external_id=str(checkout_id or ''),
-                        amount=float(remaining),
-                        currency='KES',
-                        reference=str(receipt or ''),
-                        narration='STK Callback',
-                        account_ref=str(account_ref or ''),
-                        phone=str(phone or ''),
-                        matched_student=stu,
-                        status='matched',
-                        notes='prepaid credit (no outstanding balance at time of payment)',
-                    )
-                except Exception:
-                    pass
+                    if not IncomingPayment.objects.filter(reference=str(receipt)).exists():
+                        IncomingPayment.objects.create(
+                            source='mpesa',
+                            external_id=str(checkout_id or ''),
+                            amount=float(remaining),
+                            currency='KES',
+                            reference=str(receipt or ''),
+                            narration='STK Callback',
+                            account_ref=str(account_ref or ''),
+                            phone=str(phone or ''),
+                            matched_student=stu,
+                            status='matched',
+                            notes='prepaid credit (no outstanding balance at time of payment)',
+                        )
+                except Exception as e:
+                    logger.error(f"Failed to create remaining IncomingPayment: {e}")
+            
             # Mark the pending incoming payment as matched/processed
             try:
                 if ip:
@@ -2353,77 +2375,28 @@ def mpesa_callback(request):
                     ip.status = 'matched' if allocated else 'pending'
                     ip.notes = 'callback received; allocated to invoices' if allocated else (ip.notes or '')
                     ip.save(update_fields=['reference', 'amount', 'phone', 'account_ref', 'status', 'notes', 'updated_at'])
-            except Exception:
-                pass
+                    logger.info(f"Updated IncomingPayment {ip.id} status to {ip.status}")
+            except Exception as e:
+                logger.error(f"Failed to update IncomingPayment: {e}")
+        
         if not allocated:
+            logger.info("No student matched for balance payment; recording as pending IncomingPayment")
             try:
-                IncomingPayment.objects.create(
-                    source='mpesa',
-                    external_id=str(checkout_id or ''),
-                    amount=float(amount),
-                    currency='KES',
-                    reference=str(receipt or ''),
-                    narration='STK Callback',
-                    account_ref=str(account_ref or ''),
-                    phone=str(phone or ''),
-                    status='pending',
-                )
-            except Exception:
-                pass
-    # Respond to Daraja per spec
-    # If no invoice was tied to the CheckoutRequestID, try auto-allocate FIFO by account reference
-    if result_code == 0 and not invoice and amount is not None:
-        account_ref = None
-        try:
-            meta_items = stk_cb.get('CallbackMetadata', {}).get('Item', []) if isinstance(stk_cb.get('CallbackMetadata', {}), dict) else []
-            meta = {item.get('Name'): item.get('Value') for item in meta_items if isinstance(item, dict)}
-            account_ref = meta.get('AccountReference') or meta.get('BillRefNumber')
-        except Exception:
-            account_ref = None
-        stu = None
-        if account_ref:
-            stu = Student.objects.filter(admission_no__iexact=str(account_ref).strip()).first()
-        if stu:
-            remaining = float(amount)
-            inv_qs = Invoice.objects.filter(student=stu).order_by('due_date', 'created_at', 'id')
-            for inv in inv_qs:
-                if remaining <= 0:
-                    break
-                paid_so_far = float(inv.payments.aggregate(s=Sum('amount'))['s'] or 0)
-                inv_balance = float(inv.amount) - paid_so_far
-                if inv_balance <= 0:
-                    continue
-                alloc = min(remaining, inv_balance)
-                Payment.objects.create(
-                    invoice=inv,
-                    amount=float(alloc),
-                    method='mpesa',
-                    reference=receipt or (checkout_id or ''),
-                    recorded_by=None,
-                )
-                remaining -= alloc
-                new_paid = paid_so_far + float(alloc)
-                if new_paid >= float(inv.amount):
-                    inv.status = 'paid'
-                elif new_paid > 0:
-                    inv.status = 'partial'
-                else:
-                    inv.status = 'unpaid'
-                inv.save(update_fields=['status'])
-        else:
-            # Fallback to inbox for manual reconciliation
-            try:
-                IncomingPayment.objects.create(
-                    source='mpesa',
-                    external_id=str(checkout_id or ''),
-                    amount=float(amount),
-                    currency='KES',
-                    reference=str(receipt or ''),
-                    narration='Co-op STK Callback',
-                    status='pending',
-                )
-            except Exception:
-                pass
+                if not IncomingPayment.objects.filter(reference=str(receipt)).exists():
+                    IncomingPayment.objects.create(
+                        source='mpesa',
+                        external_id=str(checkout_id or ''),
+                        amount=float(amount),
+                        currency='KES',
+                        reference=str(receipt or ''),
+                        narration='STK Callback',
+                        account_ref=str(account_ref or ''),
+                        phone=str(phone or ''),
+                        status='pending',
+                    )
+            except Exception as e:
+                logger.error(f"Failed to create unallocated IncomingPayment: {e}")
+
     return JsonResponse({'ResultCode': 0, 'ResultDesc': 'Accepted'})
 
 
