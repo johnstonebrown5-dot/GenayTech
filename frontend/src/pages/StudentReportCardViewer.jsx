@@ -1,11 +1,11 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, Link, useLocation } from 'react-router-dom'
 import api, { toAbsoluteUrl } from '../api'
 import { useAuth } from '../auth'
 
-export default function StudentReportCardViewer({ embedded=false, hideControls=false, hideHistory=false, showTermSelector=true, showExamSelector=true, showBackPrint=true, selectedTermYear: controlledTermYear=null, onSelectedTermYearChange, selectedExamId: controlledExamId=null, onSelectedExamIdChange }){
+export default function StudentReportCardViewer({ embedded=false, hideControls=false, hideHistory=false, showTermSelector=true, showExamSelector=true, showBackPrint=true, selectedTermYear: controlledTermYear=null, onSelectedTermYearChange, selectedExamId: controlledExamId=null, onSelectedExamIdChange, studentIdProp=null, autoFlow=false, autoFlowWidth=820 }){
   const { id } = useParams()
-  const studentId = Number(id)
+  const studentId = Number(studentIdProp ?? id)
   const { user } = useAuth()
   const { search } = useLocation()
   const queryExamId = useMemo(()=>{
@@ -681,6 +681,52 @@ export default function StudentReportCardViewer({ embedded=false, hideControls=f
     return ranks[key] || null
   }, [ranks, effectiveExamId, queryExamId, selectedExam?.id])
 
+  const flowRef = useRef(null)
+  const [flowScale, setFlowScale] = useState(1)
+
+  useEffect(() => {
+    if (!autoFlow) return
+
+    let raf = 0
+    const recalc = () => {
+      try {
+        const el = flowRef.current
+        if (!el) return
+        const w = el.clientWidth || 0
+        const base = Number(autoFlowWidth) || 820
+        if (w > 0 && base > 0) {
+          const next = Math.min(1, w / base)
+          setFlowScale(next)
+        }
+      } catch {
+      }
+    }
+
+    const onResize = () => {
+      cancelAnimationFrame(raf)
+      raf = requestAnimationFrame(recalc)
+    }
+
+    recalc()
+    if (typeof window !== 'undefined') window.addEventListener('resize', onResize)
+
+    let ro = null
+    try {
+      if (typeof ResizeObserver !== 'undefined') {
+        ro = new ResizeObserver(() => onResize())
+        flowRef.current && ro.observe(flowRef.current)
+      }
+    } catch {
+      ro = null
+    }
+
+    return () => {
+      cancelAnimationFrame(raf)
+      try { if (typeof window !== 'undefined') window.removeEventListener('resize', onResize) } catch {}
+      try { ro && ro.disconnect() } catch {}
+    }
+  }, [autoFlow, autoFlowWidth])
+
   return (
     <div className="p-6">
       <div className="max-w-3xl mx-auto">
@@ -714,7 +760,18 @@ export default function StudentReportCardViewer({ embedded=false, hideControls=f
         {loading && <div className="bg-white p-4 rounded card shadow border border-gray-100">Loading...</div>}
 
         {!loading && !error && (
-          <div className="relative overflow-hidden rounded-xl border border-gray-300 bg-white shadow-lg print:shadow-none report-card-print-area">
+          <div
+            ref={flowRef}
+            className="relative overflow-hidden rounded-xl border border-gray-300 bg-white shadow-lg print:shadow-none report-card-print-area"
+          >
+            {autoFlow && (
+              <style>{`@media print{ .report-card-autoflow{ transform:none !important; width:auto !important; } }`}</style>
+            )}
+
+            <div
+              className={autoFlow ? 'report-card-autoflow' : ''}
+              style={autoFlow ? { width: Number(autoFlowWidth) || 820, transform: `scale(${flowScale})`, transformOrigin: 'top left' } : undefined}
+            >
             {(() => {
               const raw = (school?.logo_url || school?.logo || '')
               const has = !!raw
@@ -882,6 +939,7 @@ export default function StudentReportCardViewer({ embedded=false, hideControls=f
                 </div>
               </div>
               </div>
+            </div>
             </div>
           </div>
         )}

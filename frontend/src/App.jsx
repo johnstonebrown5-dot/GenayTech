@@ -28,6 +28,8 @@ import StudentDashboard from './pages/StudentDashboard'
 import StudentReportCard from './pages/StudentReportCard'
 import StudentReportCardViewer from './pages/StudentReportCardViewer'
 import StudentAllReportCards from './pages/StudentAllReportCards'
+import StudentPayFees from './pages/StudentPayFees'
+import StudentVerifyPayment from './pages/StudentVerifyPayment'
 import StudentLayout from './components/StudentLayout'
 import FinanceDashboard from './pages/FinanceDashboard';
 import FinanceLayout from './components/FinanceLayout';
@@ -387,8 +389,10 @@ export default function App() {
               <Route index element={<StudentDashboard/>} />
               <Route path="messages" element={<Messages/>} />
               <Route path="academics" element={<StudentDashboard/>} />
-              <Route path="report-card" element={<StudentReportCard/>} />
+              <Route path="report-card" element={<StudentAllReportCards/>} />
               <Route path="finance" element={<StudentDashboard/>} />
+              <Route path="finance/pay" element={<StudentPayFees/>} />
+              <Route path="finance/verify" element={<StudentVerifyPayment/>} />
             </Route>
             <Route path="/finance" element={<ProtectedRoute roles={["finance"]}><FinanceLayout><Outlet/></FinanceLayout></ProtectedRoute>}>
               <Route index element={<FinanceDashboard/>} />

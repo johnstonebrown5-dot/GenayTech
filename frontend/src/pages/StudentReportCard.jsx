@@ -336,7 +336,7 @@ export default function StudentReportCard(){
   }, [examResults])
  
   return (
-    <div className="p-6">
+    <div className="-mx-3 sm:mx-0 px-4 sm:px-6 pt-4 pb-6">
       {/* Print styles for a clean sheet */}
       <style>{`
         @page { size: A4 portrait; margin: 12mm; }
@@ -353,54 +353,65 @@ export default function StudentReportCard(){
 
       <div className="max-w-4xl mx-auto space-y-4">
         {/* Screen header (hidden on print) */}
-        <div className="flex items-center gap-3 no-print">
-          {(() => {
-            const rawUrl = (school?.logo_url || user?.school?.logo_url || school?.logo || user?.school?.logo || '')
-            const src = rawUrl ? toAbsoluteUrl(String(rawUrl)) + (rawUrl.includes('?') ? '' : `?v=${(school?.id||'')}-${(student?.id||'')}`) : ''
-            return (src && !logoFailed) ? (
-            <img
-              src={src}
-              alt="School Logo"
-              className="w-10 h-10 rounded object-contain bg-white border"
-              loading="eager"
-              onError={(e)=>{ try{ e.currentTarget.src=''; }catch(_){} setLogoFailed(true) }}
-              referrerPolicy="no-referrer"
-            />
-            ) : (
-            <div className="w-10 h-10 rounded bg-gray-100 flex items-center justify-center text-gray-400 text-lg" aria-label="School Logo Placeholder">🏫</div>
-            )
-          })()}
-          <div>
-            <div className="text-base font-semibold leading-tight">{school?.name || user?.school?.name || 'School'}</div>
-            {(school?.motto || user?.school?.motto) ? (
-              <div className="text-xs text-gray-500 leading-tight">{school?.motto || user?.school?.motto}</div>
-            ) : null}
+        <div className="no-print rounded-3xl border border-slate-200 bg-white/95 backdrop-blur-xl shadow-[0_18px_45px_rgba(15,23,42,0.08)] p-4 sm:p-5">
+          <div className="flex items-center gap-3">
+            {(() => {
+              const rawUrl = (school?.logo_url || user?.school?.logo_url || school?.logo || user?.school?.logo || '')
+              const src = rawUrl ? toAbsoluteUrl(String(rawUrl)) + (rawUrl.includes('?') ? '' : `?v=${(school?.id||'')}-${(student?.id||'')}`) : ''
+              return (src && !logoFailed) ? (
+              <img
+                src={src}
+                alt="School Logo"
+                className="w-11 h-11 rounded-2xl object-contain bg-white border border-slate-200"
+                loading="eager"
+                onError={(e)=>{ try{ e.currentTarget.src=''; }catch(_){} setLogoFailed(true) }}
+                referrerPolicy="no-referrer"
+              />
+              ) : (
+              <div className="w-11 h-11 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-400 text-lg" aria-label="School Logo Placeholder">🏫</div>
+              )
+            })()}
+            <div className="min-w-0">
+              <div className="text-sm font-semibold text-slate-900 leading-tight truncate">{school?.name || user?.school?.name || 'School'}</div>
+              {(school?.motto || user?.school?.motto) ? (
+                <div className="text-xs text-slate-500 leading-tight truncate">{school?.motto || user?.school?.motto}</div>
+              ) : null}
+            </div>
           </div>
-        </div>
-        <div className="flex items-center justify-between no-print">
-          <h1 className="text-2xl font-semibold tracking-tight">Report Card {parsedTermYear? `— Term ${parsedTermYear.term}, ${parsedTermYear.year}`:''}</h1>
-          <div className="flex items-center gap-2">
-            {termYearOptions.length>0 && (
-              <select
-                className="px-2 py-1.5 border rounded bg-white text-sm"
-                value={selectedTermYear || ''}
-                onChange={(e)=> setSelectedTermYear(e.target.value || null)}
-                title="Select term"
-              >
-                {termYearOptions.map(key=> (
-                  <option key={key} value={key}>{key.replace('-', ' ')}</option>
-                ))}
-              </select>
-            )}
-            <Link to="/student/academics" className="px-3 py-1.5 rounded border hover:bg-gray-50">Back</Link>
-            <button
-              className={`px-3 py-1.5 rounded text-white bg-gray-400 cursor-not-allowed`}
-              title="PDF export supports single exam only. Use Print to save a term report as PDF."
-              disabled
-            >
-              Download PDF
-            </button>
-            <button className="px-3 py-1.5 rounded bg-indigo-600 text-white hover:bg-indigo-700" onClick={()=>{ try { window.print() } catch(_) {} }}>Print</button>
+
+          <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
+              <div className="text-[11px] font-semibold tracking-[0.18em] text-slate-500 uppercase">Report</div>
+              <h1 className="text-xl sm:text-2xl font-semibold tracking-tight text-slate-900 truncate">
+                Report Card {parsedTermYear? `— Term ${parsedTermYear.term}, ${parsedTermYear.year}`:''}
+              </h1>
+            </div>
+
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+              {termYearOptions.length>0 && (
+                <select
+                  className="px-3 py-2 border border-slate-200 rounded-xl bg-white text-sm shadow-sm"
+                  value={selectedTermYear || ''}
+                  onChange={(e)=> setSelectedTermYear(e.target.value || null)}
+                  title="Select term"
+                >
+                  {termYearOptions.map(key=> (
+                    <option key={key} value={key}>{key.replace('-', ' ')}</option>
+                  ))}
+                </select>
+              )}
+              <div className="grid grid-cols-3 gap-2">
+                <Link to="/student/academics" className="px-3 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-center text-sm">Back</Link>
+                <button
+                  className="px-3 py-2 rounded-xl text-white bg-slate-400 cursor-not-allowed text-sm"
+                  title="PDF export supports single exam only. Use Print to save a term report as PDF."
+                  disabled
+                >
+                  PDF
+                </button>
+                <button className="px-3 py-2 rounded-xl bg-indigo-600 text-white hover:bg-indigo-700 text-sm" onClick={()=>{ try { window.print() } catch(_) {} }}>Print</button>
+              </div>
+            </div>
           </div>
         </div>
         {termExams.length>0 && (
@@ -426,11 +437,11 @@ export default function StudentReportCard(){
           </div>
         )}
 
-        {error && <div className="bg-red-50 text-red-700 p-3 rounded border border-red-100">{error}</div>}
-        {loading && <div className="bg-white p-4 rounded card shadow border border-gray-100">Loading...</div>}
+        {error && <div className="bg-red-50 text-red-700 p-3 rounded-2xl border border-red-100">{error}</div>}
+        {loading && <div className="bg-white p-4 rounded-2xl shadow border border-slate-200">Loading...</div>}
 
         {!loading && !error && (
-          <div className="bg-white rounded card print-container shadow border border-gray-100 overflow-hidden">
+          <div className="bg-white rounded-3xl print-container shadow border border-slate-200 overflow-hidden">
             {/* Print header */}
             <div className="print-header hidden print:block">
               <div className="flex items-center justify-between px-1">
@@ -457,7 +468,7 @@ export default function StudentReportCard(){
             <div className="print-body">
             {/* Meta strip */
             }
-            <div className="px-5 py-4 border-b bg-gray-50/60">
+            <div className="px-5 py-4 border-b border-slate-200 bg-slate-50/60">
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
                 <div>
                   <div className="text-gray-500">Student</div>
@@ -591,7 +602,7 @@ export default function StudentReportCard(){
 
         {/* All Exams History (student-facing) */}
         {!loading && !error && (
-          <div className="bg-white rounded card shadow border border-gray-100 p-5">
+          <div className="bg-white rounded-3xl shadow border border-slate-200 p-5">
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-base font-semibold">All Exams History</h2>
               <div className="text-xs text-gray-500">Published exams only</div>

@@ -3,13 +3,33 @@ import { useParams } from 'react-router-dom'
 import api from '../api'
 import StudentReportCardViewer from './StudentReportCardViewer'
 
-export default function StudentAllReportCards(){
+export default function StudentAllReportCards({ studentIdProp=null }){
   const { id } = useParams()
-  const studentId = Number(id)
+  const [resolvedStudentId, setResolvedStudentId] = useState(null)
+  const studentId = useMemo(() => {
+    const candidate = studentIdProp ?? id
+    const n = Number(candidate)
+    return Number.isFinite(n) && n > 0 ? n : null
+  }, [studentIdProp, id])
   const [examResults, setExamResults] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const cardRefs = useRef({})
+
+  useEffect(() => {
+    let alive = true
+    ;(async () => {
+      if (studentId) { if (alive) setResolvedStudentId(studentId); return }
+      try {
+        const st = await api.get('/academics/students/my/', { timeout: 20000 })
+        const sid = Number(st?.data?.id)
+        if (alive) setResolvedStudentId(Number.isFinite(sid) && sid > 0 ? sid : null)
+      } catch {
+        if (alive) setResolvedStudentId(null)
+      }
+    })()
+    return () => { alive = false }
+  }, [studentId])
 
   const printElement = (el, title='Report Card') => {
     if (!el) return
@@ -89,15 +109,16 @@ export default function StudentAllReportCards(){
     ;(async()=>{
       try{
         setLoading(true); setError('')
-        if (!studentId) return
-        const res = await api.get(`/academics/exam_results/?student=${studentId}`)
+        const sid = resolvedStudentId
+        if (!sid) return
+        const res = await api.get(`/academics/exam_results/?student=${sid}`)
         const rows = Array.isArray(res?.data) ? res.data : (Array.isArray(res?.data?.results) ? res.data.results : [])
         if (active) setExamResults(rows)
       }catch(e){ if (active) setError(e?.response?.data?.detail || e?.message || 'Failed to load exams') }
       finally{ if (active) setLoading(false) }
     })()
     return ()=>{ active=false }
-  }, [studentId])
+  }, [resolvedStudentId])
 
   const allExams = useMemo(()=>{
     const seen = new Set()
@@ -121,6 +142,8 @@ export default function StudentAllReportCards(){
     })
     return list
   }, [examResults])
+
+  const effectiveStudentId = resolvedStudentId
 
   if (loading) return <div className="p-6 max-w-3xl mx-auto bg-white rounded shadow">Loading…</div>
   if (error) return <div className="p-6 max-w-3xl mx-auto bg-red-50 text-red-700 rounded border border-red-100">{error}</div>
@@ -154,6 +177,9 @@ export default function StudentAllReportCards(){
               showTermSelector={false}
               showExamSelector={false}
               showBackPrint={true}
+              studentIdProp={effectiveStudentId}
+              autoFlow={true}
+              autoFlowWidth={820}
               selectedTermYear={`${ex.year||''}${ex.term!=null?`-T${ex.term}`:''}`}
               selectedExamId={ex.id}
             />

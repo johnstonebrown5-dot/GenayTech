@@ -791,8 +791,19 @@ class IncomingPaymentViewSet(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ['status', 'source', 'matched_student', 'external_id', 'account_ref', 'phone']
 
+    def get_permissions(self):
+        if getattr(self, 'action', None) in ('list', 'retrieve', 'verify_mpesa'):
+            return [permissions.IsAuthenticated()]
+        return super().get_permissions()
+
     def get_queryset(self):
         qs = super().get_queryset()
+        user = getattr(self.request, 'user', None)
+        if user and getattr(user, 'is_authenticated', False) and getattr(user, 'role', None) not in ('admin', 'finance'):
+            student_id = Student.objects.filter(user=user).values_list('id', flat=True).first()
+            if not student_id:
+                return IncomingPayment.objects.none()
+            qs = qs.filter(matched_student_id=student_id)
         # Scope by school when possible (if matched_student exists)
         school = getattr(getattr(self.request, 'user', None), 'school', None)
         if school:
@@ -884,7 +895,10 @@ class IncomingPaymentViewSet(viewsets.ModelViewSet):
                 return Response({'detail': 'Invalid amount'}, status=400)
             if amount <= 0:
                 return Response({'detail': 'Amount must be greater than 0'}, status=400)
+        user = request.user
         sid = request.data.get('student_id') or request.data.get('student')
+        if getattr(user, 'role', None) not in ('admin', 'finance'):
+            sid = Student.objects.filter(user=user).values_list('id', flat=True).first()
         if not sid:
             return Response({'detail': 'student_id is required'}, status=400)
 
@@ -2363,7 +2377,7 @@ def mpesa_callback(request):
                             account_ref=str(account_ref or ''),
                             phone=str(phone or ''),
                             matched_student=stu,
-                            status='matched',
+                            status='reconciled',
                             notes='prepaid credit (no outstanding balance at time of payment)',
                         )
                 except Exception as e:
@@ -2376,7 +2390,7 @@ def mpesa_callback(request):
                     ip.amount = float(amount)
                     ip.phone = str(phone or ip.phone or '')
                     ip.account_ref = str(account_ref or ip.account_ref or '')
-                    ip.status = 'matched' if allocated else 'pending'
+                    ip.status = 'reconciled' if allocated else 'pending'
                     ip.notes = 'callback received; allocated to invoices' if allocated else (ip.notes or '')
                     ip.save(update_fields=['reference', 'amount', 'phone', 'account_ref', 'status', 'notes', 'updated_at'])
                     logger.info(f"Updated IncomingPayment {ip.id} status to {ip.status}")
@@ -2425,6 +2439,8 @@ def coop_mpesa_callback(request):
     meta = {item.get('Name'): item.get('Value') for item in meta_items if isinstance(item, dict)}
     receipt = meta.get('MpesaReceiptNumber') or meta.get('M-PESAReceiptNumber')
     amount = meta.get('Amount')
+    phone = meta.get('PhoneNumber') or meta.get('MSISDN')
+    account_ref = meta.get('AccountReference') or meta.get('BillRefNumber')
 
     invoice = Invoice.objects.filter(mpesa_transaction_id=checkout_id).first() if checkout_id else None
     logger.info("Co-op STK callback received", extra={'checkout_request_id': checkout_id, 'result_code': result_code})
@@ -2446,6 +2462,103 @@ def coop_mpesa_callback(request):
         else:
             invoice.status = 'unpaid'
         invoice.save(update_fields=['status'])
+
+    elif result_code == 0 and amount and not invoice:
+        # Balance payments initiated from portal: reconcile by CheckoutRequestID then account_ref.
+        allocated = False
+        stu = None
+        ip = None
+        try:
+            if checkout_id:
+                ip = IncomingPayment.objects.filter(source='mpesa', external_id=str(checkout_id)).select_related('matched_student').first()
+                if ip and ip.matched_student:
+                    stu = ip.matched_student
+        except Exception:
+            ip = None
+
+        if not stu and account_ref:
+            stu = Student.objects.filter(admission_no__iexact=str(account_ref).strip()).first()
+
+        if stu:
+            remaining = float(amount)
+            inv_qs = Invoice.objects.filter(student=stu).order_by('due_date', 'created_at', 'id')
+            for inv in inv_qs:
+                if remaining <= 0:
+                    break
+                paid_so_far = float(inv.payments.aggregate(s=Sum('amount'))['s'] or 0)
+                inv_balance = float(inv.amount) - paid_so_far
+                if inv_balance <= 0:
+                    continue
+                alloc = min(remaining, inv_balance)
+                if receipt and Payment.objects.filter(reference=str(receipt), invoice=inv).exists():
+                    remaining -= alloc
+                    allocated = True
+                    continue
+                Payment.objects.create(
+                    invoice=inv,
+                    amount=float(alloc),
+                    method='mpesa',
+                    reference=receipt or (checkout_id or ''),
+                    recorded_by=None,
+                )
+                remaining -= alloc
+                new_paid = paid_so_far + float(alloc)
+                if new_paid >= float(inv.amount):
+                    inv.status = 'paid'
+                elif new_paid > 0:
+                    inv.status = 'partial'
+                else:
+                    inv.status = 'unpaid'
+                inv.save(update_fields=['status'])
+                allocated = True
+
+            if remaining > 0:
+                try:
+                    if not IncomingPayment.objects.filter(reference=str(receipt)).exists():
+                        IncomingPayment.objects.create(
+                            source='mpesa',
+                            external_id=str(checkout_id or ''),
+                            amount=float(remaining),
+                            currency='KES',
+                            reference=str(receipt or ''),
+                            narration='STK Callback',
+                            account_ref=str(account_ref or ''),
+                            phone=str(phone or ''),
+                            matched_student=stu,
+                            status='reconciled',
+                            notes='prepaid credit (no outstanding balance at time of payment)',
+                        )
+                except Exception:
+                    pass
+
+            try:
+                if ip:
+                    ip.reference = str(receipt or ip.reference or '')
+                    ip.amount = float(amount)
+                    ip.phone = str(phone or ip.phone or '')
+                    ip.account_ref = str(account_ref or ip.account_ref or '')
+                    ip.status = 'reconciled' if allocated else 'pending'
+                    ip.notes = 'callback received; allocated to invoices' if allocated else (ip.notes or '')
+                    ip.save(update_fields=['reference', 'amount', 'phone', 'account_ref', 'status', 'notes', 'updated_at'])
+            except Exception:
+                pass
+
+        if not allocated:
+            try:
+                if not IncomingPayment.objects.filter(reference=str(receipt)).exists():
+                    IncomingPayment.objects.create(
+                        source='mpesa',
+                        external_id=str(checkout_id or ''),
+                        amount=float(amount),
+                        currency='KES',
+                        reference=str(receipt or ''),
+                        narration='STK Callback',
+                        account_ref=str(account_ref or ''),
+                        phone=str(phone or ''),
+                        status='pending',
+                    )
+            except Exception:
+                pass
 
     return JsonResponse({'ResultCode': 0, 'ResultDesc': 'Accepted'})
 
