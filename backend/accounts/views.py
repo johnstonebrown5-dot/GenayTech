@@ -41,6 +41,89 @@ import os
 User = get_user_model()
 
 
+def _resolve_user_school_id(user) -> int | None:
+    user_school_id = getattr(getattr(user, 'school', None), 'id', None)
+    if user_school_id:
+        return user_school_id
+
+    uid = getattr(user, 'id', None)
+    if not uid:
+        return None
+
+    try:
+        from academics.models import Student, Class, TeacherProfile, ClassSubjectTeacher  # type: ignore
+    except Exception:
+        Student = Class = TeacherProfile = ClassSubjectTeacher = None  # type: ignore
+
+    if Student is not None:
+        try:
+            row = (
+                Student.objects
+                .filter(user_id=uid)
+                .values('klass__school_id', 'school_id')
+                .first()
+            )
+            if row:
+                user_school_id = row.get('klass__school_id') or row.get('school_id') or None
+        except Exception:
+            pass
+
+    if user_school_id is None and Class is not None:
+        try:
+            sid = (
+                Class.objects
+                .filter(teacher_id=uid)
+                .values_list('school_id', flat=True)
+                .first()
+            )
+            if sid:
+                user_school_id = sid
+        except Exception:
+            pass
+
+    if user_school_id is None and TeacherProfile is not None:
+        try:
+            sid = (
+                TeacherProfile.objects
+                .filter(user_id=uid)
+                .values_list('klass__school_id', flat=True)
+                .first()
+            )
+            if sid:
+                user_school_id = sid
+        except Exception:
+            pass
+
+    if user_school_id is None and ClassSubjectTeacher is not None:
+        try:
+            sid = (
+                ClassSubjectTeacher.objects
+                .filter(teacher_id=uid)
+                .values_list('klass__school_id', flat=True)
+                .first()
+            )
+            if sid:
+                user_school_id = sid
+        except Exception:
+            pass
+
+    if user_school_id is None:
+        try:
+            from .models import NonTeachingStaff  # local import
+            sid = (
+                NonTeachingStaff.objects
+                .filter(user_id=uid)
+                .values_list('school_id', flat=True)
+                .first()
+            )
+            if sid:
+                user_school_id = sid
+        except Exception:
+            pass
+
+    return user_school_id
+
+
 def _log_system_health_event(*, school_id: int | None, component: str, ok: bool, context: str = '') -> None:
     try:
         SystemHealthEvent.objects.create(
@@ -336,28 +419,62 @@ def create_user(request):
     """Admin creates a user. Body: username, password, role, first_name, last_name, email, phone, school(optional id)
     Returns created user profile.
     """
-    data = request.data
-    username = data.get('username')
+    t0 = perf_counter()
+    data = request.data or {}
+
+    username = (data.get('username') or '').strip()
+    role = (data.get('role') or '').strip()
     password = data.get('password') or get_random_string(12)
-    role = data.get('role')
+
     if not username or not role:
         return Response({"detail": "username and role are required"}, status=400)
-    school_id = data.get('school') or getattr(request.user.school, 'id', None)
+
+    username = username.lower()
+
     try:
-        user = User.objects.create_user(
-            username=username,
-            password=password,
-            role=role,
-            email=data.get('email',''),
-            first_name=data.get('first_name',''),
-            last_name=data.get('last_name',''),
-            phone=data.get('phone',''),
-            school_id=school_id,
-        )
+        allowed_roles = {c[0] for c in getattr(User, 'Roles').choices}
+    except Exception:
+        allowed_roles = {'admin', 'teacher', 'student', 'finance', 'non_teaching'}
+    if role not in allowed_roles:
+        return Response({"detail": "Invalid role", "role": role}, status=400)
+
+    school_id = data.get('school')
+    if school_id in ('', None):
+        school_id = _resolve_user_school_id(request.user)
+    try:
+        if school_id not in (None, ''):
+            school_id = int(school_id)
+    except Exception:
+        return Response({"detail": "Invalid school id"}, status=400)
+
+    if not (request.user.is_superuser or request.user.is_staff) and not school_id:
+        return Response({"detail": "Cannot determine your school. Add a school to your account or pass school id."}, status=400)
+
+    email = (data.get('email') or '').strip()
+    first_name = (data.get('first_name') or '').strip()
+    last_name = (data.get('last_name') or '').strip()
+    phone = (data.get('phone') or '').strip()
+
+    try:
+        with transaction.atomic():
+            user = User.objects.create_user(
+                username=username,
+                password=password,
+                role=role,
+                email=email,
+                first_name=first_name,
+                last_name=last_name,
+                phone=phone,
+                school_id=school_id,
+            )
     except IntegrityError as e:
-        # Most likely a duplicate username or school constraint
         return Response({"detail": "Username already exists or violates a constraint", "error": str(e)}, status=400)
-    return Response(UserSerializer(user, context={"request": request}).data, status=201)
+    except Exception as e:
+        return Response({"detail": "Failed to create user", "error": f"{type(e).__name__}: {e}"}, status=400)
+
+    payload = UserSerializer(user, context={"request": request}).data
+    payload["_create_user_ms"] = int((perf_counter() - t0) * 1000)
+    return Response(payload, status=201)
 
 
 @api_view(["POST"])

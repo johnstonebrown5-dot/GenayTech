@@ -14,6 +14,8 @@ export default function AdminUsers(){
   const [reset, setReset] = useState({ user_id:'', new_password:'' })
   const [roleCounts, setRoleCounts] = useState({ admin:0, teacher:0, student:0, finance:0 })
   const [showCreate, setShowCreate] = useState(false)
+  const [creating, setCreating] = useState(false)
+  const [togglingId, setTogglingId] = useState(null)
   const [showReset, setShowReset] = useState(false)
   const [showEdit, setShowEdit] = useState(false)
   const [edit, setEdit] = useState({ user_id:'', username:'', first_name:'', last_name:'', email:'', phone:'', role:'', new_password:'' })
@@ -133,15 +135,34 @@ export default function AdminUsers(){
 
   const create = async (e) => {
     e.preventDefault()
-    await api.post('/auth/users/create/', form)
-    setForm({ username:'', password:'', role:'teacher', first_name:'', last_name:'', email:'', phone:'' })
-    setShowCreate(false)
-    load()
+    setCreating(true)
+    try {
+      await api.post('/auth/users/create/', form)
+      setForm({ username:'', password:'', role:'teacher', first_name:'', last_name:'', email:'', phone:'' })
+      setShowCreate(false)
+      showSuccess('User created', 'The user account was created successfully.')
+      await load()
+    } catch (err) {
+      const msg = err?.response?.data?.detail || err?.message || 'Failed to create user.'
+      showError('Create failed', msg)
+    } finally {
+      setCreating(false)
+    }
   }
 
   const toggleActive = async (u) => {
-    await api.post('/auth/users/status/', { user_id: u.id, is_active: !u.is_active })
-    load()
+    if (!u?.id) return
+    setTogglingId(u.id)
+    try {
+      await api.post('/auth/users/status/', { user_id: u.id, is_active: !u.is_active })
+      showSuccess('Status updated', `User is now ${!u.is_active ? 'active' : 'inactive'}.`)
+      await load()
+    } catch (err) {
+      const msg = err?.response?.data?.detail || err?.message || 'Failed to update status.'
+      showError('Update failed', msg)
+    } finally {
+      setTogglingId(null)
+    }
   }
 
   const openEdit = (u) => {
@@ -326,8 +347,12 @@ export default function AdminUsers(){
                     </div>
                     <div className="mt-3 flex justify-end">
                       <div className="flex gap-2">
-                        <button onClick={(e)=>{ e.stopPropagation(); toggleActive(u) }} className={`px-3 py-1 rounded-lg border-hairline ${u.is_active? 'text-red-700 bg-red-50 hover:bg-red-100':'text-green-700 bg-green-50 hover:bg-green-100'} transition`}>
-                          {u.is_active? 'Deactivate':'Activate'}
+                        <button
+                          disabled={togglingId===u.id}
+                          onClick={(e)=>{ e.stopPropagation(); toggleActive(u) }}
+                          className={`px-3 py-1 rounded-lg border-hairline ${u.is_active? 'text-red-700 bg-red-50 hover:bg-red-100':'text-green-700 bg-green-50 hover:bg-green-100'} transition ${togglingId===u.id ? 'opacity-60 cursor-not-allowed' : ''}`}
+                        >
+                          {(togglingId===u.id) ? 'Updating...' : (u.is_active? 'Deactivate':'Activate')}
                         </button>
                         <button onClick={(e)=>{ e.stopPropagation(); beginDelete([u.id]) }} className="px-3 py-1 rounded-lg border-hairline bg-red-600 text-white hover:bg-red-700 transition">
                           Delete
@@ -397,8 +422,12 @@ export default function AdminUsers(){
                     </td>
                     <td>
                       <div className="flex items-center justify-end gap-2">
-                        <button onClick={(e)=>{ e.stopPropagation(); toggleActive(u) }} className={`px-3 py-1 rounded-lg border-hairline ${u.is_active? 'text-red-700 bg-red-50 hover:bg-red-100':'text-green-700 bg-green-50 hover:bg-green-100'} transition`}>
-                          {u.is_active? 'Deactivate':'Activate'}
+                        <button
+                          disabled={togglingId===u.id}
+                          onClick={(e)=>{ e.stopPropagation(); toggleActive(u) }}
+                          className={`px-3 py-1 rounded-lg border-hairline ${u.is_active? 'text-red-700 bg-red-50 hover:bg-red-100':'text-green-700 bg-green-50 hover:bg-green-100'} transition ${togglingId===u.id ? 'opacity-60 cursor-not-allowed' : ''}`}
+                        >
+                          {(togglingId===u.id) ? 'Updating...' : (u.is_active? 'Deactivate':'Activate')}
                         </button>
                         <button onClick={(e)=>{ e.stopPropagation(); beginDelete([u.id]) }} className="px-3 py-1 rounded-lg border-hairline bg-red-600 text-white hover:bg-red-700 transition">
                           Delete
@@ -465,8 +494,8 @@ export default function AdminUsers(){
           <input className="border p-2 rounded" placeholder="First name" value={form.first_name} onChange={e=>setForm({...form, first_name:e.target.value})} />
           <input className="border p-2 rounded" placeholder="Last name" value={form.last_name} onChange={e=>setForm({...form, last_name:e.target.value})} />
           <div className="md:col-span-3 flex justify-end gap-2 mt-2">
-            <button type="button" onClick={()=>setShowCreate(false)} className="px-4 py-2 rounded border">Cancel</button>
-            <button className="bg-green-600 text-white px-4 py-2 rounded">Create</button>
+            <button type="button" disabled={creating} onClick={()=>setShowCreate(false)} className={`px-4 py-2 rounded border ${creating ? 'opacity-60 cursor-not-allowed' : ''}`}>Cancel</button>
+            <button disabled={creating} className={`bg-green-600 text-white px-4 py-2 rounded ${creating ? 'opacity-60 cursor-not-allowed' : ''}`}>{creating ? 'Creating...' : 'Create'}</button>
           </div>
         </form>
       </Modal>

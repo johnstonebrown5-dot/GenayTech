@@ -57,6 +57,11 @@ class UserSerializer(serializers.ModelSerializer):
 
     def get_student_admission_no(self, obj):
         try:
+            if str(getattr(obj, 'role', '') or '').lower() != 'student':
+                return None
+        except Exception:
+            return None
+        try:
             stu = getattr(obj, "student", None)
         except Exception:
             stu = None
