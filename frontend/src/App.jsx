@@ -396,6 +396,7 @@ export default function App() {
               <Route path="expenses" element={<FinanceExpenses/>} />
               <Route path="incoming" element={<FinanceIncomingPayments/>} />
               <Route path="payments" element={<FinancePayments/>} />
+              <Route path="mpesa-logs" element={<FinancePayments initialTab="MPESA" hideRecordForm={true} />} />
               <Route path="reports" element={<FinanceReports/>} />
               <Route path="cashbook" element={<FinanceCashbook/>} />
               <Route path="fee-register" element={<FinanceFeeRegister/>} />

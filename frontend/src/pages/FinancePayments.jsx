@@ -11,19 +11,22 @@ const TABS = [
   { key: 'BANK', label: 'Bank' },
 ]
 
-export default function FinancePayments(){
+export default function FinancePayments({ initialTab = 'all', hideRecordForm = false }){
   const [payments, setPayments] = useState([])
   const [loading, setLoading] = useState(false)
-  const [tab, setTab] = useState('all')
+  const [tab, setTab] = useState(initialTab)
   const [q, setQ] = useState('')
   const printRef = useRef(null)
-  const [showForm, setShowForm] = useState(true)
+  const [showForm, setShowForm] = useState(!hideRecordForm)
   const [studentId, setStudentId] = useState('')
   const [amount, setAmount] = useState('')
   const [method, setMethod] = useState('cash')
+  const [useStk, setUseStk] = useState(true)
+  const [phone, setPhone] = useState('')
   const [reference, setReference] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState('')
+  const [submitOk, setSubmitOk] = useState('')
   const [studentSearch, setStudentSearch] = useState('')
   const [studentResults, setStudentResults] = useState([])
   const [searchingStudents, setSearchingStudents] = useState(false)
@@ -34,6 +37,7 @@ export default function FinancePayments(){
   const [reconMessage, setReconMessage] = useState('')
   const [reconError, setReconError] = useState('')
 
+  useEffect(()=>{ setTab(initialTab) }, [initialTab])
   useEffect(()=>{ load() }, [tab])
 
   async function load(){
@@ -83,6 +87,7 @@ export default function FinancePayments(){
     const cls = s?.klass_detail?.name || s?.klass || ''
     const label = [s?.name, s?.admission_no ? `(${s.admission_no})` : null, cls ? `– ${cls}` : null].filter(Boolean).join(' ')
     setStudentSearch(label)
+    setPhone(String(s?.phone || '').trim())
     // Collapse suggestions
     setStudentResults([])
   }
@@ -90,6 +95,7 @@ export default function FinancePayments(){
   async function submitPayment(e){
     e?.preventDefault?.()
     setSubmitError('')
+    setSubmitOk('')
     setSubmitting(true)
     try{
       const sid = String(studentId||'').trim()
@@ -102,6 +108,19 @@ export default function FinancePayments(){
         chosen = enabledMethods[0] || 'cash'
         setMethod(chosen)
       }
+
+      // Mpesa STK push: initiate prompt on phone instead of instantly recording payment
+      if (String(chosen).toLowerCase() === 'mpesa' && useStk) {
+        const rawPhone = String(phone || '').trim()
+        if (!rawPhone) throw new Error('Phone number is required for STK push')
+        const payload = { student_id: sid, amount: amt, phone: rawPhone }
+        const { data } = await api.post('/finance/invoices/pay-balance-stk/', payload)
+        const msg = data?.message || data?.status || 'STK initiated'
+        setSubmitOk(String(msg))
+        setShowForm(false)
+        return
+      }
+
       await api.post('/finance/invoices/pay_student/', { student: sid, amount: amt, method: chosen, reference })
       // Reset minimal fields and refresh list
       setAmount('')
@@ -219,6 +238,12 @@ export default function FinancePayments(){
     return acc
   }, [filtered])
 
+  function openReceipt(p){
+    const id = p?.id
+    if (!id) return
+    window.open(`/receipt/${encodeURIComponent(id)}`, '_blank')
+  }
+
   const doughnutData = useMemo(()=>{
     const vals = [totalsByMethod.CASH, totalsByMethod.MPESA, totalsByMethod.BANK]
     return {
@@ -237,16 +262,19 @@ export default function FinancePayments(){
         <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
           <input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search name, admno, ref, invoice" className="px-3 py-2 border rounded-lg w-full sm:w-72 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-gray-900/20"/>
           <button onClick={printList} className="px-3 py-2 bg-gray-900 text-white rounded-lg text-sm shadow-sm hover:bg-gray-800">Print</button>
-          <button onClick={()=>setShowForm(s=>!s)} className="px-3 py-2 bg-emerald-600 text-white rounded-lg text-sm shadow-sm hover:bg-emerald-700">{showForm? 'Close' : 'Record Payment'}</button>
+          {!hideRecordForm && (
+            <button onClick={()=>setShowForm(s=>!s)} className="px-3 py-2 bg-emerald-600 text-white rounded-lg text-sm shadow-sm hover:bg-emerald-700">{showForm? 'Close' : 'Record Payment'}</button>
+          )}
         </div>
       </div>
 
-      {showForm && (
+      {showForm && !hideRecordForm && (
         <div className="bg-white rounded-xl border shadow-md p-4">
           <div className="flex items-center justify-between mb-3">
             <div className="text-sm font-semibold text-gray-800">Record Payment (Student)</div>
             <div className="text-xs text-gray-500">Allocates to oldest unpaid invoices first</div>
           </div>
+          {submitOk && <div className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-3 py-2 mb-3">{submitOk}</div>}
           {submitError && <div className="text-sm text-rose-600 bg-rose-50 border border-rose-200 rounded px-3 py-2 mb-3">{submitError}</div>}
           <form onSubmit={submitPayment} className="grid grid-cols-1 md:grid-cols-2 gap-3 items-end">
             <div>
@@ -286,6 +314,20 @@ export default function FinancePayments(){
                 {enabledMethods.includes('cheque') && (<option value="cheque">Cheque</option>)}
               </select>
             </div>
+            {String(method).toLowerCase()==='mpesa' && (
+              <>
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">Phone (STK)</label>
+                  <input value={phone} onChange={e=>setPhone(e.target.value)} placeholder="2547XXXXXXXX" className="w-full px-3 py-2 border rounded text-sm" />
+                </div>
+                <div className="md:col-span-2">
+                  <label className="inline-flex items-center gap-2 text-xs text-gray-700">
+                    <input type="checkbox" checked={useStk} onChange={e=>setUseStk(e.target.checked)} />
+                    Use STK Push (prompt on phone)
+                  </label>
+                </div>
+              </>
+            )}
             <div>
               <label className="block text-xs text-gray-600 mb-1">Reference</label>
               <input value={reference} onChange={e=>setReference(e.target.value)} placeholder="Txn/Slip/Ref No" className="w-full px-3 py-2 border rounded text-sm" />
@@ -333,7 +375,7 @@ export default function FinancePayments(){
                   <tr><td className="px-4 py-6 text-center text-gray-500" colSpan={7}>No payments</td></tr>
                 )}
                 {filtered.map(p=> (
-                  <tr key={p.id} className="border-t hover:bg-gray-50">
+                  <tr key={p.id} className="border-t hover:bg-gray-50 cursor-pointer" onClick={()=>openReceipt(p)}>
                     <td className="px-4 py-2">{(p.created_at||p.date||'').toString().slice(0,10)}</td>
                     <td className="px-4 py-2">{p.student?.name || '-'}</td>
                     <td className="px-4 py-2">{p.student?.admission_no || '-'}</td>

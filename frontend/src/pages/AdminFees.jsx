@@ -6,8 +6,8 @@ import { useNotification } from '../components/NotificationContext'
 export default function AdminFees({ embed=false, initialTab='categories' }){
   const [tab, setTab] = useState(initialTab) // categories | classFees | specialAssignments | arrears | payments
   const { showSuccess, showError } = useNotification()
-  const [counts, setCounts] = useState({ categories: null, classFees: null, studentFees: null, specialAssignments: null, arrears: null, payments: null, methods: null })
-  const [loadingCounts, setLoadingCounts] = useState({ categories: true, classFees: true, studentFees: true, specialAssignments: true, arrears: true, payments: true, methods: true })
+  const [counts, setCounts] = useState({ categories: null, classFees: null, studentFees: null, specialAssignments: null, arrears: null, payments: null, methods: null, mpesaLogs: null })
+  const [loadingCounts, setLoadingCounts] = useState({ categories: true, classFees: true, studentFees: true, specialAssignments: true, arrears: true, payments: true, methods: true, mpesaLogs: true })
   const onCount = (key, value) => setCounts(prev=>({ ...prev, [key]: value }))
   const onLoading = (key, value) => setLoadingCounts(prev=>({ ...prev, [key]: value }))
   const [gallery, setGallery] = useState([])
@@ -122,17 +122,17 @@ export default function AdminFees({ embed=false, initialTab='categories' }){
             ) : null)}
           </div>
         </div>
-
         {/* Tab Navigation */}
         <div className="bg-white border-b sticky top-0 z-20">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <nav className="flex gap-4 overflow-x-auto no-scrollbar py-1" aria-label="Tabs">
-              {[
+              {[ 
                 { id: 'categories', name: 'Fee Categories', icon: '📋' },
                 { id: 'classFees', name: 'Assign Class Fees', icon: '💰' },
                 { id: 'studentFees', name: 'Per-Student Fees', icon: '👤' },
                 { id: 'arrears', name: 'Balances & Arrears', icon: '📊' },
                 { id: 'payments', name: 'Payment History', icon: '💳' },
+                { id: 'mpesaLogs', name: 'M-Pesa Logs', icon: '📱' },
                 { id: 'methods', name: 'Payment Methods', icon: '⚙️' },
               ].map((tabItem) => (
                 <button
@@ -179,6 +179,7 @@ export default function AdminFees({ embed=false, initialTab='categories' }){
             {tab==='studentFees' && <StudentFees showSuccess={showSuccess} showError={showError} onCount={(n)=>onCount('studentFees', n)} onLoading={(v)=>onLoading('studentFees', v)} />}
             {tab==='arrears' && <Arrears showSuccess={showSuccess} showError={showError} onCount={(n)=>onCount('arrears', n)} onLoading={(v)=>onLoading('arrears', v)} />}
             {tab==='payments' && <PaymentHistory showSuccess={showSuccess} showError={showError} onCount={(n)=>onCount('payments', n)} onLoading={(v)=>onLoading('payments', v)} />}
+            {tab==='mpesaLogs' && <MpesaLogs showError={showError} onCount={(n)=>onCount('mpesaLogs', n)} onLoading={(v)=>onLoading('mpesaLogs', v)} />}
             {tab==='methods' && <PaymentMethods showSuccess={showSuccess} showError={showError} onCount={(n)=>onCount('methods', n)} onLoading={(v)=>onLoading('methods', v)} />}
           </div>
         </div>
@@ -1259,6 +1260,169 @@ function PaymentHistory({ showError, onCount, onLoading }){
 
       </div>
 
+  )
+}
+
+function MpesaLogs({ showError, onCount, onLoading }){
+  const [items, setItems] = useState([])
+  const [loading, setLoading] = useState(false)
+  const [filters, setFilters] = useState({ q:'', startDate:'', endDate:'' })
+
+  const openReceipt = (p) => {
+    const id = p?.id
+    if (!id) return
+    window.open(`/receipt/${encodeURIComponent(id)}`, '_blank')
+  }
+
+  const load = async (params={}) => {
+    setLoading(true)
+    onLoading?.(true)
+    try {
+      const query = new URLSearchParams(params).toString()
+      const url = '/finance/payments/' + (query? `?${query}`:'')
+      const { data } = await api.get(url)
+      const arr = Array.isArray(data) ? data : (Array.isArray(data?.results) ? data.results : [])
+      setItems(arr)
+      onCount?.(arr.length)
+    } catch (err) {
+      showError?.('Failed to Load M-Pesa Logs', err?.message || 'Failed')
+      setItems([])
+      onCount?.(0)
+    } finally {
+      setLoading(false)
+      onLoading?.(false)
+    }
+  }
+
+  useEffect(()=>{ load({ method: 'mpesa' }) }, [])
+
+  const applyFilters = (e) => {
+    e?.preventDefault?.()
+    const params = { method: 'mpesa' }
+    if (filters.startDate) params.start_date = filters.startDate
+    if (filters.endDate) params.end_date = filters.endDate
+    load(params)
+  }
+
+  const clearFilters = () => {
+    setFilters({ q:'', startDate:'', endDate:'' })
+    load({ method: 'mpesa' })
+  }
+
+  const filteredList = useMemo(()=>{
+    const q = filters.q.trim().toLowerCase()
+    const src = Array.isArray(items) ? items : []
+    if (!q) return src
+    return src.filter(p => {
+      const invoice = String(p.invoice || p.invoice_id || '').toLowerCase()
+      const ref = String(p.reference||'').toLowerCase()
+      const amount = String(p.amount||'')
+      const student = String(p.student?.name||'').toLowerCase()
+      const adm = String(p.student?.admission_no||'').toLowerCase()
+      return invoice.includes(q) || ref.includes(q) || amount.includes(q) || student.includes(q) || adm.includes(q)
+    })
+  }, [items, filters.q])
+
+  const exportCsv = async () => {
+    try {
+      const params = { method: 'mpesa' }
+      if (filters.startDate) params.start_date = filters.startDate
+      if (filters.endDate) params.end_date = filters.endDate
+      const { data } = await api.get('/finance/payments/export', { params, responseType: 'blob' })
+      const blob = new Blob([data], { type: 'text/csv;charset=utf-8;' })
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      const date = new Date().toISOString().slice(0,10)
+      a.download = `mpesa_logs_${filters.startDate||'all'}_${filters.endDate||date}.csv`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      window.URL.revokeObjectURL(url)
+    } catch (err) {
+      showError?.('Failed to Export M-Pesa Logs', err?.message || 'Failed')
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-white rounded-lg shadow-sm border p-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-emerald-100 rounded-lg">
+              <svg className="w-5 h-5 text-emerald-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h10M7 11h10M7 15h10M7 19h10" />
+              </svg>
+            </div>
+            <h3 className="text-lg font-semibold text-gray-800">M-Pesa Logs</h3>
+          </div>
+          <div className="flex items-center gap-2">
+            <button onClick={exportCsv} className="px-3 py-2 text-sm font-medium bg-white border border-gray-300 rounded-md hover:bg-gray-50">Export CSV</button>
+            <div className="text-sm text-gray-500">
+              {loading ? (
+                <span className="inline-flex items-center gap-2"><div className="w-4 h-4 border-2 border-gray-300 border-t-emerald-500 rounded-full animate-spin"></div> Loading...</span>
+              ) : (
+                <span className="inline-flex items-center gap-1"><span className="font-semibold text-gray-900">{(Array.isArray(filteredList)?filteredList:[]).length}</span> transactions</span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <form onSubmit={applyFilters} className="mt-4 grid grid-cols-1 sm:grid-cols-6 gap-3">
+          <div className="sm:col-span-2">
+            <input
+              placeholder="Search student, admission, invoice, reference"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+              value={filters.q}
+              onChange={e=>setFilters({...filters, q:e.target.value})}
+            />
+          </div>
+          <div>
+            <input type="date" className="w-full px-3 py-2 border border-gray-300 rounded-md" value={filters.startDate} onChange={e=>setFilters({...filters, startDate:e.target.value})} />
+          </div>
+          <div>
+            <input type="date" className="w-full px-3 py-2 border border-gray-300 rounded-md" value={filters.endDate} onChange={e=>setFilters({...filters, endDate:e.target.value})} />
+          </div>
+          <div className="sm:col-span-2 flex gap-2">
+            <button type="submit" className="px-4 py-2 bg-emerald-600 text-white rounded-md text-sm font-medium hover:bg-emerald-700">Apply</button>
+            <button type="button" onClick={clearFilters} className="px-4 py-2 bg-white border border-gray-300 rounded-md text-sm font-medium hover:bg-gray-50">Clear</button>
+          </div>
+        </form>
+      </div>
+
+      <div className="bg-white rounded-lg shadow-sm border overflow-x-auto">
+        <table className="min-w-full divide-y divide-gray-200">
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Student</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Adm No</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Invoice</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Reference</th>
+              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
+            </tr>
+          </thead>
+          <tbody className="bg-white divide-y divide-gray-200">
+            {loading ? (
+              <tr><td colSpan={6} className="px-6 py-10 text-center text-sm text-gray-500">Loading…</td></tr>
+            ) : filteredList.length === 0 ? (
+              <tr><td colSpan={6} className="px-6 py-10 text-center text-sm text-gray-500">No M-Pesa transactions found.</td></tr>
+            ) : (
+              filteredList.slice(0, 500).map(p => (
+                <tr key={p.id} className="hover:bg-gray-50 cursor-pointer" onClick={()=>openReceipt(p)}>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{new Date(p.created_at).toLocaleString()}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{p.student?.name || '-'}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{p.student?.admission_no || '-'}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">#{p.invoice || p.invoice_id}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-mono">{p.reference || '-'}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-right font-medium">KES {Number(p.amount||0).toLocaleString()}</td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
   )
 }
 
