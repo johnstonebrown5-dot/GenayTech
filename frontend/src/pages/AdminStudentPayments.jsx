@@ -173,12 +173,16 @@ export default function AdminStudentPayments(){
       const beforeList = Array.isArray(before.data) ? before.data : (before.data?.results || [])
       const baselineCount = beforeList.length
 
-      const { data } = await api.post(`/finance/invoices/pay-balance-stk/`, {
-        phone: payForm.phone,
-        amount: amountNum,
-        student_id: id,
-        simulate: false
-      })
+      const { data } = await api.post(
+        `/finance/invoices/pay-balance-stk/`,
+        {
+          phone: payForm.phone,
+          amount: amountNum,
+          student_id: id,
+          simulate: false
+        },
+        { timeout: 60000 }
+      )
       const checkoutId = data?.daraja?.CheckoutRequestID || data?.daraja?.checkoutRequestID || ''
       // Mark as sent
       setStkStatus('sent')

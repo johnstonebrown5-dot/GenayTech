@@ -29,14 +29,9 @@ def spa_redirect(request, path: str = ""):
     return HttpResponseRedirect(target)
 
 
-def root_redirect(request):
-    # Root now opens frontend index
-    return spa_redirect(request)
-
-
 urlpatterns = [
-    # Root now opens frontend index
-    path('', root_redirect, name='root'),
+    # Root health check instead of frontend redirect
+    path('', health, name='root'),
     # Health check endpoint
     path('health/', health, name='health'),
 
@@ -62,8 +57,6 @@ urlpatterns = [
     path('api/finance/', include('finance.urls')),
     path('api/communications/', include('communications.urls')),
     path('api/reports/', include('reports.urls')),
-    # Catch-all for any non-API, non-media, non-django-admin route: send to frontend SPA, preserving path
-    re_path(r'^(?P<path>(?!api/|media/|admin/).*)$', spa_redirect),
 ]
 
 # Serve media files (e.g., uploaded logos) in development
