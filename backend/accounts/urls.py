@@ -59,11 +59,6 @@ from .views import (
     TokenObtainPairViewWithLogging,
     superadmin_create_school_admin,
     superadmin_assign_school_admin,
-    dashboard_showcase_list,
-    superadmin_dashboard_showcase,
-    superadmin_dashboard_showcase_detail,
-    superadmin_dashboard_showcase_reorder,
-    superadmin_cloudinary_signature,
 )
 
 urlpatterns = [
@@ -91,7 +86,6 @@ urlpatterns = [
     path('school/public/', school_public, name='school-public'),
     path('school/teachers/', school_teachers_public, name='school-teachers-public'),
     path('school/teachers/<int:id>/', teacher_public_detail, name='teacher-public-detail'),
-    path('dashboard-showcase/', dashboard_showcase_list, name='dashboard-showcase-list'),
     path('request-demo/', request_demo, name='request-demo'),
     path('trial-signup/', trial_signup, name='trial-signup'),
     path('verify-email/', verify_email, name='verify-email'),
@@ -127,8 +121,4 @@ urlpatterns = [
     path('superadmin/recycle-bin/clear/', superadmin_recycle_bin_clear, name='superadmin-recycle-bin-clear'),
     path('superadmin/users/create-school-admin/', superadmin_create_school_admin, name='superadmin-create-school-admin'),
     path('superadmin/users/assign-school-admin/', superadmin_assign_school_admin, name='superadmin-assign-school-admin'),
-    path('superadmin/dashboard-showcase/', superadmin_dashboard_showcase, name='superadmin-dashboard-showcase'),
-    path('superadmin/dashboard-showcase/reorder/', superadmin_dashboard_showcase_reorder, name='superadmin-dashboard-showcase-reorder'),
-    path('superadmin/dashboard-showcase/<int:id>/', superadmin_dashboard_showcase_detail, name='superadmin-dashboard-showcase-detail'),
-    path('superadmin/cloudinary/signature/', superadmin_cloudinary_signature, name='superadmin-cloudinary-signature'),
 ]

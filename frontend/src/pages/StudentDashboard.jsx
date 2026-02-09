@@ -422,23 +422,23 @@ export default function StudentDashboard(){
   }
 
   return (
-    <div className="px-3 sm:px-6 py-4 space-y-5 sm:space-y-7">
+    <div className="space-y-5 sm:space-y-7">
 
-      {loading && <div className="bg-white sm:rounded-xl shadow p-3 sm:p-4">Loading...</div>}
-      {error && <div className="bg-red-50 text-red-700 p-3 sm:p-3 rounded sm:rounded">{error}</div>}
+      {loading && <div className="-mx-3 sm:mx-0 bg-white sm:rounded-xl shadow p-3 sm:p-4">Loading...</div>}
+      {error && <div className="-mx-3 sm:mx-0 bg-red-50 text-red-700 p-3 sm:p-3 rounded-none sm:rounded">{error}</div>}
 
   {currentTab === 'dashboard' && (
     <div className="space-y-6">
       {/* Welcome banner */}
-      <div className="bg-green-600 text-white rounded shadow p-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
-        <div className="font-medium break-words">Welcome {student?.name ? String(student.name).toUpperCase() : ''}</div>
+      <div className="bg-green-600 text-white rounded shadow p-3 flex items-center justify-between">
+        <div className="font-medium">Welcome {student?.name ? String(student.name).toUpperCase() : ''}</div>
         <div className="text-xs opacity-90">Dashboard</div>
       </div>
 
       {/* Quick actions removed as per request */}
 
       {/* Summary cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+      <div className="grid md:grid-cols-3 gap-3 sm:gap-4">
         <div className="bg-amber-500 text-white rounded shadow p-3 sm:p-4">
           <div className="text-xs sm:text-sm opacity-90">Total Billed</div>
           <div className="text-xl sm:text-2xl font-semibold">{money(summary.total_billed)}</div>
@@ -470,9 +470,9 @@ export default function StudentDashboard(){
               <span className="hidden sm:inline">Edit</span>
             </button>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-0">
-            <div className="p-4 md:border-r flex flex-col sm:flex-row md:flex-col items-center sm:items-start gap-4">
-              <div className="w-24 h-24 sm:w-32 sm:h-32 md:w-40 md:h-40 bg-gray-100 rounded overflow-hidden flex items-center justify-center shrink-0">
+          <div className="grid md:grid-cols-3 gap-0">
+            <div className="p-4 border-r">
+              <div className="w-40 h-40 bg-gray-100 rounded overflow-hidden flex items-center justify-center">
                 {student.photo_url ? (
                   <img src={student.photo_url} alt="Student" className="w-full h-full object-cover" />
                 ) : (
@@ -480,7 +480,7 @@ export default function StudentDashboard(){
                 )}
               </div>
               {student.admission_no && (
-                <div className="text-sm text-gray-600 break-words">{student.admission_no}</div>
+                <div className="mt-3 text-sm text-gray-600">{student.admission_no}</div>
               )}
             </div>
             <div className="md:col-span-2 p-4">
@@ -535,40 +535,24 @@ export default function StudentDashboard(){
           {!Array.isArray(assessments) || assessments.length === 0 ? (
             <div className="text-sm text-gray-500">No assessments yet.</div>
           ) : (
-            <>
-              <div className="grid gap-2 sm:hidden">
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr>
+                  <th>Competency</th>
+                  <th>Level</th>
+                  <th>Date</th>
+                </tr>
+              </thead>
+              <tbody>
                 {assessments.map(a => (
-                  <div key={a.id} className="rounded-xl border border-slate-200 p-3">
-                    <div className="font-medium text-slate-900 break-words">{a.competency}</div>
-                    <div className="mt-1 flex items-center justify-between gap-3 text-xs text-slate-600">
-                      <span className="shrink-0">Level: <span className="font-medium text-slate-800">{a.level}</span></span>
-                      <span className="whitespace-nowrap">{a.date}</span>
-                    </div>
-                  </div>
+                  <tr key={a.id} className="border-top border-t">
+                    <td>{a.competency}</td>
+                    <td>{a.level}</td>
+                    <td>{a.date}</td>
+                  </tr>
                 ))}
-              </div>
-
-              <div className="hidden sm:block overflow-x-auto">
-                <table className="w-full text-left text-sm min-w-[520px]">
-                  <thead>
-                    <tr>
-                      <th>Competency</th>
-                      <th>Level</th>
-                      <th>Date</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {assessments.map(a => (
-                      <tr key={a.id} className="border-top border-t">
-                        <td className="py-2 pr-3">{a.competency}</td>
-                        <td className="py-2 pr-3">{a.level}</td>
-                        <td className="py-2 pr-3 whitespace-nowrap">{a.date}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </>
+              </tbody>
+            </table>
           )}
         </div>
 
@@ -577,35 +561,22 @@ export default function StudentDashboard(){
           {!Array.isArray(attendance) || attendance.length === 0 ? (
             <div className="text-sm text-gray-500">No attendance records yet.</div>
           ) : (
-            <>
-              <div className="grid gap-2 sm:hidden">
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
                 {attendance.map(at => (
-                  <div key={at.id} className="rounded-xl border border-slate-200 p-3 flex items-center justify-between gap-3">
-                    <div className="text-sm text-slate-900 whitespace-nowrap">{at.date}</div>
-                    <div className="text-xs px-2 py-1 rounded-full bg-slate-100 text-slate-700 capitalize whitespace-nowrap">{at.status}</div>
-                  </div>
+                  <tr key={at.id} className="border-t">
+                    <td>{at.date}</td>
+                    <td className="capitalize">{at.status}</td>
+                  </tr>
                 ))}
-              </div>
-
-              <div className="hidden sm:block overflow-x-auto">
-                <table className="w-full text-left text-sm min-w-[360px]">
-                  <thead>
-                    <tr>
-                      <th>Date</th>
-                      <th>Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {attendance.map(at => (
-                      <tr key={at.id} className="border-t">
-                        <td className="py-2 pr-3 whitespace-nowrap">{at.date}</td>
-                        <td className="py-2 pr-3 capitalize">{at.status}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </>
+              </tbody>
+            </table>
           )}
         </div>
       </div>
@@ -613,7 +584,7 @@ export default function StudentDashboard(){
   )}
 
   {currentTab === 'finance' && (
-    <div className="bg-white/95 backdrop-blur-xl border border-slate-200/70 shadow-[0_18px_45px_rgba(15,23,42,0.08)] rounded-3xl pt-4 pb-6 px-4 sm:p-6">
+    <div className="-mx-3 sm:mx-0 bg-white/95 backdrop-blur-xl border border-slate-200/70 shadow-[0_18px_45px_rgba(15,23,42,0.08)] rounded-none sm:rounded-3xl pt-4 pb-6 px-4 sm:p-6">
       <h2 className="text-xs font-semibold tracking-[0.18em] text-slate-500 uppercase mb-1">Finance</h2>
       <p className="text-base sm:text-lg font-semibold text-slate-900 mb-4">Fees & payments</p>
 
@@ -664,7 +635,7 @@ export default function StudentDashboard(){
                     <td className="px-2 py-2">{r.description}</td>
                     <td className="px-2 py-2 text-right">{r.debit ? money(r.debit) : ''}</td>
                     <td className="px-2 py-2 text-right">{r.credit ? money(r.credit) : ''}</td>
-                    <td className={`px-2 py-2 text-right font-medium ${r.type==='payment' ? 'text-emerald-700' : 'text-slate-900'}`}>{money(r.balance)}</td>
+                    <td className="px-2 py-2 text-right font-medium {r.type==='payment' ? 'text-emerald-700' : 'text-slate-900'}">{money(r.balance)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -694,7 +665,7 @@ export default function StudentDashboard(){
   )}
 
   {currentTab === 'academics' && (
-    <div className="bg-white/95 backdrop-blur-xl border border-slate-200/70 shadow-[0_18px_45px_rgba(15,23,42,0.08)] rounded-3xl pt-4 pb-6 px-4 sm:p-6">
+    <div className="-mx-3 sm:mx-0 bg-white/95 backdrop-blur-xl border border-slate-200/70 shadow-[0_18px_45px_rgba(15,23,42,0.08)] rounded-none sm:rounded-3xl pt-4 pb-6 px-4 sm:p-6">
       <h2 className="text-[11px] font-semibold tracking-[0.18em] text-slate-500 uppercase mb-1">Performance</h2>
       <div className="flex items-center justify-between mb-4">
         <p className="text-lg sm:text-xl font-semibold text-slate-900">Academics</p>

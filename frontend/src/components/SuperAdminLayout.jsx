@@ -11,7 +11,6 @@ const navItems = [
   { to: '/superadmin/logs', label: 'Logs', icon: '📜' },
   { to: '/superadmin/recycle-bin', label: 'Recycle Bin', icon: '🗑️' },
   { to: '/superadmin/admins', label: 'Admins', icon: '🧑‍💼' },
-  { to: '/superadmin/dashboard-showcase', label: 'Dashboard Showcase', icon: '🖼️' },
   { to: '/superadmin/maintenance', label: 'Maintenance', icon: '🛠️' },
   { to: '/superadmin/system-config', label: 'System Domain', icon: '🌐' },
   { to: '/superadmin/profile', label: 'My Profile', icon: '👤' },
