@@ -6,18 +6,7 @@ from django.db import migrations
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('accounts', '0025_dashboardshowcaseitem'),
+        ('accounts', '0024_alter_user_profile_picture'),
     ]
 
-    operations = [
-        migrations.RenameIndex(
-            model_name='dashboardshowcaseitem',
-            new_name='accounts_da_sort_or_f23223_idx',
-            old_name='accounts_da_sort_or_e39192_idx',
-        ),
-        migrations.RenameIndex(
-            model_name='dashboardshowcaseitem',
-            new_name='accounts_da_created_c39bac_idx',
-            old_name='accounts_da_created_98f73c_idx',
-        ),
-    ]
+    operations = []
