@@ -170,7 +170,8 @@ export default function AdminStudentPayments(){
       setStkStatus('initiating')
       // baseline count before push
       const before = await api.get(`/finance/payments/?invoice__student=${id}`)
-      const baselineCount = Array.isArray(before.data) ? before.data.length : 0
+      const beforeList = Array.isArray(before.data) ? before.data : (before.data?.results || [])
+      const baselineCount = beforeList.length
 
       const { data } = await api.post(`/finance/invoices/pay-balance-stk/`, {
         phone: payForm.phone,
@@ -187,7 +188,8 @@ export default function AdminStudentPayments(){
       while (Date.now() - started < 60000) { // up to 60s
         await new Promise(r => setTimeout(r, 3000))
         const poll = await api.get(`/finance/payments/?invoice__student=${id}`)
-        const countNow = Array.isArray(poll.data) ? poll.data.length : 0
+        const pollList = Array.isArray(poll.data) ? poll.data : (poll.data?.results || [])
+        const countNow = pollList.length
         if (countNow > baselineCount) {
           found = true
           break
@@ -202,8 +204,10 @@ export default function AdminStudentPayments(){
           api.get(`/finance/payments/?invoice__student=${id}`),
           api.get(`/finance/invoices/?student=${id}`)
         ])
-        setPayments(payRes.data)
-        setInvoices(invRes.data)
+        const payList = Array.isArray(payRes.data) ? payRes.data : (payRes.data?.results || [])
+        const invList = Array.isArray(invRes.data) ? invRes.data : (invRes.data?.results || [])
+        setPayments(payList)
+        setInvoices(invList)
         setStkStatus('success')
       } else {
         setPayError('STK sent, but no confirmation was received in time. It may complete later or has failed.')

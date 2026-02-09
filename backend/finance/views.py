@@ -2198,7 +2198,11 @@ def mpesa_callback(request):
             .get('stkCallback', {})
     )
     checkout_id = stk_cb.get('CheckoutRequestID')
-    result_code = stk_cb.get('ResultCode')
+    result_code_raw = stk_cb.get('ResultCode')
+    try:
+        result_code = int(result_code_raw)
+    except Exception:
+        result_code = result_code_raw
     # Build a lookup for metadata items
     meta_items = stk_cb.get('CallbackMetadata', {}).get('Item', []) if isinstance(stk_cb.get('CallbackMetadata', {}), dict) else []
     meta = {item.get('Name'): item.get('Value') for item in meta_items if isinstance(item, dict)}
