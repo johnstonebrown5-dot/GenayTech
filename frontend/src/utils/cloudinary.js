@@ -71,3 +71,36 @@ export async function uploadToCloudinary(file, opts = {}){
   }
   throw lastErr || new Error('Cloudinary upload failed')
 }
+
+export async function uploadToCloudinarySigned(file, signaturePayload, opts = {}){
+  const cloud = String(signaturePayload?.cloud_name || '').trim()
+  const apiKey = String(signaturePayload?.api_key || '').trim()
+  const timestamp = Number(signaturePayload?.timestamp || 0)
+  const signature = String(signaturePayload?.signature || '').trim()
+  const folder = String(signaturePayload?.folder || '').trim()
+  const resourceType = String(signaturePayload?.resource_type || 'image').trim()
+  if (!cloud || !apiKey || !timestamp || !signature) throw new Error('Missing Cloudinary signature payload')
+
+  const endpoint = `https://api.cloudinary.com/v1_1/${cloud}/${resourceType}/upload`
+  const fd = new FormData()
+  fd.append('file', file)
+  fd.append('api_key', apiKey)
+  fd.append('timestamp', String(timestamp))
+  fd.append('signature', signature)
+  if (folder) fd.append('folder', folder)
+  if (opts.context && typeof opts.context === 'object'){
+    const ctx = Object.entries(opts.context).map(([k,v])=>`${k}=${v}`).join('|')
+    if (ctx) fd.append('context', ctx)
+  }
+
+  const res = await fetch(endpoint, { method: 'POST', body: fd, mode: 'cors', cache: 'no-store' })
+  if (!res.ok){
+    let msg = `Cloudinary upload failed (${res.status})`
+    try{ const j = await res.json(); msg = j?.error?.message || msg }catch{}
+    throw new Error(msg)
+  }
+  const json = await res.json()
+  const url = json.secure_url || json.url
+  if (!url) throw new Error('Cloudinary response missing secure_url')
+  return { url, public_id: json.public_id, width: json.width, height: json.height, bytes: json.bytes, format: json.format }
+}

@@ -105,6 +105,8 @@ import PublicReceipt from './pages/PublicReceipt'
 import OneTimeLicenseDetails from './pages/OneTimeLicenseDetails'
 import PerStudentMonthlyDetails from './pages/PerStudentMonthlyDetails'
 import SuperAdminSystemConfig from './pages/SuperAdminSystemConfig'
+import SuperAdminDashboardShowcase from './pages/SuperAdminDashboardShowcase'
+import DashboardShowcase from './pages/DashboardShowcase'
 import NotFound from './pages/NotFound'
 import Unauthorized from './pages/Unauthorized'
 import ReAuth from './pages/ReAuth'
@@ -313,6 +315,7 @@ export default function App() {
             <Route path="/verify-email" element={<VerifyEmail />} />
             <Route path="/help" element={<ProtectedRoute roles={["admin","teacher","student","finance"]}><HelpCenter/></ProtectedRoute>} />
             <Route path="/lock" element={<ProtectedRoute roles={["admin","teacher","student","finance"]}><LockPage/></ProtectedRoute>} />
+            <Route path="/dashboard-showcase" element={<DashboardShowcase/>} />
             <Route path="/app" element={<RoleRedirect />} />
             <Route path="/superadmin" element={<SuperuserRoute><SuperAdminLayout><Outlet/></SuperAdminLayout></SuperuserRoute>}>
               <Route index element={<SuperAdminDashboard/>} />
@@ -322,6 +325,7 @@ export default function App() {
               <Route path="logs" element={<SuperAdminLogs/>} />
               <Route path="recycle-bin" element={<SuperAdminRecycleBin/>} />
               <Route path="admins" element={<SuperAdminAdmins/>} />
+              <Route path="dashboard-showcase" element={<SuperAdminDashboardShowcase/>} />
               <Route path="maintenance" element={<SuperAdminMaintenance/>} />
               <Route path="system-config" element={<SuperAdminSystemConfig/>} />
               <Route path="profile" element={<SuperAdminProfile/>} />

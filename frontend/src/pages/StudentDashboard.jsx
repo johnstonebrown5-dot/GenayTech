@@ -4,6 +4,8 @@ import api from '../api'
 import Modal from '../components/Modal'
 import StatCard from '../components/StatCard'
 
+let __studentDashboardCache = null
+
 export default function StudentDashboard(){
   const { pathname } = useLocation()
   const navigate = useNavigate()
@@ -181,58 +183,92 @@ export default function StudentDashboard(){
 
   useEffect(()=>{
     let mounted = true
+
+    const ensureCache = () => {
+      if (!__studentDashboardCache) {
+        __studentDashboardCache = {
+          baseLoaded: false,
+          academicsLoaded: false,
+          financeLoaded: false,
+          student: null,
+          assessments: [],
+          attendance: [],
+          examResults: [],
+          invoices: [],
+          summary: { total_billed: 0, total_paid: 0, balance: 0 },
+        }
+      }
+      return __studentDashboardCache
+    }
+
+    const hydrateFromCache = (c) => {
+      setStudent(c.student || null)
+      setAssessments(c.assessments || [])
+      setAttendance(c.attendance || [])
+      setExamResults(c.examResults || [])
+      setInvoices(c.invoices || [])
+      setSummary(c.summary || { total_billed: 0, total_paid: 0, balance: 0 })
+    }
+
     ;(async () => {
       setLoading(true)
       setError('')
       try {
-        // 1) Student is required
-        const stRes = await api.get('/academics/students/my/')
-        if (!mounted) return
-        const st = stRes.data
-        setStudent(st)
+        const c = ensureCache()
 
-        // 2) Secondary data is optional; fetch concurrently and tolerate failures
-        const settled = await Promise.allSettled([
-          // assessments
-          api.get(`/academics/assessments/my/`),
-          // attendance
-          api.get(`/academics/attendance/my/`),
-          // exam results
-          api.get(`/academics/exam_results/?student=${st.id}`),
-          // invoices
-          api.get('/finance/invoices/my/'),
-          // summary
-          api.get('/finance/invoices/my-summary/'),
-        ])
-        if (!mounted) return
-        const [assS, attS, exmS, invS, sumS] = settled
-        setAssessments(assS.status==='fulfilled'
-          ? (Array.isArray(assS.value?.data) ? assS.value.data : (assS.value?.data?.results || []))
-          : []
-        )
-        setAttendance(attS.status==='fulfilled'
-          ? (Array.isArray(attS.value?.data) ? attS.value.data : (attS.value?.data?.results || []))
-          : []
-        )
-        setExamResults(exmS.status==='fulfilled'
-          ? (Array.isArray(exmS.value?.data) ? exmS.value.data : (exmS.value?.data?.results || []))
-          : []
-        )
-        setInvoices(invS.status==='fulfilled'
-          ? (Array.isArray(invS.value?.data) ? invS.value.data : (invS.value?.data?.results || []))
-          : []
-        )
-        setSummary(sumS.status==='fulfilled' ? (sumS.value?.data || { total_billed:0, total_paid:0, balance:0 }) : { total_billed:0, total_paid:0, balance:0 })
+        // 1) Base student record (required for dashboard/profile + academics)
+        // Finance tab should not be blocked by this call.
+        if (!c.baseLoaded && currentTab !== 'finance') {
+          const stRes = await api.get('/academics/students/my/')
+          if (!mounted) return
+          c.student = stRes.data
+          c.baseLoaded = true
+        }
+
+        // Hydrate UI immediately from cache before optional tab-specific fetches.
+        hydrateFromCache(c)
+
+        // 2) Tab-specific data loads once per tab (only when user opens that tab)
+        if (currentTab === 'academics' && !c.academicsLoaded) {
+          const stId = c.student?.id
+          const settled = await Promise.allSettled([
+            api.get('/academics/assessments/my/'),
+            api.get('/academics/attendance/my/'),
+            stId ? api.get(`/academics/exam_results/?student=${stId}`) : Promise.resolve({ data: [] }),
+          ])
+          if (!mounted) return
+          const [assS, attS, exmS] = settled
+          c.assessments = assS.status==='fulfilled' ? (Array.isArray(assS.value?.data) ? assS.value.data : (assS.value?.data?.results || [])) : []
+          c.attendance = attS.status==='fulfilled' ? (Array.isArray(attS.value?.data) ? attS.value.data : (attS.value?.data?.results || [])) : []
+          c.examResults = exmS.status==='fulfilled' ? (Array.isArray(exmS.value?.data) ? exmS.value.data : (exmS.value?.data?.results || [])) : []
+          c.academicsLoaded = true
+          hydrateFromCache(c)
+        }
+
+        if (currentTab === 'finance' && !c.financeLoaded) {
+          const settled = await Promise.allSettled([
+            api.get('/finance/invoices/my/'),
+            api.get('/finance/invoices/my-summary/'),
+          ])
+          if (!mounted) return
+          const [invS, sumS] = settled
+          c.invoices = invS.status==='fulfilled' ? (Array.isArray(invS.value?.data) ? invS.value.data : (invS.value?.data?.results || [])) : []
+          c.summary = sumS.status==='fulfilled' ? (sumS.value?.data || { total_billed:0, total_paid:0, balance:0 }) : { total_billed:0, total_paid:0, balance:0 }
+          c.financeLoaded = true
+          hydrateFromCache(c)
+        }
       } catch (e) {
         if (!mounted) return
-        // Only block page when we cannot load the student record
-        setError(e?.response?.data?.detail || e?.message || 'Failed to load your profile')
+        // Only block page when we cannot load the student record (non-finance tabs).
+        if (currentTab !== 'finance') {
+          setError(e?.response?.data?.detail || e?.message || 'Failed to load your profile')
+        }
       } finally {
         if (mounted) setLoading(false)
       }
     })()
     return () => { mounted = false }
-  }, [])
+  }, [currentTab])
 
   const classLabel = useMemo(() => {
     const k = student?.klass_detail
@@ -296,9 +332,14 @@ export default function StudentDashboard(){
       if (String(payForm.method).toLowerCase()==='mpesa'){
         if (!payForm.phone) { setPayError('Phone number required for STK'); setPaySubmitting(false); return }
         setStkStatus('initiating')
-        // Baseline: overall summary before push
-        const beforeSumRes = await api.get('/finance/invoices/my-summary/')
-        const beforeBalance = Number(beforeSumRes?.data?.balance || 0)
+        // Baseline: overall summary before push (avoid blocking when already available)
+        let beforeBalance = Number(summary?.balance || 0)
+        if (!Number.isFinite(beforeBalance) || beforeBalance === 0) {
+          try {
+            const beforeSumRes = await api.get('/finance/invoices/my-summary/', { timeout: 15000 })
+            beforeBalance = Number(beforeSumRes?.data?.balance || beforeBalance || 0)
+          } catch {}
+        }
         // Normalize phone: 07XXXXXXXX -> 2547XXXXXXXX; accept +2547XXXXXXXX
         let phone = String(payForm.phone).trim()
         if (phone.startsWith('+')) phone = phone.slice(1)
@@ -310,18 +351,51 @@ export default function StudentDashboard(){
           simulate: paySimulate,
         })
         setStkStatus('sent')
-        // Poll up to 60s for balance change
+        setShowPay(false)
+        setPaySubmitting(false)
+
+        // Poll in the background (do not block UI). Stop once balance changes or after a short timeout.
         setStkStatus('polling')
-        const started = Date.now()
-        let updated = false
-        while (Date.now() - started < 60000) {
-          await new Promise(r=>setTimeout(r, 3000))
-          const pollSum = await api.get('/finance/invoices/my-summary/')
-          const nowBal = Number(pollSum?.data?.balance || beforeBalance)
-          if (nowBal !== beforeBalance) { updated = true; break }
-        }
-        if (!updated){ setPayError('STK sent, but no confirmation yet. It may complete later.'); setStkStatus('failed') }
-        else { setStkStatus('success') }
+        ;(async () => {
+          const started = Date.now()
+          let updated = false
+          while (Date.now() - started < 25000) {
+            await new Promise(r=>setTimeout(r, 2500))
+            let pollSum
+            try {
+              pollSum = await api.get('/finance/invoices/my-summary/', { timeout: 15000, _skipGlobalLoading: true })
+            } catch {
+              continue
+            }
+            const nowBal = Number(pollSum?.data?.balance)
+            if (Number.isFinite(nowBal) && nowBal !== beforeBalance) { updated = true; break }
+          }
+
+          if (!updated) {
+            setStkStatus('sent')
+            return
+          }
+
+          try {
+            const [invRes, sumRes] = await Promise.all([
+              api.get('/finance/invoices/my/', { timeout: 20000, _skipGlobalLoading: true }),
+              api.get('/finance/invoices/my-summary/', { timeout: 20000, _skipGlobalLoading: true }),
+            ])
+            const inv = (Array.isArray(invRes?.data) ? invRes.data : (invRes?.data?.results || []))
+            const sum = sumRes?.data || { total_billed: 0, total_paid: 0, balance: 0 }
+            setInvoices(inv)
+            setSummary(sum)
+            if (__studentDashboardCache) {
+              __studentDashboardCache.invoices = inv
+              __studentDashboardCache.summary = sum
+              __studentDashboardCache.financeLoaded = true
+            }
+          } catch {}
+
+          setStkStatus('success')
+        })()
+
+        return
       } else {
         if (!selectedInvoice) { setPayError('Please select an invoice'); setPaySubmitting(false); return }
         await api.post(`/finance/invoices/${selectedInvoice.id}/pay/`, payload)
@@ -348,23 +422,23 @@ export default function StudentDashboard(){
   }
 
   return (
-    <div className="space-y-5 sm:space-y-7">
+    <div className="px-3 sm:px-6 py-4 space-y-5 sm:space-y-7">
 
-      {loading && <div className="-mx-3 sm:mx-0 bg-white sm:rounded-xl shadow p-3 sm:p-4">Loading...</div>}
-      {error && <div className="-mx-3 sm:mx-0 bg-red-50 text-red-700 p-3 sm:p-3 rounded-none sm:rounded">{error}</div>}
+      {loading && <div className="bg-white sm:rounded-xl shadow p-3 sm:p-4">Loading...</div>}
+      {error && <div className="bg-red-50 text-red-700 p-3 sm:p-3 rounded sm:rounded">{error}</div>}
 
   {currentTab === 'dashboard' && (
     <div className="space-y-6">
       {/* Welcome banner */}
-      <div className="bg-green-600 text-white rounded shadow p-3 flex items-center justify-between">
-        <div className="font-medium">Welcome {student?.name ? String(student.name).toUpperCase() : ''}</div>
+      <div className="bg-green-600 text-white rounded shadow p-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
+        <div className="font-medium break-words">Welcome {student?.name ? String(student.name).toUpperCase() : ''}</div>
         <div className="text-xs opacity-90">Dashboard</div>
       </div>
 
       {/* Quick actions removed as per request */}
 
       {/* Summary cards */}
-      <div className="grid md:grid-cols-3 gap-3 sm:gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
         <div className="bg-amber-500 text-white rounded shadow p-3 sm:p-4">
           <div className="text-xs sm:text-sm opacity-90">Total Billed</div>
           <div className="text-xl sm:text-2xl font-semibold">{money(summary.total_billed)}</div>
@@ -396,9 +470,9 @@ export default function StudentDashboard(){
               <span className="hidden sm:inline">Edit</span>
             </button>
           </div>
-          <div className="grid md:grid-cols-3 gap-0">
-            <div className="p-4 border-r">
-              <div className="w-40 h-40 bg-gray-100 rounded overflow-hidden flex items-center justify-center">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-0">
+            <div className="p-4 md:border-r flex flex-col sm:flex-row md:flex-col items-center sm:items-start gap-4">
+              <div className="w-24 h-24 sm:w-32 sm:h-32 md:w-40 md:h-40 bg-gray-100 rounded overflow-hidden flex items-center justify-center shrink-0">
                 {student.photo_url ? (
                   <img src={student.photo_url} alt="Student" className="w-full h-full object-cover" />
                 ) : (
@@ -406,7 +480,7 @@ export default function StudentDashboard(){
                 )}
               </div>
               {student.admission_no && (
-                <div className="mt-3 text-sm text-gray-600">{student.admission_no}</div>
+                <div className="text-sm text-gray-600 break-words">{student.admission_no}</div>
               )}
             </div>
             <div className="md:col-span-2 p-4">
@@ -461,24 +535,40 @@ export default function StudentDashboard(){
           {!Array.isArray(assessments) || assessments.length === 0 ? (
             <div className="text-sm text-gray-500">No assessments yet.</div>
           ) : (
-            <table className="w-full text-left text-sm">
-              <thead>
-                <tr>
-                  <th>Competency</th>
-                  <th>Level</th>
-                  <th>Date</th>
-                </tr>
-              </thead>
-              <tbody>
+            <>
+              <div className="grid gap-2 sm:hidden">
                 {assessments.map(a => (
-                  <tr key={a.id} className="border-top border-t">
-                    <td>{a.competency}</td>
-                    <td>{a.level}</td>
-                    <td>{a.date}</td>
-                  </tr>
+                  <div key={a.id} className="rounded-xl border border-slate-200 p-3">
+                    <div className="font-medium text-slate-900 break-words">{a.competency}</div>
+                    <div className="mt-1 flex items-center justify-between gap-3 text-xs text-slate-600">
+                      <span className="shrink-0">Level: <span className="font-medium text-slate-800">{a.level}</span></span>
+                      <span className="whitespace-nowrap">{a.date}</span>
+                    </div>
+                  </div>
                 ))}
-              </tbody>
-            </table>
+              </div>
+
+              <div className="hidden sm:block overflow-x-auto">
+                <table className="w-full text-left text-sm min-w-[520px]">
+                  <thead>
+                    <tr>
+                      <th>Competency</th>
+                      <th>Level</th>
+                      <th>Date</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {assessments.map(a => (
+                      <tr key={a.id} className="border-top border-t">
+                        <td className="py-2 pr-3">{a.competency}</td>
+                        <td className="py-2 pr-3">{a.level}</td>
+                        <td className="py-2 pr-3 whitespace-nowrap">{a.date}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
         </div>
 
@@ -487,22 +577,35 @@ export default function StudentDashboard(){
           {!Array.isArray(attendance) || attendance.length === 0 ? (
             <div className="text-sm text-gray-500">No attendance records yet.</div>
           ) : (
-            <table className="w-full text-left text-sm">
-              <thead>
-                <tr>
-                  <th>Date</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
+            <>
+              <div className="grid gap-2 sm:hidden">
                 {attendance.map(at => (
-                  <tr key={at.id} className="border-t">
-                    <td>{at.date}</td>
-                    <td className="capitalize">{at.status}</td>
-                  </tr>
+                  <div key={at.id} className="rounded-xl border border-slate-200 p-3 flex items-center justify-between gap-3">
+                    <div className="text-sm text-slate-900 whitespace-nowrap">{at.date}</div>
+                    <div className="text-xs px-2 py-1 rounded-full bg-slate-100 text-slate-700 capitalize whitespace-nowrap">{at.status}</div>
+                  </div>
                 ))}
-              </tbody>
-            </table>
+              </div>
+
+              <div className="hidden sm:block overflow-x-auto">
+                <table className="w-full text-left text-sm min-w-[360px]">
+                  <thead>
+                    <tr>
+                      <th>Date</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {attendance.map(at => (
+                      <tr key={at.id} className="border-t">
+                        <td className="py-2 pr-3 whitespace-nowrap">{at.date}</td>
+                        <td className="py-2 pr-3 capitalize">{at.status}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
         </div>
       </div>
@@ -510,7 +613,7 @@ export default function StudentDashboard(){
   )}
 
   {currentTab === 'finance' && (
-    <div className="-mx-3 sm:mx-0 bg-white/95 backdrop-blur-xl border border-slate-200/70 shadow-[0_18px_45px_rgba(15,23,42,0.08)] rounded-none sm:rounded-3xl pt-4 pb-6 px-4 sm:p-6">
+    <div className="bg-white/95 backdrop-blur-xl border border-slate-200/70 shadow-[0_18px_45px_rgba(15,23,42,0.08)] rounded-3xl pt-4 pb-6 px-4 sm:p-6">
       <h2 className="text-xs font-semibold tracking-[0.18em] text-slate-500 uppercase mb-1">Finance</h2>
       <p className="text-base sm:text-lg font-semibold text-slate-900 mb-4">Fees & payments</p>
 
@@ -561,7 +664,7 @@ export default function StudentDashboard(){
                     <td className="px-2 py-2">{r.description}</td>
                     <td className="px-2 py-2 text-right">{r.debit ? money(r.debit) : ''}</td>
                     <td className="px-2 py-2 text-right">{r.credit ? money(r.credit) : ''}</td>
-                    <td className="px-2 py-2 text-right font-medium {r.type==='payment' ? 'text-emerald-700' : 'text-slate-900'}">{money(r.balance)}</td>
+                    <td className={`px-2 py-2 text-right font-medium ${r.type==='payment' ? 'text-emerald-700' : 'text-slate-900'}`}>{money(r.balance)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -591,7 +694,7 @@ export default function StudentDashboard(){
   )}
 
   {currentTab === 'academics' && (
-    <div className="-mx-3 sm:mx-0 bg-white/95 backdrop-blur-xl border border-slate-200/70 shadow-[0_18px_45px_rgba(15,23,42,0.08)] rounded-none sm:rounded-3xl pt-4 pb-6 px-4 sm:p-6">
+    <div className="bg-white/95 backdrop-blur-xl border border-slate-200/70 shadow-[0_18px_45px_rgba(15,23,42,0.08)] rounded-3xl pt-4 pb-6 px-4 sm:p-6">
       <h2 className="text-[11px] font-semibold tracking-[0.18em] text-slate-500 uppercase mb-1">Performance</h2>
       <div className="flex items-center justify-between mb-4">
         <p className="text-lg sm:text-xl font-semibold text-slate-900">Academics</p>

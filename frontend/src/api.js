@@ -6,7 +6,7 @@ export const backendBase = (import.meta.env.VITE_API_BASE_URL ?? '')
 const api = axios.create({
   baseURL: backendBase.replace(/\/$/, '') + '/api',
   // Prevent the UI from hanging indefinitely on slow or unreachable networks
-  timeout: 10000,
+  timeout: 30000,
 })
 
 api.interceptors.request.use(config => {
@@ -71,6 +71,15 @@ function onRefreshed(newToken){ while(subscribers.length) { const cb = subscribe
 api.interceptors.response.use(
   res => { try { if (typeof window !== 'undefined') window.dispatchEvent(new Event('api:request:end')) } catch {}; return res },
   async err => {
+    // Normalize axios timeout error into a stable, user-friendly message.
+    // Many pages surface err.message directly.
+    try{
+      const msg = String(err?.message || '')
+      const isTimeout = err?.code === 'ECONNABORTED' || /timeout\s+of\s+\d+ms\s+exceeded/i.test(msg)
+      if (isTimeout) {
+        err.message = 'Request timed out. Please check your internet connection and try again.'
+      }
+    }catch{}
     const original = err?.config
     const status = err?.response?.status
     const isAuthEndpoint = original?.url?.includes('/auth/token') || original?.url?.includes('/auth/me') || original?.url?.includes('/auth/token/refresh')

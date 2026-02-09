@@ -779,6 +779,10 @@ class InvoiceViewSet(viewsets.ModelViewSet):
             logging.getLogger(__name__).exception('STK initiation failed')
             return Response({'detail': f'STK error: {e}'}, status=500)
 
+    @action(detail=False, methods=['post'], url_path='pay_balance_stk', permission_classes=[permissions.IsAuthenticated])
+    def pay_balance_stk_compat(self, request):
+        return self.pay_balance_stk(request)
+
 
 class IncomingPaymentViewSet(viewsets.ModelViewSet):
     queryset = IncomingPayment.objects.all()

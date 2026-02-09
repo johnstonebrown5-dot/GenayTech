@@ -228,3 +228,24 @@ class SystemConfig(models.Model):
 
     def __str__(self):
         return f"SystemConfig({self.default_domain or 'unset'})"
+
+
+class DashboardShowcaseItem(models.Model):
+    title = models.CharField(max_length=200)
+    description = models.TextField(blank=True, default='')
+    image_url = models.URLField(max_length=600)
+    public_id = models.CharField(max_length=300, blank=True, default='')
+    sort_order = models.IntegerField(default=0, db_index=True)
+    created_by = models.ForeignKey('accounts.User', null=True, blank=True, on_delete=models.SET_NULL, related_name='dashboard_showcase_items')
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['sort_order', 'id']
+        indexes = [
+            models.Index(fields=['sort_order', 'id']),
+            models.Index(fields=['created_at']),
+        ]
+
+    def __str__(self):
+        return self.title

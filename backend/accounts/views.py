@@ -16,7 +16,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
-from .models import School, SchoolDomain, SchoolIntegrationSettings, EmailVerificationToken, DemoRequest, NonTeachingStaff, PasswordResetCode, SystemHealthEvent, MaintenanceNotice, SystemConfig
+from .models import School, SchoolDomain, SchoolIntegrationSettings, EmailVerificationToken, DemoRequest, NonTeachingStaff, PasswordResetCode, SystemHealthEvent, MaintenanceNotice, SystemConfig, DashboardShowcaseItem
 from django.contrib.auth.hashers import make_password
 from rest_framework.exceptions import AuthenticationFailed
 from django.apps import apps as django_apps
@@ -37,6 +37,7 @@ from django.utils.dateparse import parse_datetime, parse_date
 from time import perf_counter
 from django.db import connection
 import os
+import hashlib
 
 User = get_user_model()
 
@@ -1612,6 +1613,185 @@ def _require_superuser(request):
     if not getattr(request.user, 'is_superuser', False):
         return Response({"detail": "Not allowed"}, status=403)
     return None
+
+
+def _showcase_to_dict(x: DashboardShowcaseItem) -> dict:
+    return {
+        'id': x.id,
+        'title': x.title,
+        'description': x.description,
+        'image_url': x.image_url,
+        'public_id': x.public_id,
+        'sort_order': x.sort_order,
+        'created_at': x.created_at,
+        'updated_at': x.updated_at,
+    }
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def dashboard_showcase_list(request):
+    qs = DashboardShowcaseItem.objects.all().order_by('sort_order', 'id')
+    items = [_showcase_to_dict(x) for x in qs]
+    return Response({'results': items})
+
+
+@api_view(["GET", "POST"])
+@permission_classes([IsAuthenticated])
+@parser_classes([JSONParser])
+def superadmin_dashboard_showcase(request):
+    denied = _require_superuser(request)
+    if denied is not None:
+        return denied
+
+    if request.method == 'GET':
+        qs = DashboardShowcaseItem.objects.all().order_by('sort_order', 'id')
+        return Response({'results': [_showcase_to_dict(x) for x in qs]})
+
+    data = request.data or {}
+    title = str(data.get('title') or '').strip()
+    image_url = str(data.get('image_url') or '').strip()
+    description = str(data.get('description') or '').strip()
+    public_id = str(data.get('public_id') or '').strip()
+
+    if not title:
+        return Response({'detail': 'Title is required'}, status=400)
+    if not image_url:
+        return Response({'detail': 'image_url is required'}, status=400)
+
+    try:
+        last = DashboardShowcaseItem.objects.order_by('-sort_order', '-id').first()
+        next_order = int(getattr(last, 'sort_order', 0) or 0) + 1
+    except Exception:
+        next_order = 0
+
+    item = DashboardShowcaseItem.objects.create(
+        title=title,
+        description=description,
+        image_url=image_url,
+        public_id=public_id,
+        sort_order=next_order,
+        created_by=getattr(request, 'user', None),
+    )
+    return Response(_showcase_to_dict(item), status=201)
+
+
+@api_view(["GET", "PATCH", "DELETE"])
+@permission_classes([IsAuthenticated])
+@parser_classes([JSONParser])
+def superadmin_dashboard_showcase_detail(request, id: int):
+    denied = _require_superuser(request)
+    if denied is not None:
+        return denied
+
+    item = DashboardShowcaseItem.objects.filter(id=id).first()
+    if item is None:
+        return Response({'detail': 'Not found'}, status=404)
+
+    if request.method == 'GET':
+        return Response(_showcase_to_dict(item))
+
+    if request.method == 'DELETE':
+        item.delete()
+        return Response({'detail': 'Deleted'})
+
+    data = request.data or {}
+    if 'title' in data:
+        item.title = str(data.get('title') or '').strip()
+    if 'description' in data:
+        item.description = str(data.get('description') or '').strip()
+    if 'image_url' in data:
+        item.image_url = str(data.get('image_url') or '').strip()
+    if 'public_id' in data:
+        item.public_id = str(data.get('public_id') or '').strip()
+    if 'sort_order' in data:
+        try:
+            item.sort_order = int(data.get('sort_order'))
+        except Exception:
+            return Response({'detail': 'sort_order must be an integer'}, status=400)
+
+    if not str(item.title or '').strip():
+        return Response({'detail': 'Title is required'}, status=400)
+    if not str(item.image_url or '').strip():
+        return Response({'detail': 'image_url is required'}, status=400)
+
+    item.save()
+    return Response(_showcase_to_dict(item))
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+@parser_classes([JSONParser])
+def superadmin_dashboard_showcase_reorder(request):
+    denied = _require_superuser(request)
+    if denied is not None:
+        return denied
+
+    data = request.data or {}
+    order = data.get('order')
+    if not isinstance(order, list) or not order:
+        return Response({'detail': 'order must be a non-empty list of ids'}, status=400)
+
+    try:
+        ids = [int(x) for x in order]
+    except Exception:
+        return Response({'detail': 'order must be a list of integers'}, status=400)
+
+    existing = set(DashboardShowcaseItem.objects.filter(id__in=ids).values_list('id', flat=True))
+    missing = [i for i in ids if i not in existing]
+    if missing:
+        return Response({'detail': 'Some ids were not found', 'missing': missing}, status=400)
+
+    with transaction.atomic():
+        for idx, item_id in enumerate(ids):
+            DashboardShowcaseItem.objects.filter(id=item_id).update(sort_order=idx)
+
+    qs = DashboardShowcaseItem.objects.all().order_by('sort_order', 'id')
+    return Response({'results': [_showcase_to_dict(x) for x in qs]})
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+@parser_classes([JSONParser])
+def superadmin_cloudinary_signature(request):
+    """Superuser-only: return signature payload for direct Cloudinary upload.
+
+    Requires env vars:
+      CLOUDINARY_CLOUD_NAME
+      CLOUDINARY_API_KEY
+      CLOUDINARY_API_SECRET
+    """
+    denied = _require_superuser(request)
+    if denied is not None:
+        return denied
+
+    cloud = str(os.getenv('CLOUDINARY_CLOUD_NAME', '') or '').strip()
+    api_key = str(os.getenv('CLOUDINARY_API_KEY', '') or '').strip()
+    api_secret = str(os.getenv('CLOUDINARY_API_SECRET', '') or '').strip()
+    if not cloud or not api_key or not api_secret:
+        return Response({'detail': 'Cloudinary not configured on backend'}, status=400)
+
+    data = request.data or {}
+    folder = str(data.get('folder') or 'edu-track/dashboard-showcase').strip()
+    resource_type = str(data.get('resource_type') or 'image').strip()
+    timestamp = int(timezone.now().timestamp())
+
+    # Signature: sha1 of sorted params joined by '&' plus api_secret
+    to_sign = {
+        'folder': folder,
+        'timestamp': timestamp,
+    }
+    sign_str = '&'.join([f"{k}={to_sign[k]}" for k in sorted(to_sign.keys())])
+    signature = hashlib.sha1((sign_str + api_secret).encode('utf-8')).hexdigest()
+
+    return Response({
+        'cloud_name': cloud,
+        'api_key': api_key,
+        'timestamp': timestamp,
+        'signature': signature,
+        'folder': folder,
+        'resource_type': resource_type,
+    })
 
 
 def _purge_school_from_db(*, school_id: int) -> None:

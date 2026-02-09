@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import AppLogo from '../components/AppLogo'
 import { Link } from 'react-router-dom'
-import { motion, AnimatePresence, useReducedMotion, useScroll, useTransform } from 'framer-motion'
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
+import api from '../api'
 import { 
   Check, 
   ChevronDown,
@@ -30,10 +31,29 @@ const fadeIn = {
   transition: { duration: 0.6 }
 }
 
+const heroFlyInUp = {
+  initial: { opacity: 0, y: 22 },
+  animate: {
+    opacity: 1,
+    y: 0,
+    transition: { type: 'spring', stiffness: 220, damping: 28, mass: 0.9 }
+  }
+}
+
+const heroFlyInRight = {
+  initial: { opacity: 0, x: -18 },
+  animate: {
+    opacity: 1,
+    x: 0,
+    transition: { type: 'spring', stiffness: 220, damping: 28, mass: 0.9 }
+  }
+}
+
 const staggerContainer = {
   animate: {
     transition: {
-      staggerChildren: 0.1
+      delayChildren: 0.06,
+      staggerChildren: 0.16
     }
   }
 }
@@ -142,7 +162,7 @@ function BackgroundVideo({ enabled }) {
         muted
         loop
         playsInline
-        preload="metadata"
+        preload="none"
       >
         <source src="/background.mp4" type="video/mp4" />
       </video>
@@ -154,10 +174,10 @@ function BackgroundVideo({ enabled }) {
 export default function LandingPage() {
   const [mobileOpen, setMobileOpen] = useState(false)
   const [expandedFeature, setExpandedFeature] = useState(null)
+  const [showcaseItems, setShowcaseItems] = useState([])
+  const [showcaseLoading, setShowcaseLoading] = useState(false)
   const prefersReducedMotion = useReducedMotion()
-  const { scrollY } = useScroll()
-  const heroParallaxY = useTransform(scrollY, [0, 700], [0, 18])
-  const [heroSlide, setHeroSlide] = useState(0)
+  const [enableHeavyBackground, setEnableHeavyBackground] = useState(false)
   const whatsappNumber = '+254796031071'
   const whatsappLink = `https://wa.me/${whatsappNumber.replace('+', '')}`
 
@@ -242,12 +262,6 @@ export default function LandingPage() {
     }
   ]
 
-  const heroImages = useMemo(() => ([
-    new URL('../../images/pexels-akelaphotography-448877.jpg', import.meta.url).href,
-    new URL('../../images/pexels-gabby-k-6289065.jpg', import.meta.url).href,
-    new URL('../../images/pexels-kwakugriffn-14554003.jpg', import.meta.url).href
-  ]), [])
-
   const borderPalettes = [
     'border-blue-200',
     'border-indigo-200',
@@ -262,16 +276,55 @@ export default function LandingPage() {
 
   useEffect(() => {
     if (prefersReducedMotion) return
-    const id = window.setInterval(() => {
-      setHeroSlide((s) => (s + 1) % heroImages.length)
-    }, 4500)
-    return () => window.clearInterval(id)
-  }, [prefersReducedMotion, heroImages.length])
+    const w = typeof window !== 'undefined' ? window : null
+    if (!w) return
+    let cancelled = false
+    const enable = () => {
+      if (cancelled) return
+      setEnableHeavyBackground(true)
+    }
+    // Defer heavy background work until after initial paint/idle.
+    try {
+      if (typeof w.requestIdleCallback === 'function') {
+        const id = w.requestIdleCallback(enable, { timeout: 2500 })
+        return () => { cancelled = true; try { w.cancelIdleCallback(id) } catch {} }
+      }
+    } catch {}
+    const t = w.setTimeout(enable, 1500)
+    return () => { cancelled = true; w.clearTimeout(t) }
+  }, [prefersReducedMotion])
+
+  useEffect(() => {
+    let mounted = true
+    const w = typeof window !== 'undefined' ? window : null
+    const fetchShowcase = async () => {
+      setShowcaseLoading(true)
+      try {
+        const { data } = await api.get('/auth/dashboard-showcase/', { _skipGlobalLoading: true })
+        const rows = Array.isArray(data?.results) ? data.results : []
+        if (mounted) setShowcaseItems(rows)
+      } catch {
+        if (mounted) setShowcaseItems([])
+      } finally {
+        if (mounted) setShowcaseLoading(false)
+      }
+    }
+
+    // Defer public fetch so first paint stays fast
+    try {
+      if (w && typeof w.requestIdleCallback === 'function') {
+        const id = w.requestIdleCallback(() => { fetchShowcase() }, { timeout: 2500 })
+        return () => { mounted = false; try { w.cancelIdleCallback(id) } catch {} }
+      }
+    } catch {}
+    const t = w ? w.setTimeout(fetchShowcase, 1200) : null
+    return () => { mounted = false; if (w && t) w.clearTimeout(t) }
+  }, [])
 
   return (
     <div className="min-h-screen bg-slate-50/30 selection:bg-indigo-100 selection:text-indigo-900">
-      <BackgroundVideo enabled={!prefersReducedMotion} />
-      <StarryBackground enabled={!prefersReducedMotion} />
+      <BackgroundVideo enabled={!prefersReducedMotion && enableHeavyBackground} />
+      <StarryBackground enabled={!prefersReducedMotion && enableHeavyBackground} />
       {/* Navigation */}
       <nav className="fixed top-0 z-50 w-full border-b border-white/10 bg-indigo-600/95 md:border-slate-200/60 md:bg-white/70 backdrop-blur-xl">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
@@ -363,26 +416,9 @@ export default function LandingPage() {
 
       {/* Hero Section */}
       <section id="hero" className="relative pt-32 pb-20 lg:pt-48 lg:pb-32 overflow-hidden">
-        {/* Mobile background carousel */}
+        {/* Mobile lightweight background (no large image downloads) */}
         <div className="absolute inset-0 lg:hidden">
-          {prefersReducedMotion ? (
-            <div
-              className="absolute inset-0 bg-center bg-cover"
-              style={{ backgroundImage: `url('${heroImages[0]}')` }}
-            />
-          ) : (
-            <AnimatePresence mode="sync" initial={false}>
-              <motion.div
-                key={heroSlide}
-                className="absolute inset-0 bg-center bg-cover will-change-transform"
-                style={{ backgroundImage: `url('${heroImages[heroSlide]}')` }}
-                initial={{ opacity: 0, scale: 1.06 }}
-                animate={{ opacity: 1, scale: 1.0 }}
-                exit={{ opacity: 0, scale: 1.02 }}
-                transition={{ opacity: { duration: 0.9, ease: 'easeInOut' }, scale: { duration: 4.6, ease: 'easeOut' } }}
-              />
-            </AnimatePresence>
-          )}
+          <div className="absolute inset-0 bg-gradient-to-br from-indigo-200/60 via-white/25 to-violet-200/50" />
           <div className="absolute inset-0 bg-slate-950/45" />
           <div className="absolute inset-0 bg-gradient-to-b from-white/55 via-white/25 to-white/70" />
         </div>
@@ -395,24 +431,24 @@ export default function LandingPage() {
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="grid lg:grid-cols-2 gap-12 lg:gap-16 items-center">
             <motion.div 
-              initial="initial"
+              initial={prefersReducedMotion ? false : 'initial'}
               animate="animate"
               variants={staggerContainer}
               className="max-w-2xl relative z-10"
             >
               <div className="lg:rounded-none lg:bg-transparent lg:backdrop-blur-0 lg:ring-0 lg:shadow-none lg:p-0">
-              <motion.div variants={fadeIn} className="inline-flex items-center gap-2 rounded-full bg-indigo-50/90 px-4 py-1.5 text-sm font-semibold text-indigo-700 ring-1 ring-inset ring-indigo-700/10 mb-6">
+              <motion.div variants={heroFlyInRight} className="inline-flex items-center gap-2 rounded-full bg-indigo-50/90 px-4 py-1.5 text-sm font-semibold text-indigo-700 ring-1 ring-inset ring-indigo-700/10 mb-6">
                 <Zap size={14} className="fill-indigo-700" />
                 <span>All-in-one School Management</span>
               </motion.div>
               
-              <motion.h1 variants={fadeIn} className="text-4xl lg:text-6xl font-extrabold tracking-tight text-slate-900 leading-[1.1]">
+              <motion.h1 variants={heroFlyInUp} className="text-4xl lg:text-6xl font-extrabold tracking-tight text-slate-900 leading-[1.1]">
                 Run your school <br />
                 <span className="text-indigo-600">smarter</span> with EduTrack
               </motion.h1>
               
               <div className="mt-6 w-full rounded-2xl bg-white/55 backdrop-blur-sm ring-1 ring-white/30 p-4 sm:p-0 sm:bg-transparent sm:backdrop-blur-0 sm:ring-0 lg:bg-transparent lg:p-0">
-                <motion.p variants={fadeIn} className="text-base lg:text-lg leading-relaxed text-slate-700 sm:text-slate-600">
+                <motion.p variants={heroFlyInUp} className="text-base lg:text-lg leading-relaxed text-slate-700 sm:text-slate-600">
                   A modern, end-to-end platform for schools to manage{' '}
                   <motion.span
                     className="font-semibold text-slate-900 sm:text-slate-800"
@@ -457,7 +493,7 @@ export default function LandingPage() {
                 </motion.p>
               </div>
               
-              <motion.div variants={fadeIn} className="mt-10 flex flex-wrap gap-4">
+              <motion.div variants={heroFlyInUp} className="mt-10 flex flex-wrap gap-4">
                 <MotionLink
                   to="/app"
                   whileHover={prefersReducedMotion ? undefined : { y: -2, scale: 1.01 }}
@@ -480,7 +516,7 @@ export default function LandingPage() {
                 </motion.a>
               </motion.div>
               
-              <motion.div variants={fadeIn} className="mt-10 sm:mt-12 flex flex-wrap items-center gap-x-4 sm:gap-x-8 gap-y-2 sm:gap-y-3 border-t border-slate-200 pt-6 sm:pt-8">
+              <motion.div variants={heroFlyInUp} className="mt-10 sm:mt-12 flex flex-wrap items-center gap-x-4 sm:gap-x-8 gap-y-2 sm:gap-y-3 border-t border-slate-200 pt-6 sm:pt-8">
                 {[
                   { label: 'Secure', color: 'bg-emerald-500', Icon: ShieldCheck, delay: 0 },
                   { label: 'Reliable', color: 'bg-indigo-500', Icon: Users, delay: 0.1 },
@@ -534,35 +570,52 @@ export default function LandingPage() {
             >
               <div className="relative rounded-[2.5rem] bg-slate-900/5 p-2 ring-1 ring-inset ring-slate-900/10 lg:-m-4 lg:rounded-[3rem]">
                 <div className="overflow-hidden rounded-[2rem] bg-white shadow-2xl ring-1 ring-slate-900/10">
-                  <motion.img
-                    src={new URL('../../images/pexels-akelaphotography-448877.jpg', import.meta.url).href}
-                    alt="Students in a classroom"
-                    className="h-64 sm:h-72 lg:h-80 w-full object-cover will-change-transform"
-                    style={prefersReducedMotion ? undefined : { y: heroParallaxY }}
-                  />
-                  <div className="grid grid-cols-3 gap-px bg-slate-200 border-t border-slate-200">
+                  {enableHeavyBackground ? (
                     <motion.img
-                      src={new URL('../../images/pexels-gabby-k-6289065.jpg', import.meta.url).href}
-                      className="h-20 sm:h-24 w-full object-cover"
-                      alt="Student"
-                      initial={{ opacity: 0, y: 10 }}
-                      whileInView={{ opacity: 1, y: 0 }}
-                      viewport={{ once: true, margin: '-20% 0px -20% 0px' }}
-                      transition={{ duration: 0.6, delay: 0.05 }}
+                      src={new URL('../../images/pexels-akelaphotography-448877.jpg', import.meta.url).href}
+                      alt="Students in a classroom"
+                      className="h-64 sm:h-72 lg:h-80 w-full object-cover will-change-transform"
+                      decoding="async"
+                      loading="eager"
                     />
+                  ) : (
+                    <div className="h-64 sm:h-72 lg:h-80 w-full bg-gradient-to-br from-indigo-100 to-violet-100" />
+                  )}
+                  <div className="grid grid-cols-3 gap-px bg-slate-200 border-t border-slate-200">
+                    {enableHeavyBackground ? (
+                      <motion.img
+                        src={new URL('../../images/pexels-gabby-k-6289065.jpg', import.meta.url).href}
+                        className="h-20 sm:h-24 w-full object-cover"
+                        alt="Student"
+                        initial={{ opacity: 0, y: 10 }}
+                        decoding="async"
+                        loading="lazy"
+                        whileInView={{ opacity: 1, y: 0 }}
+                        viewport={{ once: true, margin: '-20% 0px -20% 0px' }}
+                        transition={{ duration: 0.6, delay: 0.05 }}
+                      />
+                    ) : (
+                      <div className="h-20 sm:h-24 w-full bg-slate-100" />
+                    )}
                     <div className="flex flex-col items-center justify-center bg-indigo-600 text-white p-3 sm:p-4">
                       <span className="text-2xl font-bold">99%</span>
                       <span className="text-[10px] uppercase font-semibold tracking-wider opacity-80">Uptime</span>
                     </div>
-                    <motion.img
-                      src={new URL('../../images/pexels-akelaphotography-448877.jpg', import.meta.url).href}
-                      className="h-20 sm:h-24 w-full object-cover"
-                      alt="Campus"
-                      initial={{ opacity: 0, y: 10 }}
-                      whileInView={{ opacity: 1, y: 0 }}
-                      viewport={{ once: true, margin: '-20% 0px -20% 0px' }}
-                      transition={{ duration: 0.6, delay: 0.12 }}
-                    />
+                    {enableHeavyBackground ? (
+                      <motion.img
+                        src={new URL('../../images/pexels-akelaphotography-448877.jpg', import.meta.url).href}
+                        className="h-20 sm:h-24 w-full object-cover"
+                        alt="Campus"
+                        initial={{ opacity: 0, y: 10 }}
+                        decoding="async"
+                        loading="lazy"
+                        whileInView={{ opacity: 1, y: 0 }}
+                        viewport={{ once: true, margin: '-20% 0px -20% 0px' }}
+                        transition={{ duration: 0.6, delay: 0.12 }}
+                      />
+                    ) : (
+                      <div className="h-20 sm:h-24 w-full bg-slate-100" />
+                    )}
                   </div>
                 </div>
                 
@@ -688,6 +741,69 @@ export default function LandingPage() {
                 </LazySection>
               );
             })}
+          </div>
+
+          <div className="mt-16">
+            <div className="flex items-end justify-between gap-4 mb-6">
+              <div>
+                <h3 className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight">Dashboard Showcase</h3>
+                <p className="mt-1 text-sm text-slate-600">Screenshots uploaded by the super admin showing key features.</p>
+              </div>
+              <Link
+                to="/dashboard-showcase"
+                className="hidden sm:inline-flex px-4 py-2 rounded-xl text-sm font-bold bg-indigo-600 text-white hover:bg-indigo-700"
+              >
+                View all
+              </Link>
+            </div>
+
+            {showcaseLoading ? (
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+                {Array.from({ length: 8 }).map((_, i) => (
+                  <div key={i} className="aspect-[16/10] rounded-2xl bg-white ring-1 ring-slate-200 overflow-hidden">
+                    <div className="h-full w-full bg-gradient-to-br from-slate-100 to-slate-50" />
+                  </div>
+                ))}
+              </div>
+            ) : showcaseItems.length === 0 ? (
+              <div className="rounded-2xl border border-slate-200 bg-white p-6 text-sm text-slate-600">No showcase images yet.</div>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+                {showcaseItems.slice(0, 8).map((x) => (
+                  <a
+                    key={x.id}
+                    href={x.image_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="group rounded-2xl bg-white ring-1 ring-slate-200 overflow-hidden hover:shadow-lg hover:shadow-slate-900/10 transition-all"
+                    title={x.title}
+                  >
+                    <div className="aspect-[16/10] bg-slate-50">
+                      <img
+                        src={x.image_url}
+                        alt={x.title || 'Dashboard'}
+                        className="h-full w-full object-cover"
+                        loading="lazy"
+                        decoding="async"
+                      />
+                    </div>
+                    <div className="p-3">
+                      <div className="text-sm font-bold text-slate-900 line-clamp-1">{x.title}</div>
+                      <div className="text-xs text-slate-600 line-clamp-2">{x.description || ''}</div>
+                    </div>
+                  </a>
+                ))}
+              </div>
+            )}
+
+            <div className="mt-6 sm:hidden">
+              <Link
+                to="/dashboard-showcase"
+                className="inline-flex px-4 py-2 rounded-xl text-sm font-bold bg-indigo-600 text-white hover:bg-indigo-700"
+              >
+                View all
+              </Link>
+            </div>
           </div>
         </div>
       </section>
@@ -872,11 +988,17 @@ export default function LandingPage() {
 
             <div className="hidden lg:block h-full min-h-[520px] relative overflow-hidden rounded-[2.5rem]">
               <div className="absolute inset-0 bg-indigo-600/20 backdrop-blur-[2px]" />
-              <img 
-                src={new URL('../../images/pexels-gabby-k-6289065.jpg', import.meta.url).href} 
-                className="w-full h-full object-cover" 
-                alt="Contact background" 
-              />
+              {enableHeavyBackground ? (
+                <img 
+                  src={new URL('../../images/pexels-gabby-k-6289065.jpg', import.meta.url).href} 
+                  className="w-full h-full object-cover" 
+                  alt="Contact background" 
+                  loading="lazy"
+                  decoding="async"
+                />
+              ) : (
+                <div className="absolute inset-0 bg-gradient-to-br from-indigo-200/40 via-white/10 to-violet-200/30" />
+              )}
             </div>
           </div>
         </div>
