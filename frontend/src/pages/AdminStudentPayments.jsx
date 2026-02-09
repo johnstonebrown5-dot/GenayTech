@@ -179,6 +179,7 @@ export default function AdminStudentPayments(){
         student_id: id,
         simulate: false
       })
+      const checkoutId = data?.daraja?.CheckoutRequestID || data?.daraja?.checkoutRequestID || ''
       // Mark as sent
       setStkStatus('sent')
       // Begin polling for payment creation
@@ -187,6 +188,21 @@ export default function AdminStudentPayments(){
       let found = false
       while (Date.now() - started < 60000) { // up to 60s
         await new Promise(r => setTimeout(r, 3000))
+        // 1) Prefer checking callback reconciliation via IncomingPayment (CheckoutRequestID)
+        if (checkoutId) {
+          try {
+            const ipRes = await api.get(`/finance/incoming-payments/`, { params: { source: 'mpesa', external_id: checkoutId } })
+            const ipList = Array.isArray(ipRes.data) ? ipRes.data : (ipRes.data?.results || [])
+            const ip = ipList?.[0]
+            const st = String(ip?.status || '').toLowerCase()
+            if (st === 'matched' || (ip?.reference && String(ip.reference).trim())) {
+              found = true
+              break
+            }
+          } catch {
+            // ignore; fallback to payments polling
+          }
+        }
         const poll = await api.get(`/finance/payments/?invoice__student=${id}`)
         const pollList = Array.isArray(poll.data) ? poll.data : (poll.data?.results || [])
         const countNow = pollList.length

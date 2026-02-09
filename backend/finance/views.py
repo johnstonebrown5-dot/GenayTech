@@ -753,6 +753,27 @@ class InvoiceViewSet(viewsets.ModelViewSet):
             else:
                 client = MpesaClient()
                 resp = client.stk_push(phone=str(phone), amount=amount, account_ref=account_ref)
+            # Persist a pending incoming payment tied to CheckoutRequestID so callback can reconcile
+            try:
+                checkout_id = str((resp or {}).get('CheckoutRequestID') or '').strip()
+                if checkout_id:
+                    IncomingPayment.objects.get_or_create(
+                        source='mpesa',
+                        external_id=checkout_id,
+                        defaults={
+                            'amount': float(amount),
+                            'currency': 'KES',
+                            'reference': '',
+                            'narration': 'STK Initiated',
+                            'account_ref': str(account_ref or ''),
+                            'phone': str(phone or ''),
+                            'matched_student': stu,
+                            'status': 'pending',
+                            'notes': 'awaiting daraja callback',
+                        }
+                    )
+            except Exception:
+                pass
             return Response({'status': 'pending', 'message': 'STK initiated', 'daraja': resp}, status=202)
         except Exception as e:
             logging.getLogger(__name__).exception('STK initiation failed')
@@ -764,7 +785,7 @@ class IncomingPaymentViewSet(viewsets.ModelViewSet):
     serializer_class = IncomingPaymentSerializer
     permission_classes = [IsFinanceOrAdmin]
     filter_backends = [DjangoFilterBackend]
-    filterset_fields = ['status', 'source', 'matched_student']
+    filterset_fields = ['status', 'source', 'matched_student', 'external_id', 'account_ref', 'phone']
 
     def get_queryset(self):
         qs = super().get_queryset()
@@ -2219,6 +2240,12 @@ def mpesa_callback(request):
     logger.info("STK callback received", extra={'checkout_request_id': checkout_id, 'result_code': result_code})
     # If payment successful, record it
     if result_code == 0 and invoice and amount:
+        # Avoid duplicates on callback retries
+        try:
+            if receipt and Payment.objects.filter(reference=str(receipt)).exists():
+                return JsonResponse({'ResultCode': 0, 'ResultDesc': 'Accepted'})
+        except Exception:
+            pass
         pay = Payment.objects.create(
             invoice=invoice,
             amount=float(amount),
@@ -2251,11 +2278,19 @@ def mpesa_callback(request):
             logger.error(f"Notification failed: {e}")
 
     elif result_code == 0 and amount and not invoice:
-        # Attempt to auto-allocate FIFO by student admission number in account_ref.
-        # If there is no outstanding invoice balance, record as prepaid credit.
+        # Reconcile balance payments by CheckoutRequestID (preferred), then account_ref.
         allocated = False
         stu = None
-        if account_ref:
+        ip = None
+        try:
+            if checkout_id:
+                ip = IncomingPayment.objects.filter(source='mpesa', external_id=str(checkout_id)).select_related('matched_student').first()
+                if ip and getattr(ip, 'matched_student', None):
+                    stu = ip.matched_student
+        except Exception:
+            ip = None
+
+        if not stu and account_ref:
             stu = Student.objects.filter(admission_no__iexact=str(account_ref).strip()).first()
         if stu:
             remaining = float(amount)
@@ -2268,7 +2303,12 @@ def mpesa_callback(request):
                 if inv_balance <= 0:
                     continue
                 alloc = min(remaining, inv_balance)
-                pay = Payment.objects.create(
+                # Avoid duplicates if callback replays
+                if receipt and Payment.objects.filter(reference=str(receipt), invoice=inv).exists():
+                    remaining -= alloc
+                    allocated = True
+                    continue
+                Payment.objects.create(
                     invoice=inv,
                     amount=float(alloc),
                     method='mpesa',
@@ -2303,6 +2343,18 @@ def mpesa_callback(request):
                     )
                 except Exception:
                     pass
+            # Mark the pending incoming payment as matched/processed
+            try:
+                if ip:
+                    ip.reference = str(receipt or ip.reference or '')
+                    ip.amount = float(amount)
+                    ip.phone = str(phone or ip.phone or '')
+                    ip.account_ref = str(account_ref or ip.account_ref or '')
+                    ip.status = 'matched' if allocated else 'pending'
+                    ip.notes = 'callback received; allocated to invoices' if allocated else (ip.notes or '')
+                    ip.save(update_fields=['reference', 'amount', 'phone', 'account_ref', 'status', 'notes', 'updated_at'])
+            except Exception:
+                pass
         if not allocated:
             try:
                 IncomingPayment.objects.create(
