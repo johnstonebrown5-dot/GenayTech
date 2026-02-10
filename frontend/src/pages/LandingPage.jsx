@@ -161,7 +161,7 @@ function BackgroundVideo({ enabled }) {
         muted
         loop
         playsInline
-        preload="metadata"
+        preload="none"
       >
         <source src="/background.mp4" type="video/mp4" />
       </video>
@@ -289,7 +289,7 @@ export default function LandingPage() {
 
   return (
     <div className="min-h-screen bg-slate-50/30 selection:bg-indigo-100 selection:text-indigo-900">
-      <BackgroundVideo enabled={!prefersReducedMotion} />
+      <BackgroundVideo enabled={false} />
       <StarryBackground enabled={!prefersReducedMotion} />
       {/* Navigation */}
       <nav className="fixed top-0 z-50 w-full border-b border-white/10 bg-indigo-600/95 md:border-slate-200/60 md:bg-white/70 backdrop-blur-xl">
