@@ -143,47 +143,98 @@ class TokenObtainPairViewWithLogging(TokenObtainPairView):
             u = getattr(self, 'user', None)
             if u is not None:
                 if not (getattr(u, 'is_superuser', False) or getattr(u, 'is_staff', False)):
-                    try:
-                        sch = getattr(u, 'school', None)
-                        is_trial_school = bool(getattr(sch, 'is_trial', False)) if sch is not None else False
-                    except Exception:
+                    role = str(getattr(u, 'role', '') or '').lower()
+                    if role == 'admin':
+                        school_id = getattr(u, 'school_id', None)
                         is_trial_school = False
-                    if is_trial_school and str(getattr(u, 'role', '') or '').lower() == 'admin':
-                        if not bool(getattr(u, 'email_verified', False)):
+                        if school_id:
+                            try:
+                                cache_key = f"school:is_trial:{int(school_id)}"
+                                cached = cache.get(cache_key)
+                                if cached is None:
+                                    cached = School.objects.filter(id=school_id).values_list('is_trial', flat=True).first()
+                                    cache.set(cache_key, cached, 60)
+                                is_trial_school = bool(cached)
+                            except Exception:
+                                is_trial_school = False
+                        if is_trial_school and not bool(getattr(u, 'email_verified', False)):
                             raise AuthenticationFailed('Email not verified')
+
+                try:
+                    req = self.context.get('request') if isinstance(self.context, dict) else None
+                    include_me = str(getattr(req, 'query_params', {}).get('include_me', '') or '').lower() in ('1', 'true', 'yes')
+                except Exception:
+                    include_me = False
+                if include_me:
+                    try:
+                        uid = getattr(u, 'id', None)
+                        if uid:
+                            u2 = (
+                                User.objects
+                                .select_related('school', 'student')
+                                .only(
+                                    'id', 'username', 'email', 'first_name', 'last_name',
+                                    'role', 'phone', 'school_id', 'is_staff', 'is_superuser', 'email_verified', 'is_active',
+                                    'profile_picture',
+                                    'school__id', 'school__name', 'school__code', 'school__is_active', 'school__address',
+                                    'school__motto', 'school__aim', 'school__logo', 'school__social_links', 'school__homepage',
+                                    'school__is_trial', 'school__trial_expires_at', 'school__trial_student_limit', 'school__feature_flags',
+                                    'student__admission_no',
+                                )
+                                .get(id=uid)
+                            )
+                            data['user'] = UserSerializer(u2, context={'request': req} if req is not None else {}).data
+                    except Exception:
+                        pass
             return data
 
     serializer_class = Serializer
 
     def post(self, request, *args, **kwargs):
-        username = None
-        try:
-            username = (request.data or {}).get('username') or (request.data or {}).get('email')
-        except Exception:
-            username = None
-
-        school_id = None
-        if username:
+        t0 = perf_counter()
+        q0 = None
+        if bool(getattr(settings, 'DEBUG', False)):
             try:
-                u = User.objects.filter(username__iexact=str(username)).only('id', 'school_id').first()
-                school_id = getattr(u, 'school_id', None)
+                q0 = len(connection.queries)
             except Exception:
-                school_id = None
-
+                q0 = None
         try:
-            resp = super().post(request, *args, **kwargs)
+            serializer = self.get_serializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
         except Exception as e:
-            _log_system_health_event(school_id=school_id, component=SystemHealthEvent.Component.LOGIN, ok=False, context=f"exception:{type(e).__name__}")
+            _log_system_health_event(
+                school_id=None,
+                component=SystemHealthEvent.Component.LOGIN,
+                ok=False,
+                context=f"exception:{type(e).__name__}",
+            )
             raise
 
-        ok = int(getattr(resp, 'status_code', 500) or 500) < 400
+        user = getattr(serializer, 'user', None)
+        school_id = getattr(user, 'school_id', None) if user is not None else None
+        ms = int((perf_counter() - t0) * 1000)
+        q1 = None
+        if q0 is not None and bool(getattr(settings, 'DEBUG', False)):
+            try:
+                q1 = len(connection.queries)
+            except Exception:
+                q1 = None
+        qd = None
+        try:
+            if q0 is not None and q1 is not None:
+                qd = max(0, int(q1) - int(q0))
+        except Exception:
+            qd = None
+        ctx = f"status:200;ms:{ms}"
+        if qd is not None:
+            ctx = ctx + f";q:{qd}"
         _log_system_health_event(
             school_id=school_id,
             component=SystemHealthEvent.Component.LOGIN,
-            ok=bool(ok),
-            context=f"status:{getattr(resp, 'status_code', '')}",
+            ok=True,
+            context=ctx,
         )
-        return resp
+        return Response(serializer.validated_data, status=200)
 
 @api_view(["GET","PATCH"]) 
 @permission_classes([IsAuthenticated])
@@ -194,6 +245,25 @@ def me(request):
     any of the keys: 'profile_picture', 'avatar', or 'photo'.
     """
     user = request.user
+    try:
+        uid = getattr(user, 'id', None)
+        if uid:
+            user = (
+                User.objects
+                .select_related('school', 'student')
+                .only(
+                    'id', 'username', 'email', 'first_name', 'last_name',
+                    'role', 'phone', 'school_id', 'is_staff', 'is_superuser', 'email_verified', 'is_active',
+                    'profile_picture',
+                    'school__id', 'school__name', 'school__code', 'school__is_active', 'school__address',
+                    'school__motto', 'school__aim', 'school__logo', 'school__social_links', 'school__homepage',
+                    'school__is_trial', 'school__trial_expires_at', 'school__trial_student_limit', 'school__feature_flags',
+                    'student__admission_no',
+                )
+                .get(id=uid)
+            )
+    except Exception:
+        user = request.user
     try:
         if not getattr(user, 'is_superuser', False):
             sch = getattr(user, 'school', None)

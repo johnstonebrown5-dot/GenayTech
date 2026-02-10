@@ -1,18 +1,31 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import api from '../api'
+import { useAuth } from '../auth'
 import Modal from '../components/Modal'
 import StatCard from '../components/StatCard'
 
 let __studentDashboardCache = null
+
+function Skeleton({ className = '' }){
+  return <div className={`animate-pulse rounded bg-slate-200/80 ${className}`} />
+}
 
 export default function StudentDashboard(){
   const location = useLocation()
   const { pathname } = location
   const navigate = useNavigate()
   const [student, setStudent] = useState(null)
+  const { user: authUser } = useAuth()
+  const [personalInfoOpen, setPersonalInfoOpen] = useState(() => {
+    if (typeof window === 'undefined') return true
+    return window.innerWidth >= 640
+  })
+  const [openExam, setOpenExam] = useState(null)
+  const [examSearchOpen, setExamSearchOpen] = useState(false)
+  const [examQuery, setExamQuery] = useState('')
+  const [printExamId, setPrintExamId] = useState(null)
   const [assessments, setAssessments] = useState([])
-  const [attendance, setAttendance] = useState([])
   const [examResults, setExamResults] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -75,6 +88,39 @@ export default function StudentDashboard(){
     const first = examResults[0]
     return first?.exam_detail?.name || first?.exam || null
   }, [examResults])
+
+  useEffect(() => {
+    if (currentTab !== 'academics') return
+    if (openExam) return
+    if (!latestExamLabel) return
+    setOpenExam(latestExamLabel)
+  }, [currentTab, latestExamLabel, openExam])
+
+  useEffect(() => {
+    if (!printExamId) return
+    let alive = true
+    const onAfter = () => {
+      if (!alive) return
+      setPrintExamId(null)
+    }
+    try { window.addEventListener('afterprint', onAfter) } catch {}
+    const t = setTimeout(() => {
+      try { window.print() } catch {}
+      // Fallback cleanup if afterprint doesn't fire
+      setTimeout(() => { if (alive) setPrintExamId(null) }, 1200)
+    }, 60)
+    return () => {
+      alive = false
+      clearTimeout(t)
+      try { window.removeEventListener('afterprint', onAfter) } catch {}
+    }
+  }, [printExamId])
+
+  const examDomId = (name) => {
+    const raw = String(name || '')
+    const safe = raw.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
+    return `exam-report-${safe || 'unknown'}`
+  }
 
   // Build report card rows for the latest exam
   const reportRows = useMemo(() => {
@@ -175,6 +221,12 @@ export default function StudentDashboard(){
     return Array.from(m.entries())
   }, [examResults])
 
+  const filteredExamResults = useMemo(() => {
+    const q = String(examQuery || '').trim().toLowerCase()
+    if (!q) return groupedExamResults
+    return (groupedExamResults || []).filter(([name]) => String(name || '').toLowerCase().includes(q))
+  }, [groupedExamResults, examQuery])
+
   useEffect(()=>{
     let mounted = true
 
@@ -182,11 +234,13 @@ export default function StudentDashboard(){
       if (!__studentDashboardCache) {
         __studentDashboardCache = {
           baseLoaded: false,
+          dashboardLoaded: false,
           academicsLoaded: false,
           financeLoaded: false,
+          financeSummaryLoaded: false,
+          invoicesLoaded: false,
           student: null,
           assessments: [],
-          attendance: [],
           examResults: [],
           invoices: [],
           summary: { total_billed: 0, total_paid: 0, balance: 0 },
@@ -198,7 +252,6 @@ export default function StudentDashboard(){
     const hydrateFromCache = (c) => {
       setStudent(c.student || null)
       setAssessments(c.assessments || [])
-      setAttendance(c.attendance || [])
       setExamResults(c.examResults || [])
       setInvoices(c.invoices || [])
       setSummary(c.summary || { total_billed: 0, total_paid: 0, balance: 0 })
@@ -210,46 +263,111 @@ export default function StudentDashboard(){
       try {
         const c = ensureCache()
 
-        // 1) Base student record (required for dashboard/profile + academics)
-        // Finance tab should not be blocked by this call.
-        if (!c.baseLoaded && currentTab !== 'finance') {
-          const stRes = await api.get('/academics/students/my/')
-          if (!mounted) return
-          c.student = stRes.data
-          c.baseLoaded = true
-        }
-
         // Hydrate UI immediately from cache before optional tab-specific fetches.
         hydrateFromCache(c)
 
+        // If academics is already loaded, ensure we show the latest expanded exam if none open
+        if (currentTab === 'academics' && c.academicsLoaded) {
+          hydrateFromCache(c)
+        }
+
+        // Base student record (required for personalized sections)
+        if (!c.baseLoaded) {
+          try {
+            const stRes = await api.get('/academics/students/my/', { timeout: 15000, _skipGlobalLoading: true })
+            if (!mounted) return
+            c.student = stRes.data
+            c.baseLoaded = true
+            hydrateFromCache(c)
+          } catch {
+            if (!mounted) return
+          }
+        }
+
+        // Prefetch core personalized data for the main dashboard once per session.
+        if (currentTab === 'dashboard' && !c.dashboardLoaded) {
+          const settled = await Promise.allSettled([
+            c.baseLoaded ? Promise.resolve({ data: c.student }) : api.get('/academics/students/my/', { timeout: 15000, _skipGlobalLoading: true }),
+            api.get('/academics/assessments/my/', { timeout: 15000, _skipGlobalLoading: true }),
+            api.get('/finance/invoices/my-summary/', { timeout: 15000, _skipGlobalLoading: true }),
+          ])
+          if (!mounted) return
+          const [stS, assS, sumS] = settled
+          if (stS.status === 'fulfilled') {
+            c.student = stS.value?.data || c.student
+            c.baseLoaded = true
+          }
+          c.assessments = assS.status==='fulfilled' ? (Array.isArray(assS.value?.data) ? assS.value.data : (assS.value?.data?.results || [])) : (c.assessments || [])
+          c.summary = sumS.status==='fulfilled' ? (sumS.value?.data || { total_billed:0, total_paid:0, balance:0 }) : (c.summary || { total_billed:0, total_paid:0, balance:0 })
+          c.financeSummaryLoaded = true
+          c.dashboardLoaded = true
+          hydrateFromCache(c)
+        }
+
         // 2) Tab-specific data loads once per tab (only when user opens that tab)
         if (currentTab === 'academics' && !c.academicsLoaded) {
+          if (!c.baseLoaded) {
+            try {
+              const stRes = await api.get('/academics/students/my/', { timeout: 15000, _skipGlobalLoading: true })
+              if (!mounted) return
+              c.student = stRes.data
+              c.baseLoaded = true
+              hydrateFromCache(c)
+            } catch {
+              if (!mounted) return
+            }
+          }
           const stId = c.student?.id
           const settled = await Promise.allSettled([
             api.get('/academics/assessments/my/'),
-            api.get('/academics/attendance/my/'),
             stId ? api.get(`/academics/exam_results/?student=${stId}`) : Promise.resolve({ data: [] }),
           ])
           if (!mounted) return
-          const [assS, attS, exmS] = settled
+          const [assS, exmS] = settled
           c.assessments = assS.status==='fulfilled' ? (Array.isArray(assS.value?.data) ? assS.value.data : (assS.value?.data?.results || [])) : []
-          c.attendance = attS.status==='fulfilled' ? (Array.isArray(attS.value?.data) ? attS.value.data : (attS.value?.data?.results || [])) : []
           c.examResults = exmS.status==='fulfilled' ? (Array.isArray(exmS.value?.data) ? exmS.value.data : (exmS.value?.data?.results || [])) : []
           c.academicsLoaded = true
           hydrateFromCache(c)
         }
 
         if (currentTab === 'finance' && !c.financeLoaded) {
-          const settled = await Promise.allSettled([
-            api.get('/finance/invoices/my/'),
-            api.get('/finance/invoices/my-summary/'),
-          ])
-          if (!mounted) return
-          const [invS, sumS] = settled
-          c.invoices = invS.status==='fulfilled' ? (Array.isArray(invS.value?.data) ? invS.value.data : (invS.value?.data?.results || [])) : []
-          c.summary = sumS.status==='fulfilled' ? (sumS.value?.data || { total_billed:0, total_paid:0, balance:0 }) : { total_billed:0, total_paid:0, balance:0 }
+          // Load summary first (fast, small payload) so totals render immediately.
+          if (!c.financeSummaryLoaded) {
+            try {
+              const sumRes = await api.get('/finance/invoices/my-summary/', { timeout: 15000, _skipGlobalLoading: true })
+              if (!mounted) return
+              c.summary = sumRes?.data || { total_billed: 0, total_paid: 0, balance: 0 }
+              c.financeSummaryLoaded = true
+              hydrateFromCache(c)
+            } catch {
+              if (!mounted) return
+              c.summary = c.summary || { total_billed: 0, total_paid: 0, balance: 0 }
+              hydrateFromCache(c)
+            }
+          }
+
+          // Mark finance as loaded so we don't refetch repeatedly; invoices will hydrate when ready.
           c.financeLoaded = true
-          hydrateFromCache(c)
+
+          ;(async () => {
+            try {
+              if (c.invoicesLoaded) return
+              const invRes = await api.get('/finance/invoices/my/', {
+                params: { page_size: 200 },
+                timeout: 20000,
+                _skipGlobalLoading: true,
+              })
+              if (!mounted) return
+              c.invoices = (Array.isArray(invRes?.data) ? invRes.data : (invRes?.data?.results || []))
+              c.invoicesLoaded = true
+              hydrateFromCache(c)
+            } catch {
+              if (!mounted) return
+              c.invoices = []
+              c.invoicesLoaded = true
+              hydrateFromCache(c)
+            }
+          })()
         }
       } catch (e) {
         if (!mounted) return
@@ -271,20 +389,32 @@ export default function StudentDashboard(){
     let alive = true
     ;(async () => {
       try {
-        const [invRes, sumRes] = await Promise.all([
-          api.get('/finance/invoices/my/', { timeout: 20000, _skipGlobalLoading: true }),
-          api.get('/finance/invoices/my-summary/', { timeout: 20000, _skipGlobalLoading: true }),
-        ])
+        const sumRes = await api.get('/finance/invoices/my-summary/', { timeout: 15000, _skipGlobalLoading: true })
         if (!alive) return
-        const inv = (Array.isArray(invRes?.data) ? invRes.data : (invRes?.data?.results || []))
         const sum = sumRes?.data || { total_billed: 0, total_paid: 0, balance: 0 }
-        setInvoices(inv)
         setSummary(sum)
         if (__studentDashboardCache) {
-          __studentDashboardCache.invoices = inv
           __studentDashboardCache.summary = sum
           __studentDashboardCache.financeLoaded = true
         }
+
+        ;(async () => {
+          try {
+            const invRes = await api.get('/finance/invoices/my/', {
+              params: { page_size: 200 },
+              timeout: 20000,
+              _skipGlobalLoading: true,
+            })
+            if (!alive) return
+            const inv = (Array.isArray(invRes?.data) ? invRes.data : (invRes?.data?.results || []))
+            setInvoices(inv)
+            if (__studentDashboardCache) {
+              __studentDashboardCache.invoices = inv
+              __studentDashboardCache.financeLoaded = true
+            }
+          } catch {
+          }
+        })()
       } catch {
       } finally {
         try { navigate('/student/finance', { replace: true, state: null }) } catch {}
@@ -299,6 +429,26 @@ export default function StudentDashboard(){
     if (!k) return student?.klass || '-'
     return `${k.name} • ${k.grade_level}`
   }, [student])
+
+  const isBaseLoading = useMemo(() => {
+    if (!__studentDashboardCache) return loading
+    return !__studentDashboardCache.baseLoaded
+  }, [loading, currentTab])
+
+  const isFinanceSummaryLoading = useMemo(() => {
+    if (!__studentDashboardCache) return loading
+    return !__studentDashboardCache.financeSummaryLoaded
+  }, [loading, currentTab])
+
+  const isInvoicesLoading = useMemo(() => {
+    if (!__studentDashboardCache) return loading
+    return !__studentDashboardCache.invoicesLoaded
+  }, [loading, currentTab])
+
+  const isAcademicsLoading = useMemo(() => {
+    if (!__studentDashboardCache) return loading
+    return !__studentDashboardCache.academicsLoaded
+  }, [loading, currentTab])
 
   function money(n){
     try {
@@ -335,160 +485,171 @@ export default function StudentDashboard(){
   return (
     <div className="space-y-5 sm:space-y-7">
 
-      {loading && <div className="-mx-3 sm:mx-0 bg-white sm:rounded-xl shadow p-3 sm:p-4">Loading...</div>}
       {error && <div className="-mx-3 sm:mx-0 bg-red-50 text-red-700 p-3 sm:p-3 rounded-none sm:rounded">{error}</div>}
 
   {currentTab === 'dashboard' && (
     <div className="space-y-6">
       {/* Welcome banner */}
-      <div className="bg-green-600 text-white rounded shadow p-3 flex items-center justify-between">
-        <div className="font-medium">Welcome {student?.name ? String(student.name).toUpperCase() : ''}</div>
+      <div className="hidden sm:flex bg-green-600 text-white rounded shadow p-3 items-center justify-between">
+        <div className="font-medium">
+          {isBaseLoading && !student?.name && !authUser?.first_name ? (
+            <Skeleton className="h-4 w-56 bg-white/25" />
+          ) : (
+            <>Welcome {(student?.name || authUser?.first_name || authUser?.username || '').toUpperCase()}</>
+          )}
+        </div>
         <div className="text-xs opacity-90">Dashboard</div>
       </div>
 
       {/* Quick actions removed as per request */}
 
       {/* Summary cards */}
-      <div className="grid md:grid-cols-3 gap-3 sm:gap-4">
-        <div className="bg-amber-500 text-white rounded shadow p-3 sm:p-4">
-          <div className="text-xs sm:text-sm opacity-90">Total Billed</div>
-          <div className="text-xl sm:text-2xl font-semibold">{money(summary.total_billed)}</div>
-          <div className="text-[10px] sm:text-xs mt-1 opacity-90">All time invoiced</div>
+      <div className="px-3 sm:px-0 grid md:grid-cols-3 gap-3 sm:gap-4">
+        <div className="bg-amber-500 text-white rounded-xl shadow-sm p-4">
+          <div className="text-xs sm:text-sm opacity-90 font-medium">Total Billed</div>
+          <div className="text-xl sm:text-2xl font-bold mt-1">
+            {isFinanceSummaryLoading ? <Skeleton className="h-7 w-32 bg-white/25" /> : money(summary.total_billed)}
+          </div>
+          <div className="text-[10px] sm:text-xs mt-1 opacity-80">All time invoiced</div>
         </div>
-        <div className="bg-green-600 text-white rounded shadow p-3 sm:p-4">
-          <div className="text-xs sm:text-sm opacity-90">Total Paid</div>
-          <div className="text-xl sm:text-2xl font-semibold">{money(summary.total_paid)}</div>
-          <div className="text-[10px] sm:text-xs mt-1 opacity-90">All time payments</div>
+        <div className="bg-green-600 text-white rounded-xl shadow-sm p-4">
+          <div className="text-xs sm:text-sm opacity-90 font-medium">Total Paid</div>
+          <div className="text-xl sm:text-2xl font-bold mt-1">
+            {isFinanceSummaryLoading ? <Skeleton className="h-7 w-32 bg-white/25" /> : money(summary.total_paid)}
+          </div>
+          <div className="text-[10px] sm:text-xs mt-1 opacity-80">All time payments</div>
         </div>
-        <div className="bg-sky-600 text-white rounded shadow p-3 sm:p-4">
-          <div className="text-xs sm:text-sm opacity-90">Balance</div>
-          <div className="text-xl sm:text-2xl font-semibold">{money(summary.balance)}</div>
-          <div className="text-[10px] sm:text-xs mt-1 opacity-90">Outstanding</div>
+        <div className="bg-sky-600 text-white rounded-xl shadow-sm p-4">
+          <div className="text-xs sm:text-sm opacity-90 font-medium">Balance</div>
+          <div className="text-xl sm:text-2xl font-bold mt-1">
+            {isFinanceSummaryLoading ? <Skeleton className="h-7 w-32 bg-white/25" /> : money(summary.balance)}
+          </div>
+          <div className="text-[10px] sm:text-xs mt-1 opacity-80">Outstanding</div>
         </div>
       </div>
 
       {/* User Profile */}
-      {student && (
-        <div className="bg-white rounded shadow p-0 overflow-hidden">
-          <div className="border-b px-4 py-2 font-medium flex items-center justify-between">
-            <span>User Profile</span>
+      <div className="px-3 sm:px-0">
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+          {/* Header area */}
+          <div className="bg-slate-50/50 px-4 py-3 border-b border-slate-100 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="text-lg">👤</span>
+              <h2 className="font-semibold text-slate-800">Personal Information</h2>
+            </div>
             <button
-              onClick={() => { setEditError(''); setEditForm({ email: student.email || '', phone: student.guardian_id || '', address: student.address || '' }); setShowEdit(true) }}
-              className="inline-flex items-center gap-1 px-2 py-1 rounded bg-indigo-600 text-white hover:bg-indigo-700 text-xs"
+              onClick={() => {
+                if (!student) return
+                setEditError('')
+                setEditForm({ email: student.email || '', phone: student.guardian_id || '', address: student.address || '' })
+                setShowEdit(true)
+              }}
+              className="p-2 rounded-full hover:bg-slate-200/50 text-indigo-600 transition-colors disabled:opacity-50"
               title="Edit Details"
+              disabled={!student}
             >
-              <span>✏️</span>
-              <span className="hidden sm:inline">Edit</span>
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+              </svg>
             </button>
           </div>
-          <div className="grid md:grid-cols-3 gap-0">
-            <div className="p-4 border-r">
-              <div className="w-40 h-40 bg-gray-100 rounded overflow-hidden flex items-center justify-center">
-                {student.photo_url ? (
-                  <img src={student.photo_url} alt="Student" className="w-full h-full object-cover" />
-                ) : (
-                  <div className="text-gray-400 text-6xl">👤</div>
-                )}
+
+          <div className="p-4 md:p-6 flex flex-col md:flex-row gap-6 md:gap-8">
+            {/* Avatar Section */}
+            <div className="flex flex-col items-center gap-3 shrink-0">
+              <div className="relative group">
+                <div className="w-24 h-24 md:w-32 md:h-32 rounded-3xl bg-slate-100 border-4 border-white shadow-sm overflow-hidden flex items-center justify-center">
+                  {isBaseLoading ? (
+                    <Skeleton className="h-full w-full" />
+                  ) : student?.photo_url ? (
+                    <img src={student.photo_url} alt="Student" className="w-full h-full object-cover" />
+                  ) : (
+                    <span className="text-4xl md:text-5xl opacity-20">👤</span>
+                  )}
+                </div>
               </div>
-              {student.admission_no && (
-                <div className="mt-3 text-sm text-gray-600">{student.admission_no}</div>
+              {!isBaseLoading && student?.admission_no && (
+                <span className="px-3 py-1 rounded-full bg-slate-100 text-slate-600 text-xs font-bold tracking-wider">
+                  {student.admission_no}
+                </span>
+              )}
+
+              <button
+                type="button"
+                onClick={() => setPersonalInfoOpen(v => !v)}
+                className="mt-1 inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-slate-200 bg-white text-slate-700 text-xs font-semibold hover:bg-slate-50 transition"
+                title={personalInfoOpen ? 'Hide details' : 'Show details'}
+                aria-label={personalInfoOpen ? 'Collapse personal information details' : 'Expand personal information details'}
+                aria-expanded={personalInfoOpen}
+                aria-controls="personal-info-details"
+              >
+                <span>{personalInfoOpen ? 'Hide details' : 'Show details'}</span>
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={`w-4 h-4 transition-transform ${personalInfoOpen ? 'rotate-180' : ''}`}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Details Grid */}
+            <div
+              id="personal-info-details"
+              className={`flex-1 transition-all duration-300 ease-in-out overflow-hidden ${personalInfoOpen ? 'max-h-[1200px] opacity-100' : 'max-h-0 opacity-0'}`}
+            >
+              {isBaseLoading && !student?.name && !authUser?.first_name ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4">
+                  {Array.from({ length: 6 }).map((_, i) => (
+                    <div key={i} className="space-y-2">
+                      <Skeleton className="h-3 w-20" />
+                      <Skeleton className="h-4 w-32" />
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-5">
+                  <div className="space-y-1">
+                    <label className="text-[10px] uppercase tracking-widest font-bold text-slate-400">Full Name</label>
+                    <p className="text-sm md:text-base font-semibold text-slate-900">
+                      {student?.name || `${authUser?.first_name || ''} ${authUser?.last_name || ''}`.trim() || authUser?.username}
+                    </p>
+                  </div>
+                  
+                  <div className="space-y-1">
+                    <label className="text-[10px] uppercase tracking-widest font-bold text-slate-400">Class & Grade</label>
+                    <p className="text-sm md:text-base font-semibold text-slate-900">{classLabel}</p>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] uppercase tracking-widest font-bold text-slate-400">Parent Phone</label>
+                    <p className="text-sm md:text-base font-semibold text-slate-900">{student?.guardian_id || authUser?.phone || '-'}</p>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] uppercase tracking-widest font-bold text-slate-400">Email Address</label>
+                    <p className="text-sm md:text-base font-semibold text-slate-900 truncate">{student?.email || authUser?.email || '-'}</p>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] uppercase tracking-widest font-bold text-slate-400">Boarding Status</label>
+                    <div className="flex">
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-100 uppercase tracking-tight">
+                        {student?.boarding_status || 'Day'}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] uppercase tracking-widest font-bold text-slate-400">Date of Birth</label>
+                    <p className="text-sm md:text-base font-semibold text-slate-900">{student?.dob || '-'}</p>
+                  </div>
+
+                  <div className="sm:col-span-2 space-y-1 pt-2 border-t border-slate-50">
+                    <label className="text-[10px] uppercase tracking-widest font-bold text-slate-400">Postal Address</label>
+                    <p className="text-sm text-slate-600 leading-relaxed">{student?.address || 'No address provided'}</p>
+                  </div>
+                </div>
               )}
             </div>
-            <div className="md:col-span-2 p-4">
-              <div className="text-gray-700 font-medium mb-3">Personal Information</div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-y-3 gap-x-6 text-sm">
-                <div>
-                  <div className="text-gray-500">Full Name</div>
-                  <div className="font-medium uppercase">{student.name}</div>
-                </div>
-                <div>
-                  <div className="text-gray-500">Phone Number</div>
-                  <div className="font-medium">{student.guardian_id || '-'}</div>
-                </div>
-                <div>
-                  <div className="text-gray-500">Gender</div>
-                  <div className="font-medium">{student.gender || '-'}</div>
-                </div>
-                <div>
-                  <div className="text-gray-500">Boarding Status</div>
-                  <div className="font-medium capitalize">{student.boarding_status || 'day'}</div>
-                </div>
-                <div>
-                  <div className="text-gray-500">Date of Birth</div>
-                  <div className="font-medium">{student.dob || '-'}</div>
-                </div>
-                <div>
-                  <div className="text-gray-500">Class</div>
-                  <div className="font-medium">{classLabel}</div>
-                </div>
-                <div>
-                  <div className="text-gray-500">Passport No</div>
-                  <div className="font-medium">{student.passport_no || '-'}</div>
-                </div>
-                <div>
-                  <div className="text-gray-500">Email</div>
-                  <div className="font-medium">{student.email || '-'}</div>
-                </div>
-                <div className="md:col-span-2">
-                  <div className="text-gray-500">Postal Address</div>
-                  <div className="font-medium">{student.address || '-'}</div>
-                </div>
-              </div>
-            </div>
           </div>
-        </div>
-      )}
-
-      {/* Assessments & Attendance */}
-      <div className="grid md:grid-cols-2 gap-6">
-        <div className="bg-white rounded shadow p-4">
-          <h2 className="font-medium mb-2">Assessments</h2>
-          {!Array.isArray(assessments) || assessments.length === 0 ? (
-            <div className="text-sm text-gray-500">No assessments yet.</div>
-          ) : (
-            <table className="w-full text-left text-sm">
-              <thead>
-                <tr>
-                  <th>Competency</th>
-                  <th>Level</th>
-                  <th>Date</th>
-                </tr>
-              </thead>
-              <tbody>
-                {assessments.map(a => (
-                  <tr key={a.id} className="border-top border-t">
-                    <td>{a.competency}</td>
-                    <td>{a.level}</td>
-                    <td>{a.date}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-
-        <div className="bg-white rounded shadow p-4">
-          <h2 className="font-medium mb-2">Attendance</h2>
-          {!Array.isArray(attendance) || attendance.length === 0 ? (
-            <div className="text-sm text-gray-500">No attendance records yet.</div>
-          ) : (
-            <table className="w-full text-left text-sm">
-              <thead>
-                <tr>
-                  <th>Date</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {attendance.map(at => (
-                  <tr key={at.id} className="border-t">
-                    <td>{at.date}</td>
-                    <td className="capitalize">{at.status}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
         </div>
       </div>
     </div>
@@ -522,7 +683,13 @@ export default function StudentDashboard(){
             </button>
           </div>
         </div>
-        {Array.isArray(feeStatement) && feeStatement.length > 0 ? (
+        {isInvoicesLoading ? (
+          <div className="space-y-2">
+            <Skeleton className="h-12 w-full" />
+            <Skeleton className="h-12 w-full" />
+            <Skeleton className="h-12 w-full" />
+          </div>
+        ) : Array.isArray(feeStatement) && feeStatement.length > 0 ? (
           <>
             <div className="sm:hidden space-y-2">
               {feeStatement.map((r, idx) => (
@@ -596,7 +763,12 @@ export default function StudentDashboard(){
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-sm font-semibold text-slate-900">Payments over time</h3>
         </div>
-        {Array.isArray(paymentsOverTime) && paymentsOverTime.length > 0 ? (
+        {isInvoicesLoading ? (
+          <div className="space-y-2">
+            <Skeleton className="h-8 w-40" />
+            <Skeleton className="h-56 w-full" />
+          </div>
+        ) : Array.isArray(paymentsOverTime) && paymentsOverTime.length > 0 ? (
           <ResponsiveLine data={paymentsOverTime} />
         ) : (
           <div className="text-sm text-slate-500">No payments recorded yet. Once you start paying invoices, a trend will appear here.</div>
@@ -606,136 +778,140 @@ export default function StudentDashboard(){
   )}
 
   {currentTab === 'academics' && (
-    <div className="-mx-3 sm:mx-0 bg-white/95 backdrop-blur-xl border border-slate-200/70 shadow-[0_18px_45px_rgba(15,23,42,0.08)] rounded-none sm:rounded-3xl pt-4 pb-6 px-4 sm:p-6">
-      <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-indigo-50 via-white to-slate-50 p-4 sm:p-5 mb-5 shadow-sm">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <div className="text-[11px] font-semibold tracking-[0.18em] text-slate-500 uppercase">Performance</div>
-            <div className="text-lg sm:text-xl font-semibold text-slate-900">Academics</div>
-            <div className="mt-1 text-xs text-slate-600 truncate">
-              {latestExamLabel ? `Latest: ${latestExamLabel}` : 'No exams yet'}
-            </div>
+    <div className="-mx-3 sm:mx-0 bg-white sm:rounded-3xl p-4 sm:p-6 border border-slate-200">
+      <h2 className="text-xl font-bold text-slate-900 mb-4">Academics</h2>
+      
+      <div className="space-y-6">
+        {/* Exams Section */}
+        <section>
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Exams</h3>
+            <button
+              type="button"
+              onClick={() => {
+                setExamSearchOpen(v => !v)
+                if (examSearchOpen) setExamQuery('')
+              }}
+              className="inline-flex items-center justify-center w-9 h-9 rounded-xl border border-slate-200 bg-white hover:bg-slate-50"
+              aria-label="Search exams"
+              title="Search"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5 text-slate-600">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35m1.85-5.15a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+            </button>
           </div>
-          <button
-            className="shrink-0 text-xs sm:text-sm px-3 py-2 rounded-xl bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-60"
-            onClick={() => latestExamLabel ? navigate('/student/report-card') : null}
-            disabled={!latestExamLabel}
-          >
-            {latestExamLabel ? 'Open Report Card' : 'No Exam Yet'}
-          </button>
-        </div>
 
-        <div className="mt-3 flex flex-wrap gap-2">
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] border border-slate-200 bg-white text-slate-700">
-            Exams
-            <span className="font-semibold">{Array.isArray(groupedExamResults) ? groupedExamResults.length : 0}</span>
-          </span>
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] border border-slate-200 bg-white text-slate-700">
-            Attendance
-            <span className="font-semibold">{Array.isArray(attendance) ? attendance.length : 0}</span>
-          </span>
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] border border-slate-200 bg-white text-slate-700">
-            Trend points
-            <span className="font-semibold">{Array.isArray(performance) ? performance.length : 0}</span>
-          </span>
-        </div>
-      </div>
-
-      {/* Exams list */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-5 mb-6">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="font-medium">Exams</h2>
-          {latestExamLabel && <span className="text-xs text-slate-500">Latest: {latestExamLabel}</span>}
-        </div>
-        {Array.isArray(groupedExamResults) && groupedExamResults.length > 0 ? (
-          <>
-            {/* Mobile cards */}
-            <div className="grid gap-2 sm:hidden">
-              {groupedExamResults.map(([name, rows]) => {
-                const total = rows.reduce((s,r)=> s + Number(r.marks||0), 0)
+          {examSearchOpen && (
+            <div className="mb-3">
+              <input
+                value={examQuery}
+                onChange={(e) => setExamQuery(e.target.value)}
+                placeholder="Search exams..."
+                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-200"
+              />
+            </div>
+          )}
+          {isAcademicsLoading ? (
+            <div className="space-y-2">
+              <Skeleton className="h-12 w-full" />
+              <Skeleton className="h-12 w-full" />
+            </div>
+          ) : Array.isArray(filteredExamResults) && filteredExamResults.length > 0 ? (
+            <div className="space-y-3">
+              {filteredExamResults.map(([name, rows]) => {
+                const total = rows.reduce((s, r) => s + Number(r.marks || 0), 0)
                 const avg = rows.length ? (total / rows.length) : 0
-                const badge = avg >= 75 ? 'bg-emerald-100 text-emerald-700' : avg >= 50 ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700'
+                const isOpen = openExam === name
+                const domId = examDomId(name)
+                const report = rows
+                  .map(r => ({
+                    subjectLabel: r.subject_detail
+                      ? `${r.subject_detail.code ? r.subject_detail.code + ' — ' : ''}${r.subject_detail.name || ''}`
+                      : String(r.subject || ''),
+                    marks: Number(r.marks || 0),
+                  }))
+                  .sort((a, b) => String(a.subjectLabel).localeCompare(String(b.subjectLabel)))
+
                 return (
-                  <div key={name} className="rounded-xl border border-slate-200 p-3 flex items-center justify-between">
-                    <div className="min-w-0">
-                      <div className="font-medium text-slate-900 truncate">{name}</div>
-                      <div className="text-xs text-slate-500">Subjects • {rows.length}</div>
+                  <div key={name} className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+                    <button
+                      type="button"
+                      onClick={() => setOpenExam(prev => (prev === name ? null : name))}
+                      className="w-full px-4 py-3 flex items-center justify-between gap-3 hover:bg-slate-50"
+                      aria-expanded={isOpen}
+                    >
+                      <div className="min-w-0 text-left">
+                        <div className="text-sm font-semibold text-slate-900 truncate">{name}</div>
+                        <div className="text-[11px] text-slate-500">Tap to view report card</div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <div className="text-right">
+                          <div className="text-[11px] uppercase tracking-wider text-slate-400">Average</div>
+                          <div className="text-sm font-bold text-indigo-600">{avg.toFixed(1)}%</div>
+                        </div>
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={`w-5 h-5 text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </div>
+                    </button>
+
+                    <div className={`transition-all duration-300 ease-in-out overflow-hidden ${isOpen ? 'max-h-[800px] opacity-100' : 'max-h-0 opacity-0'}`}>
+                      <div className="px-4 pb-4" id={domId}>
+                        {printExamId === domId && (
+                          <style>{`@media print{ body *{ visibility:hidden } #${domId}, #${domId} *{ visibility:visible } #${domId}{ position:absolute; left:0; top:0; width:100%; padding:16px } }`}</style>
+                        )}
+
+                        <div className="mt-3 flex items-center justify-between gap-3">
+                          <div className="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">Report Card</div>
+                          <button
+                            type="button"
+                            onClick={() => setPrintExamId(domId)}
+                            className="text-xs px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50"
+                          >
+                            Print report card
+                          </button>
+                        </div>
+
+                        <div className="mt-3 grid grid-cols-2 gap-3">
+                          <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+                            <div className="text-[11px] uppercase tracking-wider text-slate-500">Total</div>
+                            <div className="text-sm font-bold text-slate-900">{Number.isFinite(total) ? total.toFixed(0) : '0'}</div>
+                          </div>
+                          <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+                            <div className="text-[11px] uppercase tracking-wider text-slate-500">Subjects</div>
+                            <div className="text-sm font-bold text-slate-900">{rows.length}</div>
+                          </div>
+                        </div>
+
+                        <div className="mt-4 overflow-x-auto">
+                          <table className="w-full text-left text-sm">
+                            <thead className="bg-slate-50 text-slate-600">
+                              <tr>
+                                <th className="px-2 py-2">Subject</th>
+                                <th className="px-2 py-2 text-right">Marks</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {report.map((r, idx) => (
+                                <tr key={idx} className="border-t">
+                                  <td className="px-2 py-2 text-slate-900">{r.subjectLabel || '-'}</td>
+                                  <td className="px-2 py-2 text-right font-semibold text-slate-900">{Number.isFinite(r.marks) ? r.marks : '-'}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
                     </div>
-                    <span className={`ml-3 text-xs px-2 py-1 rounded-full ${badge}`}>{avg.toFixed(1)}%</span>
                   </div>
                 )
               })}
             </div>
-            {/* Desktop table */}
-            <div className="hidden sm:block overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead className="bg-slate-50 text-slate-600">
-                  <tr>
-                    <th className="py-2 px-3">Exam</th>
-                    <th className="py-2 px-3">Subjects</th>
-                    <th className="py-2 px-3">Average</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {groupedExamResults.map(([name, rows]) => {
-                    const total = rows.reduce((s,r)=> s + Number(r.marks||0), 0)
-                    const avg = rows.length ? (total / rows.length) : 0
-                    const badge = avg >= 75 ? 'bg-emerald-100 text-emerald-700' : avg >= 50 ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700'
-                    return (
-                      <tr key={name} className="border-t hover:bg-slate-50">
-                        <td className="py-2 px-3 whitespace-nowrap">{name}</td>
-                        <td className="py-2 px-3">{rows.length}</td>
-                        <td className="py-2 px-3"><span className={`px-2 py-0.5 rounded-full text-xs ${badge}`}>{avg.toFixed(1)}%</span></td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </>
-        ) : (
-          <div className="text-sm text-slate-500">No exams yet.</div>
-        )}
-      </div>
-
-      {/* Attendance */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-5 mb-6">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-semibold text-slate-900">Attendance</h2>
-          <span className="text-xs text-slate-500">{Array.isArray(attendance) ? `${attendance.length} records` : '0 records'}</span>
-        </div>
-        {!Array.isArray(attendance) || attendance.length === 0 ? (
-          <div className="text-sm text-slate-500">No attendance records yet.</div>
-        ) : (
-          <div>
-            <table className="w-full text-left text-sm">
-              <thead className="bg-slate-50 text-slate-600">
-                <tr>
-                  <th className="py-2 px-2">Date</th>
-                  <th className="py-2 px-2">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {attendance.map(at => (
-                  <tr key={at.id} className="border-t hover:bg-slate-50">
-                    <td className="py-2 px-2">{at.date}</td>
-                    <td className="py-2 px-2 capitalize">{at.status}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-      {/* Performance chart */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-5">
-        <h2 className="font-medium mb-3">Performance Over Time</h2>
-        {Array.isArray(performance) && performance.length > 0 ? (
-          <ResponsiveLine data={performance} />
-        ) : (
-          <div className="text-sm text-gray-500">No exam performance data yet.</div>
-        )}
+          ) : (
+            <div className="text-sm text-slate-500 italic">No exams yet</div>
+          )}
+        </section>
       </div>
     </div>
   )}

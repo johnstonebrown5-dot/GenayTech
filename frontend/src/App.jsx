@@ -421,7 +421,7 @@ export default function App() {
             {!isPublicLanding && <BrowserNotificationPrompt />}
             {!isPublicLanding && <ReportIssuePrompt />}
             {!hideAssistant && <FloatingActions />}
-            {!hideAssistant && <FloatingHelpAction />}
+            {!hideAssistant && !pathname.startsWith('/student') && <FloatingHelpAction />}
             {!hideAssistant && <FloatingButton />}
             <AssistantPanel />
           </LockProvider>

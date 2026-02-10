@@ -19,18 +19,22 @@ export function AuthProvider({ children }) {
   }, [])
 
   const login = async (username, password) => {
-    const { data } = await api.post('/auth/token/', { username, password })
+    const { data } = await api.post('/auth/token/?include_me=1', { username, password })
     localStorage.setItem('access', data.access)
     localStorage.setItem('refresh', data.refresh)
-    const me = await api.get('/auth/me/')
-    setUser(me.data)
+    let meData = data?.user
+    if (!meData) {
+      const me = await api.get('/auth/me/')
+      meData = me.data
+    }
+    setUser(meData)
     try {
-      localStorage.setItem('auth_user_id', String(me?.data?.id ?? ''))
+      localStorage.setItem('auth_user_id', String(meData?.id ?? ''))
       // Broadcast login to other tabs
       localStorage.setItem('auth_event', `login:${Date.now()}`)
     } catch {}
     try { playSound('login') } catch {}
-    return me.data
+    return meData
   }
 
   const logout = () => {

@@ -406,6 +406,30 @@ export default function LandingPage() {
           <div className="absolute inset-0 bg-gradient-to-b from-white/55 via-white/25 to-white/70" />
         </div>
 
+        {/* Desktop background carousel */}
+        <div className="absolute inset-0 hidden lg:block">
+          {prefersReducedMotion ? (
+            <div
+              className="absolute inset-0 bg-right bg-cover"
+              style={{ backgroundImage: `url('${heroImages[0]}')` }}
+            />
+          ) : (
+            <AnimatePresence mode="sync" initial={false}>
+              <motion.div
+                key={heroSlide}
+                className="absolute inset-0 bg-right bg-cover will-change-transform"
+                style={{ backgroundImage: `url('${heroImages[heroSlide]}')` }}
+                initial={{ opacity: 0, scale: 1.04 }}
+                animate={{ opacity: 1, scale: 1.0 }}
+                exit={{ opacity: 0, scale: 1.02 }}
+                transition={{ opacity: { duration: 0.9, ease: 'easeInOut' }, scale: { duration: 5.2, ease: 'easeOut' } }}
+              />
+            </AnimatePresence>
+          )}
+          <div className="absolute inset-0 bg-slate-950/25" />
+          <div className="absolute inset-0 bg-gradient-to-r from-white/95 via-white/85 to-white/40" />
+        </div>
+
         {/* Abstract background elements */}
         <div className="absolute top-0 left-1/2 -z-10 h-[1000px] w-[1000px] -translate-x-1/2 [mask-image:radial-gradient(closest-side,white,transparent)]">
           <div className="absolute inset-0 bg-gradient-to-r from-indigo-100/40 to-purple-100/40 opacity-40" />
@@ -546,61 +570,40 @@ export default function LandingPage() {
             </motion.div>
 
             <motion.div 
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.8, delay: 0.2 }}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.7, delay: 0.2 }}
               className="relative lg:ml-auto w-full max-w-md lg:max-w-lg hidden lg:block"
             >
-              <div className="relative rounded-[2.5rem] bg-slate-900/5 p-2 ring-1 ring-inset ring-slate-900/10 lg:-m-4 lg:rounded-[3rem]">
-                <div className="overflow-hidden rounded-[2rem] bg-white shadow-2xl ring-1 ring-slate-900/10">
-                  <motion.img
-                    src={new URL('../../images/pexels-akelaphotography-448877.jpg', import.meta.url).href}
-                    alt="Students in a classroom"
-                    className="h-64 sm:h-72 lg:h-80 w-full object-cover will-change-transform"
-                    style={prefersReducedMotion ? undefined : { y: heroParallaxY }}
-                  />
-                  <div className="grid grid-cols-3 gap-px bg-slate-200 border-t border-slate-200">
-                    <motion.img
-                      src={new URL('../../images/pexels-gabby-k-6289065.jpg', import.meta.url).href}
-                      className="h-20 sm:h-24 w-full object-cover"
-                      alt="Student"
-                      initial={{ opacity: 0, y: 10 }}
-                      whileInView={{ opacity: 1, y: 0 }}
-                      viewport={{ once: true, margin: '-20% 0px -20% 0px' }}
-                      transition={{ duration: 0.6, delay: 0.05 }}
-                    />
-                    <div className="flex flex-col items-center justify-center bg-indigo-600 text-white p-3 sm:p-4">
-                      <span className="text-2xl font-bold">99%</span>
-                      <span className="text-[10px] uppercase font-semibold tracking-wider opacity-80">Uptime</span>
+              <div className="rounded-3xl border border-slate-200/70 bg-white/80 backdrop-blur-xl shadow-xl shadow-slate-900/10 ring-1 ring-inset ring-white/30 p-6">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="rounded-2xl border border-slate-200 bg-white/70 p-4">
+                    <div className="text-xs font-bold text-slate-500 uppercase tracking-widest">Uptime</div>
+                    <div className="mt-2 text-3xl font-extrabold tracking-tight text-indigo-600">99%</div>
+                    <div className="mt-1 text-xs font-semibold text-slate-500">Service availability</div>
+                  </div>
+                  <div className="rounded-2xl border border-slate-200 bg-white/70 p-4">
+                    <div className="text-xs font-bold text-slate-500 uppercase tracking-widest">Security</div>
+                    <div className="mt-2 flex items-center gap-2 text-slate-900">
+                      <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700">
+                        <ShieldCheck size={18} />
+                      </span>
+                      <div className="leading-tight">
+                        <div className="text-sm font-extrabold">Enterprise Secure</div>
+                        <div className="text-xs font-semibold text-slate-500">Bank-grade encryption</div>
+                      </div>
                     </div>
-                    <motion.img
-                      src={new URL('../../images/pexels-akelaphotography-448877.jpg', import.meta.url).href}
-                      className="h-20 sm:h-24 w-full object-cover"
-                      alt="Campus"
-                      initial={{ opacity: 0, y: 10 }}
-                      whileInView={{ opacity: 1, y: 0 }}
-                      viewport={{ once: true, margin: '-20% 0px -20% 0px' }}
-                      transition={{ duration: 0.6, delay: 0.12 }}
-                    />
                   </div>
                 </div>
-                
-                {/* Floating Card */}
-                <motion.div 
-                  animate={{ y: [0, -10, 0] }}
-                  transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
-                  className="absolute -bottom-6 -left-6 hidden sm:block rounded-2xl bg-white p-6 shadow-xl ring-1 ring-slate-900/5"
-                >
-                  <div className="flex items-center gap-4">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-100 text-emerald-600">
-                      <ShieldCheck size={28} />
+                <div className="mt-4 rounded-2xl bg-gradient-to-r from-indigo-600 to-purple-600 p-[1px]">
+                  <div className="rounded-2xl bg-white/85 px-4 py-3">
+                    <div className="flex items-center justify-between">
+                      <div className="text-sm font-extrabold text-slate-900">Built for modern schools</div>
+                      <div className="text-xs font-bold text-indigo-600">All-in-one</div>
                     </div>
-                    <div>
-                      <div className="text-sm font-bold text-slate-900">Enterprise Secure</div>
-                      <div className="text-xs text-slate-500">Bank-grade encryption</div>
-                    </div>
+                    <div className="mt-1 text-xs font-semibold text-slate-500">Academics, finance, communication, exams and more.</div>
                   </div>
-                </motion.div>
+                </div>
               </div>
             </motion.div>
           </div>

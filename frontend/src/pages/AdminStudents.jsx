@@ -666,15 +666,28 @@ export default function AdminStudents(){
 
           if (isCompact) {
             return (
-              <div className="relative overflow-hidden">
-                <div
-                  className="flex"
-                  style={{ transform: `translateX(-${statIndex * 100}%)`, transition: 'transform 500ms ease' }}
-                >
-                  {cards.map((c, idx) => (
-                    <div key={idx} className="min-w-full shrink-0 pr-0">
-                      {c}
-                    </div>
+              <div className="relative">
+                <div className="relative overflow-hidden rounded-2xl">
+                  <div
+                    className="flex"
+                    style={{ transform: `translateX(-${statIndex * 100}%)`, transition: 'transform 500ms ease' }}
+                  >
+                    {cards.map((c, idx) => (
+                      <div key={idx} className="min-w-full shrink-0">
+                        <div className="px-0.5">
+                          {c}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="mt-2 flex items-center justify-center gap-1.5">
+                  {cards.map((_, i) => (
+                    <span
+                      key={i}
+                      className={`h-1.5 rounded-full transition-all ${i === statIndex ? 'w-5 bg-blue-600' : 'w-1.5 bg-gray-300'}`}
+                      aria-hidden="true"
+                    />
                   ))}
                 </div>
               </div>
@@ -753,35 +766,35 @@ export default function AdminStudents(){
 
         {/* Mobile toolbar */}
         <div className="sm:hidden space-y-2">
-          <div className="flex items-center gap-1.5">
-            <div className="relative flex-1">
-              <input
-                type="text"
-                placeholder="Search students..."
-                value={searchDraft}
-                onChange={(e) => setSearchDraft(e.target.value)}
-                className="pl-10 pr-4 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent w-full"
-              />
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
+          <div className="rounded-2xl border border-gray-200 bg-white/90 backdrop-blur-xl supports-[backdrop-filter]:bg-white/70 shadow-card p-2.5">
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1">
+                <input
+                  type="text"
+                  placeholder="Search students..."
+                  value={searchDraft}
+                  onChange={(e) => setSearchDraft(e.target.value)}
+                  className="pl-10 pr-3 h-10 text-sm border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent w-full bg-white"
+                />
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                </div>
               </div>
+              <button
+                onClick={()=> setSearchTerm(searchDraft)}
+                className="inline-flex items-center justify-center h-10 px-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-4.35-4.35m1.35-4.65a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+              </button>
+              <button
+                onClick={()=> setShowFilters(v=>!v)}
+                className="inline-flex items-center justify-center h-10 px-3 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-xs font-semibold"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 4h18M6 12h12m-9 8h6"/></svg>
+              </button>
             </div>
-            <button
-              onClick={()=> setSearchTerm(searchDraft)}
-              className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-xs"
-            >
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-4.35-4.35m1.35-4.65a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-              Search
-            </button>
-            <button
-              onClick={()=> setShowFilters(v=>!v)}
-              className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-md text-xs"
-            >
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 4h18M6 12h12m-9 8h6"/></svg>
-              Filters
-            </button>
           </div>
           {showFilters && (
             <div className="p-3 rounded-xl border border-gray-200 bg-white/90 backdrop-blur-xl supports-[backdrop-filter]:bg-white/70 space-y-2">
@@ -902,26 +915,48 @@ export default function AdminStudents(){
           ) : (
             filteredStudents.map((s) => (
               <div key={s.id} className="relative overflow-hidden rounded-2xl border border-gray-200 bg-white/90 backdrop-blur-xl supports-[backdrop-filter]:bg-white/70 shadow-card p-3">
-                <div className="flex items-center gap-3">
+                <div className="flex items-start gap-3">
                   <input
                     type="checkbox"
                     checked={selectedSet.has(s.id)}
                     onChange={()=> toggleSelectStudent(s.id)}
                     aria-label={`Select ${s.name}`}
+                    className="mt-1"
                   />
-                  <div className="h-9 w-9 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-semibold text-xs shadow-soft">
+                  <div className="h-10 w-10 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-semibold text-xs shadow-soft shrink-0">
                     {s.name.split(' ').map(n => n[0]).join('').toUpperCase()}
                   </div>
-                  <div className="min-w-0">
-                    <Link to={`/admin/students/${s.id}`} className="font-semibold text-gray-900 hover:underline truncate block">{s.name}</Link>
-                    <div className="text-xs text-gray-500 font-mono truncate">{s.admission_no}</div>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <Link to={`/admin/students/${s.id}`} className="px-2 py-1.5 text-xs rounded-lg bg-indigo-100 text-indigo-700 hover:bg-indigo-200">View</Link>
-                    <button
-                      onClick={()=>{ setConfirmStudent(s); setConfirmTargetActive(!s.is_active); setConfirmAgree(false); setConfirmOpen(true); }}
-                      className={`${s.is_active ? 'bg-red-100 text-red-700 hover:bg-red-200' : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'} px-2 py-1.5 text-xs rounded-lg`}
-                    >{s.is_active ? 'Deactivate' : 'Activate'}</button>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <Link to={`/admin/students/${s.id}`} className="font-semibold text-gray-900 hover:underline truncate block leading-snug">{s.name}</Link>
+                        <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-mono bg-gray-100 text-gray-700 border border-gray-200">
+                            {s.admission_no}
+                          </span>
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold border ${s.is_active ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-rose-50 text-rose-700 border-rose-200'}`}>
+                            {s.is_active ? 'Active' : 'Inactive'}
+                          </span>
+                        </div>
+                      </div>
+                      <Link
+                        to={`/admin/students/${s.id}`}
+                        className="shrink-0 inline-flex items-center justify-center h-9 px-3 text-xs font-semibold rounded-xl bg-indigo-100 text-indigo-700 hover:bg-indigo-200"
+                      >
+                        View
+                      </Link>
+                    </div>
+                    <div className="mt-2 flex items-center justify-between gap-2">
+                      <div className="min-w-0 text-xs text-gray-600 truncate">
+                        {s.klass_detail?.name || s.klass || 'Not Assigned'}
+                      </div>
+                      <button
+                        onClick={()=>{ setConfirmStudent(s); setConfirmTargetActive(!s.is_active); setConfirmAgree(false); setConfirmOpen(true); }}
+                        className={`${s.is_active ? 'bg-red-100 text-red-700 hover:bg-red-200' : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'} h-9 px-3 text-xs font-semibold rounded-xl shrink-0`}
+                      >
+                        {s.is_active ? 'Deactivate' : 'Activate'}
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>

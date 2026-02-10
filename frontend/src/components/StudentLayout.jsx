@@ -3,12 +3,18 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth'
 import { useLock } from './LockProvider'
 import api from '../api'
+import { createPortal } from 'react-dom'
 
 const baseNavItems = [
   { to: '/student', label: 'Dashboard', icon: '📊' },
   { to: '/student/academics', label: 'Academics', icon: '🎓' },
   { to: '/student/finance', label: 'Finance', icon: '💳' },
-  { to: '/student/messages', label: 'Messages', icon: '✉️' },
+]
+
+const mobileNavItems = [
+  { to: '/student', label: 'Dashboard', icon: '📊' },
+  { to: '/student/academics', label: 'Academics', icon: '🎓' },
+  { to: '/student/finance', label: 'Finance', icon: '💳' },
 ]
 
 export default function StudentLayout({ children }){
@@ -16,6 +22,7 @@ export default function StudentLayout({ children }){
   const { user, logout } = useAuth()
   const navigate = useNavigate()
   const { lock } = useLock()
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
   const [schoolName, setSchoolName] = useState('')
   const [schoolLogo, setSchoolLogo] = useState('')
   const [unreadCount, setUnreadCount] = useState(0)
@@ -126,16 +133,16 @@ export default function StudentLayout({ children }){
         </div>
       )}
       {/* Top App Bar */}
-      <header className="sticky top-0 z-40 bg-white/90 backdrop-blur supports-[backdrop-filter]:bg-white/70 border-b border-slate-200 shadow-[0_6px_20px_-10px_rgba(0,0,0,0.15)]">
+      <header className="sticky top-0 z-40 bg-blue-700 text-white border-b border-blue-800 shadow-md">
         <div className="px-3 md:px-6 h-14 md:h-16 flex items-center gap-2 relative">
           {/* Brand */}
-          <Link to="/student" className="flex items-center gap-2 shrink-0">
+          <Link to="/student" className="flex items-center gap-2 shrink-0 text-white">
             {schoolLogo ? (
-              <img src={schoolLogo} alt="School Logo" className="w-7 h-7 rounded object-contain" />
+              <img src={schoolLogo} alt="School Logo" className="w-7 h-7 rounded object-contain bg-white/10" />
             ) : null}
             <div className="flex flex-col">
               <div className="hidden sm:block text-sm font-semibold leading-tight">{schoolName || 'EDU-TRACK'}</div>
-              <div className="text-xs sm:text-[13px] font-medium text-slate-800 truncate max-w-[120px]">
+              <div className="text-xs sm:text-[13px] font-medium text-blue-100 truncate max-w-[120px]">
                 {user?.first_name || user?.username || ''}
               </div>
             </div>
@@ -153,7 +160,7 @@ export default function StudentLayout({ children }){
             <div className="hidden md:flex items-center gap-2">
               <button
                 onClick={() => navigate(-1)}
-                className="p-2.5 rounded-xl border border-gray-200 text-gray-600 hover:text-slate-900 hover:border-slate-300 hover:bg-gray-50 transition"
+                className="p-2.5 rounded-xl border border-blue-600 text-blue-100 hover:text-white hover:border-blue-500 hover:bg-white/10 transition"
                 aria-label="Go back"
                 title="Back"
               >
@@ -163,7 +170,7 @@ export default function StudentLayout({ children }){
               </button>
               <button
                 onClick={() => navigate(1)}
-                className="p-2.5 rounded-xl border border-gray-200 text-gray-600 hover:text-slate-900 hover:border-slate-300 hover:bg-gray-50 transition"
+                className="p-2.5 rounded-xl border border-blue-600 text-blue-100 hover:text-white hover:border-blue-500 hover:bg-white/10 transition"
                 aria-label="Go forward"
                 title="Forward"
               >
@@ -174,26 +181,26 @@ export default function StudentLayout({ children }){
             </div>
             <Link
               to="/student/messages?tab=system"
-              className="relative inline-flex items-center justify-center w-10 h-10 rounded-xl border border-slate-200 hover:bg-slate-50 transition"
+              className="relative inline-flex items-center justify-center w-10 h-10 rounded-xl border border-blue-600 hover:bg-white/10 transition"
               aria-label="Notifications"
               title="System messages"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5 text-slate-700">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5 text-blue-100">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75V9a6 6 0 10-12 0v.75a8.967 8.967 0 01-2.311 6.022c1.733.64 3.56 1.085 5.455 1.31m5.713 0a24.255 24.255 0 01-5.713 0m5.713 0a3 3 0 11-5.713 0" />
               </svg>
               {broadcastUnread > 0 && (
-                <span className="absolute -top-1 -right-1 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] bg-red-600 text-white">
+                <span className="absolute -top-1 -right-1 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] bg-red-600 text-white border border-blue-700">
                   {broadcastUnread > 99 ? '99+' : broadcastUnread}
                 </span>
               )}
             </Link>
             {user && (
-              <div className="hidden md:block text-sm text-slate-700 max-w-[160px] truncate" title={user.first_name || user.username}>
+              <div className="hidden md:block text-sm text-blue-50 max-w-[160px] truncate" title={user.first_name || user.username}>
                 {user.first_name || user.username}
               </div>
             )}
-            <button onClick={lock} className="hidden md:inline-flex items-center px-3 py-2 rounded-xl border border-slate-200 text-sm text-slate-700 hover:bg-slate-50">Lock</button>
-            <button onClick={logout} className="hidden md:inline-flex items-center px-3 py-2 rounded-xl border border-slate-800 text-sm bg-slate-800 text-white hover:bg-slate-700">Logout</button>
+            <button onClick={lock} className="hidden md:inline-flex items-center px-3 py-2 rounded-xl border border-blue-600 text-sm text-blue-50 hover:bg-white/10">Lock</button>
+            <button onClick={logout} className="hidden md:inline-flex items-center px-3 py-2 rounded-xl border border-white text-sm bg-white text-blue-700 hover:bg-blue-50">Logout</button>
           </div>
         </div>
       </header>
@@ -203,16 +210,16 @@ export default function StudentLayout({ children }){
       {/* Content */}
       <main className="pt-0 pb-16 md:pt-0 md:pb-0 flex-1 flex">
         <div className="w-full flex">
-          <div className="w-full bg-white md:bg-white/90 md:backdrop-blur-xl shadow-none md:shadow-[0_30px_80px_rgba(15,23,42,0.18)] border border-violet-100/80 overflow-hidden flex flex-col md:flex-row md:items-stretch h-full md:min-h-[calc(100vh-4rem)]">
+          <div className="w-full bg-white md:bg-white/90 md:backdrop-blur-xl shadow-none md:shadow-[0_30px_80px_rgba(15,23,42,0.18)] border border-blue-100/80 overflow-hidden flex flex-col md:flex-row md:items-stretch h-full md:min-h-[calc(100vh-4rem)]">
             {/* Sidebar (desktop) */}
-            <aside className="hidden md:flex w-60 lg:w-64 bg-gradient-to-b from-violet-600 via-violet-600 to-purple-700 text-violet-50 flex-col py-6 px-4 relative md:sticky md:top-0 md:self-start h-full">
+            <aside className="hidden md:flex w-60 lg:w-64 bg-gradient-to-b from-blue-700 via-blue-700 to-indigo-800 text-blue-50 flex-col py-6 px-4 relative md:sticky md:top-0 md:self-start h-full">
               <div className="mb-6 px-2">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-2xl bg-white/10 flex items-center justify-center text-2xl">
                     🎓
                   </div>
                   <div className="flex flex-col">
-                    <span className="text-xs uppercase tracking-[0.2em] text-violet-200/90">Student</span>
+                    <span className="text-xs uppercase tracking-[0.2em] text-blue-200/90">Student</span>
                     <span className="text-sm font-semibold leading-tight">Portal</span>
                   </div>
                 </div>
@@ -225,8 +232,8 @@ export default function StudentLayout({ children }){
                       key={item.to}
                       to={item.to}
                       className={`${active
-                        ? 'bg-white text-violet-700 shadow-md'
-                        : 'hover:bg-white/10 text-violet-100'} flex items-center gap-3 px-3 py-2.5 rounded-2xl text-sm font-medium transition-all duration-200`}
+                        ? 'bg-white text-blue-700 shadow-md'
+                        : 'hover:bg-white/10 text-blue-100'} flex items-center gap-3 px-3 py-2.5 rounded-2xl text-sm font-medium transition-all duration-200`}
                     >
                       <span className="text-lg" aria-hidden>{item.icon}</span>
                       <span>{item.label}</span>
@@ -239,7 +246,7 @@ export default function StudentLayout({ children }){
                   )
                 })}
               </nav>
-              <div className="mt-6 pt-4 border-t border-violet-500/40 text-[11px] text-violet-100 flex items-center justify-between px-2">
+              <div className="mt-6 pt-4 border-t border-blue-500/40 text-[11px] text-blue-100 flex items-center justify-between px-2">
                 <span>© {new Date().getFullYear()} EDU-TRACK</span>
                 <span className="inline-flex items-center gap-1">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-300 animate-pulse" />
@@ -261,7 +268,7 @@ export default function StudentLayout({ children }){
       {/* Bottom Nav (mobile, M-Pesa style) */}
       <nav className="sm:hidden fixed bottom-0 inset-x-0 z-30 border-t border-slate-200 bg-white/95 backdrop-blur-xl">
         <div className="max-w-xl mx-auto flex items-stretch justify-around py-1.5">
-          {baseNavItems.map(item => {
+          {mobileNavItems.map(item => {
             const active = pathname === item.to
             return (
               <Link
@@ -276,6 +283,74 @@ export default function StudentLayout({ children }){
           })}
         </div>
       </nav>
+
+      {/* Floating Logout button for mobile only */}
+      {(() => {
+        const root = typeof document !== 'undefined' ? document.getElementById('floating-actions-root') : null
+        const isSmall = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(max-width: 767px)').matches
+        if (!isSmall) return null
+        const size = 44
+        const iconSize = 18
+        const btn = (
+          <button
+            onClick={() => setShowLogoutConfirm(true)}
+            aria-label="Logout"
+            title="Logout"
+            style={{
+              order: 4,
+              width: `${size}px`,
+              height: `${size}px`,
+              borderRadius: '9999px',
+              border: 'none',
+              background: 'linear-gradient(135deg, #ef4444, #dc2626)',
+              color: 'white',
+              boxShadow: '0 8px 22px rgba(220,38,38,0.35)',
+              cursor: 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: 0,
+              pointerEvents: 'auto',
+            }}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width={iconSize+2} height={iconSize+2} fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="12" y1="3" x2="12" y2="11" />
+              <path d="M19 12.5a7 7 0 1 1-14 0" />
+            </svg>
+          </button>
+        )
+        if (root) return createPortal(btn, root)
+        return (
+          <div style={{ position:'fixed', right:16, bottom:24, zIndex:2100}}>{btn}</div>
+        )
+      })()}
+
+      {/* Logout confirmation modal */}
+      {showLogoutConfirm && createPortal(
+        <div style={{ position:'fixed', inset:0, zIndex:5000 }}>
+          <div className="fixed inset-0 bg-black/40" onClick={() => setShowLogoutConfirm(false)} />
+          <div className="fixed inset-0 flex items-end justify-end p-4 sm:items-center sm:justify-center">
+            <div className="bg-white shadow-2xl ring-1 ring-gray-200 rounded-xl w-full max-w-sm overflow-hidden">
+              <div className="px-4 py-3 border-b border-gray-100 font-semibold text-gray-900">Confirm logout</div>
+              <div className="px-4 py-3 text-sm text-gray-700">Are you sure you want to logout?</div>
+              <div className="px-4 py-3 border-t border-gray-100 flex items-center justify-end gap-2">
+                <button onClick={() => setShowLogoutConfirm(false)} className="px-3 py-1.5 rounded-lg text-sm border bg-white text-gray-700 hover:bg-gray-50">Cancel</button>
+                <button
+                  onClick={() => {
+                    setShowLogoutConfirm(false)
+                    logout()
+                    try { navigate('/login') } catch {}
+                  }}
+                  className="px-3 py-1.5 rounded-lg text-sm bg-red-600 text-white hover:bg-red-700"
+                >
+                  Logout
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   )
 }
