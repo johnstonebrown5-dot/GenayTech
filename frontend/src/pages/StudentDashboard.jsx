@@ -16,6 +16,7 @@ export default function StudentDashboard(){
   const { pathname } = location
   const navigate = useNavigate()
   const [student, setStudent] = useState(null)
+  const [schoolInfo, setSchoolInfo] = useState(null)
   const { user: authUser } = useAuth()
   const [personalInfoOpen, setPersonalInfoOpen] = useState(() => {
     if (typeof window === 'undefined') return true
@@ -292,9 +293,13 @@ export default function StudentDashboard(){
         // Base student record (required for personalized sections)
         if (!c.baseLoaded) {
           try {
-            const stRes = await api.get('/academics/students/my/', { timeout: 15000, _skipGlobalLoading: true })
+            const [stRes, scRes] = await Promise.all([
+              api.get('/academics/students/my/', { timeout: 15000, _skipGlobalLoading: true }),
+              api.get('/auth/school/info/', { timeout: 15000, _skipGlobalLoading: true })
+            ])
             if (!mounted) return
             c.student = stRes.data
+            setSchoolInfo(scRes.data)
             c.baseLoaded = true
             hydrateFromCache(c)
           } catch {
@@ -488,6 +493,13 @@ export default function StudentDashboard(){
         } catch { return '' }
       }
 
+      const logoUrl = schoolInfo?.logo_url || schoolInfo?.logo || ''
+      const schoolName = schoolInfo?.name || 'School Name'
+      const schoolAddress = schoolInfo?.address || ''
+      const schoolPhone = schoolInfo?.phone || ''
+      const schoolEmail = schoolInfo?.email || ''
+      const schoolWebsite = schoolInfo?.website || ''
+
       const rows = Array.isArray(feeStatement) ? feeStatement : []
       const tableRows = rows.map(r => {
         const date = r?.date ? String(r.date).slice(0, 10) : '-'
@@ -521,20 +533,41 @@ export default function StudentDashboard(){
     <title>Fee Statement</title>
     <style>
       body{ font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; padding: 16px; color:#0f172a; }
-      h1{ font-size: 18px; margin: 0 0 12px; }
-      .meta{ color:#475569; font-size: 12px; margin-bottom: 12px; }
+      .letterhead { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 10px; border-bottom: 2px solid #0f172a; padding-bottom: 15px; margin-bottom: 20px; }
+      .logo { width: 80px; height: 80px; object-fit: contain; margin-bottom: 5px; }
+      .school-info { width: 100%; }
+      .school-name { font-size: 24px; font-weight: bold; margin: 0; color: #1e293b; text-transform: uppercase; }
+      .school-details { font-size: 11px; color: #475569; margin-top: 4px; line-height: 1.4; }
+      h1{ font-size: 18px; margin: 20px 0 10px; text-align: center; text-transform: uppercase; letter-spacing: 1px; }
+      .meta{ color:#475569; font-size: 12px; margin-bottom: 15px; display: flex; justify-content: space-between; }
       table{ width:100%; border-collapse: collapse; }
       th, td{ border:1px solid #e2e8f0; padding: 8px; font-size: 12px; }
-      th{ background:#f8fafc; text-align:left; }
+      th{ background:#f8fafc; text-align:left; text-transform: uppercase; font-size: 10px; letter-spacing: 0.5px; }
       .right{ text-align:right; }
       .muted{ color:#64748b; font-size: 12px; }
-      @media print{ body{ padding: 0; } }
+      @media print{ body{ padding: 0; } .letterhead { border-bottom-color: #000; } }
     </style>
   </head>
   <body>
+    <div class="letterhead">
+      ${logoUrl ? `<img src="${esc(logoUrl)}" class="logo" />` : ''}
+      <div class="school-info">
+        <h2 class="school-name">${esc(schoolName)}</h2>
+        <div class="school-details">
+          ${schoolAddress ? `<div>${esc(schoolAddress)}</div>` : ''}
+          <div>
+            ${schoolPhone ? `Tel: ${esc(schoolPhone)}` : ''} 
+            ${schoolEmail ? ` | Email: ${esc(schoolEmail)}` : ''}
+          </div>
+          ${schoolWebsite ? `<div>Website: ${esc(schoolWebsite)}</div>` : ''}
+        </div>
+      </div>
+    </div>
+
     <h1>Fee Statement</h1>
+
     <div class="meta">
-      <div><span class="muted">Student:</span> ${esc(student?.name || authUser?.username || '')}</div>
+      <div><span class="muted">STUDENT:</span> <b>${esc(student?.name || authUser?.username || '').toUpperCase()}</b></div>
       <div><span class="muted">Printed:</span> ${esc(new Date().toLocaleString())}</div>
     </div>
     <table>
