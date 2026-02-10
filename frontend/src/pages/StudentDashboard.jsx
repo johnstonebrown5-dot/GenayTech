@@ -25,6 +25,8 @@ export default function StudentDashboard(){
   const [examSearchOpen, setExamSearchOpen] = useState(false)
   const [examQuery, setExamQuery] = useState('')
   const [printExamId, setPrintExamId] = useState(null)
+  const [academicsSubTab, setAcademicsSubTab] = useState('exams') // 'exams' or 'reports'
+  const [financeSubTab, setFinanceSubTab] = useState('statement') // 'statement' or 'reports'
   const [assessments, setAssessments] = useState([])
   const [examResults, setExamResults] = useState([])
   const [loading, setLoading] = useState(true)
@@ -192,7 +194,7 @@ export default function StudentDashboard(){
           })
         }
       }
-      // Sort by date ascending
+      // Compute running balance in chronological order (oldest -> newest)
       rows.sort((a,b)=>{
         const da = new Date(a.date||0).getTime() || 0
         const db = new Date(b.date||0).getTime() || 0
@@ -203,11 +205,27 @@ export default function StudentDashboard(){
       })
       // Running balance: debit increases, credit decreases
       let balance = 0
-      return rows.map(r => {
+      const withBalance = rows.map(r => {
         balance = balance + (Number(r.debit||0)) - (Number(r.credit||0))
         return { ...r, balance }
       })
+
+      // Display latest first, while keeping correct balance values
+      return withBalance.reverse()
     } catch { return [] }
+  }, [invoices])
+
+  const paymentsByMethod = useMemo(() => {
+    const byMethod = new Map()
+    for (const inv of invoices) {
+      const pays = Array.isArray(inv.payments) ? inv.payments : []
+      for (const p of pays) {
+        const method = p.method || 'Unknown'
+        const amount = Number(p.amount || 0)
+        byMethod.set(method, (byMethod.get(method) || 0) + amount)
+      }
+    }
+    return Array.from(byMethod.entries()).map(([method, total]) => ({ method, total })).sort((a,b)=> b.total - a.total)
   }, [invoices])
 
   const groupedExamResults = useMemo(() => {
@@ -336,38 +354,36 @@ export default function StudentDashboard(){
             try {
               const sumRes = await api.get('/finance/invoices/my-summary/', { timeout: 15000, _skipGlobalLoading: true })
               if (!mounted) return
-              c.summary = sumRes?.data || { total_billed: 0, total_paid: 0, balance: 0 }
+              c.summary = sumRes.data || { total_billed:0, total_paid:0, balance:0 }
               c.financeSummaryLoaded = true
-              hydrateFromCache(c)
-            } catch {
+            } catch (e) {
+              // Set flag even on failure to prevent infinite loading
+              c.financeSummaryLoaded = true
+              c.summary = { total_billed:0, total_paid:0, balance:0 }
               if (!mounted) return
-              c.summary = c.summary || { total_billed: 0, total_paid: 0, balance: 0 }
-              hydrateFromCache(c)
             }
           }
 
-          // Mark finance as loaded so we don't refetch repeatedly; invoices will hydrate when ready.
-          c.financeLoaded = true
-
-          ;(async () => {
+          // Then load detailed invoices (may be large, paginated)
+          if (!c.invoicesLoaded) {
             try {
-              if (c.invoicesLoaded) return
               const invRes = await api.get('/finance/invoices/my/', {
                 params: { page_size: 200 },
                 timeout: 20000,
                 _skipGlobalLoading: true,
               })
               if (!mounted) return
-              c.invoices = (Array.isArray(invRes?.data) ? invRes.data : (invRes?.data?.results || []))
+              c.invoices = Array.isArray(invRes.data) ? invRes.data : (invRes.data?.results || [])
               c.invoicesLoaded = true
-              hydrateFromCache(c)
             } catch {
-              if (!mounted) return
+              // Set flag even on failure to prevent infinite loading
               c.invoices = []
               c.invoicesLoaded = true
-              hydrateFromCache(c)
+              if (!mounted) return
             }
-          })()
+          }
+          c.financeLoaded = true
+          hydrateFromCache(c)
         }
       } catch (e) {
         if (!mounted) return
@@ -459,6 +475,97 @@ export default function StudentDashboard(){
     }
   }
 
+  function printFeeStatement(){
+    try {
+      const esc = (v) => {
+        try {
+          return String(v ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;')
+        } catch { return '' }
+      }
+
+      const rows = Array.isArray(feeStatement) ? feeStatement : []
+      const tableRows = rows.map(r => {
+        const date = r?.date ? String(r.date).slice(0, 10) : '-'
+        const ref = esc(r?.ref || '')
+        const desc = esc(r?.description || '')
+        const debit = r?.debit ? money(r.debit) : ''
+        const credit = r?.credit ? money(r.credit) : ''
+        const bal = money(r?.balance)
+        return `
+          <tr>
+            <td>${esc(date)}</td>
+            <td>${ref}</td>
+            <td>${desc}</td>
+            <td class="right">${esc(debit)}</td>
+            <td class="right">${esc(credit)}</td>
+            <td class="right"><b>${esc(bal)}</b></td>
+          </tr>
+        `
+      }).join('')
+
+      const w = window.open('', '_blank', 'width=900,height=700')
+      if (!w) {
+        try { window.print() } catch {}
+        return
+      }
+      const html = `<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Fee Statement</title>
+    <style>
+      body{ font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; padding: 16px; color:#0f172a; }
+      h1{ font-size: 18px; margin: 0 0 12px; }
+      .meta{ color:#475569; font-size: 12px; margin-bottom: 12px; }
+      table{ width:100%; border-collapse: collapse; }
+      th, td{ border:1px solid #e2e8f0; padding: 8px; font-size: 12px; }
+      th{ background:#f8fafc; text-align:left; }
+      .right{ text-align:right; }
+      .muted{ color:#64748b; font-size: 12px; }
+      @media print{ body{ padding: 0; } }
+    </style>
+  </head>
+  <body>
+    <h1>Fee Statement</h1>
+    <div class="meta">
+      <div><span class="muted">Student:</span> ${esc(student?.name || authUser?.username || '')}</div>
+      <div><span class="muted">Printed:</span> ${esc(new Date().toLocaleString())}</div>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Reference</th>
+          <th>Description</th>
+          <th class="right">Debit</th>
+          <th class="right">Credit</th>
+          <th class="right">Balance</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${tableRows || '<tr><td colspan="6" class="muted">No transactions</td></tr>'}
+      </tbody>
+    </table>
+  </body>
+</html>`
+      w.document.open()
+      w.document.write(html)
+      w.document.close()
+      try { w.focus() } catch {}
+      setTimeout(() => {
+        try { w.print() } catch {}
+      }, 250)
+    } catch {
+      try { window.print() } catch {}
+    }
+  }
+
   async function submitEdit(e){
     e?.preventDefault?.()
     if (!student) return
@@ -483,7 +590,7 @@ export default function StudentDashboard(){
   }
 
   return (
-    <div className="space-y-5 sm:space-y-7">
+    <div className="space-y-5 sm:space-y-7 bg-white">
 
       {error && <div className="-mx-3 sm:mx-0 bg-red-50 text-red-700 p-3 sm:p-3 rounded-none sm:rounded">{error}</div>}
 
@@ -656,122 +763,157 @@ export default function StudentDashboard(){
   )}
 
   {currentTab === 'finance' && (
-    <div className="-mx-3 sm:mx-0 bg-white/95 backdrop-blur-xl border border-slate-200/70 shadow-[0_18px_45px_rgba(15,23,42,0.08)] rounded-none sm:rounded-3xl pt-4 pb-6 px-4 sm:p-6">
-      <h2 className="text-xs font-semibold tracking-[0.18em] text-slate-500 uppercase mb-1">Finance</h2>
-      <p className="text-base sm:text-lg font-semibold text-slate-900 mb-4">Fees & payments</p>
-
-      {/* Printable Fee Statement */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-5 mb-5" id="fee-statement">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-3">
-          <h3 className="text-sm font-semibold text-slate-900">Fee Statement</h3>
-          <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-            <button
-              className="w-full sm:w-auto text-xs px-3 py-2 sm:py-1.5 rounded bg-emerald-600 text-white hover:bg-emerald-700 print:hidden"
-              onClick={() => {
-                navigate('/student/finance/pay')
-              }}
-            >Pay Fees</button>
-            <button
-              className="w-full sm:w-auto text-xs px-3 py-2 sm:py-1.5 rounded border border-slate-300 hover:bg-slate-50 print:hidden"
-              onClick={() => navigate('/student/finance/verify')}
-            >Verify Payment</button>
-            <button
-              className="w-full sm:w-auto text-xs px-3 py-2 sm:py-1.5 rounded border border-slate-300 hover:bg-slate-50 print:hidden"
-              onClick={() => { try { window.print() } catch {} }}
-            >
-              Print
-            </button>
-          </div>
+    <div className="-mx-3 sm:mx-0 bg-white sm:rounded-3xl p-4 sm:p-6 border border-slate-200">
+      <div className="flex items-center justify-between mb-6">
+        <h2 className="text-xl font-bold text-slate-900">Finance</h2>
+        <div className="flex bg-slate-100 p-1 rounded-xl">
+          <button
+            onClick={() => setFinanceSubTab('statement')}
+            className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-all ${financeSubTab === 'statement' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+          >
+            STATEMENT
+          </button>
+          <button
+            onClick={() => setFinanceSubTab('reports')}
+            className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-all ${financeSubTab === 'reports' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+          >
+            REPORTS
+          </button>
         </div>
-        {isInvoicesLoading ? (
-          <div className="space-y-2">
-            <Skeleton className="h-12 w-full" />
-            <Skeleton className="h-12 w-full" />
-            <Skeleton className="h-12 w-full" />
-          </div>
-        ) : Array.isArray(feeStatement) && feeStatement.length > 0 ? (
-          <>
-            <div className="sm:hidden space-y-2">
-              {feeStatement.map((r, idx) => (
-                <div key={idx} className="rounded-xl border border-slate-200 p-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="text-xs text-slate-500">{r.date ? String(r.date).slice(0,10) : '-'}</div>
-                      <div className="text-sm font-semibold text-slate-900 truncate">{r.description}</div>
-                      <div className="text-[11px] text-slate-500 truncate">{r.ref}</div>
-                    </div>
-                    <div className={`shrink-0 text-[11px] px-2 py-1 rounded-full border ${r.type==='payment' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-slate-50 text-slate-700 border-slate-200'}`}>
-                      {r.type==='payment' ? 'Payment' : 'Invoice'}
-                    </div>
-                  </div>
-                  <div className="mt-2 grid grid-cols-3 gap-2 text-xs">
-                    <div className="rounded-lg bg-slate-50 p-2">
-                      <div className="text-[11px] text-slate-500">Debit</div>
-                      <div className="font-semibold text-slate-900">{r.debit ? money(r.debit) : '-'}</div>
-                    </div>
-                    <div className="rounded-lg bg-slate-50 p-2">
-                      <div className="text-[11px] text-slate-500">Credit</div>
-                      <div className="font-semibold text-slate-900">{r.credit ? money(r.credit) : '-'}</div>
-                    </div>
-                    <div className="rounded-lg bg-slate-50 p-2">
-                      <div className="text-[11px] text-slate-500">Balance</div>
-                      <div className={`font-semibold ${r.type==='payment' ? 'text-emerald-700' : 'text-slate-900'}`}>{money(r.balance)}</div>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div className="hidden sm:block overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead className="bg-slate-50 text-slate-600">
-                  <tr>
-                    <th className="px-2 py-2">Date</th>
-                    <th className="px-2 py-2">Reference</th>
-                    <th className="px-2 py-2">Description</th>
-                    <th className="px-2 py-2 text-right">Debit</th>
-                    <th className="px-2 py-2 text-right">Credit</th>
-                    <th className="px-2 py-2 text-right">Balance</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {feeStatement.map((r, idx) => (
-                    <tr key={idx} className="border-t">
-                      <td className="px-2 py-2 whitespace-nowrap">{r.date ? String(r.date).slice(0,10) : '-'}</td>
-                      <td className="px-2 py-2 whitespace-nowrap">{r.ref}</td>
-                      <td className="px-2 py-2">{r.description}</td>
-                      <td className="px-2 py-2 text-right">{r.debit ? money(r.debit) : ''}</td>
-                      <td className="px-2 py-2 text-right">{r.credit ? money(r.credit) : ''}</td>
-                      <td className={`px-2 py-2 text-right font-medium ${r.type==='payment' ? 'text-emerald-700' : 'text-slate-900'}`}>{money(r.balance)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </>
-        ) : (
-          <div className="text-sm text-slate-500">No transactions yet. Your detailed statement will appear here.</div>
-        )}
-        {/* Minimal print styles to focus on statement */}
-        <style>{`@media print{ body *{ visibility:hidden } #fee-statement, #fee-statement *{ visibility:visible } #fee-statement{ position:absolute; left:0; top:0; width:100% } }`}</style>
       </div>
+      
+      <div className="space-y-6">
+        {financeSubTab === 'statement' ? (
+          /* Statement section */
+          <section>
+            {/* Fee Statement */}
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-5 mb-5" id="fee-statement">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-3">
+                <h3 className="text-sm font-semibold text-slate-900">Fee Statement</h3>
+                <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+                  <button
+                    className="w-full sm:w-auto text-xs px-3 py-2 sm:py-1.5 rounded bg-emerald-600 text-white hover:bg-emerald-700 print:hidden"
+                    onClick={() => {
+                      navigate('/student/finance/pay')
+                    }}
+                  >Pay Fees</button>
+                  <button
+                    className="w-full sm:w-auto text-xs px-3 py-2 sm:py-1.5 rounded border border-slate-300 hover:bg-slate-50 print:hidden"
+                    onClick={() => navigate('/student/finance/verify')}
+                  >Verify Payment</button>
+                  <button
+                    className="w-full sm:w-auto text-xs px-3 py-2 sm:py-1.5 rounded border border-slate-300 hover:bg-slate-50 print:hidden"
+                    onClick={printFeeStatement}
+                  >
+                    Print
+                  </button>
+                </div>
+              </div>
+              {isInvoicesLoading ? (
+                <div className="space-y-2">
+                  <Skeleton className="h-12 w-full" />
+                  <Skeleton className="h-12 w-full" />
+                  <Skeleton className="h-12 w-full" />
+                </div>
+              ) : Array.isArray(feeStatement) && feeStatement.length > 0 ? (
+                <>
+                  <div className="sm:hidden space-y-2">
+                    {feeStatement.map((r, idx) => (
+                      <div key={idx} className="rounded-xl border border-slate-200 p-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="text-xs text-slate-500">{r.date ? String(r.date).slice(0,10) : '-'}</div>
+                            <div className="text-sm font-semibold text-slate-900 truncate">{r.description}</div>
+                            <div className="text-[11px] text-slate-500 truncate">{r.ref}</div>
+                          </div>
+                          <div className={`shrink-0 text-[11px] px-2 py-1 rounded-full border ${r.type==='payment' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-slate-50 text-slate-700 border-slate-200'}`}>
+                            {r.type==='payment' ? 'Payment' : 'Invoice'}
+                          </div>
+                        </div>
+                        <div className="mt-2 grid grid-cols-3 gap-2 text-xs">
+                          <div className="rounded-lg bg-slate-50 p-2">
+                            <div className="text-[11px] text-slate-500">Debit</div>
+                            <div className="font-semibold text-slate-900">{r.debit ? money(r.debit) : '-'}</div>
+                          </div>
+                          <div className="rounded-lg bg-slate-50 p-2">
+                            <div className="text-[11px] text-slate-500">Credit</div>
+                            <div className="font-semibold text-slate-900">{r.credit ? money(r.credit) : '-'}</div>
+                          </div>
+                          <div className="rounded-lg bg-slate-50 p-2">
+                            <div className="text-[11px] text-slate-500">Balance</div>
+                            <div className={`font-semibold ${r.type==='payment' ? 'text-emerald-700' : 'text-slate-900'}`}>{money(r.balance)}</div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
 
-      
-      
-      {/* Payments over time graph */}
-      <div className="mt-5 bg-white rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-5">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-semibold text-slate-900">Payments over time</h3>
-        </div>
-        {isInvoicesLoading ? (
-          <div className="space-y-2">
-            <Skeleton className="h-8 w-40" />
-            <Skeleton className="h-56 w-full" />
-          </div>
-        ) : Array.isArray(paymentsOverTime) && paymentsOverTime.length > 0 ? (
-          <ResponsiveLine data={paymentsOverTime} />
+                  <div className="hidden sm:block overflow-x-auto">
+                    <table className="w-full text-left text-sm">
+                      <thead className="bg-slate-50 text-slate-600">
+                        <tr>
+                          <th className="px-2 py-2">Date</th>
+                          <th className="px-2 py-2">Reference</th>
+                          <th className="px-2 py-2">Description</th>
+                          <th className="px-2 py-2 text-right">Debit</th>
+                          <th className="px-2 py-2 text-right">Credit</th>
+                          <th className="px-2 py-2 text-right">Balance</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {feeStatement.map((r, idx) => (
+                          <tr key={idx} className="border-t">
+                            <td className="px-2 py-2 whitespace-nowrap">{r.date ? String(r.date).slice(0,10) : '-'}</td>
+                            <td className="px-2 py-2 whitespace-nowrap">{r.ref}</td>
+                            <td className="px-2 py-2">{r.description}</td>
+                            <td className="px-2 py-2 text-right">{r.debit ? money(r.debit) : ''}</td>
+                            <td className="px-2 py-2 text-right">{r.credit ? money(r.credit) : ''}</td>
+                            <td className={`px-2 py-2 text-right font-medium ${r.type==='payment' ? 'text-emerald-700' : 'text-slate-900'}`}>{money(r.balance)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              ) : (
+                <div className="text-sm text-slate-500">No transactions yet. Your detailed statement will appear here.</div>
+              )}
+              {/* Minimal print styles to focus on statement */}
+              <style>{`@media print{ body *{ visibility:hidden } #fee-statement, #fee-statement *{ visibility:visible } #fee-statement{ position:absolute; left:0; top:0; width:100% } }`}</style>
+            </div>
+          </section>
         ) : (
-          <div className="text-sm text-slate-500">No payments recorded yet. Once you start paying invoices, a trend will appear here.</div>
+          /* Reports Section */
+          <section className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
+            <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
+              <h3 className="text-sm font-semibold text-slate-700 mb-4 flex items-center gap-2">
+                <span className="p-1.5 bg-emerald-100 text-emerald-600 rounded-lg text-xs">📈</span>
+                Payments Over Time
+              </h3>
+              {paymentsOverTime && paymentsOverTime.length > 0 ? (
+                <div className="h-[300px] w-full">
+                  <ResponsiveLine data={paymentsOverTime} />
+                </div>
+              ) : (
+                <div className="py-12 text-center text-slate-400 text-sm italic">
+                  Not enough payment data to generate charts.
+                </div>
+              )}
+            </div>
+
+            <div className="bg-white border border-slate-100 rounded-2xl p-5">
+              <h3 className="text-sm font-semibold text-slate-800 mb-4">Payment Methods</h3>
+              {paymentsByMethod && paymentsByMethod.length > 0 ? (
+                <div className="h-[300px] w-full">
+                  <ResponsiveBar data={paymentsByMethod} />
+                </div>
+              ) : (
+                <div className="py-12 text-center text-slate-400 text-sm italic">
+                  No payment method data available.
+                </div>
+              )}
+            </div>
+          </section>
         )}
       </div>
     </div>
@@ -779,11 +921,28 @@ export default function StudentDashboard(){
 
   {currentTab === 'academics' && (
     <div className="-mx-3 sm:mx-0 bg-white sm:rounded-3xl p-4 sm:p-6 border border-slate-200">
-      <h2 className="text-xl font-bold text-slate-900 mb-4">Academics</h2>
+      <div className="flex items-center justify-between mb-6">
+        <h2 className="text-xl font-bold text-slate-900">Academics</h2>
+        <div className="flex bg-slate-100 p-1 rounded-xl">
+          <button
+            onClick={() => setAcademicsSubTab('exams')}
+            className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-all ${academicsSubTab === 'exams' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+          >
+            EXAMS
+          </button>
+          <button
+            onClick={() => setAcademicsSubTab('reports')}
+            className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-all ${academicsSubTab === 'reports' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+          >
+            REPORTS
+          </button>
+        </div>
+      </div>
       
       <div className="space-y-6">
-        {/* Exams Section */}
-        <section>
+        {academicsSubTab === 'exams' ? (
+          /* Exams Section */
+          <section>
           <div className="flex items-center justify-between gap-3 mb-3">
             <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Exams</h3>
             <button
@@ -912,6 +1071,93 @@ export default function StudentDashboard(){
             <div className="text-sm text-slate-500 italic">No exams yet</div>
           )}
         </section>
+        ) : (
+          /* Reports Section */
+          <section className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
+            <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
+              <h3 className="text-sm font-semibold text-slate-700 mb-4 flex items-center gap-2">
+                <span className="p-1.5 bg-indigo-100 text-indigo-600 rounded-lg text-xs">📈</span>
+                Performance Over Time
+              </h3>
+              {performance && performance.length > 0 ? (
+                <div className="h-[300px] w-full">
+                  <ResponsiveLine data={performance} />
+                </div>
+              ) : (
+                <div className="py-12 text-center text-slate-400 text-sm italic">
+                  Not enough exam data to generate charts.
+                </div>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="bg-indigo-600 text-white rounded-2xl p-5 shadow-sm">
+                <div className="text-xs opacity-80 font-medium uppercase tracking-wider mb-1">Average Score</div>
+                <div className="text-3xl font-bold">
+                  {performance.length > 0 
+                    ? (performance.reduce((acc, curr) => acc + curr.avg, 0) / performance.length).toFixed(1)
+                    : '0'
+                  }%
+                </div>
+                <div className="mt-4 h-1.5 w-full bg-white/20 rounded-full overflow-hidden">
+                  <div 
+                    className="h-full bg-white rounded-full" 
+                    style={{ width: `${performance.length > 0 ? (performance.reduce((acc, curr) => acc + curr.avg, 0) / performance.length) : 0}%` }}
+                  />
+                </div>
+              </div>
+              
+              <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+                <div className="text-xs text-slate-500 font-medium uppercase tracking-wider mb-1">Highest Performance</div>
+                <div className="text-3xl font-bold text-slate-900">
+                  {performance.length > 0 
+                    ? Math.max(...performance.map(p => p.avg)).toFixed(1)
+                    : '0'
+                  }%
+                </div>
+                <div className="mt-2 text-xs text-indigo-600 font-semibold">
+                  {performance.length > 0 
+                    ? performance.find(p => p.avg === Math.max(...performance.map(x => x.avg)))?.label
+                    : 'No exams yet'
+                  }
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white border border-slate-100 rounded-2xl p-5">
+              <h3 className="text-sm font-semibold text-slate-800 mb-4">Improvement Summary</h3>
+              <div className="space-y-4">
+                {performance.length >= 2 ? (
+                  (() => {
+                    const latest = performance[performance.length - 1].avg;
+                    const previous = performance[performance.length - 2].avg;
+                    const diff = latest - previous;
+                    const isImproved = diff >= 0;
+                    return (
+                      <div className="flex items-center gap-4">
+                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-xl ${isImproved ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600'}`}>
+                          {isImproved ? '▲' : '▼'}
+                        </div>
+                        <div>
+                          <div className="font-bold text-slate-900">
+                            {isImproved ? 'Performance is up!' : 'Performance declined'}
+                          </div>
+                          <div className="text-xs text-slate-500">
+                            You {isImproved ? 'gained' : 'lost'} {Math.abs(diff).toFixed(1)}% compared to the previous exam.
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()
+                ) : (
+                  <div className="text-xs text-slate-500 italic">
+                    Requires at least two exams to show improvement metrics.
+                  </div>
+                )}
+              </div>
+            </div>
+          </section>
+        )}
       </div>
     </div>
   )}
@@ -1014,6 +1260,46 @@ function ResponsiveLine({ data }){
         {/* points */}
         {data.map((d, i) => (
           <circle key={i} cx={xScale(i)} cy={yScale(Number(d.avg)||0)} r="3" fill="#1d4ed8" />
+        ))}
+      </svg>
+    </div>
+  )
+}
+
+// Lightweight responsive bar chart component (no external deps)
+function ResponsiveBar({ data }){
+  // dimensions
+  const height = 220
+  const padding = { top: 20, right: 20, bottom: 60, left: 60 }
+  const width = Math.min(900, Math.max(320, (typeof window !== 'undefined' ? window.innerWidth - 120 : 600)))
+  const innerW = width - padding.left - padding.right
+  const innerH = height - padding.top - padding.bottom
+  const barWidth = innerW / data.length
+  const maxTotal = Math.max(...data.map(d => d.total), 1)
+  const yScale = v => padding.top + innerH - (innerH * v / maxTotal)
+  return (
+    <div className="w-full overflow-x-auto">
+      <svg width={width} height={height} role="img" aria-label="Payment methods bar chart">
+        {/* grid */}
+        {[0, 0.25, 0.5, 0.75, 1].map((p, idx) => (
+          <line key={idx} x1={padding.left} y1={yScale(p * maxTotal)} x2={width - padding.right} y2={yScale(p * maxTotal)} stroke="#e5e7eb" strokeWidth="1" />
+        ))}
+        {/* axes */}
+        <line x1={padding.left} y1={padding.top} x2={padding.left} y2={height - padding.bottom} stroke="#9ca3af" />
+        <line x1={padding.left} y1={height - padding.bottom} x2={width - padding.right} y2={height - padding.bottom} stroke="#9ca3af" />
+        {/* y-axis labels */}
+        {[0, 0.25, 0.5, 0.75, 1].map((p, idx) => (
+          <text key={idx} x={padding.left - 6} y={yScale(p * maxTotal) + 4} textAnchor="end" fontSize="10" fill="#6b7280">{Math.round(p * maxTotal)}</text>
+        ))}
+        {/* bars */}
+        {data.map((d, i) => (
+          <rect key={i} x={padding.left + i * barWidth + 2} y={yScale(d.total)} width={barWidth - 4} height={innerH - (yScale(d.total) - padding.top)} fill="#10b981" />
+        ))}
+        {/* x-axis labels */}
+        {data.map((d, i) => (
+          <text key={i} x={padding.left + i * barWidth + barWidth / 2} y={height - padding.bottom + 16} textAnchor="middle" fontSize="10" fill="#6b7280">
+            {String(d.method).slice(0, 8)}
+          </text>
         ))}
       </svg>
     </div>

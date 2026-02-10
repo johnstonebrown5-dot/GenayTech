@@ -300,6 +300,7 @@ export default function App() {
                 </button>
               </div>
             )}
+            <div className="min-h-screen bg-white">
             <Routes>
             {/* Public landing page */}
             <Route path="/" element={<PublicRoot />} />
@@ -417,6 +418,7 @@ export default function App() {
             {/* Catch-all 404 */}
             <Route path="*" element={<NotFound/>} />
             </Routes>
+            </div>
             <NotificationContainer />
             {!isPublicLanding && <BrowserNotificationPrompt />}
             {!isPublicLanding && <ReportIssuePrompt />}

@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import api from '../api'
-import NumericKeypad from '../components/NumericKeypad'
 import { ArrowLeft, Phone, Coins, ShieldCheck, Sparkles, Loader2 } from 'lucide-react'
 
 export default function StudentPayFees(){
@@ -11,8 +10,6 @@ export default function StudentPayFees(){
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [stkStatus, setStkStatus] = useState('idle') // idle | initiating | sent | polling | success | failed
-  const [keypadOpen, setKeypadOpen] = useState(false)
-  const [keypadField, setKeypadField] = useState(null) // 'amount' | 'phone'
   const amountRef = useRef(null)
   const phoneRef = useRef(null)
 
@@ -26,28 +23,7 @@ export default function StudentPayFees(){
     return { label: 'Ready', cls: 'bg-slate-100 text-slate-700', icon: Sparkles }
   }, [stkStatus])
 
-  useEffect(() => {
-    if (!keypadOpen) return
-    const t = setTimeout(() => {
-      try {
-        if (keypadField === 'amount') amountRef.current?.blur?.()
-        if (keypadField === 'phone') phoneRef.current?.blur?.()
-      } catch {}
-    }, 0)
-    return () => clearTimeout(t)
-  }, [keypadOpen, keypadField])
-
   const onBack = () => navigate('/student/finance')
-
-  const openKeypad = (field) => {
-    setKeypadField(field)
-    setKeypadOpen(true)
-  }
-
-  const closeKeypad = () => {
-    setKeypadOpen(false)
-    setKeypadField(null)
-  }
 
   const submit = async (e) => {
     e?.preventDefault?.()
@@ -172,7 +148,6 @@ export default function StudentPayFees(){
                   className="w-full border border-slate-200 rounded-2xl pl-10 pr-3 py-3 text-sm bg-white focus-soft"
                   value={amount}
                   onChange={e=>setAmount(e.target.value)}
-                  onFocus={() => openKeypad('amount')}
                   placeholder="e.g. 1500"
                 />
               </div>
@@ -191,7 +166,6 @@ export default function StudentPayFees(){
                   className="w-full border border-slate-200 rounded-2xl pl-10 pr-3 py-3 text-sm bg-white focus-soft"
                   value={phone}
                   onChange={e=>setPhone(e.target.value)}
-                  onFocus={() => openKeypad('phone')}
                   placeholder="07XXXXXXXX or 2547XXXXXXXX"
                   inputMode="numeric"
                 />
@@ -229,27 +203,6 @@ export default function StudentPayFees(){
             </div>
           </div>
         </form>
-
-        <div className="mt-4 pb-[76px] sm:pb-0">
-          {keypadOpen ? (
-            <NumericKeypad
-              variant="embedded"
-              open={keypadOpen}
-              value={keypadField === 'amount' ? amount : (keypadField === 'phone' ? phone : '')}
-              allowDecimal={keypadField === 'amount'}
-              allowPlus={keypadField === 'phone'}
-              preserveLeadingZeros={keypadField === 'phone'}
-              maxLength={keypadField === 'phone' ? 12 : undefined}
-              onChange={(v) => {
-                if (keypadField === 'amount') setAmount(v)
-                if (keypadField === 'phone') setPhone(v)
-              }}
-              onDone={closeKeypad}
-            />
-          ) : (
-            <div className="hidden sm:block" />
-          )}
-        </div>
       </div>
     </div>
   )

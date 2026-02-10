@@ -107,7 +107,7 @@ export default function StudentLayout({ children }){
   }, [user, dismissedIds])
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-violet-300 via-violet-200 to-slate-100">
+    <div className="min-h-screen bg-white">
       {broadcastBanner && (
         <div className="sticky top-0 z-40 w-full bg-red-600 text-white">
           <div className="px-3 md:px-6 py-2 flex items-start gap-2">
