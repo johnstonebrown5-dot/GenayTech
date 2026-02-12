@@ -3,6 +3,8 @@ import { useParams, Link, useLocation } from 'react-router-dom'
 import api, { toAbsoluteUrl } from '../api'
 import { useAuth } from '../auth'
 
+let __embeddedReportCardCache = new Map()
+
 export default function StudentReportCardViewer({ embedded=false, hideControls=false, hideHistory=false, showTermSelector=true, showExamSelector=true, showBackPrint=true, selectedTermYear: controlledTermYear=null, onSelectedTermYearChange, selectedExamId: controlledExamId=null, onSelectedExamIdChange, studentIdProp=null, autoFlow=false, autoFlowWidth=820 }){
   const { id } = useParams()
   const studentId = Number(studentIdProp ?? id)
@@ -168,6 +170,13 @@ export default function StudentReportCardViewer({ embedded=false, hideControls=f
 
   const effectiveExamId = controlledExamId || selectedExamId
 
+  const isEmbeddedSingleExam = Boolean(embedded && hideControls && hideHistory && !showTermSelector && !showExamSelector && studentId && effectiveExamId)
+
+  const cacheKey = useMemo(() => {
+    if (!isEmbeddedSingleExam) return null
+    return `${studentId}::${String(effectiveExamId)}`
+  }, [isEmbeddedSingleExam, studentId, effectiveExamId])
+
   const selectedExamFromResults = useMemo(()=>{
     if (!effectiveExamId) return null
     const want = String(toId(effectiveExamId))
@@ -277,6 +286,7 @@ export default function StudentReportCardViewer({ embedded=false, hideControls=f
 
   // Load all exam results for this student to populate selectors when no specific exam is forced
   useEffect(()=>{
+    if (isEmbeddedSingleExam) return
     let active = true
     ;(async()=>{
       try{
@@ -373,9 +383,43 @@ export default function StudentReportCardViewer({ embedded=false, hideControls=f
         const stRes = await api.get(`/academics/students/${studentId}/`)
         if (!mounted) return
         setStudent(stRes.data)
-        const exm = await api.get(`/academics/exam_results/?student=${studentId}`)
-        if (!mounted) return
-        setExamResults(Array.isArray(exm.data) ? exm.data : [])
+
+        if (isEmbeddedSingleExam) {
+          const exId = effectiveExamId || queryExamId
+          if (!exId) return
+
+          try{
+            const cached = cacheKey ? __embeddedReportCardCache.get(cacheKey) : null
+            if (cached?.examResults) {
+              setExamResults(cached.examResults)
+              if (cached.examMeta) setExamMeta(cached.examMeta)
+              if (cached.summarySubjects) setSummarySubjects(cached.summarySubjects)
+              if (cached.summaryStudent) setSummaryStudent(cached.summaryStudent)
+              if (cached.summaryExam) setSummaryExam(cached.summaryExam)
+              if (cached.ranks) setRanks(cached.ranks)
+              return
+            }
+          }catch{}
+
+          const [examRes, rowsRes] = await Promise.all([
+            api.get(`/academics/exams/${exId}/`).catch(()=>null),
+            api.get(`/academics/exam_results/?student=${studentId}&exam=${exId}`),
+          ])
+          if (!mounted) return
+          if (examRes?.data) setExamMeta(examRes.data)
+          const rows = Array.isArray(rowsRes?.data) ? rowsRes.data : (Array.isArray(rowsRes?.data?.results) ? rowsRes.data.results : [])
+          const ed = examRes?.data ? { id: examRes.data.id, name: examRes.data.name, year: examRes.data.year, term: examRes.data.term, date: examRes.data.date, published: examRes.data.published, klass: examRes.data.klass, total_marks: examRes.data.total_marks } : null
+          const augmented = rows.map(r => ({ ...r, exam_detail: ed || r.exam_detail || {} }))
+          setExamResults(augmented)
+          setSelectedExamId(String(exId))
+          if (cacheKey) {
+            __embeddedReportCardCache.set(cacheKey, { examResults: augmented, examMeta: examRes?.data || null })
+          }
+        } else {
+          const exm = await api.get(`/academics/exam_results/?student=${studentId}`)
+          if (!mounted) return
+          setExamResults(Array.isArray(exm.data) ? exm.data : [])
+        }
       }catch(err){
         if (!mounted) return
         setError(err?.response?.data?.detail || err?.message || 'Failed to load report card')
@@ -387,6 +431,7 @@ export default function StudentReportCardViewer({ embedded=false, hideControls=f
   }, [studentId])
 
   useEffect(()=>{
+    if (isEmbeddedSingleExam) return
     let active = true
     ;(async ()=>{
       if (!studentId || termExams.length === 0) return
@@ -413,6 +458,12 @@ export default function StudentReportCardViewer({ embedded=false, hideControls=f
         const { data } = await api.get(`/academics/exams/${exId}/rank`, { params: { student: studentId } })
         if (!abort){
           setRanks(prev => ({ ...prev, [String(exId)]: data }))
+          try{
+            if (cacheKey) {
+              const prev = __embeddedReportCardCache.get(cacheKey) || {}
+              __embeddedReportCardCache.set(cacheKey, { ...prev, ranks: { ...(prev.ranks || {}), [String(exId)]: data } })
+            }
+          }catch{}
         }
       }catch{}
     })()
@@ -472,6 +523,7 @@ export default function StudentReportCardViewer({ embedded=false, hideControls=f
   }
 
   useEffect(()=>{
+    if (isEmbeddedSingleExam) return
     let active = true
     ;(async ()=>{
       try{
@@ -599,6 +651,13 @@ export default function StudentReportCardViewer({ embedded=false, hideControls=f
     }
     return Array.from(map.values())
   }, [examResults, parsedTermYear, selectedExam, marksByExamAndSubject, isPrivileged])
+
+  const displaySubjects = useMemo(() => {
+    if (loading && (!Array.isArray(subjects) || subjects.length === 0)) {
+      return Array.from({ length: 6 }).map((_, i) => ({ id: `p-${i}`, label: '...' }))
+    }
+    return subjects
+  }, [loading, subjects])
 
   
 
@@ -733,213 +792,202 @@ export default function StudentReportCardViewer({ embedded=false, hideControls=f
         <div className={`flex items-center justify-between mb-4 no-print:mb-4 ${hideControls ? 'hidden print:hidden' : ''}`}>
           <div className="hidden" />
           <div className="flex items-center gap-2">
-            {showTermSelector && termYearOptions.length>0 && (
-              <select className="px-2 py-1.5 border rounded bg-white text-sm" value={effectiveTermYear || ''} onChange={(e)=> { const v = e.target.value || null; onSelectedTermYearChange ? onSelectedTermYearChange(v) : setSelectedTermYear(v) }} title="Select term">
-                {termYearOptions.map(key=> (
-                  <option key={key} value={key}>{key.replace('-', ' ')}</option>
+            {showTermSelector && termYearOptions.length > 0 && (
+              <select
+                className="px-2 py-1.5 border rounded bg-white text-sm"
+                value={effectiveTermYear || ''}
+                onChange={(e) => {
+                  const v = e.target.value || null
+                  onSelectedTermYearChange ? onSelectedTermYearChange(v) : setSelectedTermYear(v)
+                }}
+                title="Select term"
+              >
+                {termYearOptions.map((key) => (
+                  <option key={key} value={key}>
+                    {key.replace('-', ' ')}
+                  </option>
                 ))}
               </select>
             )}
-            {showExamSelector && (termExams.length>0 || allExams.length>0) && (
-              <select className="px-2 py-1.5 border rounded bg-white text-sm" value={effectiveExamId || ''} onChange={(e)=> { const v = e.target.value || null; onSelectedExamIdChange ? onSelectedExamIdChange(v) : setSelectedExamId(v) }} title="Select exam">
-                {(termExams.length>0 ? termExams : allExams).map(ex => (
-                  <option key={ex.id} value={ex.id}>{ex.name}</option>
+            {showExamSelector && (termExams.length > 0 || allExams.length > 0) && (
+              <select
+                className="px-2 py-1.5 border rounded bg-white text-sm"
+                value={effectiveExamId || ''}
+                onChange={(e) => {
+                  const v = e.target.value || null
+                  onSelectedExamIdChange ? onSelectedExamIdChange(v) : setSelectedExamId(v)
+                }}
+                title="Select exam"
+              >
+                {(termExams.length > 0 ? termExams : allExams).map((ex) => (
+                  <option key={ex.id} value={ex.id}>
+                    {ex.name}
+                  </option>
                 ))}
               </select>
             )}
             {showBackPrint && (
               <>
-                <Link to={-1} className="px-3 py-1.5 rounded border hover:bg-gray-50">Back</Link>
-                <button className="px-3 py-1.5 rounded bg-indigo-600 text-white hover:bg-indigo-700" onClick={()=>{ try { window.print() } catch(_) {} }}>Print</button>
+                <button
+                  type="button"
+                  className="px-3 py-1.5 rounded border hover:bg-gray-50"
+                  onClick={() => {
+                    try {
+                      window.history.back()
+                    } catch (_) {}
+                  }}
+                >
+                  Back
+                </button>
+                <button
+                  className="px-3 py-1.5 rounded bg-indigo-600 text-white hover:bg-indigo-700"
+                  onClick={() => {
+                    try {
+                      window.print()
+                    } catch (_) {}
+                  }}
+                >
+                  Print
+                </button>
               </>
             )}
           </div>
         </div>
 
         {error && <div className="bg-red-50 text-red-700 p-3 rounded border border-red-100">{error}</div>}
-        {loading && <div className="bg-white p-4 rounded card shadow border border-gray-100">Loading...</div>}
 
-        {!loading && !error && (
+        {!error && (
           <div
             ref={flowRef}
             className="relative overflow-hidden rounded-xl border border-gray-300 bg-white shadow-lg print:shadow-none report-card-print-area"
+            style={autoFlow ? { transform: `scale(${flowScale})`, transformOrigin: 'top center', width: autoFlow ? `${(1 / flowScale) * 100}%` : undefined } : undefined}
           >
-            {autoFlow && (
-              <style>{`@media print{ .report-card-autoflow{ transform:none !important; width:auto !important; } }`}</style>
-            )}
+            {autoFlow && <style>{`@media print{ .report-card-autoflow{ transform:none !important; width:auto !important; } }`}</style>}
 
             <div
               className={autoFlow ? 'report-card-autoflow' : ''}
               style={autoFlow ? { width: Number(autoFlowWidth) || 820, transform: `scale(${flowScale})`, transformOrigin: 'top left' } : undefined}
             >
-            {(() => {
-              const raw = (school?.logo_url || school?.logo || '')
-              const has = !!raw
-              const bgStyle = has ? {
-                backgroundImage: `url(${raw})`,
-                backgroundRepeat: 'no-repeat',
-                backgroundPosition: 'center',
-                backgroundSize: '65%',
-                opacity: 0.07,
-                filter: 'grayscale(100%)',
-              } : { background: 'linear-gradient(180deg,#f8fafc,rgba(248,250,252,0.7))' }
-              return <div className="absolute inset-0 pointer-events-none" style={bgStyle}></div>
-            })()}
-            <div className="relative m-3 sm:m-4 md:m-6 border-2 border-gray-700 rounded-lg">
-              <div className="h-1.5 bg-gradient-to-r from-indigo-500 via-sky-500 to-violet-500 rounded-t-md"></div>
-              <div className="p-6 md:p-8">
-                <div className="text-center mb-6">
-                  <div className="flex items-center justify-center gap-2 mb-2">
-                    {(() => {
-                      const rawUrl = (school?.logo_url || user?.school?.logo_url || school?.logo || user?.school?.logo || '')
-                      const src = rawUrl ? toAbsoluteUrl(String(rawUrl)) + (rawUrl.includes('?') ? '' : `?v=${(school?.id||'')}-${(student?.id||'')}`) : ''
-                      return (src && !logoFailed) ? (
-                        <img src={src} alt="School Logo" className="w-10 h-10 object-contain" loading="eager" onError={(e)=>{ try{ e.currentTarget.src=''; }catch(_){} setLogoFailed(true) }} />
-                      ) : (
-                        <div className="w-10 h-10 rounded bg-gray-100 flex items-center justify-center text-gray-400">🏫</div>
-                      )
-                    })()}
-                    <div className="text-2xl font-extrabold tracking-wide">{school?.name || user?.school?.name || 'SCHOOL NAME'}</div>
+              {(() => {
+                const raw = school?.logo_url || school?.logo || ''
+                const has = !!raw
+                const bgStyle = has
+                  ? {
+                      backgroundImage: `url(${raw})`,
+                      backgroundRepeat: 'no-repeat',
+                      backgroundPosition: 'center',
+                      backgroundSize: '65%',
+                      opacity: 0.07,
+                      filter: 'grayscale(100%)',
+                    }
+                  : { background: 'linear-gradient(180deg,#f8fafc,rgba(248,250,252,0.7))' }
+                return <div className="absolute inset-0 pointer-events-none" style={bgStyle}></div>
+              })()}
+
+              <div className="relative m-3 sm:m-4 md:m-6 border-2 border-gray-700 rounded-lg">
+                <div className="h-1.5 bg-gradient-to-r from-indigo-500 via-sky-500 to-violet-500 rounded-t-md"></div>
+                <div className="p-6 md:p-8">
+                  <div className="text-center mb-6">
+                    <div className="flex items-center justify-center gap-2 mb-2">
+                      {(() => {
+                        const rawUrl = school?.logo_url || user?.school?.logo_url || school?.logo || user?.school?.logo || ''
+                        const src = rawUrl
+                          ? toAbsoluteUrl(String(rawUrl)) + (rawUrl.includes('?') ? '' : `?v=${(school?.id || '')}-${(student?.id || '')}`)
+                          : ''
+                        return src && !logoFailed ? (
+                          <img
+                            src={src}
+                            alt="School Logo"
+                            className="w-10 h-10 object-contain"
+                            loading="eager"
+                            onError={(e) => {
+                              try {
+                                e.currentTarget.src = ''
+                              } catch (_) {}
+                              setLogoFailed(true)
+                            }}
+                          />
+                        ) : (
+                          <div className="w-10 h-10 rounded bg-gray-100 flex items-center justify-center text-gray-400">🏫</div>
+                        )
+                      })()}
+                      <div className="text-2xl font-extrabold tracking-wide">{school?.name || user?.school?.name || 'SCHOOL NAME'}</div>
+                    </div>
+                    {(school?.motto || user?.school?.motto) && (
+                      <div className="text-base font-semibold text-gray-600 mt-1">{school?.motto || user?.school?.motto}</div>
+                    )}
                   </div>
-                  {(school?.motto || user?.school?.motto) && (
-                    <div className="text-base font-semibold text-gray-600 mt-1">{school?.motto || user?.school?.motto}</div>
-                  )}
-                </div>
 
-              <div className="flex items-start justify-between text-sm mb-6">
-                <div className="space-y-1">
-                  <div className="flex gap-3"><span className="font-semibold">Students name</span><span className="font-medium">{student?.name || '-'}</span></div>
-                  <div className="flex gap-3">
-                    <span className="font-semibold">Class</span>
-                    <span className="font-medium">
-                      {selectedExamClass?.name || student?.klass_detail?.name || student?.klass || '-'}
-                    </span>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-start text-sm mb-5">
+                    <div className="space-y-1">
+                      <div className="flex gap-3">
+                        <span className="font-semibold">Students name</span>
+                        <span className="font-medium">{student?.name || '-'}</span>
+                      </div>
+                      <div className="flex gap-3">
+                        <span className="font-semibold">Class</span>
+                        <span className="font-medium">{selectedExamClass?.name || student?.klass_detail?.name || student?.klass || '-'}</span>
+                      </div>
+                    </div>
+
+                    <div className="text-center">
+                      <div className="text-[11px] uppercase tracking-wider text-gray-500">Exam</div>
+                      <div className="text-base font-semibold text-gray-900">{headerExamName}</div>
+                    </div>
+
+                    <div className="text-right">
+                      <div className="text-[11px] uppercase tracking-wider text-gray-500">Position</div>
+                      <div className="text-base font-semibold text-gray-900">
+                        {loading ? '-' : currentRank?.class?.position ? `${currentRank.class.position}/${currentRank.class.size || '-'}` : '-'}
+                      </div>
+                    </div>
                   </div>
-                  <div className="flex gap-3">
-                    <span className="font-semibold">Grade</span>
-                    <span className="font-medium">
-                      {selectedExam?.grade || selectedExamClass?.grade_level || student?.klass_detail?.grade_level || '-'}
-                    </span>
-                  </div>
-                  <div className="flex gap-3"><span className="font-semibold">Admission number</span><span className="font-medium">{student?.admission_no || '-'}</span></div>
-                </div>
-                <div className="text-right space-y-1">
-                  <div className="font-semibold">TERM</div>
-                  <div className="font-medium">{parsedTermYear ? parsedTermYear.term : '-'}</div>
-                  <div className="font-semibold mt-2">ACADEMIC YEAR</div>
-                  <div className="font-medium">{parsedTermYear ? parsedTermYear.year : '-'}</div>
-                </div>
-              </div>
 
-              <div className="border-t border-gray-300 my-4" />
-
-              <div className="text-center text-sm font-semibold tracking-wide mb-3">{headerExamName}</div>
-
-              <div className="overflow-hidden">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr>
-                      <th className="text-left px-3 py-2 bg-gray-100">Subject</th>
-                      <th className="text-center px-3 py-2 bg-gray-100">Marks</th>
-                      <th className="text-center px-3 py-2 bg-gray-100">Grade</th>
-                      <th className="text-left px-3 py-2 bg-gray-100">Remarks</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {subjects.length === 0 ? (
-                      <tr>
-                        <td colSpan={4} className="px-3 py-6 text-center text-gray-500">
-                          No marks found for the selected exam/term.
-                        </td>
-                      </tr>
-                    ) : (
-                      <>
-                        {subjects.map((subj)=>{
-                          const v = selectedExamMarks[String(subj.id)]
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm border border-gray-200 rounded-lg overflow-hidden">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-3 py-2 text-left text-[11px] uppercase tracking-wider text-gray-600">Subject</th>
+                          <th className="px-3 py-2 text-center text-[11px] uppercase tracking-wider text-gray-600">Marks</th>
+                          <th className="px-3 py-2 text-center text-[11px] uppercase tracking-wider text-gray-600">Grade</th>
+                          <th className="px-3 py-2 text-left text-[11px] uppercase tracking-wider text-gray-600">Remarks</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {displaySubjects.map((subj) => {
+                          const v = loading ? null : selectedExamMarks[String(subj.id)]
+                          const g = loading ? null : toGrade(v, subj.id)
                           return (
                             <tr key={String(subj.id)}>
                               <td className="px-3 py-2 border-t border-gray-200">{subj.label}</td>
-                              <td className="px-3 py-2 text-center border-t border-gray-200">{Number.isFinite(v) ? v : '-'}</td>
-                              <td className="px-3 py-2 text-center border-t border-gray-200">{Number.isFinite(v) ? (
-                                <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${gradeBadgeClass(toGrade(v, subj.id))}`}>{toGrade(v, subj.id)}</span>
-                              ) : '-'}</td>
-                              <td className="px-3 py-2 border-t border-gray-200">{subjectRemark(v, subj.label)}</td>
+                              <td className="px-3 py-2 text-center border-t border-gray-200">{Number.isFinite(v) ? v : loading ? '...' : '-'}</td>
+                              <td className="px-3 py-2 text-center border-t border-gray-200">
+                                <span className={`inline-flex items-center justify-center px-2 py-0.5 rounded text-xs font-semibold ${gradeBadgeClass(g)}`}>{loading ? '...' : g}</span>
+                              </td>
+                              <td className="px-3 py-2 border-t border-gray-200 text-sm text-gray-700">{loading ? '...' : subjectRemark(v, subj.label)}</td>
                             </tr>
                           )
                         })}
-                        <tr>
-                          <td className="px-3 py-2 border-t border-gray-300 font-semibold">Total</td>
-                          <td className="px-3 py-2 text-center border-t border-gray-300 font-semibold">{selectedTotals.sum.toFixed(2)}</td>
-                          <td className="px-3 py-2 text-center border-t border-gray-300 font-semibold">
-                            {(() => { const g = letterFromBands(selectedTotals.avg, globalBands); return <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${gradeBadgeClass(g)}`}>{g}</span> })()}
-                          </td>
-                          <td className="px-3 py-2 border-t border-gray-300 font-semibold"></td>
-                        </tr>
-                      </>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-
-              <div className="border-t border-gray-300 my-6" />
-
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div className="border border-gray-300 rounded">
-                  <div className="px-3 py-2 font-semibold border-b border-gray-300">Class Position</div>
-                  <div className="px-3 py-6">
-                    {currentRank ? (
-                      <>
-                        <span className="text-lg md:text-xl font-semibold">{currentRank.class?.position || '-'}</span>
-                        <span className="mx-1 text-xs md:text-sm text-gray-600 align-baseline">out of</span>
-                        <span className="text-lg md:text-xl font-extrabold">{currentRank.class?.size || '-'}</span>
-                      </>
-                    ) : '-' }
+                      </tbody>
+                    </table>
                   </div>
-                </div>
-                <div className="border border-gray-300 rounded">
-                  <div className="px-3 py-2 font-semibold border-b border-gray-300">Grade Position</div>
-                  <div className="px-3 py-6">
-                    {currentRank ? (
-                      <>
-                        <span className="text-lg md:text-xl font-semibold">{currentRank.grade?.position || '-'}</span>
-                        <span className="mx-1 text-xs md:text-sm text-gray-600 align-baseline">out of</span>
-                        <span className="text-lg md:text-xl font-extrabold">{currentRank.grade?.size || '-'}</span>
-                      </>
-                    ) : '-' }
+
+                  <div className="grid grid-cols-3 gap-3 mt-4">
+                    <div className="rounded-lg border border-gray-200 p-3">
+                      <div className="text-[11px] uppercase tracking-wider text-gray-500">Total</div>
+                      <div className="text-lg font-bold text-gray-900">{loading ? '...' : Number.isFinite(selectedTotals.sum) ? selectedTotals.sum.toFixed(0) : '0'}</div>
+                    </div>
+                    <div className="rounded-lg border border-gray-200 p-3">
+                      <div className="text-[11px] uppercase tracking-wider text-gray-500">Subjects</div>
+                      <div className="text-lg font-bold text-gray-900">{loading ? '...' : selectedTotals.count || 0}</div>
+                    </div>
+                    <div className="rounded-lg border border-gray-200 p-3">
+                      <div className="text-[11px] uppercase tracking-wider text-gray-500">Average</div>
+                      <div className="text-lg font-bold text-gray-900">{loading ? '...' : Number.isFinite(selectedTotals.avg) ? selectedTotals.avg.toFixed(1) : '0.0'}%</div>
+                    </div>
                   </div>
                 </div>
               </div>
-
-              <div className="border-t border-gray-300 my-6" />
-
-              <div className="grid grid-cols-5 gap-4 text-sm items-start">
-                <div className="col-span-2">
-                  <div className="font-semibold">Class Teacher Name</div>
-                  <div className="mt-2">{(() => {
-                    const t = student?.klass_detail?.teacher_detail
-                    if (!t) return '-'
-                    const first = t.first_name || ''
-                    const last = t.last_name || ''
-                    const full = `${first} ${last}`.trim()
-                    return full || t.username || '-'
-                  })()}</div>
-                </div>
-                <div className="col-span-3">
-                  <div className="font-semibold">Remarks</div>
-                  <div className="mt-2 w-full border rounded p-2 min-h-[72px] bg-white">
-                    {(() => {
-                      const avg = Number(totals.average || 0)
-                      if (avg >= 80) return 'Excellent performance — keep it up.'
-                      if (avg >= 70) return 'Very good work.'
-                      if (avg >= 60) return 'Good, aim higher.'
-                      if (avg >= 50) return 'Fair — effort needed.'
-                      return 'Needs improvement — consult your teacher.'
-                    })()}
-                  </div>
-                </div>
-              </div>
-              </div>
-            </div>
             </div>
           </div>
         )}
@@ -955,15 +1003,26 @@ export default function StudentReportCardViewer({ embedded=false, hideControls=f
                 <div className="text-sm text-gray-600">No exam history yet.</div>
               ) : (
                 <ul className="divide-y divide-gray-100">
-                  {examHistory.map(ex => (
+                  {examHistory.map((ex) => (
                     <li key={ex.id} className="py-2 flex items-center gap-3">
-                      <div className={`text-[10px] px-2 py-0.5 rounded-full border ${ex.published ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-50 text-gray-600 border-gray-200'}`}>{ex.published ? 'Published' : 'Draft'}</div>
+                      <div
+                        className={`text-[10px] px-2 py-0.5 rounded-full border ${
+                          ex.published ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-50 text-gray-600 border-gray-200'
+                        }`}
+                      >
+                        {ex.published ? 'Published' : 'Draft'}
+                      </div>
                       <div className="flex-1 min-w-0">
                         <div className="font-medium truncate">{ex.name || `Exam ${ex.id}`}</div>
-                        <div className="text-xs text-gray-500">Year {ex.year || '-'} • Term {ex.term || '-'}{ex.grade ? ` • ${ex.grade}` : ''}</div>
+                        <div className="text-xs text-gray-500">
+                          Year {ex.year || '-'} • Term {ex.term || '-'}
+                          {ex.grade ? ` • ${ex.grade}` : ''}
+                        </div>
                       </div>
                       {ex.grade && (
-                        <span className="text-[11px] px-2 py-0.5 rounded-full border bg-gray-50 text-gray-700" title="Grade at time of exam">{ex.grade}</span>
+                        <span className="text-[11px] px-2 py-0.5 rounded-full border bg-gray-50 text-gray-700" title="Grade at time of exam">
+                          {ex.grade}
+                        </span>
                       )}
                     </li>
                   ))}

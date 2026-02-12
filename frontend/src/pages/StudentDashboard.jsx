@@ -4,6 +4,7 @@ import api from '../api'
 import { useAuth } from '../auth'
 import Modal from '../components/Modal'
 import StatCard from '../components/StatCard'
+import StudentReportCardViewer from './StudentReportCardViewer'
 
 let __studentDashboardCache = null
 
@@ -1016,6 +1017,7 @@ export default function StudentDashboard(){
                 const avg = rows.length ? (total / rows.length) : 0
                 const isOpen = openExam === name
                 const domId = examDomId(name)
+                const examId = rows?.[0]?.exam_detail?.id || rows?.[0]?.exam || null
                 const report = rows
                   .map(r => ({
                     subjectLabel: r.subject_detail
@@ -1048,7 +1050,7 @@ export default function StudentDashboard(){
                       </div>
                     </button>
 
-                    <div className={`transition-all duration-300 ease-in-out overflow-hidden ${isOpen ? 'max-h-[800px] opacity-100' : 'max-h-0 opacity-0'}`}>
+                    <div className={`transition-all duration-300 ease-in-out ${isOpen ? 'max-h-[80vh] opacity-100 overflow-y-auto' : 'max-h-0 opacity-0 overflow-hidden'}`}>
                       <div className="px-4 pb-4" id={domId}>
                         {printExamId === domId && (
                           <style>{`@media print{ body *{ visibility:hidden } #${domId}, #${domId} *{ visibility:visible } #${domId}{ position:absolute; left:0; top:0; width:100%; padding:16px } }`}</style>
@@ -1077,22 +1079,37 @@ export default function StudentDashboard(){
                         </div>
 
                         <div className="mt-4 overflow-x-auto">
-                          <table className="w-full text-left text-sm">
-                            <thead className="bg-slate-50 text-slate-600">
-                              <tr>
-                                <th className="px-2 py-2">Subject</th>
-                                <th className="px-2 py-2 text-right">Marks</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {report.map((r, idx) => (
-                                <tr key={idx} className="border-t">
-                                  <td className="px-2 py-2 text-slate-900">{r.subjectLabel || '-'}</td>
-                                  <td className="px-2 py-2 text-right font-semibold text-slate-900">{Number.isFinite(r.marks) ? r.marks : '-'}</td>
+                          {examId && student?.id ? (
+                            <div className="-mx-4">
+                              <StudentReportCardViewer
+                                embedded={true}
+                                hideControls={true}
+                                hideHistory={true}
+                                showTermSelector={false}
+                                showExamSelector={false}
+                                showBackPrint={false}
+                                studentIdProp={student.id}
+                                selectedExamId={examId}
+                              />
+                            </div>
+                          ) : (
+                            <table className="w-full text-left text-sm">
+                              <thead className="bg-slate-50 text-slate-600">
+                                <tr>
+                                  <th className="px-2 py-2">Subject</th>
+                                  <th className="px-2 py-2 text-right">Marks</th>
                                 </tr>
-                              ))}
-                            </tbody>
-                          </table>
+                              </thead>
+                              <tbody>
+                                {report.map((r, idx) => (
+                                  <tr key={idx} className="border-t">
+                                    <td className="px-2 py-2 text-slate-900">{r.subjectLabel || '-'}</td>
+                                    <td className="px-2 py-2 text-right font-semibold text-slate-900">{Number.isFinite(r.marks) ? r.marks : '-'}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          )}
                         </div>
                       </div>
                     </div>
