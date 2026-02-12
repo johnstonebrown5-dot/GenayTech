@@ -1,6 +1,6 @@
 from rest_framework.routers import DefaultRouter
 from django.urls import path
-from .views import NotificationViewSet, EventViewSet, ArrearsMessageCampaignViewSet, MessageViewSet, ATSMSCallbackView, ContactInquiryView, UploadAdmissionLetterView, DeliveryLogViewSet, ReportIssueView, ServiceReviewView, PublicAlertBannerView
+from .views import NotificationViewSet, EventViewSet, ArrearsMessageCampaignViewSet, MessageViewSet, ATSMSCallbackView, TextWaveSMSCallbackView, ContactInquiryView, UploadAdmissionLetterView, DeliveryLogViewSet, ReportIssueView, ServiceReviewView, PublicAlertBannerView
 
 router = DefaultRouter()
 router.register('notifications', NotificationViewSet, basename='notification')
@@ -13,6 +13,8 @@ urlpatterns = router.urls + [
     path('alerts/banner/', PublicAlertBannerView.as_view(), name='public-alert-banner'),
     # Africa's Talking SMS delivery/inbound callbacks
     path('at/sms/callback/', ATSMSCallbackView.as_view(), name='at-sms-callback'),
+    # TextWave SMS delivery/inbound callbacks
+    path('textwave/sms/callback/', TextWaveSMSCallbackView.as_view(), name='textwave-sms-callback'),
     # Public contact inquiry endpoint
     path('contact-inquiry/', ContactInquiryView.as_view(), name='contact-inquiry'),
     # Public report issue endpoint

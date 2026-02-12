@@ -195,69 +195,126 @@ def render_template(template: str, context: dict) -> str:
     return msg
 
 
-def _send_sms_via_at_rest(username: str, api_key: str, phone: str, message: str, sender: str | None) -> bool:
-    """Send SMS using Africa's Talking REST API directly.
-    This is used to circumvent the WhatsApp sandbox initialization error in the SDK.
-    """
+def _send_sms_via_textwave_rest(*, base_url: str, api_key: str, phone: str, message: str, sender: str | None) -> bool:
     try:
-        base = "https://api.sandbox.africastalking.com" if username.lower() == "sandbox" else "https://api.africastalking.com"
-        url = f"{base}/version1/messaging"
-        data = {
-            "username": username,
-            "to": phone,
-            "message": message,
+        base_url = str(base_url or '').strip().rstrip('/')
+        if not base_url:
+            logger.warning("TextWave base url missing; skipping SMS to %s", phone)
+            return False
+
+        path = str(getattr(settings, 'TEXTWAVE_SEND_PATH', '/sms/send') or '/sms/send').strip()
+        if not path.startswith('/'):
+            path = '/' + path
+        url = base_url + path
+
+        headers: dict = {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+            'User-Agent': 'edutrack/1.0 (+requests)',
+        }
+
+        raw_headers = getattr(settings, 'TEXTWAVE_HEADERS_JSON', '') or ''
+        if raw_headers:
+            try:
+                parsed_headers = json.loads(raw_headers)
+                if isinstance(parsed_headers, dict):
+                    for hk, hv in parsed_headers.items():
+                        if isinstance(hv, str):
+                            parsed_headers[hk] = hv.replace('${TEXTWAVE_API_KEY}', str(api_key))
+                    headers.update(parsed_headers)
+            except Exception:
+                logger.warning("Invalid TEXTWAVE_HEADERS_JSON; ignoring")
+
+        if not any(k.lower() in ('authorization', 'x-api-key', 'apikey', 'api-key') for k in headers.keys()):
+            headers['Authorization'] = f"Bearer {api_key}"
+
+        to_key = str(getattr(settings, 'TEXTWAVE_TO_KEY', 'to') or 'to')
+        msg_key = str(getattr(settings, 'TEXTWAVE_MESSAGE_KEY', 'message') or 'message')
+        sender_key = str(getattr(settings, 'TEXTWAVE_FROM_KEY', 'senderId') or 'senderId')
+
+        payload: dict = {
+            to_key: phone,
+            msg_key: message,
         }
         if sender:
-            # Optional short code or sender ID
-            data["from"] = sender
-        headers = {
-            "apiKey": api_key,
-            "Accept": "application/json",
-            "Content-Type": "application/x-www-form-urlencoded",
-            "User-Agent": "edutrack/1.0 (+requests)",
-        }
+            payload[sender_key] = sender
 
-        # Prepare a TLS 1.2-enforced adapter and small retry policy (adapter defined top-level)
         retries = Retry(total=2, backoff_factor=0.5, status_forcelist=(429, 500, 502, 503, 504))
-
-        # Determine verification and proxy behavior from settings
-        ca_bundle = getattr(settings, 'AT_CA_BUNDLE', '') or ''
-        verify_param = ca_bundle if ca_bundle else True
-        trust_env = getattr(settings, 'AT_TRUST_ENV', False)
-
-        # Use a session and honor configured proxy trust and CA bundle
         with requests.Session() as s:
-            s.trust_env = bool(trust_env)
-            s.mount("https://", TLSv1_2HttpAdapter(max_retries=retries))
-            try:
-                resp = s.post(url, data=data, headers=headers, timeout=20, verify=verify_param)
-                resp.raise_for_status()
-            except requests.exceptions.SSLError:
-                # Guarded fallback: try once with certificate verification disabled, using a fresh session
-                logger.warning("SSL handshake to Africa's Talking failed; retrying once with verify=False")
-                with requests.Session() as s2:
-                    s2.trust_env = bool(trust_env)
-                    resp = s2.post(url, data=data, headers=headers, timeout=20, verify=False)
-                    resp.raise_for_status()
+            s.mount('https://', TLSv1_2HttpAdapter(max_retries=retries))
 
-        payload = resp.json() if resp.headers.get("Content-Type", "").startswith("application/json") else json.loads(resp.text)
-        recipients = (payload or {}).get('SMSMessageData', {}).get('Recipients', [])
-        if recipients:
-            status = recipients[0].get('status', '').lower()
-            if 'success' in status:
-                logger.info("SMS sent via AT REST -> %s: %s", phone, status)
-                return True
-        logger.warning("AT REST response did not confirm success: %s", payload)
+            # Try common auth formats in sequence (providers vary)
+            attempts: list[tuple[str, dict]] = []
+            attempts.append(('bearer_or_configured', dict(headers)))
+
+            h_x = dict(headers)
+            h_x.pop('Authorization', None)
+            h_x['X-API-KEY'] = str(api_key)
+            attempts.append(('x_api_key', h_x))
+
+            h_x2 = dict(headers)
+            h_x2.pop('Authorization', None)
+            h_x2['x-api-key'] = str(api_key)
+            attempts.append(('x-api-key', h_x2))
+
+            h_ak = dict(headers)
+            h_ak['Authorization'] = f"ApiKey {api_key}"
+            attempts.append(('authorization_apikey', h_ak))
+
+            h_tok = dict(headers)
+            h_tok['Authorization'] = f"Token {api_key}"
+            attempts.append(('authorization_token', h_tok))
+
+            h_raw = dict(headers)
+            h_raw['Authorization'] = str(api_key)
+            attempts.append(('authorization_raw', h_raw))
+
+            resp = None
+            last_401_details: list[tuple[str, str]] = []
+            for name, h in attempts:
+                resp = s.post(url, json=payload, headers=h, timeout=20)
+                if resp.status_code != 401:
+                    break
+                try:
+                    last_401_details.append((name, (resp.text or '')[:300]))
+                except Exception:
+                    last_401_details.append((name, '<no body>'))
+
+            if resp is not None and resp.status_code == 401 and last_401_details:
+                try:
+                    logger.warning("TextWave 401 auth attempts: %s", last_401_details)
+                except Exception:
+                    pass
+
+            if resp is None:
+                logger.warning("TextWave SMS send failed: no response")
+                return False
+
+        if resp.status_code >= 400:
+            logger.warning("TextWave SMS send failed (%s): %s", resp.status_code, (resp.text or '')[:500])
+            return False
+
+        try:
+            data = resp.json() if resp.headers.get('Content-Type', '').startswith('application/json') else None
+        except Exception:
+            data = None
+        if not isinstance(data, dict):
+            return 200 <= int(resp.status_code) < 400
+
+        if data.get('status') == 'complete':
+            total_failed = data.get('data', {}).get('totalFailed', 0)
+            return int(total_failed or 0) == 0
+
+        logger.warning("TextWave response indicates failure: %s", data)
         return False
     except Exception:
-        logger.exception("Failed to send SMS via AT REST to %s", phone)
+        logger.exception("Failed to send SMS via TextWave to %s", phone)
         return False
 
 
 def send_sms(phone: str, message: str, school_id: int | None = None) -> bool:
     """
-    Send SMS via Africa's Talking. Returns True if accepted for delivery.
-    Uses sandbox or live based on credentials in settings.
+    Send SMS via configured provider. Returns True if accepted for delivery.
     """
     if not phone or not message:
         return False
@@ -268,35 +325,17 @@ def send_sms(phone: str, message: str, school_id: int | None = None) -> bool:
 
     integ = _get_school_integration_settings(school_id)
 
-    # If a school has integration settings, do not fall back to global credentials.
-    # This guarantees that a school's outbound messages use only channels configured by superuser.
-    try:
-        if integ is not None:
-            provider = str(getattr(integ, 'sms_provider', '') or '').strip().lower() or 'africastalking'
-            if provider and provider not in ('africastalking',):
-                logger.warning("Unsupported SMS provider '%s' for school_id=%s", provider, school_id)
-                return False
-            if not (getattr(integ, 'at_username', None) and getattr(integ, 'at_api_key', None)):
-                logger.warning("School SMS channel not configured; skipping SMS to %s (school_id=%s)", phone, school_id)
-                return False
-    except Exception:
-        pass
+    # Prepend school name to message if school_id provided
+    if school_id:
+        try:
+            from accounts.models import School
+            school = School.objects.get(pk=school_id)
+            school_name = getattr(school, 'name', 'School')
+            message = f"From : {school_name}\n\n{message}\nTHANKYOU"
+        except Exception:
+            pass
 
-    at_username = getattr(settings, 'AT_USERNAME', None)
-    at_api_key = getattr(settings, 'AT_API_KEY', None)
-    at_sender = getattr(settings, 'AT_SENDER_ID', None) or None
-    try:
-        if integ is not None:
-            if getattr(integ, 'at_username', None) and getattr(integ, 'at_api_key', None):
-                at_username = getattr(integ, 'at_username', None)
-                at_api_key = getattr(integ, 'at_api_key', None)
-            if getattr(integ, 'at_sender_id', None):
-                at_sender = getattr(integ, 'at_sender_id', None) or None
-    except Exception:
-        pass
-    if not at_username or not at_api_key:
-        logger.warning("Africa's Talking credentials missing; skipping SMS to %s", phone)
-        return False
+    provider = 'textwave'
     # Normalize phone into E.164 if possible (defaults to KE)
     # Normalize and validate phone (default region KE)
     valid_number = False
@@ -315,108 +354,32 @@ def send_sms(phone: str, message: str, school_id: int | None = None) -> bool:
             return True
         logger.warning("SMS not sent: invalid phone '%s' and SMS_LOOPBACK is disabled", phone)
         return False
+
+    # TextWave expects recipient numbers in the format 2547XXXXXXXX (no leading '+')
     try:
-        use_rest_pref = getattr(settings, 'AT_USE_REST_FOR_SANDBOX', True)
-        is_sandbox = str(at_username).lower() == 'sandbox'
-
-        # Strategy on sandbox:
-        # - If AT_USE_REST_FOR_SANDBOX True: try REST first, then SDK fallback on SSL/proxy errors
-        # - If False: try SDK first, then REST fallback
-        if is_sandbox:
-            if use_rest_pref:
-                ok = _send_sms_via_at_rest(at_username, at_api_key, phone, message, at_sender)
-                if ok:
-                    return True
-                # Fallback to SDK once
-                try:
-                    # Avoid system proxies for SDK if AT_TRUST_ENV is False (prevents TLS interception issues)
-                    _old_env = {}
-                    if not getattr(settings, 'AT_TRUST_ENV', False):
-                        for k in ('HTTP_PROXY','HTTPS_PROXY','ALL_PROXY','http_proxy','https_proxy','all_proxy','NO_PROXY','no_proxy'):
-                            if k in os.environ:
-                                _old_env[k] = os.environ.pop(k)
-                    import africastalking  # type: ignore
-                    africastalking.initialize(at_username, at_api_key)
-                    sms = africastalking.SMS
-                    resp = sms.send(message, [phone], at_sender) if at_sender else sms.send(message, [phone])
-                    recipients = (resp or {}).get('SMSMessageData', {}).get('Recipients', [])
-                    if recipients and 'success' in (recipients[0].get('status','').lower()):
-                        logger.info("SMS sent via AT SDK fallback -> %s", phone)
-                        return True
-                except Exception:
-                    logger.exception("AT SDK fallback failed on sandbox")
-                finally:
-                    # Restore proxies
-                    try:
-                        for k, v in (_old_env.items() if '_old_env' in locals() else []):
-                            os.environ[k] = v
-                    except Exception:
-                        pass
-                return False
-            else:
-                # Prefer SDK first
-                try:
-                    _old_env = {}
-                    if not getattr(settings, 'AT_TRUST_ENV', False):
-                        for k in ('HTTP_PROXY','HTTPS_PROXY','ALL_PROXY','http_proxy','https_proxy','all_proxy','NO_PROXY','no_proxy'):
-                            if k in os.environ:
-                                _old_env[k] = os.environ.pop(k)
-                    import africastalking  # type: ignore
-                    africastalking.initialize(at_username, at_api_key)
-                    sms = africastalking.SMS
-                    resp = sms.send(message, [phone], at_sender) if at_sender else sms.send(message, [phone])
-                    recipients = (resp or {}).get('SMSMessageData', {}).get('Recipients', [])
-                    if recipients and 'success' in (recipients[0].get('status','').lower()):
-                        logger.info("SMS sent via AT SDK (sandbox) -> %s", phone)
-                        return True
-                except Exception as e:
-                    # Known WhatsApp sandbox error or TLS anomalies -> fallback to REST
-                    logger.warning("AT SDK on sandbox error; falling back to REST: %s", e)
-                finally:
-                    try:
-                        for k, v in (_old_env.items() if '_old_env' in locals() else []):
-                            os.environ[k] = v
-                    except Exception:
-                        pass
-                return _send_sms_via_at_rest(at_username, at_api_key, phone, message, at_sender)
-
-        # Live mode: use official SDK
-        # If a custom CA bundle is provided, propagate it to requests used by the SDK
-        ca_bundle = getattr(settings, 'AT_CA_BUNDLE', '') or ''
-        if ca_bundle and not os.environ.get('REQUESTS_CA_BUNDLE'):
-            os.environ['REQUESTS_CA_BUNDLE'] = ca_bundle
-        # Live: ensure proxies are cleared if AT_TRUST_ENV=False
-        _old_env = {}
-        if not getattr(settings, 'AT_TRUST_ENV', False):
-            for k in ('HTTP_PROXY','HTTPS_PROXY','ALL_PROXY','http_proxy','https_proxy','all_proxy','NO_PROXY','no_proxy'):
-                if k in os.environ:
-                    _old_env[k] = os.environ.pop(k)
-        import africastalking  # type: ignore
-        africastalking.initialize(at_username, at_api_key)
-        sms = africastalking.SMS
-        resp = sms.send(message, [phone], at_sender) if at_sender else sms.send(message, [phone])
-        recipients = (resp or {}).get('SMSMessageData', {}).get('Recipients', [])
-        if recipients:
-            status = recipients[0].get('status', '').lower()
-            if 'success' in status:
-                logger.info("SMS sent via AT (live) -> %s: %s", phone, status)
-                return True
-        logger.warning("AT SDK (live) response did not confirm success: %s", resp)
-        return False
+        if phone.startswith('+'):
+            phone = phone[1:]
     except Exception:
-        logger.exception("Failed to send SMS via Africa's Talking to %s", phone)
-        # Final guard: allow loopback to simulate success in dev
-        if getattr(settings, 'SMS_LOOPBACK', False):
-            logger.info("SMS_LOOPBACK enabled: simulating success for %s after failure", phone)
-            return True
-        return False
-    finally:
-        # Restore proxies for live path if we cleared them
+        pass
+
+    base_url = getattr(settings, 'TEXTWAVE_BASE_URL', '') or ''
+    api_key = getattr(settings, 'TEXTWAVE_API_KEY', '') or ''
+    sender = getattr(settings, 'TEXTWAVE_SENDER_ID', '') or None
+    if integ is not None:
         try:
-            for k, v in (_old_env.items() if '_old_env' in locals() else []):
-                os.environ[k] = v
+            if getattr(integ, 'textwave_base_url', None):
+                base_url = getattr(integ, 'textwave_base_url', '') or base_url
+            if getattr(integ, 'textwave_api_key', None):
+                api_key = getattr(integ, 'textwave_api_key', '') or api_key
+            if getattr(integ, 'textwave_sender_id', None):
+                sender = getattr(integ, 'textwave_sender_id', '') or sender
         except Exception:
             pass
+    if not api_key or not base_url:
+        logger.warning("TextWave credentials missing; skipping SMS to %s (school_id=%s)", phone, school_id)
+        return False
+    ok = _send_sms_via_textwave_rest(base_url=base_url, api_key=api_key, phone=phone, message=message, sender=sender)
+    return bool(ok)
 
 
 def send_email_safe(subject: str, message: str, recipient: str, reply_to: list[str] | None = None, from_name: str | None = None, school_id: int | None = None) -> bool:
@@ -988,8 +951,11 @@ def process_message_delivery(message_id: int):
     Uses user.phone and user.email if available. Errors are logged and do not stop delivery to others.
     """
     from .models import Message, MessageRecipient
+    from academics.models import Student
     try:
         msg = Message.objects.select_related('sender', 'school').get(pk=message_id)
+        send_sms_enabled = bool(getattr(msg, 'send_sms', True))
+        send_email_enabled = bool(getattr(msg, 'send_email', True))
         # Iterate recipients
         recipients = (
             MessageRecipient.objects
@@ -1003,9 +969,18 @@ def process_message_delivery(message_id: int):
             u = r.user
             if not u or (hasattr(u, 'is_active') and not u.is_active):
                 continue
+            # Resolve student record (for guardian phone / student email fallbacks)
+            stu = None
+            try:
+                if getattr(u, 'role', None) == 'student':
+                    stu = Student.objects.filter(user_id=getattr(u, 'id', None), is_active=True).only('id', 'guardian_id', 'email').first()
+            except Exception:
+                stu = None
             # SMS
-            phone = getattr(u, 'phone', '')
-            if phone:
+            phone = (getattr(u, 'phone', '') or '').strip()
+            if (not phone) and stu is not None:
+                phone = (getattr(stu, 'guardian_id', '') or '').strip()
+            if phone and send_sms_enabled:
                 ok_sms = False
                 try:
                     ok_sms = send_sms(phone, msg.body, school_id=getattr(msg, 'school_id', None))
@@ -1026,8 +1001,10 @@ def process_message_delivery(message_id: int):
                     except Exception:
                         pass
             # Email
-            email = getattr(u, 'email', '')
-            if email:
+            email = (getattr(u, 'email', '') or '').strip()
+            if (not email) and stu is not None:
+                email = (getattr(stu, 'email', '') or '').strip()
+            if email and send_email_enabled:
                 ok_email = False
                 try:
                     ok_email = send_email_safe(subject, msg.body, email, school_id=getattr(msg, 'school_id', None))
@@ -1070,6 +1047,7 @@ def deliver_message_collect(message_id: int) -> dict:
     Does not raise; logs errors and marks ok=False when applicable.
     """
     from .models import Message, MessageRecipient
+    from academics.models import Student
     results = {
         'message_id': message_id,
         'in_app': {'created': False},
@@ -1078,6 +1056,8 @@ def deliver_message_collect(message_id: int) -> dict:
     }
     try:
         msg = Message.objects.select_related('sender', 'school').get(pk=message_id)
+        send_sms_enabled = bool(getattr(msg, 'send_sms', True))
+        send_email_enabled = bool(getattr(msg, 'send_email', True))
         # If recipients exist, we consider in-app as created (Message + MessageRecipient rows)
         has_recipients = MessageRecipient.objects.filter(message_id=msg.id).exists()
         results['in_app']['created'] = has_recipients
@@ -1093,9 +1073,17 @@ def deliver_message_collect(message_id: int) -> dict:
             u = r.user
             if not u:
                 continue
+            stu = None
+            try:
+                if getattr(u, 'role', None) == 'student':
+                    stu = Student.objects.filter(user_id=getattr(u, 'id', None), is_active=True).only('id', 'guardian_id', 'email').first()
+            except Exception:
+                stu = None
             # SMS
-            phone = getattr(u, 'phone', '')
-            if phone:
+            phone = (getattr(u, 'phone', '') or '').strip()
+            if (not phone) and stu is not None:
+                phone = (getattr(stu, 'guardian_id', '') or '').strip()
+            if phone and send_sms_enabled:
                 ok_sms = False
                 try:
                     ok_sms = send_sms(phone, msg.body, school_id=getattr(msg, 'school_id', None))
@@ -1116,8 +1104,10 @@ def deliver_message_collect(message_id: int) -> dict:
                     pass
 
             # Email
-            email = getattr(u, 'email', '')
-            if email:
+            email = (getattr(u, 'email', '') or '').strip()
+            if (not email) and stu is not None:
+                email = (getattr(stu, 'email', '') or '').strip()
+            if email and send_email_enabled:
                 ok_email = False
                 try:
                     ok_email = send_email_safe(subject, msg.body, email, school_id=getattr(msg, 'school_id', None))

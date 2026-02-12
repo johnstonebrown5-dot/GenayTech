@@ -547,6 +547,132 @@ class ClassViewSet(viewsets.ModelViewSet):
             'email_ok': email_ok,
         })
 
+    @action(detail=True, methods=['post'], permission_classes=[IsTeacherOrAdmin], url_path='message-student')
+    def message_student(self, request, pk=None):
+        klass = self.get_object()
+        user = getattr(request, 'user', None)
+        is_admin = bool(user and (getattr(user, 'role', None) == 'admin' or user.is_staff or user.is_superuser))
+        if not is_admin:
+            if not (getattr(user, 'role', None) == 'teacher' and getattr(klass, 'teacher_id', None) == getattr(user, 'id', None)):
+                return Response({'detail': 'Only the class teacher can message students in this class'}, status=status.HTTP_403_FORBIDDEN)
+
+        body = str(request.data.get('message') or request.data.get('body') or '').strip()
+        if not body:
+            return Response({'detail': 'message is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        student_id = request.data.get('student_id') or request.data.get('student')
+        try:
+            student_id = int(student_id)
+        except Exception:
+            return Response({'detail': 'student_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        send_sms_enabled = request.data.get('send_sms', True)
+        send_email_enabled = request.data.get('send_email', True)
+        try:
+            send_sms_enabled = bool(send_sms_enabled)
+        except Exception:
+            send_sms_enabled = True
+        try:
+            send_email_enabled = bool(send_email_enabled)
+        except Exception:
+            send_email_enabled = True
+
+        try:
+            stu = Student.objects.select_related('user', 'klass').get(id=student_id, klass=klass, is_active=True)
+        except Student.DoesNotExist:
+            return Response({'detail': 'Student not found in this class'}, status=status.HTTP_404_NOT_FOUND)
+
+        school_id = getattr(getattr(klass, 'school', None), 'id', None)
+        in_app_message_id = None
+
+        # If student has a linked user, create an in-app message and let the unified delivery pipeline handle SMS/email
+        if school_id and getattr(stu, 'user_id', None):
+            try:
+                msg = Message.objects.create(
+                    school_id=school_id,
+                    sender_id=getattr(user, 'id', None),
+                    body=body,
+                    audience=Message.Audience.USERS,
+                    system_tag=f"class_single:class:{klass.id};student:{stu.id}",
+                    send_sms=bool(send_sms_enabled),
+                    send_email=bool(send_email_enabled),
+                )
+                MessageRecipient.objects.create(message=msg, user_id=stu.user_id)
+                in_app_message_id = msg.id
+                try:
+                    queue_message_delivery(msg.id)
+                except Exception:
+                    pass
+            except Exception:
+                in_app_message_id = None
+
+            return Response({
+                'detail': 'message_queued',
+                'class_id': klass.id,
+                'student_id': stu.id,
+                'in_app_message_id': in_app_message_id,
+                'send_sms': bool(send_sms_enabled),
+                'send_email': bool(send_email_enabled),
+            }, status=status.HTTP_202_ACCEPTED)
+
+        # No linked user: send directly to guardian/email
+        sms_ok = None
+        email_ok = None
+
+        phone = str(getattr(stu, 'guardian_id', None) or '').strip()
+        if phone and send_sms_enabled:
+            ok_sms = False
+            try:
+                ok_sms = send_sms(phone, body, school_id=school_id)
+            except Exception:
+                ok_sms = False
+            sms_ok = bool(ok_sms)
+            try:
+                log_delivery(
+                    school_id=school_id,
+                    channel='sms',
+                    recipient=str(phone),
+                    ok=bool(ok_sms),
+                    message=body,
+                    context=f"classsingle:class:{klass.id};student:{stu.id}",
+                )
+            except Exception:
+                pass
+
+        recipient_email = str(getattr(stu, 'email', None) or '').strip()
+        if recipient_email and send_email_enabled:
+            ok_email = False
+            try:
+                sender_name = getattr(user, 'username', None) or 'Teacher'
+                class_name = getattr(klass, 'name', '') or getattr(klass, 'grade_level', '') or 'Class'
+                subj = f"Message from {sender_name} - {class_name}"
+                ok_email = send_email_safe(subj, body, recipient_email, school_id=school_id)
+            except Exception:
+                ok_email = False
+            email_ok = bool(ok_email)
+            try:
+                log_delivery(
+                    school_id=school_id,
+                    channel='email',
+                    recipient=str(recipient_email),
+                    ok=bool(ok_email),
+                    message=body,
+                    context=f"classsingle:class:{klass.id};student:{stu.id}",
+                )
+            except Exception:
+                pass
+
+        return Response({
+            'detail': 'message_sent',
+            'class_id': klass.id,
+            'student_id': stu.id,
+            'has_user': False,
+            'sms_ok': sms_ok,
+            'email_ok': email_ok,
+            'send_sms': bool(send_sms_enabled),
+            'send_email': bool(send_email_enabled),
+        })
+
     @action(detail=True, methods=['get'], permission_classes=[IsTeacherOrAdmin], url_path='message-logs')
     def message_logs(self, request, pk=None):
         klass = self.get_object()

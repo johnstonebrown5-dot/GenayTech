@@ -640,6 +640,8 @@ export default function AdminClassProfile(){
   const [sendingClassMessage, setSendingClassMessage] = useState(false)
   const [classMessageStatus, setClassMessageStatus] = useState('')
   const [singleStudentId, setSingleStudentId] = useState('')
+  const [deliverSms, setDeliverSms] = useState(true)
+  const [deliverEmail, setDeliverEmail] = useState(true)
   const [categoryBoarding, setCategoryBoarding] = useState('all') // all | boarding | day
   const [categoryGender, setCategoryGender] = useState('all') // all | boys | girls
   const [categoryOutstandingOnly, setCategoryOutstandingOnly] = useState(false)
@@ -663,6 +665,17 @@ export default function AdminClassProfile(){
       body,
       audience: 'users',
       recipient_ids: ids,
+      send_sms: !!deliverSms,
+      send_email: !!deliverEmail,
+    })
+  }
+
+  const sendMessageToSingleStudent = async (body, studentId) => {
+    await api.post(`/academics/classes/${id}/message-student/`, {
+      message: body,
+      student_id: Number(studentId),
+      send_sms: !!deliverSms,
+      send_email: !!deliverEmail,
     })
   }
 
@@ -693,13 +706,7 @@ export default function AdminClassProfile(){
           setClassMessageStatus('Select a student first.')
           return
         }
-        const stu = await loadClassStudentsForMessaging()
-        const target = stu.find(s => String(s.id) === String(sid))
-        if (!target || !target.user) {
-          setClassMessageStatus('Selected student does not have an account.')
-          return
-        }
-        await sendMessageToRecipients(body, [target.user])
+        await sendMessageToSingleStudent(body, sid)
         setClassMessageBody('')
         setClassMessageStatus('Message sent to selected student.')
       } else if (messageMode === 'category') {
@@ -1093,7 +1100,7 @@ export default function AdminClassProfile(){
                                 ))}
                               </select>
                             </div>
-                            <div className="text-xs text-gray-500 mb-1">Only students with linked accounts will receive in-app messages.</div>
+                            <div className="text-xs text-gray-500 mb-2">Choose delivery methods below. SMS is sent to guardian phone (guardian ID). Email is sent to student email if available. In-app requires a linked account.</div>
                           </>
                         )}
                         {messageMode === 'category' && (
@@ -1136,6 +1143,17 @@ export default function AdminClassProfile(){
                             </div>
                           </>
                         )}
+
+                        <div className="mt-2 flex flex-wrap items-center gap-4 text-xs">
+                          <label className="inline-flex items-center gap-2 text-gray-700">
+                            <input type="checkbox" className="h-3 w-3" checked={!!deliverSms} onChange={(e)=>setDeliverSms(e.target.checked)} />
+                            SMS
+                          </label>
+                          <label className="inline-flex items-center gap-2 text-gray-700">
+                            <input type="checkbox" className="h-3 w-3" checked={!!deliverEmail} onChange={(e)=>setDeliverEmail(e.target.checked)} />
+                            Email
+                          </label>
+                        </div>
 
                         <textarea
                           className="mt-2 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm min-h-[96px] focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-300"

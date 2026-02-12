@@ -74,13 +74,15 @@ class MessageSerializer(serializers.ModelSerializer):
     recipients = MessageRecipientSerializer(many=True, read_only=True)
     # For creation convenience
     recipient_ids = serializers.ListField(child=serializers.IntegerField(), required=False, allow_empty=True)
+    send_sms = serializers.BooleanField(required=False)
+    send_email = serializers.BooleanField(required=False)
 
     class Meta:
         model = Message
         fields = [
             'id', 'school', 'sender', 'sender_username', 'body', 'created_at',
             'audience', 'recipient_role', 'reply_to', 'recipients', 'recipient_ids',
-            'system_tag', 'is_broadcast'
+            'system_tag', 'is_broadcast', 'send_sms', 'send_email'
         ]
         read_only_fields = ['school', 'sender', 'sender_username', 'created_at', 'recipients', 'system_tag', 'is_broadcast']
 
@@ -155,6 +157,17 @@ class MessageSerializer(serializers.ModelSerializer):
         recipient_role = validated_data.get('recipient_role')
         reply_to = validated_data.get('reply_to')
 
+        send_sms = self.initial_data.get('send_sms', True)
+        send_email = self.initial_data.get('send_email', True)
+        try:
+            send_sms = bool(send_sms)
+        except Exception:
+            send_sms = True
+        try:
+            send_email = bool(send_email)
+        except Exception:
+            send_email = True
+
         # Pop non-model fields
         recipient_ids = self.initial_data.get('recipient_ids', [])
 
@@ -165,6 +178,8 @@ class MessageSerializer(serializers.ModelSerializer):
             audience=audience,
             recipient_role=recipient_role,
             reply_to=reply_to if reply_to else None,
+            send_sms=send_sms,
+            send_email=send_email,
         )
 
         if audience == Message.Audience.ALL:

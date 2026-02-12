@@ -3151,12 +3151,24 @@ def superadmin_school_integrations(request, id: int):
             'at_username': obj.at_username,
             'at_sender_id': obj.at_sender_id,
             'at_api_key_set': bool(obj.at_api_key),
+            'textwave_base_url': getattr(obj, 'textwave_base_url', ''),
+            'textwave_sender_id': getattr(obj, 'textwave_sender_id', ''),
+            'textwave_api_key_set': bool(getattr(obj, 'textwave_api_key', '')),
             'updated_at': obj.updated_at,
         })
 
     data = request.data or {}
     update_fields = []
-    for field in ('smtp_host', 'smtp_username', 'smtp_from_email', 'sms_provider', 'at_username', 'at_sender_id'):
+    for field in (
+        'smtp_host',
+        'smtp_username',
+        'smtp_from_email',
+        'sms_provider',
+        'at_username',
+        'at_sender_id',
+        'textwave_base_url',
+        'textwave_sender_id',
+    ):
         if field in data and data.get(field) is not None:
             setattr(obj, field, str(data.get(field) or ''))
             update_fields.append(field)
@@ -3186,6 +3198,14 @@ def superadmin_school_integrations(request, id: int):
         else:
             obj.at_api_key = str(raw)
             update_fields.append('at_api_key')
+
+    if 'textwave_api_key' in data:
+        raw = data.get('textwave_api_key')
+        if raw is None:
+            pass
+        else:
+            obj.textwave_api_key = str(raw)
+            update_fields.append('textwave_api_key')
 
     if update_fields:
         obj.save(update_fields=list(set(update_fields)))

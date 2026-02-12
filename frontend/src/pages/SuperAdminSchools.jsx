@@ -34,10 +34,10 @@ export default function SuperAdminSchools(){
     smtp_use_ssl: false,
     smtp_from_email: '',
     smtp_password_set: false,
-    at_username: '',
-    at_api_key: '',
-    at_sender_id: '',
-    at_api_key_set: false,
+    textwave_base_url: '',
+    textwave_api_key: '',
+    textwave_sender_id: '',
+    textwave_api_key_set: false,
   })
   const [paymentMethods, setPaymentMethods] = useState({ cash: true, mpesa: true, bank: true, cheque: true })
   const [mpesaForm, setMpesaForm] = useState({
@@ -171,10 +171,10 @@ export default function SuperAdminSchools(){
         smtp_use_ssl: !!integ.smtp_use_ssl,
         smtp_from_email: integ.smtp_from_email || '',
         smtp_password_set: !!integ.smtp_password_set,
-        at_username: integ.at_username || '',
-        at_api_key: '',
-        at_sender_id: integ.at_sender_id || '',
-        at_api_key_set: !!integ.at_api_key_set,
+        textwave_base_url: integ.textwave_base_url || '',
+        textwave_api_key: '',
+        textwave_sender_id: integ.textwave_sender_id || '',
+        textwave_api_key_set: !!integ.textwave_api_key_set,
       }))
       const methods = Array.isArray(payRes?.data?.results) ? payRes.data.results : []
       const pm = { cash: true, mpesa: true, bank: true, cheque: true }
@@ -214,11 +214,11 @@ export default function SuperAdminSchools(){
         smtp_use_tls: !!integrationsForm.smtp_use_tls,
         smtp_use_ssl: !!integrationsForm.smtp_use_ssl,
         smtp_from_email: integrationsForm.smtp_from_email,
-        at_username: integrationsForm.at_username,
-        at_sender_id: integrationsForm.at_sender_id,
+        textwave_base_url: integrationsForm.textwave_base_url,
+        textwave_sender_id: integrationsForm.textwave_sender_id,
       }
       if (integrationsForm.smtp_password && integrationsForm.smtp_password.trim()) payload.smtp_password = integrationsForm.smtp_password
-      if (integrationsForm.at_api_key && integrationsForm.at_api_key.trim()) payload.at_api_key = integrationsForm.at_api_key
+      if (integrationsForm.textwave_api_key && integrationsForm.textwave_api_key.trim()) payload.textwave_api_key = integrationsForm.textwave_api_key
 
       await api.patch(`/auth/superadmin/schools/${integrationsSchool.id}/integrations/`, payload)
       await api.patch(`/auth/superadmin/schools/${integrationsSchool.id}/payment-methods/`, { methods: paymentMethods })
@@ -605,19 +605,19 @@ The data is not deleted completely until you purge it from the Recycle Bin.`)
             </div>
 
             <div className="rounded-xl border p-4 bg-white">
-              <div className="font-semibold text-gray-900">SMS (Africa's Talking)</div>
+              <div className="font-semibold text-gray-900">SMS (TextWave)</div>
               <div className="mt-3 space-y-3">
                 <div>
-                  <label className="text-sm text-gray-700">AT Username</label>
-                  <input value={integrationsForm.at_username} onChange={(e)=>setIntegrationsForm(f=>({ ...f, at_username: e.target.value }))} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2" />
+                  <label className="text-sm text-gray-700">TextWave Base URL</label>
+                  <input value={integrationsForm.textwave_base_url} onChange={(e)=>setIntegrationsForm(f=>({ ...f, textwave_base_url: e.target.value }))} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2" placeholder="https://api.textwave.pro/v1" />
                 </div>
                 <div>
-                  <label className="text-sm text-gray-700">AT API Key {integrationsForm.at_api_key_set ? '(saved)' : ''}</label>
-                  <input type="password" value={integrationsForm.at_api_key} onChange={(e)=>setIntegrationsForm(f=>({ ...f, at_api_key: e.target.value }))} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2" placeholder="Leave blank to keep" />
+                  <label className="text-sm text-gray-700">TextWave API Key {integrationsForm.textwave_api_key_set ? '(saved)' : ''}</label>
+                  <input type="password" value={integrationsForm.textwave_api_key} onChange={(e)=>setIntegrationsForm(f=>({ ...f, textwave_api_key: e.target.value }))} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2" placeholder="Leave blank to keep" />
                 </div>
                 <div>
                   <label className="text-sm text-gray-700">Sender ID</label>
-                  <input value={integrationsForm.at_sender_id} onChange={(e)=>setIntegrationsForm(f=>({ ...f, at_sender_id: e.target.value }))} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2" placeholder="Optional" />
+                  <input value={integrationsForm.textwave_sender_id} onChange={(e)=>setIntegrationsForm(f=>({ ...f, textwave_sender_id: e.target.value }))} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2" placeholder="EDUTRACK" />
                 </div>
               </div>
             </div>

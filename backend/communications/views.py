@@ -509,6 +509,28 @@ class ATSMSCallbackView(APIView):
 
 
 @method_decorator(csrf_exempt, name='dispatch')
+class TextWaveSMSCallbackView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        # Simple health-check endpoint if provider probes with GET
+        return Response({'detail': 'ok'}, status=status.HTTP_200_OK)
+
+    def post(self, request):
+        try:
+            payload = dict(request.data)
+            # Flatten single-value lists that may come from QueryDict
+            for k, v in list(payload.items()):
+                if isinstance(v, list) and len(v) == 1:
+                    payload[k] = v[0]
+            logger.info("TextWave SMS callback: %s", payload)
+        except Exception:
+            logger.exception("Failed to process TextWave SMS callback")
+        # Always return 204 quickly to prevent retries
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+@method_decorator(csrf_exempt, name='dispatch')
 class ContactInquiryView(APIView):
     """Public endpoint to send inquiries to the EduTrack team email.
     Accepts JSON or form data with fields: name, sender, message, channel, origin.

@@ -163,6 +163,9 @@ class Message(models.Model):
     sender = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='sent_messages')
     body = models.TextField()
     created_at = models.DateTimeField(auto_now_add=True)
+    # Delivery channels (in-app is always on; email/SMS are optional)
+    send_sms = models.BooleanField(default=True)
+    send_email = models.BooleanField(default=True)
     # Targeting
     audience = models.CharField(max_length=10, choices=Audience.choices, default=Audience.USERS)
     recipient_role = models.CharField(max_length=20, choices=Roles.choices, null=True, blank=True)

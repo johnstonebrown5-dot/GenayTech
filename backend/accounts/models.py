@@ -50,6 +50,7 @@ class SchoolDomain(models.Model):
 
 class SchoolIntegrationSettings(models.Model):
     SMS_PROVIDER_CHOICES = (
+        ('textwave', 'TextWave'),
         ('africastalking', "Africa's Talking"),
     )
 
@@ -63,10 +64,14 @@ class SchoolIntegrationSettings(models.Model):
     smtp_use_ssl = models.BooleanField(default=False)
     smtp_from_email = models.CharField(max_length=255, blank=True, default='')
 
-    sms_provider = models.CharField(max_length=50, choices=SMS_PROVIDER_CHOICES, blank=True, default='africastalking')
+    sms_provider = models.CharField(max_length=50, choices=SMS_PROVIDER_CHOICES, blank=True, default='textwave')
     at_username = models.CharField(max_length=100, blank=True, default='')
     at_api_key = models.CharField(max_length=255, blank=True, default='')
     at_sender_id = models.CharField(max_length=50, blank=True, default='')
+
+    textwave_base_url = models.CharField(max_length=255, blank=True, default='')
+    textwave_api_key = models.CharField(max_length=255, blank=True, default='')
+    textwave_sender_id = models.CharField(max_length=50, blank=True, default='')
 
     updated_at = models.DateTimeField(auto_now=True)
 

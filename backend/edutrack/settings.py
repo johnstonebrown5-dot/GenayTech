@@ -316,6 +316,26 @@ AT_CA_BUNDLE = os.getenv('AT_CA_BUNDLE', '')
 # Optional: whether to trust environment proxy settings (HTTP(S)_PROXY). Default False to avoid TLS downgrades.
 AT_TRUST_ENV = os.getenv('AT_TRUST_ENV', 'False') == 'True'
 
+# TextWave (SMS) configuration
+TEXTWAVE_BASE_URL = os.getenv('TEXTWAVE_BASE_URL', 'https://api.textwave.co.ke/v1')
+TEXTWAVE_API_KEY = os.getenv('TEXTWAVE_API_KEY', '')
+TEXTWAVE_SENDER_ID = os.getenv('TEXTWAVE_SENDER_ID', '')
+
+# Optional: override the send endpoint path if it differs (will be joined to TEXTWAVE_BASE_URL)
+TEXTWAVE_SEND_PATH = os.getenv('TEXTWAVE_SEND_PATH', '/sms/send')
+
+# Optional: if set, will be used as-is (JSON object) to build request headers.
+# Example: {"Authorization": "Bearer ${TEXTWAVE_API_KEY}", "Content-Type": "application/json"}
+TEXTWAVE_HEADERS_JSON = os.getenv('TEXTWAVE_HEADERS_JSON', '{"Authorization":"Bearer ${TEXTWAVE_API_KEY}","Content-Type":"application/json"}')
+
+# Optional: payload key overrides
+TEXTWAVE_TO_KEY = os.getenv('TEXTWAVE_TO_KEY', 'to')
+TEXTWAVE_MESSAGE_KEY = os.getenv('TEXTWAVE_MESSAGE_KEY', 'message')
+TEXTWAVE_FROM_KEY = os.getenv('TEXTWAVE_FROM_KEY', 'senderId')
+
+# Default provider when school integration settings are not configured
+SMS_PROVIDER_DEFAULT = os.getenv('SMS_PROVIDER_DEFAULT', 'textwave')
+
 # Control whether creating chat messages queues email/SMS delivery
 MESSAGES_QUEUE_DELIVERY = os.getenv('MESSAGES_QUEUE_DELIVERY', 'True') == 'True'
 
