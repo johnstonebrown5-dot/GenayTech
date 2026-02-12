@@ -663,17 +663,69 @@ export default function StudentReportCardViewer({ embedded=false, hideControls=f
 
 
   const selectedExamMarks = useMemo(()=>{
+    // Per-subject percentage values (0..100)
     if (summaryStudent && Array.isArray(summarySubjects)){
       const out = {}
       for (const s of summarySubjects){
-        const v = summaryStudent?.subject_percentages?.[String(s.id)]
-        if (v != null) out[String(s.id)] = Math.round(Number(v))
+        const v = Number(summaryStudent?.subject_percentages?.[String(s.id)])
+        if (Number.isFinite(v)) out[String(s.id)] = v
       }
       return out
     }
+
     if (!selectedExam) return {}
-    return marksByExamAndSubject[String(selectedExam.id)] || {}
-  }, [marksByExamAndSubject, selectedExam, summaryStudent, summarySubjects])
+    const exIdWant = String(selectedExam.id)
+    const acc = {}
+
+    for (const r of examResults){
+      const ed = r.exam_detail || {}
+      const exId = String(toId(ed.id) || toId(r.exam) || toId(r.exam_id) || '')
+      if (!exId || exId !== exIdWant) continue
+      const sid = String(toId(r.subject_detail?.id) || toId(r.subject) || toId(r.subject_id) || '')
+      if (!sid) continue
+
+      let denom = null
+      try {
+        if (r.out_of != null && String(r.out_of) !== '') denom = Number(r.out_of)
+      } catch (_) {
+        denom = null
+      }
+      if (!denom) {
+        try {
+          const cm = r.component_detail?.max_marks
+          if (cm != null && String(cm) !== '') denom = Number(cm)
+        } catch (_) {
+          denom = null
+        }
+      }
+      if (!denom) {
+        try {
+          const tm = ed?.total_marks
+          if (tm != null && String(tm) !== '') denom = Number(tm)
+        } catch (_) {
+          denom = null
+        }
+      }
+      if (!Number.isFinite(denom) || denom <= 0) denom = 100
+
+      const mval = Number(r.marks)
+      if (!Number.isFinite(mval)) continue
+
+      // Backward compat: treat marks as percentage if it exceeds denominator but <= 100
+      const normMarks = (mval <= 100 && mval > denom) ? ((mval / 100) * denom) : mval
+
+      acc[sid] = acc[sid] || { num: 0, den: 0 }
+      acc[sid].num += normMarks
+      acc[sid].den += denom
+    }
+
+    const out = {}
+    for (const [sid, v] of Object.entries(acc)){
+      if (!v || !v.den) continue
+      out[String(sid)] = Math.max(0, Math.min(100, (Number(v.num) / Number(v.den)) * 100))
+    }
+    return out
+  }, [summaryStudent, summarySubjects, selectedExam, examResults])
 
   const selectedTotals = useMemo(()=>{
     // Prefer totals from summary percentages when available
@@ -960,7 +1012,7 @@ export default function StudentReportCardViewer({ embedded=false, hideControls=f
                           return (
                             <tr key={String(subj.id)}>
                               <td className="px-3 py-2 border-t border-gray-200">{subj.label}</td>
-                              <td className="px-3 py-2 text-center border-t border-gray-200">{Number.isFinite(v) ? v : loading ? '...' : '-'}</td>
+                              <td className="px-3 py-2 text-center border-t border-gray-200">{Number.isFinite(v) ? `${Math.round(v)}%` : loading ? '...' : '-'}</td>
                               <td className="px-3 py-2 text-center border-t border-gray-200">
                                 <span className={`inline-flex items-center justify-center px-2 py-0.5 rounded text-xs font-semibold ${gradeBadgeClass(g)}`}>{loading ? '...' : g}</span>
                               </td>
