@@ -24,7 +24,7 @@ export default function OneTimeLicenseDetails() {
               <div className="mt-2 text-slate-700">KSh 500,000</div>
             </div>
             <a
-              href="mailto:EduTrack46@gmail.com?subject=EduTrack%20One-time%20License%20Inquiry"
+              href="mailto:EduTrack46@gmail.com?subject=Genay%20Technologies%20One-time%20License%20Inquiry"
               className="inline-flex h-10 items-center justify-center rounded-lg bg-indigo-600 px-4 text-sm font-medium text-white hover:bg-indigo-700"
             >
               Talk to Sales
@@ -35,7 +35,7 @@ export default function OneTimeLicenseDetails() {
             <section>
               <h2 className="text-lg font-semibold text-slate-900">Rights & permissions</h2>
               <ul className="mt-3 list-disc pl-5 text-sm text-slate-700 space-y-2">
-                <li>All rights & permissions for your institution to use EduTrack.</li>
+                <li>All rights & permissions for your institution to use Genay Technologies.</li>
                 <li>Unlimited students (no student cap).</li>
                 <li>All modules included (academics, finance, communication, timetables, reports).</li>
               </ul>

@@ -647,7 +647,7 @@ def users_delete_otp_request(request):
         expires_in,
     )
 
-    subject = "EduTrack delete user verification code"
+    subject = "Genay Technologies delete user verification code"
     text_message = (
         "Use this 6-digit verification code to confirm deleting user account(s):\n\n"
         f"{code}\n\n"
@@ -657,7 +657,7 @@ def users_delete_otp_request(request):
         html_message = render_to_string(
             'verification_code_email.html',
             {
-                'brand': 'EduTrack',
+                'brand': 'Genay Technologies',
                 'title': 'Confirm delete user',
                 'intro': f"Enter the verification code below to confirm deleting {len(ids)} user account(s).",
                 'code': code,
@@ -811,16 +811,16 @@ def password_reset_request(request):
     PasswordResetCode.objects.create(user=user, email=raw_email, code=code, expires_at=expires_at)
 
     # Send email best-effort
-    subject = "EduTrack password reset code"
+    subject = "Genay Technologies password reset code"
     message = (
-        f"Use this 6-digit verification code to reset your EduTrack password:\n\n"
+        f"Use this 6-digit verification code to reset your Genay Technologies password:\n\n"
         f"{code}\n\n"
         "This code expires in 15 minutes. If you did not request this, you can safely ignore this email."
     )
     html_message = render_to_string(
         'verification_code_email.html',
         {
-            'brand': 'EduTrack',
+            'brand': 'Genay Technologies',
             'title': 'Verify your email address',
             'intro': 'To reset your password, please enter the verification code below in the app.',
             'code': code,
@@ -1933,10 +1933,10 @@ def superadmin_demo_request_approve(request, id: int):
 
         try:
             send_email_safe(
-                subject='EduTrack demo approved — verify your email',
+                subject='Genay Technologies demo approved — verify your email',
                 message=(
                     f"Hi {r.admin_first_name or 'there'},\n\n"
-                    f"Your EduTrack demo request for '{r.school_name}' has been approved.\n\n"
+                    f"Your Genay Technologies demo request for '{r.school_name}' has been approved.\n\n"
                     "Please verify your email using this link:\n"
                     f"{verify_url}\n\n"
                     "After verifying your email, you can log in using your email and password."

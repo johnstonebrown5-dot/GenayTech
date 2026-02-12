@@ -287,7 +287,7 @@ export default function App() {
             {blockLandscape && (
               <div className="fixed inset-0 z-[60] flex flex-col items-center justify-center bg-slate-900/95 text-white px-8 text-center">
                 <h2 className="text-lg font-semibold tracking-wide mb-2">Rotate device to portrait</h2>
-                <p className="text-sm text-slate-200 max-w-xs mb-6">EduTrack is best used in portrait mode on phones. Turn your device upright to continue, or allow landscape once below.</p>
+                <p className="text-sm text-slate-200 max-w-xs mb-6">Genay Technologies is best used in portrait mode on phones. Turn your device upright to continue, or allow landscape once below.</p>
                 <button
                   type="button"
                   onClick={() => {

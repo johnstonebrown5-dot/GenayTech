@@ -534,7 +534,7 @@ class TextWaveSMSCallbackView(APIView):
 
 @method_decorator(csrf_exempt, name='dispatch')
 class ContactInquiryView(APIView):
-    """Public endpoint to send inquiries to the EduTrack team email.
+    """Public endpoint to send inquiries to the Genay Technologies team email.
     Accepts JSON or form data with fields: name, sender, message, channel, origin.
     """
     permission_classes = [permissions.AllowAny]
@@ -548,7 +548,7 @@ class ContactInquiryView(APIView):
             channel = str(request.data.get('channel', '')).strip() or 'email'
             origin = str(request.data.get('origin', '')).strip() or request.META.get('HTTP_REFERER', '')
 
-            subject = f"EduTrack Inquiry via Landing Page"
+            subject = f"Genay Technologies Inquiry via Landing Page"
             lines = [
                 f"Name: {name}",
                 f"From: {sender}",

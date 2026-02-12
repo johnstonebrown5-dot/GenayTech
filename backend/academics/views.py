@@ -3536,7 +3536,7 @@ class ExamViewSet(viewsets.ModelViewSet):
             ts = timezone.localtime(timezone.now()).strftime('%Y-%m-%d %H:%M')
             footer_text_left = f"Generated: {ts}"
             footer_text_right = f"Page {page_num}"
-            powered = "Powered by EDU-TRACK"
+            powered = "Powered by Genay Technologies"
             canv.setFont('Helvetica', 8)
             # Left
             canv.drawString(36, 20, footer_text_left)
@@ -5244,7 +5244,7 @@ class StudentViewSet(viewsets.ModelViewSet):
         if loopback:
             return Response({'detail': 'Verification code sent', 'code': code, 'loopback': True})
 
-        subject = 'Edu-Track Bulk Action Verification Code'
+        subject = 'Genay Technologies Bulk Action Verification Code'
         message = (
             'Use this 6-digit verification code to confirm the bulk students action:\n\n'
             f'{code}\n\n'
@@ -5254,7 +5254,7 @@ class StudentViewSet(viewsets.ModelViewSet):
             html_message = render_to_string(
                 'verification_code_email.html',
                 {
-                    'brand': 'EduTrack',
+                    'brand': 'Genay Technologies',
                     'title': 'Verify your email address',
                     'intro': 'To confirm the bulk students action, please enter the verification code below in the app.',
                     'code': code,

@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-Comprehensive data seeding script for EDU-TRACK
+Comprehensive data seeding script for Genay Technologies
 Seeds: Schools, Classes, Teachers, Students, Payments, and Results
 """
 
@@ -19,7 +19,7 @@ from django.core.management import call_command
 
 def main():
     print("=" * 60)
-    print("EDU-TRACK Comprehensive Data Seeding")
+    print("Genay Technologies Comprehensive Data Seeding")
     print("=" * 60)
     
     # Step 1: Seed basic data (schools, classes, teachers, students)

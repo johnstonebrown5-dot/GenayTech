@@ -1,6 +1,6 @@
 {
-  "name": "EduTrack — Modern School Management",
-  "short_name": "EduTrack",
+  "name": "Genay Technologies — Modern School Management",
+  "short_name": "Genay Technologies",
   "description": "All-in-one school management for academics, finance, messaging, timetables, exams, and analytics.",
   "start_url": "/",
   "scope": "/",
@@ -28,7 +28,7 @@
       "name": "Open Dashboard",
       "short_name": "Dashboard",
       "url": "/",
-      "description": "Open your EduTrack dashboard"
+      "description": "Open your Genay Technologies dashboard"
     },
     {
       "name": "Finance",

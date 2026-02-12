@@ -55,7 +55,7 @@ class MpesaClient:
         raw = f"{self.short_code}{self.passkey}{timestamp}".encode('utf-8')
         return base64.b64encode(raw).decode('utf-8')
 
-    def stk_push(self, phone: str, amount: float, account_ref: str = 'EDU-TRACK', tx_desc: str = 'Fee Payment'):
+    def stk_push(self, phone: str, amount: float, account_ref: str = 'GENAYTECH', tx_desc: str = 'Fee Payment'):
         # Basic pre-validation to avoid opaque Daraja 400 errors
         if not self.short_code or not str(self.short_code).strip().isdigit() or len(str(self.short_code).strip()) < 5:
             raise ValueError('Invalid MPESA_SHORT_CODE. For sandbox STK, commonly use 174379. Ensure it is numeric and at least 5 digits.')
@@ -82,7 +82,7 @@ class MpesaClient:
             "PartyB": int(self.short_code),
             "PhoneNumber": phone,
             "CallBackURL": self.callback,
-            "AccountReference": account_ref[:12] or 'EDU-TRACK',
+            "AccountReference": account_ref[:12] or 'GENAYTECH',
             "TransactionDesc": tx_desc[:12] or 'Fees',
         }
         url = f"{self.base}/mpesa/stkpush/v1/processrequest"

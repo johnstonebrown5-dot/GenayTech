@@ -64,7 +64,7 @@ export default function TrialOnboarding() {
     <div className="min-h-screen bg-white">
       <header className="border-b border-gray-100">
         <div className="mx-auto max-w-5xl px-6 py-5 flex items-center justify-between">
-          <div className="text-xl font-semibold">EduTrack Trial</div>
+          <div className="text-xl font-semibold">Genay Technologies Trial</div>
           <nav className="text-sm text-gray-600">
             <a href="/" className="hover:text-gray-900">Back to site</a>
           </nav>
@@ -138,7 +138,7 @@ export default function TrialOnboarding() {
             </form>
             <div className="mt-4 text-sm text-gray-600">Already have an account? <Link className="text-indigo-700 hover:underline" to="/login">Sign in</Link></div>
             <div className="mt-2">
-              <a href="mailto:EduTrack46@gmail.com?subject=EduTrack%20Trial%20Assistance" className="text-sm text-gray-700 hover:underline">Need help?</a>
+              <a href="mailto:EduTrack46@gmail.com?subject=Genay%20Technologies%20Trial%20Assistance" className="text-sm text-gray-700 hover:underline">Need help?</a>
             </div>
           </div>
         </div>

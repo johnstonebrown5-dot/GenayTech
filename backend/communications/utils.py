@@ -33,7 +33,7 @@ def _get_school_integration_settings(school_id: int | None):
 
 def _resolve_school_email_context(school_id: int | None) -> dict:
     ctx: dict = {
-        'school_name': 'EduTrack',
+        'school_name': 'Genay Technologies',
         'school_address': '',
         'school_phone': '',
         'school_email': '',

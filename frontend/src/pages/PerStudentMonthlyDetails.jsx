@@ -24,7 +24,7 @@ export default function PerStudentMonthlyDetails() {
               <div className="mt-2 text-slate-700">KSh 30 / student / month</div>
             </div>
             <a
-              href="mailto:EduTrack46@gmail.com?subject=EduTrack%20Per%20Student%20Monthly%20Plan%20Inquiry"
+              href="mailto:EduTrack46@gmail.com?subject=Genay%20Technologies%20Per%20Student%20Monthly%20Plan%20Inquiry"
               className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-300 bg-white px-4 text-sm font-medium text-slate-800 hover:bg-slate-50"
             >
               Talk to Sales

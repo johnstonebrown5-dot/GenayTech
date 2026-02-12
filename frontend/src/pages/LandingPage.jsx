@@ -256,7 +256,7 @@ export default function LandingPage() {
     { 
       title: 'Cloud Infrastructure', 
       desc: 'Built with React and Django for enterprise-grade reliability.', 
-      details: 'Experience zero downtime with our cloud-hosted solution. Built on modern, scalable technology, EduTrack is fast, reliable, and accessible from anywhere in the world on any device.',
+      details: 'Experience zero downtime with our cloud-hosted solution. Built on modern, scalable technology, Genay Technologies is fast, reliable, and accessible from anywhere in the world on any device.',
       icon: Database, color: 'text-slate-600', bg: 'bg-slate-50' 
     }
   ]
@@ -299,7 +299,7 @@ export default function LandingPage() {
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-600 shadow-lg shadow-indigo-200">
                 <AppLogo size={24} className="text-white" />
               </div>
-              <span className="text-xl font-bold tracking-tight text-white md:text-slate-900">EduTrack</span>
+              <span className="text-xl font-bold tracking-tight text-white md:text-slate-900">Genay Technologies</span>
             </a>
             
             <div className="hidden md:block">
@@ -451,7 +451,7 @@ export default function LandingPage() {
               
               <motion.h1 variants={heroFlyInUp} className="text-4xl lg:text-6xl font-extrabold tracking-tight text-slate-900 leading-[1.1]">
                 Run your school <br />
-                <span className="text-indigo-600">smarter</span> with EduTrack
+                <span className="text-indigo-600">smarter</span> with Genay Technologies
               </motion.h1>
               
               <div className="mt-6 w-full rounded-2xl bg-white/55 backdrop-blur-sm ring-1 ring-white/30 p-4 sm:p-0 sm:bg-transparent sm:backdrop-blur-0 sm:ring-0 lg:bg-transparent lg:p-0">
@@ -724,7 +724,7 @@ export default function LandingPage() {
             <LazySection>
               <h2 className="text-sm font-bold text-indigo-400 uppercase tracking-[0.2em] mb-4">Why Us</h2>
               <h3 className="text-2xl sm:text-4xl font-extrabold text-white tracking-tight lg:text-5xl mb-5 sm:mb-8">
-                The EduTrack Advantage
+                The Genay Technologies Advantage
               </h3>
               <div className="space-y-3 sm:space-y-6">
                 {[
@@ -864,7 +864,7 @@ export default function LandingPage() {
                   Ready to transform your school?
                 </h3>
                 <p className="text-lg text-slate-300 mb-10">
-                  Book a free demo today and see how EduTrack can streamline your operations and improve learning outcomes.
+                  Book a free demo today and see how Genay Technologies can streamline your operations and improve learning outcomes.
                 </p>
                 
                 <div className="space-y-6 mb-12">
@@ -912,7 +912,7 @@ export default function LandingPage() {
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600">
                 <AppLogo size={18} className="text-white" />
               </div>
-              <span className="text-lg font-bold tracking-tight text-slate-900">EduTrack</span>
+              <span className="text-lg font-bold tracking-tight text-slate-900">Genay Technologies</span>
             </div>
             
             <div className="flex flex-wrap justify-center gap-x-8 gap-y-4">
@@ -930,7 +930,7 @@ export default function LandingPage() {
             </div>
             
             <p className="text-sm text-slate-400">
-              © {new Date().getFullYear()} EduTrack. All rights reserved.
+              © {new Date().getFullYear()} Genay Technologies. All rights reserved.
             </p>
           </div>
         </div>

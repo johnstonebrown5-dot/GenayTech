@@ -617,7 +617,7 @@ The data is not deleted completely until you purge it from the Recycle Bin.`)
                 </div>
                 <div>
                   <label className="text-sm text-gray-700">Sender ID</label>
-                  <input value={integrationsForm.textwave_sender_id} onChange={(e)=>setIntegrationsForm(f=>({ ...f, textwave_sender_id: e.target.value }))} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2" placeholder="EDUTRACK" />
+                  <input value={integrationsForm.textwave_sender_id} onChange={(e)=>setIntegrationsForm(f=>({ ...f, textwave_sender_id: e.target.value }))} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2" placeholder="GENAYTECH" />
                 </div>
               </div>
             </div>

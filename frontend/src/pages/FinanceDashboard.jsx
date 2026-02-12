@@ -874,7 +874,7 @@ export default function FinanceDashboard() {
                         {/* Footer */}
                         <div className="pt-3 text-xs text-gray-600 flex items-center justify-between print:mt-4 no-break">
                             <div>Thank you for your payment.</div>
-                            <div>Printed by EDU-TRACK Finance</div>
+                            <div>Printed by Genay Technologies Finance</div>
                         </div>
 
                         {/* On-screen controls only */}

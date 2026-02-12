@@ -1,6 +1,6 @@
 $#!/usr/bin/env python
 """
-Standalone data seeding script for EDU-TRACK
+Standalone data seeding script for Genay Technologies
 Run this script to seed the database with schools, classes, teachers, and students.
 """
 

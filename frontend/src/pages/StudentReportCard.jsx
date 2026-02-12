@@ -595,7 +595,7 @@ export default function StudentReportCard(){
             {/* Print footer */}
             <div className="print-footer hidden print:flex items-center justify-between px-1">
               <div>{window.location.host}</div>
-              <div>EduTrack — Modern School Management</div>
+              <div>Genay Technologies — Modern School Management</div>
             </div>
           </div>
         )}

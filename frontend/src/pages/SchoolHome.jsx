@@ -242,7 +242,7 @@ export default function SchoolHome() {
   // Keep browser tab title in sync with public school
   useEffect(() => {
     if (typeof document !== 'undefined') {
-      document.title = school?.name ? school.name : 'EDU-TRACK'
+      document.title = school?.name ? school.name : 'Genay Technologies'
     }
   }, [school?.name])
 
@@ -408,7 +408,7 @@ export default function SchoolHome() {
           {!slowLoading ? (
             <div className="text-center">
               <div className="text-xl font-semibold text-gray-900">Welcome</div>
-              <p className="mt-1 text-sm text-gray-600">Website powered by EduTrack</p>
+              <p className="mt-1 text-sm text-gray-600">Website powered by Genay Technologies</p>
             </div>
           ) : (
             <div className="text-center max-w-sm">
@@ -1251,7 +1251,7 @@ export default function SchoolHome() {
             <div>© {new Date().getFullYear()} {school.name}. All rights reserved.</div>
             <div className="flex items-center gap-2 text-gray-600">
               <span>Powered by</span>
-              <button type="button" onClick={()=>{ setContactChannel('email'); setContactOpen(true) }} className="font-medium text-indigo-700 hover:underline">EduTrack</button>
+              <button type="button" onClick={()=>{ setContactChannel('email'); setContactOpen(true) }} className="font-medium text-indigo-700 hover:underline">Genay Technologies</button>
               <span className="hidden md:inline">·</span>
               <button type="button" onClick={()=>{ setContactChannel('email'); setContactOpen(true) }} className="hover:text-gray-900">Email</button>
               <span>·</span>
@@ -1283,7 +1283,7 @@ export default function SchoolHome() {
           <div className="absolute inset-0 grid place-items-center p-4">
             <div className="w-full max-w-lg rounded-2xl bg-white shadow-2xl border border-gray-200">
               <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
-                <div className="text-base font-semibold text-gray-900">Contact EduTrack</div>
+                <div className="text-base font-semibold text-gray-900">Contact Genay Technologies</div>
                 <button className="p-2 rounded-md hover:bg-gray-50" onClick={()=>setContactOpen(false)} aria-label="Close">
                   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5"><path fillRule="evenodd" d="M6.225 4.811a1 1 0 0 1 1.414 0L12 9.172l4.361-4.361a1 1 0 1 1 1.414 1.414L13.414 10.586l4.361 4.361a1 1 0 0 1-1.414 1.414L12 12l-4.361 4.361a1 1 0 0 1-1.414-1.414l4.361-4.361-4.361-4.361a1 1 0 0 1 0-1.414Z" clipRule="evenodd"/></svg>
                 </button>
@@ -1313,7 +1313,7 @@ export default function SchoolHome() {
                 <div className="flex gap-2 justify-end">
                   <button className="px-4 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50" onClick={()=>setContactOpen(false)}>Cancel</button>
                   <button className="px-4 py-2 rounded-md bg-gradient-to-r from-indigo-600 to-purple-600 text-white" onClick={async ()=>{
-                    const subject = encodeURIComponent('EduTrack Inquiry')
+                    const subject = encodeURIComponent('Genay Technologies Inquiry')
                     const body = encodeURIComponent(`Name: ${contactForm.name}\nFrom: ${contactForm.from}\n\n${contactForm.message}`)
                     try {
                       await api.post('/communications/contact-inquiry/', {
@@ -1327,7 +1327,7 @@ export default function SchoolHome() {
                     if (contactChannel==='email') {
                       window.location.href = `mailto:edutrack46@gmail.com?subject=${subject}&body=${body}`
                     } else {
-                      const plain = `EduTrack Inquiry\nName: ${contactForm.name}\nFrom: ${contactForm.from}\n\n${contactForm.message}`
+                      const plain = `Genay Technologies Inquiry\nName: ${contactForm.name}\nFrom: ${contactForm.from}\n\n${contactForm.message}`
                       const text = encodeURIComponent(plain)
                       const url = `https://api.whatsapp.com/send?phone=254796031071&text=${text}`
                       window.open(url,'_blank')

@@ -7,7 +7,7 @@ import React, { useState, useMemo } from 'react'
  */
 export default function AppLogo({
   src = '/logo.jpg',
-  alt = 'EDU-TRACK Logo',
+  alt = 'Genay Technologies Logo',
   className = '',
   size = 32,
   rounded = true,

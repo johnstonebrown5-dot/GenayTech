@@ -105,7 +105,7 @@ export default function FinanceLayout({ children }) {
     // Keep browser tab title in sync with active school
     useEffect(() => {
         if (typeof document !== 'undefined') {
-            document.title = schoolName ? schoolName : 'EDU-TRACK';
+            document.title = schoolName ? schoolName : 'Genay Technologies';
         }
     }, [schoolName]);
 
@@ -156,7 +156,7 @@ export default function FinanceLayout({ children }) {
                 <div className="flex items-center gap-3 min-w-0">
                     <img src={schoolLogo || '/logo.jpg'} alt="School Logo" className="w-8 h-8 rounded object-contain" />
                     <div className="flex items-baseline gap-2 truncate">
-                        <span className="text-gray-900 font-extrabold tracking-tight">EDUTRACK</span>
+                        <span className="text-gray-900 font-extrabold tracking-tight">GENAY TECHNOLOGIES</span>
                         <span className="text-gray-300">|</span>
                         <span className="font-bold text-xl text-gray-900 tracking-tight truncate">{(schoolName || 'School')} Finance</span>
                     </div>
@@ -243,7 +243,7 @@ export default function FinanceLayout({ children }) {
                                 {isOpen && (
                                     <div className="flex flex-col text-white/90 text-xs mt-0.5 min-w-0">
                                         <span className="font-semibold tracking-wide uppercase opacity-90">Finance</span>
-                                        <span className="text-[11px] truncate">{schoolName || 'EDU-TRACK'}</span>
+                                        <span className="text-[11px] truncate">{schoolName || 'Genay Technologies'}</span>
                                     </div>
                                 )}
                             </div>

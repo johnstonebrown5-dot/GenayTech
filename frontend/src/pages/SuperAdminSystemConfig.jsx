@@ -54,7 +54,7 @@ export default function SuperAdminSystemConfig(){
               System Domain
             </div>
             <div className="mt-3 text-2xl md:text-3xl font-extrabold tracking-tight text-gray-900">Default domain settings</div>
-            <div className="mt-1 text-sm text-gray-600">Set the main domain that should always show the EduTrack landing page (not a school website).</div>
+            <div className="mt-1 text-sm text-gray-600">Set the main domain that should always show the Genay Technologies landing page (not a school website).</div>
           </div>
           <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
             <button type="button" onClick={fetchConfig} className="px-4 py-2 rounded-2xl bg-white border border-gray-200 text-sm font-semibold text-gray-700 hover:bg-gray-50">

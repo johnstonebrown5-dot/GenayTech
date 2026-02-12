@@ -62,7 +62,7 @@ export default function StudentLayout({ children }){
   // Keep browser tab title in sync with active school
   useEffect(() => {
     if (typeof document !== 'undefined') {
-      document.title = schoolName ? schoolName : 'EDU-TRACK'
+      document.title = schoolName ? schoolName : 'Genay Technologies'
     }
   }, [schoolName])
 
@@ -148,7 +148,7 @@ export default function StudentLayout({ children }){
               <img src={schoolLogo} alt="School Logo" className="w-7 h-7 rounded object-contain bg-white/10" />
             ) : null}
             <div className="flex flex-col">
-              <div className="hidden sm:block text-sm font-semibold leading-tight">{schoolName || 'EDU-TRACK'}</div>
+              <div className="hidden sm:block text-sm font-semibold leading-tight">{schoolName || 'Genay Technologies'}</div>
               <div className="text-xs sm:text-[13px] font-medium text-blue-100 whitespace-normal break-words leading-tight max-w-[55vw] sm:max-w-[220px]">
                 {displayName}
               </div>
@@ -254,7 +254,7 @@ export default function StudentLayout({ children }){
                 })}
               </nav>
               <div className="mt-6 pt-4 border-t border-blue-500/40 text-[11px] text-blue-100 flex items-center justify-between px-2">
-                <span>© {new Date().getFullYear()} EDU-TRACK</span>
+                <span>© {new Date().getFullYear()} Genay Technologies</span>
                 <span className="inline-flex items-center gap-1">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-300 animate-pulse" />
                   <span className="opacity-80">Online</span>

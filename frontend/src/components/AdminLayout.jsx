@@ -103,7 +103,7 @@ export default function AdminLayout({ children }){
   // Keep browser tab title in sync with active school
   useEffect(() => {
     if (typeof document !== 'undefined') {
-      document.title = schoolName ? schoolName : 'EDU-TRACK'
+      document.title = schoolName ? schoolName : 'Genay Technologies'
     }
   }, [schoolName])
 
@@ -438,7 +438,7 @@ export default function AdminLayout({ children }){
             {isOpen && (
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-                <span>© {new Date().getFullYear()} EDU-TRACK</span>
+                <span>© {new Date().getFullYear()} Genay Technologies</span>
               </div>
             )}
           </div>
@@ -490,7 +490,7 @@ export default function AdminLayout({ children }){
           <div className="mt-auto p-3 text-xs text-blue-200/80">
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-              <span>© {new Date().getFullYear()} EDU-TRACK</span>
+              <span>© {new Date().getFullYear()} Genay Technologies</span>
             </div>
           </div>
         </aside>

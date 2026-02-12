@@ -55,7 +55,7 @@ class CoopStkClient:
         j = resp.json()
         return j.get('access_token') or j.get('accessToken') or j.get('token')
 
-    def stk_push(self, phone: str, amount: float, account_ref: str = 'EDU-TRACK', tx_desc: str = 'Fee Payment'):
+    def stk_push(self, phone: str, amount: float, account_ref: str = 'GENAYTECH', tx_desc: str = 'Fee Payment'):
         ts = self._timestamp()
         password = self._password(ts)
         token = self.get_token()
@@ -70,7 +70,7 @@ class CoopStkClient:
             "PartyB": int(self.short_code),
             "PhoneNumber": phone,
             "CallBackURL": self.callback,
-            "AccountReference": (account_ref or 'EDU-TRACK')[:12],
+            "AccountReference": (account_ref or 'GENAYTECH')[:12],
             "TransactionDesc": (tx_desc or 'Fees')[:12],
         }
         url = f"{self.base_url}{self.stk_path}"

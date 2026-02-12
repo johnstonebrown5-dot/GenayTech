@@ -202,7 +202,7 @@ REST_FRAMEWORK = {
 }
 
 SPECTACULAR_SETTINGS = {
-    'TITLE': 'EDU-TRACK API',
+    'TITLE': 'Genay Technologies API',
     'DESCRIPTION': 'CBC-ready School Management System API',
     'VERSION': '1.0.0',
 }

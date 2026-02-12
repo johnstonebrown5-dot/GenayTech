@@ -388,7 +388,7 @@ export default function LoginPage() {
                     <div>
                       <div className="flex items-center gap-3">
                         <AppLogo size={44} className="h-11 w-11 rounded-2xl bg-white/10 p-1.5 shadow-soft" />
-                        <div className="text-sm font-semibold tracking-[0.28em] uppercase text-white/80">EduTrack</div>
+                        <div className="text-sm font-semibold tracking-[0.28em] uppercase text-white/80">Genay Technologies</div>
                       </div>
                       <h1 className="mt-6 text-3xl lg:text-4xl font-extrabold tracking-tight leading-tight">Welcome back</h1>
                       <p className="mt-3 text-sm lg:text-[15px] text-white/85 max-w-sm">
@@ -472,7 +472,7 @@ export default function LoginPage() {
                         </div>
                         <div className="hidden md:flex items-center gap-2">
                           <span className="h-2 w-2 rounded-full bg-sky-300" />
-                          <span>Powered by EduTrack</span>
+                          <span>Powered by Genay Technologies</span>
                         </div>
                       </div>
                     </div>
@@ -813,13 +813,13 @@ export default function LoginPage() {
         </div>
         {/* Top brand area */}
         <div className="pt-6 pb-2 flex flex-col items-center justify-start text-white relative z-10">
-          <div className="text-[11px] font-semibold tracking-[0.28em] uppercase">EDU-TRACK</div>
+          <div className="text-[11px] font-semibold tracking-[0.28em] uppercase">GENAY TECHNOLOGIES</div>
           <p className="mt-2 text-[11px] text-white/90">Login to access your school dashboards.</p>
         </div>
 
         {showAppIntro ? (
           <div className="relative z-10 flex-1 flex flex-col items-center justify-center px-8 pb-12 text-center text-slate-800">
-            <h2 className="text-base font-semibold tracking-wide text-indigo-700 uppercase mb-2">Welcome to EduTrack</h2>
+            <h2 className="text-base font-semibold tracking-wide text-indigo-700 uppercase mb-2">Welcome to Genay Technologies</h2>
             <p className="text-sm text-slate-600 max-w-xs mb-4">Keep your school attendance, results, finance and messaging in one lightweight app.</p>
             <ul className="text-[11px] text-slate-500 space-y-1 mb-6 max-w-xs text-left">
               <li>• Fast access to your dashboards from this device.</li>
@@ -1191,7 +1191,7 @@ export default function LoginPage() {
           )}
 
           {/* Footer */}
-          <div className="mt-4 text-center text-[11px] text-white/80">© {new Date().getFullYear()} EDU-TRACK</div>
+          <div className="mt-4 text-center text-[11px] text-white/80">© {new Date().getFullYear()} Genay Technologies</div>
         </div>
         )}
       </div>

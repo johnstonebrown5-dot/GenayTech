@@ -127,7 +127,7 @@ export default function TeacherLayout({ children }){
   // Keep browser tab title in sync with active school
   useEffect(() => {
     if (typeof document !== 'undefined') {
-      document.title = schoolName ? schoolName : 'EDU-TRACK'
+      document.title = schoolName ? schoolName : 'Genay Technologies'
     }
   }, [schoolName])
 
@@ -499,7 +499,7 @@ export default function TeacherLayout({ children }){
                 <span>© {new Date().getFullYear()} {schoolName}</span>
               </div>
             )}
-            <div className="text-[10px] text-blue-100/90">Powered by EduTrack</div>
+            <div className="text-[10px] text-blue-100/90">Powered by Genay Technologies</div>
           </div>
         </aside>
 
