@@ -421,9 +421,7 @@ export default function App() {
             </div>
             <NotificationContainer />
             {!isPublicLanding && <BrowserNotificationPrompt />}
-            {!isPublicLanding && <ReportIssuePrompt />}
             {!hideAssistant && <FloatingActions />}
-            {!hideAssistant && !pathname.startsWith('/student') && <FloatingHelpAction />}
             {!hideAssistant && <FloatingButton />}
             <AssistantPanel />
           </LockProvider>

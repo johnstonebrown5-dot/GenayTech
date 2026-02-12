@@ -20,6 +20,7 @@ class DeliveryLog(models.Model):
     recipient = models.CharField(max_length=255)
     ok = models.BooleanField(default=False)
     message_snippet = models.CharField(max_length=300, blank=True, default='')
+    error = models.TextField(blank=True, default='')
     context = models.CharField(max_length=100, blank=True, default='', help_text='e.g., message:123, campaign:45')
     created_at = models.DateTimeField(auto_now_add=True)
 

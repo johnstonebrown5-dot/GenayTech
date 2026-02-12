@@ -640,6 +640,7 @@ export default function AdminClassProfile(){
   const [sendingClassMessage, setSendingClassMessage] = useState(false)
   const [classMessageStatus, setClassMessageStatus] = useState('')
   const [singleStudentId, setSingleStudentId] = useState('')
+  const [studentSearch, setStudentSearch] = useState('')
   const [deliverSms, setDeliverSms] = useState(true)
   const [deliverEmail, setDeliverEmail] = useState(true)
   const [categoryBoarding, setCategoryBoarding] = useState('all') // all | boarding | day
@@ -655,6 +656,27 @@ export default function AdminClassProfile(){
     const data = Array.isArray(res.data) ? res.data : []
     return data.filter(s => s && s.is_active !== false)
   }
+
+  const filteredClassStudentsForPicker = useMemo(() => {
+    const q = String(studentSearch || '').trim().toLowerCase()
+    if (!q) return classStudents
+    const filtered = (classStudents || []).filter(s => {
+      const name = String(s?.name || '').toLowerCase()
+      const adm = String(s?.admission_no || '').toLowerCase()
+      return name.includes(q) || adm.includes(q)
+    })
+    return filtered
+  }, [classStudents, studentSearch])
+
+  useEffect(() => {
+    const q = String(studentSearch || '').trim()
+    if (q && filteredClassStudentsForPicker.length === 1) {
+      const singleMatch = filteredClassStudentsForPicker[0]
+      if (String(singleStudentId) !== String(singleMatch.id)) {
+        setSingleStudentId(String(singleMatch.id))
+      }
+    }
+  }, [filteredClassStudentsForPicker, studentSearch, singleStudentId])
 
   const sendMessageToRecipients = async (body, ids) => {
     if (!ids || !ids.length) {
@@ -1059,182 +1081,266 @@ export default function AdminClassProfile(){
                 )}
 
                 {activeTab === 'messages' && (
-                  <div className="space-y-4 max-w-4xl">
-                    <div className="flex flex-wrap items-center gap-2 text-xs">
-                      <span className="text-gray-600">Mode:</span>
-                      {[
-                        { key: 'all', label: 'All students' },
-                        { key: 'single', label: 'Single student' },
-                        { key: 'category', label: 'By category' },
-                        { key: 'results', label: 'Share results with parents' },
-                      ].map(m => (
-                        <button
-                          key={m.key}
-                          type="button"
-                          onClick={() => { setMessageMode(m.key); setClassMessageStatus('') }}
-                          className={`px-3 py-1.5 rounded-full border text-xs ${messageMode===m.key ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'}`}
-                        >{m.label}</button>
-                      ))}
+                  <div className="space-y-4 w-full max-w-none">
+                    <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+                      <div className="px-4 py-3 bg-gradient-to-r from-indigo-50 to-white border-b border-gray-100">
+                        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+                          <div>
+                            <div className="text-sm font-semibold text-gray-900">Messages</div>
+                            <div className="text-xs text-gray-500">Send SMS and email notifications to students or parents.</div>
+                          </div>
+                          <div className="inline-flex flex-wrap items-center rounded-xl bg-white border border-gray-200 p-1 gap-1">
+                            {[
+                              { key: 'all', label: 'All students' },
+                              { key: 'single', label: 'Single student' },
+                              { key: 'category', label: 'By category' },
+                              { key: 'results', label: 'Share results' },
+                            ].map(m => (
+                              <button
+                                key={m.key}
+                                type="button"
+                                onClick={() => { setMessageMode(m.key); setClassMessageStatus('') }}
+                                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-300 ${messageMode===m.key ? 'bg-indigo-600 text-white shadow-sm' : 'text-gray-700 hover:bg-gray-50'}`}
+                              >{m.label}</button>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="p-4">
+                        {messageMode !== 'results' && (
+                          <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+                            <div className="lg:col-span-3">
+                              <div className="rounded-2xl border border-gray-200 bg-white shadow-sm">
+                                <div className="px-4 py-3 border-b border-gray-100">
+                                  {messageMode === 'all' && (
+                                    <>
+                                      <div className="text-sm font-semibold text-gray-900">Message all students</div>
+                                      <div className="text-xs text-gray-500">Send a message to all active students with accounts in {klass?.name || 'this class'}.</div>
+                                    </>
+                                  )}
+                                  {messageMode === 'single' && (
+                                    <>
+                                      <div className="text-sm font-semibold text-gray-900">Message a single student</div>
+                                      <div className="text-xs text-gray-500">Select a student, choose delivery methods, then write your message.</div>
+                                    </>
+                                  )}
+                                  {messageMode === 'category' && (
+                                    <>
+                                      <div className="text-sm font-semibold text-gray-900">Message by category</div>
+                                      <div className="text-xs text-gray-500">Filter the class roster, choose delivery methods, then write your message.</div>
+                                    </>
+                                  )}
+                                </div>
+
+                                <div className="p-4 space-y-3">
+                                  {messageMode === 'single' && (
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                      <label className="grid gap-1">
+                                        <span className="text-xs font-medium text-gray-700">Student</span>
+                                        <input
+                                          className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-300"
+                                          value={studentSearch}
+                                          onChange={e => setStudentSearch(e.target.value)}
+                                          placeholder="Search by name or admission no…"
+                                        />
+                                        <select
+                                          className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-300"
+                                          value={singleStudentId}
+                                          onChange={e => setSingleStudentId(e.target.value)}
+                                        >
+                                          <option value="">Select student</option>
+                                          {filteredClassStudentsForPicker.map(s => (
+                                            <option key={s.id} value={s.id}>{s.name} ({s.admission_no})</option>
+                                          ))}
+                                        </select>
+                                      </label>
+                                      <div className="hidden md:block" />
+                                    </div>
+                                  )}
+
+                                  {messageMode === 'category' && (
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                      <label className="grid gap-1">
+                                        <span className="text-xs font-medium text-gray-700">Boarding</span>
+                                        <select
+                                          className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-300"
+                                          value={categoryBoarding}
+                                          onChange={e => setCategoryBoarding(e.target.value)}
+                                        >
+                                          <option value="all">All</option>
+                                          <option value="boarding">Boarding only</option>
+                                          <option value="day">Day only</option>
+                                        </select>
+                                      </label>
+                                      <label className="grid gap-1">
+                                        <span className="text-xs font-medium text-gray-700">Gender</span>
+                                        <select
+                                          className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-300"
+                                          value={categoryGender}
+                                          onChange={e => setCategoryGender(e.target.value)}
+                                        >
+                                          <option value="all">All</option>
+                                          <option value="boys">Boys</option>
+                                          <option value="girls">Girls</option>
+                                        </select>
+                                      </label>
+                                      <label className="flex items-start gap-2 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2">
+                                        <input
+                                          type="checkbox"
+                                          className="mt-0.5 h-4 w-4"
+                                          checked={categoryOutstandingOnly}
+                                          onChange={e => setCategoryOutstandingOnly(e.target.checked)}
+                                        />
+                                        <div className="min-w-0">
+                                          <div className="text-xs font-medium text-gray-800">Outstanding balances</div>
+                                          <div className="text-[11px] text-gray-500">Targets guardians using arrears campaign.</div>
+                                        </div>
+                                      </label>
+                                    </div>
+                                  )}
+
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <span className="text-xs font-medium text-gray-700">Delivery</span>
+                                    <label className={`inline-flex items-center gap-2 px-3 py-2 rounded-xl border text-xs font-medium cursor-pointer select-none ${deliverSms ? 'border-indigo-200 bg-indigo-50 text-indigo-700' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'}`}>
+                                      <input type="checkbox" className="h-4 w-4" checked={!!deliverSms} onChange={(e)=>setDeliverSms(e.target.checked)} />
+                                      SMS
+                                    </label>
+                                    <label className={`inline-flex items-center gap-2 px-3 py-2 rounded-xl border text-xs font-medium cursor-pointer select-none ${deliverEmail ? 'border-indigo-200 bg-indigo-50 text-indigo-700' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'}`}>
+                                      <input type="checkbox" className="h-4 w-4" checked={!!deliverEmail} onChange={(e)=>setDeliverEmail(e.target.checked)} />
+                                      Email
+                                    </label>
+                                  </div>
+
+                                  <label className="grid gap-1">
+                                    <span className="text-xs font-medium text-gray-700">Message</span>
+                                    <textarea
+                                      className="w-full border border-gray-200 rounded-2xl px-3 py-2 text-sm min-h-[120px] bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-300"
+                                      placeholder="Write a clear message…"
+                                      value={classMessageBody}
+                                      onChange={e => setClassMessageBody(e.target.value)}
+                                    />
+                                  </label>
+
+                                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                                    <div className="text-[11px] text-gray-500">
+                                      {messageMode === 'all' && 'Recipients: all active students with accounts in this class.'}
+                                      {messageMode === 'single' && 'Recipient: the selected student (if they have an account).'}
+                                      {messageMode === 'category' && (categoryOutstandingOnly
+                                        ? 'Recipients: guardians of students with outstanding balances in this class (via arrears campaign).'
+                                        : 'Recipients: students in this class matching the selected filters.')}
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={handleSendClassMessage}
+                                      disabled={sendingClassMessage || !classMessageBody.trim()}
+                                      className="inline-flex items-center justify-center px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm font-semibold disabled:opacity-60 shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                                    >{sendingClassMessage ? 'Sending...' : 'Send message'}</button>
+                                  </div>
+
+                                  {classMessageStatus && (
+                                    <div
+                                      className={`rounded-xl px-3 py-2 text-xs border ${String(classMessageStatus).toLowerCase().includes('fail') || String(classMessageStatus).toLowerCase().includes('error') ? 'text-red-700 bg-red-50 border-red-200' : 'text-emerald-800 bg-emerald-50 border-emerald-200'}`}
+                                    >
+                                      {classMessageStatus}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="lg:col-span-1">
+                              <div className="rounded-2xl border border-gray-200 bg-gradient-to-b from-gray-50 to-white p-4">
+                                <div className="text-xs font-semibold text-gray-800">Tips</div>
+                                <div className="mt-1 text-[11px] text-gray-600">
+                                  Keep messages short and specific. Include dates, times, and clear next steps.
+                                </div>
+                                <div className="mt-3 rounded-xl border border-gray-200 bg-white p-3">
+                                  <div className="text-xs font-semibold text-gray-800">Delivery notes</div>
+                                  <div className="mt-1 text-[11px] text-gray-600">
+                                    SMS goes to guardian phone (guardian ID). Email uses the student email when available. In-app requires linked accounts.
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {messageMode === 'results' && (
+                          <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+                            <div className="lg:col-span-3">
+                              <div className="rounded-2xl border border-emerald-200 bg-white shadow-sm overflow-hidden">
+                                <div className="px-4 py-3 bg-gradient-to-r from-emerald-50 to-white border-b border-emerald-100">
+                                  <div className="text-sm font-semibold text-gray-900">Share exam results with parents</div>
+                                  <div className="text-xs text-gray-500">Queue results notifications per student (guardian SMS, optional email).</div>
+                                </div>
+                                <div className="p-4 space-y-3">
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                    <label className="grid gap-1">
+                                      <span className="text-xs font-medium text-gray-700">Exam</span>
+                                      <select
+                                        className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-300"
+                                        value={shareExamId || (recentExam?.id ? String(recentExam.id) : '')}
+                                        onChange={e => setShareExamId(e.target.value)}
+                                      >
+                                        <option value="">Latest exam for this class</option>
+                                        {exams.filter(e => String(e.klass) === String(id)).map(e => (
+                                          <option key={e.id} value={e.id}>{e.name}</option>
+                                        ))}
+                                      </select>
+                                    </label>
+                                    <label className="grid gap-1">
+                                      <span className="text-xs font-medium text-gray-700">Channel</span>
+                                      <select
+                                        className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-300"
+                                        value={shareChannel}
+                                        onChange={e => setShareChannel(e.target.value)}
+                                      >
+                                        <option value="sms">SMS to guardians</option>
+                                        <option value="both">SMS + Email</option>
+                                      </select>
+                                    </label>
+                                  </div>
+
+                                  <div className="text-xs text-gray-600 rounded-xl bg-emerald-50 border border-emerald-100 px-3 py-2">
+                                    This sends a concise results summary per student to their guardian phone (from guardian ID) and optionally email, and may take a few minutes to complete.
+                                  </div>
+
+                                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={handleSendClassMessage}
+                                      disabled={sendingClassMessage}
+                                      className="inline-flex items-center justify-center px-4 py-2 rounded-xl bg-emerald-600 text-white text-sm font-semibold disabled:opacity-60 shadow-sm hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-200"
+                                    >{sendingClassMessage
+                                      ? (String(classMessageStatus).toLowerCase().includes('preparing') ? 'Preparing to send…' : 'Sending…')
+                                      : 'Share results'}
+                                    </button>
+                                  </div>
+
+                                  {classMessageStatus && (
+                                    <div
+                                      className={`rounded-xl px-3 py-2 text-xs border ${String(classMessageStatus).toLowerCase().includes('fail') || String(classMessageStatus).toLowerCase().includes('error') ? 'text-red-700 bg-red-50 border-red-200' : 'text-emerald-800 bg-emerald-50 border-emerald-200'}`}
+                                    >
+                                      {classMessageStatus}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="lg:col-span-1">
+                              <div className="rounded-2xl border border-gray-200 bg-gradient-to-b from-gray-50 to-white p-4">
+                                <div className="text-xs font-semibold text-gray-800">Before you send</div>
+                                <div className="mt-1 text-[11px] text-gray-600">
+                                  Ensure guardian contacts are up to date. For large classes, delivery may take a few minutes.
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     </div>
-
-                    {messageMode !== 'results' && (
-                      <div className="p-4 rounded-xl border border-indigo-100 bg-white shadow-sm">
-                        {messageMode === 'all' && (
-                          <>
-                            <div className="text-sm font-semibold text-gray-800">Message all students</div>
-                            <div className="text-xs text-gray-500 mb-2">Send a message to all active students with accounts in {klass?.name || 'this class'}.</div>
-                          </>
-                        )}
-                        {messageMode === 'single' && (
-                          <>
-                            <div className="flex flex-wrap items-center gap-3 mb-2">
-                              <div className="text-sm font-semibold text-gray-800">Message a single student</div>
-                              <select
-                                className="border border-gray-200 rounded-md px-2 py-1 text-sm"
-                                value={singleStudentId}
-                                onChange={e => setSingleStudentId(e.target.value)}
-                              >
-                                <option value="">Select student</option>
-                                {classStudents.map(s => (
-                                  <option key={s.id} value={s.id}>{s.name} ({s.admission_no})</option>
-                                ))}
-                              </select>
-                            </div>
-                            <div className="text-xs text-gray-500 mb-2">Choose delivery methods below. SMS is sent to guardian phone (guardian ID). Email is sent to student email if available. In-app requires a linked account.</div>
-                          </>
-                        )}
-                        {messageMode === 'category' && (
-                          <>
-                            <div className="text-sm font-semibold text-gray-800 mb-2">Message by category</div>
-                            <div className="flex flex-wrap items-center gap-3 mb-2 text-xs">
-                              <label className="flex items-center gap-1">
-                                <span className="text-gray-600">Boarding:</span>
-                                <select
-                                  className="border border-gray-200 rounded-md px-2 py-1 text-xs"
-                                  value={categoryBoarding}
-                                  onChange={e => setCategoryBoarding(e.target.value)}
-                                >
-                                  <option value="all">All</option>
-                                  <option value="boarding">Boarding only</option>
-                                  <option value="day">Day only</option>
-                                </select>
-                              </label>
-                              <label className="flex items-center gap-1">
-                                <span className="text-gray-600">Gender:</span>
-                                <select
-                                  className="border border-gray-200 rounded-md px-2 py-1 text-xs"
-                                  value={categoryGender}
-                                  onChange={e => setCategoryGender(e.target.value)}
-                                >
-                                  <option value="all">All</option>
-                                  <option value="boys">Boys</option>
-                                  <option value="girls">Girls</option>
-                                </select>
-                              </label>
-                              <label className="flex items-center gap-1">
-                                <input
-                                  type="checkbox"
-                                  className="h-3 w-3"
-                                  checked={categoryOutstandingOnly}
-                                  onChange={e => setCategoryOutstandingOnly(e.target.checked)}
-                                />
-                                <span className="text-gray-700">Target students with outstanding fee balances (uses arrears campaign)</span>
-                              </label>
-                            </div>
-                          </>
-                        )}
-
-                        <div className="mt-2 flex flex-wrap items-center gap-4 text-xs">
-                          <label className="inline-flex items-center gap-2 text-gray-700">
-                            <input type="checkbox" className="h-3 w-3" checked={!!deliverSms} onChange={(e)=>setDeliverSms(e.target.checked)} />
-                            SMS
-                          </label>
-                          <label className="inline-flex items-center gap-2 text-gray-700">
-                            <input type="checkbox" className="h-3 w-3" checked={!!deliverEmail} onChange={(e)=>setDeliverEmail(e.target.checked)} />
-                            Email
-                          </label>
-                        </div>
-
-                        <textarea
-                          className="mt-2 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm min-h-[96px] focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-300"
-                          placeholder="Type a short message..."
-                          value={classMessageBody}
-                          onChange={e => setClassMessageBody(e.target.value)}
-                        />
-                        <div className="mt-2 flex items-center justify-between gap-2">
-                          <div className="text-[11px] text-gray-500">
-                            {messageMode === 'all' && 'Recipients: all active students with accounts in this class.'}
-                            {messageMode === 'single' && 'Recipient: the selected student (if they have an account).'}
-                            {messageMode === 'category' && (categoryOutstandingOnly
-                              ? 'Recipients: guardians of students with outstanding balances in this class (via arrears campaign).'
-                              : 'Recipients: students in this class matching the selected filters.')}
-                          </div>
-                          <button
-                            type="button"
-                            onClick={handleSendClassMessage}
-                            disabled={sendingClassMessage || !classMessageBody.trim()}
-                            className="inline-flex items-center justify-center px-3 py-1.5 rounded-md bg-indigo-600 text-white text-xs font-medium disabled:opacity-60 shadow-sm hover:bg-indigo-700"
-                          >{sendingClassMessage ? 'Sending...' : 'Send'}</button>
-                        </div>
-                        {classMessageStatus && (
-                          <div
-                            className={`mt-1 text-[11px] ${String(classMessageStatus).toLowerCase().includes('fail') || String(classMessageStatus).toLowerCase().includes('error') ? 'text-red-600' : 'text-emerald-700'}`}
-                          >
-                            {classMessageStatus}
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {messageMode === 'results' && (
-                      <div className="p-4 rounded-xl border border-emerald-100 bg-white shadow-sm">
-                        <div className="flex flex-wrap items-center gap-3 mb-2">
-                          <div className="text-sm font-semibold text-gray-800">Share exam results with parents</div>
-                          <label className="flex items-center gap-1 text-xs text-gray-700">
-                            <span>Exam:</span>
-                            <select
-                              className="border border-gray-200 rounded-md px-2 py-1 text-xs"
-                              value={shareExamId || (recentExam?.id ? String(recentExam.id) : '')}
-                              onChange={e => setShareExamId(e.target.value)}
-                            >
-                              <option value="">Latest exam for this class</option>
-                              {exams.filter(e => String(e.klass) === String(id)).map(e => (
-                                <option key={e.id} value={e.id}>{e.name}</option>
-                              ))}
-                            </select>
-                          </label>
-                          <label className="flex items-center gap-1 text-xs text-gray-700">
-                            <span>Channel:</span>
-                            <select
-                              className="border border-gray-200 rounded-md px-2 py-1 text-xs"
-                              value={shareChannel}
-                              onChange={e => setShareChannel(e.target.value)}
-                            >
-                              <option value="sms">SMS to guardians</option>
-                              <option value="both">SMS + Email</option>
-                            </select>
-                          </label>
-                        </div>
-                        <div className="text-xs text-gray-500 mb-2">
-                          This sends a concise results summary per student to their guardian phone (from guardian ID) and optionally email, and may take a few minutes to complete.
-                        </div>
-                        <button
-                          type="button"
-                          onClick={handleSendClassMessage}
-                          disabled={sendingClassMessage}
-                          className="inline-flex items-center justify-center px-3 py-1.5 rounded-md bg-emerald-600 text-white text-xs font-medium disabled:opacity-60 shadow-sm hover:bg-emerald-700"
-                        >{sendingClassMessage
-                          ? (String(classMessageStatus).toLowerCase().includes('preparing') ? 'Preparing to send…' : 'Sending…')
-                          : 'Share results with parents'}</button>
-                        {classMessageStatus && (
-                          <div
-                            className={`mt-2 text-[11px] ${String(classMessageStatus).toLowerCase().includes('fail') || String(classMessageStatus).toLowerCase().includes('error') ? 'text-red-600' : 'text-emerald-700'}`}
-                          >
-                            {classMessageStatus}
-                          </div>
-                        )}
-                      </div>
-                    )}
                   </div>
                 )}
 

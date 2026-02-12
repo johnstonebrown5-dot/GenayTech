@@ -217,17 +217,19 @@ class DeliveryLogViewSet(viewsets.ReadOnlyModelViewSet):
         results = []
         for rec in logs:
             ok = False
+            err_txt = ''
             try:
                 if rec.channel == 'sms':
                     ok = send_sms(rec.recipient, rec.message_snippet or '', school_id=getattr(rec, 'school_id', None) or school_id)
                 elif rec.channel == 'email':
                     subj = "Delivery retry"
                     ok = send_email_safe(subj, rec.message_snippet or '', rec.recipient, school_id=getattr(rec, 'school_id', None) or school_id)
-            except Exception:
+            except Exception as e:
+                err_txt = str(e)
                 ok = False
             try:
                 ctx = (f"retry_of:{rec.id};" + (rec.context or ''))[:100]
-                log_delivery(school_id=rec.school_id, channel=rec.channel, recipient=rec.recipient, ok=bool(ok), message=rec.message_snippet or '', context=ctx)
+                log_delivery(school_id=rec.school_id, channel=rec.channel, recipient=rec.recipient, ok=bool(ok), message=rec.message_snippet or '', context=ctx, error=err_txt)
             except Exception:
                 pass
             results.append({"id": rec.id, "ok": bool(ok), "channel": rec.channel, "recipient": rec.recipient})

@@ -13,6 +13,7 @@ export default function FloatingDeliveryLog(){
   const [items, setItems] = useState([])
   const [filter, setFilter] = useState('all') // all | sms | email
   const [error, setError] = useState('')
+  const [previewItem, setPreviewItem] = useState(null)
   const intervalRef = useRef(null)
   const lastTopIdRef = useRef(null)
   const initialLoadRef = useRef(true)
@@ -38,6 +39,11 @@ export default function FloatingDeliveryLog(){
   const [holderEl, setHolderEl] = useState(null)
   // Compact mode (small screens)
   const [isCompact, setIsCompact] = useState(false)
+
+  const panelRef = useRef(null)
+  const dragRef = useRef({ dragging: false, offsetX: 0, offsetY: 0 })
+  const [panelXY, setPanelXY] = useState({ left: 0, top: 0 })
+  const [panelSize, setPanelSize] = useState({ width: 560, height: 520 })
 
   useEffect(() => {
     if (typeof window === 'undefined' || !window.matchMedia) return
@@ -258,6 +264,58 @@ export default function FloatingDeliveryLog(){
     return () => { window.removeEventListener('resize', onEvt); window.removeEventListener('scroll', onEvt, true) }
   }, [open])
 
+  // Measure panel size (used for drag clamping) + center it when opened
+  useEffect(() => {
+    if (!open) return
+    const measureAndCenter = () => {
+      try {
+        const rect = panelRef.current?.getBoundingClientRect()
+        if (rect && rect.width && rect.height) {
+          const w = window.innerWidth
+          const h = window.innerHeight
+          setPanelSize({ width: rect.width, height: rect.height })
+          setPanelXY({
+            left: Math.max(8, Math.round((w - rect.width) / 2)),
+            top: Math.max(8, Math.round((h - rect.height) / 2)),
+          })
+        }
+      } catch {}
+    }
+    const id = window.requestAnimationFrame(measureAndCenter)
+    return () => { try { window.cancelAnimationFrame(id) } catch {} }
+  }, [open])
+
+  // Drag handling (mouse + touch)
+  useEffect(() => {
+    if (!open) return
+    const onMove = (e) => {
+      if (!dragRef.current.dragging) return
+      const p = ('touches' in e && e.touches && e.touches[0]) ? e.touches[0] : e
+      const x = Number(p?.clientX)
+      const y = Number(p?.clientY)
+      if (!Number.isFinite(x) || !Number.isFinite(y)) return
+      const w = window.innerWidth
+      const h = window.innerHeight
+      const maxLeft = Math.max(8, w - (panelSize.width || 0) - 8)
+      const maxTop = Math.max(8, h - (panelSize.height || 0) - 8)
+      const nextLeft = Math.max(8, Math.min(x - dragRef.current.offsetX, maxLeft))
+      const nextTop = Math.max(8, Math.min(y - dragRef.current.offsetY, maxTop))
+      setPanelXY({ left: nextLeft, top: nextTop })
+      try { e.preventDefault() } catch {}
+    }
+    const onUp = () => { dragRef.current.dragging = false }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+    window.addEventListener('touchmove', onMove, { passive: false })
+    window.addEventListener('touchend', onUp)
+    return () => {
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+      window.removeEventListener('touchmove', onMove)
+      window.removeEventListener('touchend', onUp)
+    }
+  }, [open, panelSize.width, panelSize.height])
+
   if (!canSee || locked) return null
 
   const button = (
@@ -310,9 +368,35 @@ export default function FloatingDeliveryLog(){
   )
 
   const panel = open ? (
-    <div style={{ position:'fixed', left: panelPos.left, top: panelPos.top, zIndex:4000 }}>
-      <div className="bg-white/85 supports-[backdrop-filter]:bg-white/60 backdrop-blur-xl shadow-2xl ring-1 ring-gray-200/70 rounded-2xl w-[26rem] max-h-[70vh] overflow-hidden">
-        <div className="sticky top-0 z-10 px-3.5 py-2.5 border-b border-gray-200/70 flex items-center gap-2 bg-gradient-to-r from-white to-sky-50/60">
+    <div style={{ position:'fixed', inset: 0, zIndex:4000, pointerEvents: 'none' }} className="p-4">
+      <div
+        ref={panelRef}
+        style={{ position: 'fixed', left: panelXY.left, top: panelXY.top, pointerEvents: 'auto' }}
+        className="bg-white/85 supports-[backdrop-filter]:bg-white/60 backdrop-blur-xl shadow-2xl ring-1 ring-gray-200/70 rounded-2xl w-[34rem] max-w-[94vw] max-h-[76vh] overflow-hidden"
+      >
+        <div
+          className="sticky top-0 z-10 px-3.5 py-2.5 border-b border-gray-200/70 flex items-center gap-2 bg-gradient-to-r from-white to-sky-50/60 cursor-move select-none"
+          onMouseDown={(e) => {
+            try {
+              const rect = panelRef.current?.getBoundingClientRect()
+              if (!rect) return
+              dragRef.current.dragging = true
+              dragRef.current.offsetX = e.clientX - rect.left
+              dragRef.current.offsetY = e.clientY - rect.top
+            } catch {}
+          }}
+          onTouchStart={(e) => {
+            try {
+              const t = e.touches?.[0]
+              const rect = panelRef.current?.getBoundingClientRect()
+              if (!t || !rect) return
+              dragRef.current.dragging = true
+              dragRef.current.offsetX = t.clientX - rect.left
+              dragRef.current.offsetY = t.clientY - rect.top
+            } catch {}
+          }}
+          title="Drag to move"
+        >
           <span className="inline-flex items-center gap-2 font-semibold text-gray-900 text-sm flex-1">
             <span className="inline-flex h-5 w-5 items-center justify-center rounded-md bg-blue-100 text-blue-700">✉️</span>
             Delivery logs
@@ -392,7 +476,19 @@ export default function FloatingDeliveryLog(){
             <div className="p-3 text-sm text-gray-500">No recent logs</div>
           )}
           {items.map((it) => (
-            <div key={`${it.id}`} className="px-3 py-2 text-sm">
+            <div
+              key={`${it.id}`}
+              role="button"
+              tabIndex={0}
+              onClick={() => setPreviewItem(it)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  setPreviewItem(it)
+                }
+              }}
+              className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+            >
               <div className="flex items-center gap-2">
                 <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium ${it.channel === 'sms' ? 'bg-emerald-50 text-emerald-700' : 'bg-indigo-50 text-indigo-700'}`}>{it.channel.toUpperCase()}</span>
                 <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium ${it.ok ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>{it.ok ? 'OK' : 'FAIL'}</span>
@@ -412,12 +508,15 @@ export default function FloatingDeliveryLog(){
                 {!it.ok && (
                   <button
                     onClick={async () => {
+                      try { window.event?.stopPropagation?.() } catch {}
                       setRetryingMap(prev => ({ ...prev, [it.id]: true }))
                       // Per-item retry mode
                       setRetryStart(new Date().toISOString())
                       setRetryIds(prev => Array.from(new Set([...(prev||[]), it.id])))
                       try { await api.post('/communications/delivery-logs/retry/', { id: it.id }); await load() } catch (e) { setError('Retry failed') } finally { setRetryingMap(prev => ({ ...prev, [it.id]: false })) }
                     }}
+                    onMouseDown={(e)=>e.stopPropagation()}
+                    onClickCapture={(e)=>e.stopPropagation()}
                     disabled={!!retryingMap[it.id]}
                     className={`ml-auto text-xs px-2 py-0.5 rounded border ${retryingMap[it.id] ? 'opacity-60 cursor-wait' : 'bg-white hover:bg-gray-50'} border-gray-300 text-gray-700`}
                   >{retryingMap[it.id] ? 'Retrying…' : 'Retry'}</button>
@@ -427,6 +526,52 @@ export default function FloatingDeliveryLog(){
           ))}
         </div>
         )}
+      </div>
+    </div>
+  ) : null
+
+  const previewModal = previewItem ? (
+    <div style={{ position:'fixed', inset:0, zIndex:5000 }}>
+      <div className="fixed inset-0 bg-black/40" onClick={() => setPreviewItem(null)} />
+      <div className="fixed inset-0 flex items-end justify-end p-4 sm:items-center sm:justify-center">
+        <div className="bg-white shadow-2xl ring-1 ring-gray-200 rounded-xl w-full max-w-2xl overflow-hidden">
+          <div className="px-4 py-3 border-b border-gray-100 flex items-center gap-2">
+            <div className="font-semibold text-gray-900 flex-1">Queued message</div>
+            <button onClick={() => setPreviewItem(null)} className="px-2 py-1 text-sm rounded-lg border bg-white text-gray-700 hover:bg-gray-50">Close</button>
+          </div>
+          <div className="px-4 py-3 space-y-2 text-sm">
+            <div className="flex flex-wrap gap-2">
+              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${previewItem.channel === 'sms' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-indigo-50 text-indigo-700 border border-indigo-200'}`}>{String(previewItem.channel || '').toUpperCase()}</span>
+              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${previewItem.ok ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>{previewItem.ok ? 'OK' : 'FAILED'}</span>
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-50 text-gray-700 border border-gray-200">{previewItem.created_at ? new Date(previewItem.created_at).toLocaleString() : ''}</span>
+            </div>
+            {!previewItem.ok && previewItem.error && (
+              <div>
+                <div className="text-xs text-gray-500">Error</div>
+                <div className="mt-1 whitespace-pre-wrap break-words text-red-700 bg-red-50 border border-red-200 rounded-lg p-3 text-xs max-h-[30vh] overflow-auto">
+                  {previewItem.error}
+                </div>
+              </div>
+            )}
+            <div>
+              <div className="text-xs text-gray-500">Recipient</div>
+              <div className="font-medium text-gray-900 break-all">{previewItem.recipient}</div>
+            </div>
+            {previewItem.context && (
+              <div>
+                <div className="text-xs text-gray-500">Context</div>
+                <div className="text-xs text-gray-700 break-all">{previewItem.context}</div>
+              </div>
+            )}
+            <div>
+              <div className="text-xs text-gray-500">Message</div>
+              <div className="mt-1 whitespace-pre-wrap break-words text-gray-900 bg-gray-50 border border-gray-200 rounded-lg p-3 text-sm max-h-[50vh] overflow-auto">
+                {previewItem.message_snippet || '(no message text)'}
+              </div>
+              <div className="text-[11px] text-gray-500 mt-1">Length: {String(previewItem.message_snippet || '').length} characters</div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   ) : null
@@ -449,9 +594,10 @@ export default function FloatingDeliveryLog(){
             document.body
           )}
       {panel && createPortal(panel, document.body)}
+      {previewModal && createPortal(previewModal, document.body)}
       {fullOpen && createPortal(
         <div style={{ position:'fixed', inset:0, zIndex:5000 }}>
-          <div onClick={()=>setFullOpen(false)} className="fixed inset-0 bg-black/40" />
+          <div className="fixed inset-0 bg-black/40" onClick={() => setFullOpen(false)} />
           {/* Collapsed tag at bottom-right */}
           {collapsed ? (
             <div className="fixed right-4 bottom-4">
@@ -509,7 +655,19 @@ export default function FloatingDeliveryLog(){
                     <div className="p-4 text-sm text-gray-500">No recent logs</div>
                   )}
                   {items.map(it => (
-                    <div key={it.id} className="px-4 py-3 text-sm">
+                    <div
+                      key={it.id}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => setPreviewItem(it)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          setPreviewItem(it)
+                        }
+                      }}
+                      className="px-4 py-3 text-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                    >
                       <div className="flex items-center gap-2">
                         <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium ${it.channel === 'sms' ? 'bg-emerald-50 text-emerald-700' : 'bg-indigo-50 text-indigo-700'}`}>{it.channel.toUpperCase()}</span>
                         <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium ${it.ok ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>{it.ok ? 'OK' : 'FAIL'}</span>

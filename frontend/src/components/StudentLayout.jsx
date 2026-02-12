@@ -106,6 +106,13 @@ export default function StudentLayout({ children }){
     return () => { mounted = false; clearInterval(id) }
   }, [user, dismissedIds])
 
+  const displayName = (() => {
+    const first = String(user?.first_name || '').trim()
+    const last = String(user?.last_name || '').trim()
+    const full = `${first} ${last}`.trim()
+    return full || first || String(user?.username || '').trim() || ''
+  })()
+
   return (
     <div className="min-h-screen bg-white">
       {broadcastBanner && (
@@ -142,8 +149,8 @@ export default function StudentLayout({ children }){
             ) : null}
             <div className="flex flex-col">
               <div className="hidden sm:block text-sm font-semibold leading-tight">{schoolName || 'EDU-TRACK'}</div>
-              <div className="text-xs sm:text-[13px] font-medium text-blue-100 truncate max-w-[120px]">
-                {user?.first_name || user?.username || ''}
+              <div className="text-xs sm:text-[13px] font-medium text-blue-100 whitespace-normal break-words leading-tight max-w-[55vw] sm:max-w-[220px]">
+                {displayName}
               </div>
             </div>
           </Link>
@@ -195,8 +202,8 @@ export default function StudentLayout({ children }){
               )}
             </Link>
             {user && (
-              <div className="hidden md:block text-sm text-blue-50 max-w-[160px] truncate" title={user.first_name || user.username}>
-                {user.first_name || user.username}
+              <div className="hidden md:block text-sm text-blue-50 max-w-[160px] truncate" title={displayName}>
+                {displayName}
               </div>
             )}
             <button onClick={lock} className="hidden md:inline-flex items-center px-3 py-2 rounded-xl border border-blue-600 text-sm text-blue-50 hover:bg-white/10">Lock</button>

@@ -148,18 +148,20 @@ def _append_contact_to_text(text_message: str, ctx: dict) -> str:
     return msg
 
 
-def log_delivery(*, school_id: int | None, channel: str, recipient: str, ok: bool, message: str = '', context: str = '') -> None:
+def log_delivery(*, school_id: int | None, channel: str, recipient: str, ok: bool, message: str = '', context: str = '', error: str = '') -> None:
     """Persist a lightweight delivery log. Never raises."""
     try:
         # Local import to avoid circulars
         from .models import DeliveryLog
         snippet = (message or '')[:300]
+        err = (str(error or '')[:1000]) if error is not None else ''
         DeliveryLog.objects.create(
             school_id=school_id,
             channel=channel,
             recipient=str(recipient)[:255],
             ok=bool(ok),
             message_snippet=snippet,
+            error=err,
             context=(context or '')[:100],
         )
     except Exception:
@@ -407,6 +409,74 @@ def send_sms(phone: str, message: str, school_id: int | None = None, max_len: in
     return bool(ok)
 
 
+def _resolve_smtp_config(*, school_id: int | None):
+    """Return SMTP config, preferring per-school SchoolIntegrationSettings when present.
+    Coalesces blank/invalid values to safe defaults.
+    """
+    integ = _get_school_integration_settings(school_id)
+
+    def _clean_host(v: str | None) -> str:
+        h = str(v or '').strip()
+        # Common UI mistake: saving an email address into host
+        if not h or ('@' in h):
+            return ''
+        return h
+
+    if integ is not None:
+        host_user = str(getattr(integ, 'smtp_username', '') or '').strip()
+        host_pass = str(getattr(integ, 'smtp_password', '') or '').strip()
+        if not (host_user and host_pass):
+            return None
+
+        host = _clean_host(getattr(integ, 'smtp_host', None))
+        if not host:
+            host = str(getattr(settings, 'EMAIL_HOST', 'smtp.gmail.com') or 'smtp.gmail.com').strip()
+
+        try:
+            port = int(getattr(integ, 'smtp_port', None) or 0)
+        except Exception:
+            port = 0
+        if port <= 0:
+            port = int(getattr(settings, 'EMAIL_PORT', 587) or 587)
+
+        use_ssl = bool(getattr(integ, 'smtp_use_ssl', False))
+        use_tls = bool(getattr(integ, 'smtp_use_tls', True)) and (not use_ssl)
+
+        base_from = str(getattr(integ, 'smtp_from_email', '') or '').strip()
+        if not base_from:
+            base_from = str(getattr(settings, 'DEFAULT_FROM_EMAIL', host_user or 'no-reply@example.com') or (host_user or 'no-reply@example.com')).strip()
+        return {
+            'source': 'integration',
+            'host': host,
+            'port': port,
+            'use_tls': use_tls,
+            'use_ssl': use_ssl,
+            'username': host_user,
+            'password': host_pass,
+            'base_from': base_from,
+        }
+
+    host = str(getattr(settings, 'EMAIL_HOST', 'smtp.gmail.com') or 'smtp.gmail.com').strip()
+    port = int(getattr(settings, 'EMAIL_PORT', 587) or 587)
+    use_tls = bool(getattr(settings, 'EMAIL_USE_TLS', True))
+    use_ssl = bool(getattr(settings, 'EMAIL_USE_SSL', False))
+    host_user = str(getattr(settings, 'EMAIL_HOST_USER', '') or '').strip()
+    host_pass = str(getattr(settings, 'EMAIL_HOST_PASSWORD', '') or '').strip()
+    base_from = str(getattr(settings, 'DEFAULT_FROM_EMAIL', host_user or 'no-reply@example.com') or (host_user or 'no-reply@example.com')).strip()
+    if not (host_user and host_pass):
+        return None
+    return {
+        'source': 'global',
+        'host': host,
+        'port': port,
+        'use_tls': bool(use_tls) and (not bool(use_ssl)),
+        'use_ssl': bool(use_ssl),
+        'username': host_user,
+        'password': host_pass,
+        'base_from': base_from,
+    }
+
+
 def send_email_safe(subject: str, message: str, recipient: str, reply_to: list[str] | None = None, from_name: str | None = None, school_id: int | None = None) -> bool:
     if not recipient:
         return False
@@ -417,34 +487,19 @@ def send_email_safe(subject: str, message: str, recipient: str, reply_to: list[s
             return True
     except Exception:
         pass
-    integ = _get_school_integration_settings(school_id)
-    if integ is not None:
-        if not (getattr(integ, 'smtp_username', None) and getattr(integ, 'smtp_password', None)):
-            logger.warning("School email channel not configured; skipping email to %s (school_id=%s)", recipient, school_id)
-            return False
-        host = getattr(integ, 'smtp_host', 'smtp.gmail.com')
-        port = int(getattr(integ, 'smtp_port', 587) or 587)
-        use_tls = bool(getattr(integ, 'smtp_use_tls', True))
-        use_ssl = bool(getattr(integ, 'smtp_use_ssl', False))
-        host_user = getattr(integ, 'smtp_username', '')
-        host_pass = getattr(integ, 'smtp_password', '')
-        base_from = getattr(integ, 'smtp_from_email', host_user or 'no-reply@example.com')
-    else:
-        host = getattr(settings, 'EMAIL_HOST', 'smtp.gmail.com')
-        port = int(getattr(settings, 'EMAIL_PORT', 587) or 587)
-        use_tls = bool(getattr(settings, 'EMAIL_USE_TLS', True))
-        use_ssl = bool(getattr(settings, 'EMAIL_USE_SSL', False))
-        host_user = getattr(settings, 'EMAIL_HOST_USER', '')
-        host_pass = getattr(settings, 'EMAIL_HOST_PASSWORD', '')
-        base_from = getattr(settings, 'DEFAULT_FROM_EMAIL', host_user or 'no-reply@example.com')
-    if not host_user or not host_pass:
-        logger.warning("Email credentials missing; skipping email to %s", recipient)
+    cfg = _resolve_smtp_config(school_id=school_id)
+    if not cfg:
+        logger.warning("School/global email channel not configured; skipping email to %s (school_id=%s)", recipient, school_id)
         return False
-    try:
-        if integ is not None and getattr(integ, 'smtp_from_email', None):
-            base_from = str(getattr(integ, 'smtp_from_email', '') or base_from)
-    except Exception:
-        pass
+
+    host = cfg['host']
+    port = int(cfg['port'] or 587)
+    use_tls = bool(cfg['use_tls'])
+    use_ssl = bool(cfg['use_ssl'])
+    host_user = cfg['username']
+    host_pass = cfg['password']
+    base_from = cfg['base_from']
+
     from_email = base_from
     try:
         if from_name:
@@ -471,78 +526,40 @@ def send_email_safe(subject: str, message: str, recipient: str, reply_to: list[s
             email.attach_alternative(wrapped_html, 'text/html')
         return email
 
-    try:
-        from django.core.mail import get_connection
-        conn = get_connection(
-            host=host,
-            port=int(port or 587),
-            username=host_user,
-            password=host_pass,
-            use_tls=bool(use_tls) and not bool(use_ssl),
-            use_ssl=bool(use_ssl),
-            timeout=20,
-        )
-        conn.open()
-        try:
-            email = _build_email(connection=conn)
-            email.send(fail_silently=False)
-            return True
-        finally:
-            try:
-                conn.close()
-            except Exception:
-                pass
-    except Exception as e:
-        logger.warning("Primary SMTP send failed (per-school/global): %s", e)
+    try_ports: list[tuple[int, bool, bool]] = [(port, use_tls, use_ssl)]
+    # If school integration config is present, do not override with hardcoded ports.
+    if cfg.get('source') != 'integration':
+        try_ports += [(587, True, False), (465, False, True)]
 
-    try:
-        from django.core.mail import get_connection
-        conn = get_connection(
-            host=host,
-            port=587,
-            username=host_user,
-            password=host_pass,
-            use_tls=True,
-            use_ssl=False,
-            timeout=20,
-        )
-        conn.open()
+    last_err = None
+    for p, tls_flag, ssl_flag in try_ports:
         try:
-            email = _build_email(connection=conn)
-            email.send(fail_silently=False)
-            return True
-        finally:
+            from django.core.mail import get_connection
+            conn = get_connection(
+                host=host,
+                port=int(p or 587),
+                username=host_user,
+                password=host_pass,
+                use_tls=bool(tls_flag) and not bool(ssl_flag),
+                use_ssl=bool(ssl_flag),
+                timeout=20,
+            )
+            conn.open()
             try:
-                conn.close()
-            except Exception:
-                pass
-    except Exception as e:
-        logger.warning("SMTP TLS fallback failed: %s", e)
+                email = _build_email(connection=conn)
+                email.send(fail_silently=False)
+                return True
+            finally:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+        except Exception as e:
+            last_err = e
+            logger.warning("SMTP send failed (host=%s port=%s tls=%s ssl=%s): %s", host, p, tls_flag, ssl_flag, e)
 
-    try:
-        from django.core.mail import get_connection
-        conn = get_connection(
-            host=host,
-            port=465,
-            username=host_user,
-            password=host_pass,
-            use_tls=False,
-            use_ssl=True,
-            timeout=20,
-        )
-        conn.open()
-        try:
-            email = _build_email(connection=conn)
-            email.send(fail_silently=False)
-            return True
-        finally:
-            try:
-                conn.close()
-            except Exception:
-                pass
-    except Exception as e:
-        logger.exception("All SMTP attempts failed for %s: %s", recipient, e)
-        return False
+    logger.exception("All SMTP attempts failed for %s: %s", recipient, last_err)
+    return False
 
 
 def send_email_safe_html(
@@ -563,47 +580,18 @@ def send_email_safe_html(
      except Exception:
          pass
 
-     integ = _get_school_integration_settings(school_id)
-
-     # If a school has integration settings, do not fall back to global SMTP.
-     try:
-         if integ is not None:
-             if not (getattr(integ, 'smtp_username', None) and getattr(integ, 'smtp_password', None)):
-                 logger.warning("School email channel not configured; skipping email to %s (school_id=%s)", recipient, school_id)
-                 return False
-     except Exception:
-         pass
-     host = getattr(settings, 'EMAIL_HOST', 'smtp.gmail.com')
-     port = int(getattr(settings, 'EMAIL_PORT', 587) or 587)
-     use_tls = bool(getattr(settings, 'EMAIL_USE_TLS', True))
-     use_ssl = bool(getattr(settings, 'EMAIL_USE_SSL', False))
-     host_user = getattr(settings, 'EMAIL_HOST_USER', '')
-     host_pass = getattr(settings, 'EMAIL_HOST_PASSWORD', '')
-
-     try:
-         if integ is not None:
-             if getattr(integ, 'smtp_host', None):
-                 host = str(getattr(integ, 'smtp_host', '') or host)
-             if getattr(integ, 'smtp_port', None):
-                 port = int(getattr(integ, 'smtp_port', port) or port)
-             if getattr(integ, 'smtp_username', None):
-                 host_user = str(getattr(integ, 'smtp_username', '') or host_user)
-             if getattr(integ, 'smtp_password', None):
-                 host_pass = str(getattr(integ, 'smtp_password', '') or host_pass)
-             use_tls = bool(getattr(integ, 'smtp_use_tls', use_tls))
-             use_ssl = bool(getattr(integ, 'smtp_use_ssl', use_ssl))
-     except Exception:
-         pass
-     if not host_user or not host_pass:
-         logger.warning("Email credentials missing; skipping email to %s", recipient)
+     cfg = _resolve_smtp_config(school_id=school_id)
+     if not cfg:
+         logger.warning("School/global email channel not configured; skipping email to %s (school_id=%s)", recipient, school_id)
          return False
 
-     base_from = getattr(settings, 'DEFAULT_FROM_EMAIL', host_user or 'no-reply@example.com')
-     try:
-         if integ is not None and getattr(integ, 'smtp_from_email', None):
-             base_from = str(getattr(integ, 'smtp_from_email', '') or base_from)
-     except Exception:
-         pass
+     host = cfg['host']
+     port = int(cfg['port'] or 587)
+     use_tls = bool(cfg['use_tls'])
+     use_ssl = bool(cfg['use_ssl'])
+     host_user = cfg['username']
+     host_pass = cfg['password']
+     base_from = cfg['base_from']
      from_email = base_from
      try:
          if from_name:
@@ -642,78 +630,39 @@ def send_email_safe_html(
              email.alternatives = [(wrapped_html2, 'text/html')]
          return email
 
-     try:
-         from django.core.mail import get_connection
-         conn = get_connection(
-             host=host,
-             port=int(port or 587),
-             username=host_user,
-             password=host_pass,
-             use_tls=bool(use_tls) and not bool(use_ssl),
-             use_ssl=bool(use_ssl),
-             timeout=20,
-         )
-         conn.open()
-         try:
-             email = _build_email(connection=conn)
-             email.send(fail_silently=False)
-             return True
-         finally:
-             try:
-                 conn.close()
-             except Exception:
-                 pass
-     except Exception as e:
-         logger.warning("Primary SMTP send failed (HTML) for %s: %s", recipient, e)
+     try_ports: list[tuple[int, bool, bool]] = [(port, use_tls, use_ssl)]
+     if cfg.get('source') != 'integration':
+         try_ports += [(587, True, False), (465, False, True)]
 
-     try:
-         from django.core.mail import get_connection
-         conn = get_connection(
-             host=host,
-             port=587,
-             username=host_user,
-             password=host_pass,
-             use_tls=True,
-             use_ssl=False,
-             timeout=20,
-         )
-         conn.open()
+     last_err = None
+     for p, tls_flag, ssl_flag in try_ports:
          try:
-             email = _build_email(connection=conn)
-             email.send(fail_silently=False)
-             return True
-         finally:
+             from django.core.mail import get_connection
+             conn = get_connection(
+                 host=host,
+                 port=int(p or 587),
+                 username=host_user,
+                 password=host_pass,
+                 use_tls=bool(tls_flag) and not bool(ssl_flag),
+                 use_ssl=bool(ssl_flag),
+                 timeout=20,
+             )
+             conn.open()
              try:
-                 conn.close()
-             except Exception:
-                 pass
-     except Exception as e:
-         logger.warning("SMTP TLS fallback failed (HTML) for %s: %s", recipient, e)
+                 email = _build_email(connection=conn)
+                 email.send(fail_silently=False)
+                 return True
+             finally:
+                 try:
+                     conn.close()
+                 except Exception:
+                     pass
+         except Exception as e:
+             last_err = e
+             logger.warning("SMTP send failed (HTML) (host=%s port=%s tls=%s ssl=%s): %s", host, p, tls_flag, ssl_flag, e)
 
-     try:
-         from django.core.mail import get_connection
-         conn = get_connection(
-             host=host,
-             port=465,
-             username=host_user,
-             password=host_pass,
-             use_tls=False,
-             use_ssl=True,
-             timeout=20,
-         )
-         conn.open()
-         try:
-             email = _build_email(connection=conn)
-             email.send(fail_silently=False)
-             return True
-         finally:
-             try:
-                 conn.close()
-             except Exception:
-                 pass
-     except Exception as e:
-         logger.exception("All SMTP attempts failed (HTML) for %s: %s", recipient, e)
-         return False
+     logger.exception("All SMTP attempts failed (HTML) for %s: %s", recipient, last_err)
+     return False
 
 
 def send_email_with_attachment(subject: str, message: str, recipient: str, filename: str, content: bytes, mimetype: str = 'application/pdf', school_id: int | None = None) -> bool:
@@ -721,38 +670,23 @@ def send_email_with_attachment(subject: str, message: str, recipient: str, filen
     if not recipient:
         return False
     try:
-        integ = _get_school_integration_settings(school_id)
+        cfg = _resolve_smtp_config(school_id=school_id)
+        if not cfg:
+            logger.warning("School/global email channel not configured; skipping email to %s (school_id=%s)", recipient, school_id)
+            return False
 
-        # If a school has integration settings, do not fall back to global SMTP.
-        if integ is not None:
-            if not (getattr(integ, 'smtp_username', None) and getattr(integ, 'smtp_password', None)):
-                logger.warning("School email channel not configured; skipping email to %s (school_id=%s)", recipient, school_id)
-                return False
-            host = getattr(integ, 'smtp_host', 'smtp.gmail.com')
-            port = int(getattr(integ, 'smtp_port', 587) or 587)
-            use_tls = bool(getattr(integ, 'smtp_use_tls', True))
-            use_ssl = bool(getattr(integ, 'smtp_use_ssl', False))
-            host_user = getattr(integ, 'smtp_username', '')
-            host_pass = getattr(integ, 'smtp_password', '')
-            base_from = getattr(integ, 'smtp_from_email', host_user or 'no-reply@example.com')
-        else:
-            host = getattr(settings, 'EMAIL_HOST', 'smtp.gmail.com')
-            port = int(getattr(settings, 'EMAIL_PORT', 587) or 587)
-            use_tls = bool(getattr(settings, 'EMAIL_USE_TLS', True))
-            use_ssl = bool(getattr(settings, 'EMAIL_USE_SSL', False))
-            host_user = getattr(settings, 'EMAIL_HOST_USER', '')
-            host_pass = getattr(settings, 'EMAIL_HOST_PASSWORD', '')
-            base_from = getattr(settings, 'DEFAULT_FROM_EMAIL', host_user or 'no-reply@example.com')
-
-        try:
-            if integ is not None and getattr(integ, 'smtp_from_email', None):
-                base_from = str(getattr(integ, 'smtp_from_email', '') or base_from)
-        except Exception:
-            pass
+        host = cfg['host']
+        port = int(cfg['port'] or 587)
+        use_tls = bool(cfg['use_tls'])
+        use_ssl = bool(cfg['use_ssl'])
+        host_user = cfg['username']
+        host_pass = cfg['password']
+        base_from = cfg['base_from']
         from_email = base_from
         ctx = _resolve_school_email_context(school_id)
         final_text = _append_contact_to_text(message or '', ctx)
 
+        conn = None
         try:
             from django.core.mail import get_connection
             conn = get_connection(
@@ -1031,11 +965,13 @@ def process_message_delivery(message_id: int):
                 email = (getattr(stu, 'email', '') or '').strip()
             if email and send_email_enabled:
                 ok_email = False
+                err_txt = ''
                 try:
                     ok_email = send_email_safe(subject, msg.body, email, school_id=getattr(msg, 'school_id', None))
                     if ok_email:
                         sent_email += 1
-                except Exception:
+                except Exception as e:
+                    err_txt = str(e)
                     logger.exception("Failed to email user %s", getattr(u, 'id', ''))
                 finally:
                     try:
@@ -1046,6 +982,7 @@ def process_message_delivery(message_id: int):
                             ok=bool(ok_email),
                             message=msg.body,
                             context=f"message:{message_id};user:{getattr(u,'id',None)}",
+                            error=err_txt,
                         )
                     except Exception:
                         pass
@@ -1134,9 +1071,11 @@ def deliver_message_collect(message_id: int) -> dict:
                 email = (getattr(stu, 'email', '') or '').strip()
             if email and send_email_enabled:
                 ok_email = False
+                err_txt = ''
                 try:
                     ok_email = send_email_safe(subject, msg.body, email, school_id=getattr(msg, 'school_id', None))
-                except Exception:
+                except Exception as e:
+                    err_txt = str(e)
                     logger.exception("Failed to email user %s", getattr(u, 'id', ''))
                     ok_email = False
                 results['email'].append({'user_id': getattr(u, 'id', None), 'email': email, 'ok': bool(ok_email)})
@@ -1148,6 +1087,7 @@ def deliver_message_collect(message_id: int) -> dict:
                         ok=bool(ok_email),
                         message=msg.body,
                         context=f"message:{message_id};user:{getattr(u,'id',None)}",
+                        error=err_txt,
                     )
                 except Exception:
                     pass
@@ -1332,6 +1272,8 @@ def notify_payment_received(invoice, payment) -> bool:
             return False
         if not getattr(student, 'is_active', True):
             return True
+        if bool(getattr(student, 'is_transferred', False)):
+            return True
         school = getattr(getattr(student, 'klass', None), 'school', None)
         school_id = getattr(school, 'id', None)
         # Compute updated totals
@@ -1356,8 +1298,10 @@ def notify_payment_received(invoice, payment) -> bool:
             except Exception:
                 pass
 
-        # Mirror to chat
+        # Preferred: queue in-app + SMS + Email via the unified Messages delivery pipeline.
+        # This ensures delivery logs are created and sending happens asynchronously.
         sender_id = resolve_default_sender_id(school_id) if school_id else None
+        queued_via_messages = False
         if sender_id and getattr(student, 'user_id', None):
             try:
                 create_messages_for_users(
@@ -1366,26 +1310,30 @@ def notify_payment_received(invoice, payment) -> bool:
                     body=body,
                     recipient_user_ids=[student.user_id],
                     system_tag='payment',
+                    queue_delivery=True,
                 )
+                queued_via_messages = True
             except Exception:
-                pass
+                queued_via_messages = False
 
-        # SMS -> guardian phone only
-        phone = getattr(student, 'guardian_id', None)
-        if phone:
-            try:
-                send_sms(phone, body, school_id=school_id)
-            except Exception:
-                pass
+        # Fallback: if the student has no linked user (or sender not resolvable), send directly.
+        if not queued_via_messages:
+            # SMS -> guardian phone only
+            phone = getattr(student, 'guardian_id', None)
+            if phone:
+                try:
+                    send_sms(phone, body, school_id=school_id)
+                except Exception:
+                    pass
 
-        # Email
-        recipient = getattr(student, 'email', None) or getattr(getattr(student, 'user', None), 'email', None)
-        if recipient:
-            try:
-                subj = f"Fee payment received - Invoice {invoice.id}"
-                send_email_safe(subj, body, recipient, school_id=school_id)
-            except Exception:
-                pass
+            # Email
+            recipient = getattr(student, 'email', None) or getattr(getattr(student, 'user', None), 'email', None)
+            if recipient:
+                try:
+                    subj = f"Fee payment received - Invoice {invoice.id}"
+                    send_email_safe(subj, body, recipient, school_id=school_id)
+                except Exception:
+                    pass
         return True
     except Exception:
         logger.exception("notify_payment_received failed for invoice %s payment %s", getattr(invoice, 'id', None), getattr(payment, 'id', None))

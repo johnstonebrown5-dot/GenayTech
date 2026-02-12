@@ -54,7 +54,7 @@ class ArrearsMessageCampaignSerializer(serializers.ModelSerializer):
 class DeliveryLogSerializer(serializers.ModelSerializer):
     class Meta:
         model = DeliveryLog
-        fields = ['id','school','channel','recipient','ok','message_snippet','context','created_at']
+        fields = ['id','school','channel','recipient','ok','message_snippet','error','context','created_at']
         read_only_fields = fields
 
 

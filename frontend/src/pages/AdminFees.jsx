@@ -58,7 +58,7 @@ export default function AdminFees({ embed=false, initialTab='categories' }){
       const params = new URLSearchParams()
       if (scope==='class' && reportForm.classId) params.set('class', String(reportForm.classId))
       if (scope==='grade' && reportForm.grade) params.set('grade', String(reportForm.grade))
-      // Graphical -> open analytics dashboard
+      // Graphical -> open analytics dashboard in a new window/tab
       if (format==='graph'){
         const qs = new URLSearchParams({ tab: kind, ...Object.fromEntries(params) }).toString()
         const path = '/admin/reports' // FinanceReports page

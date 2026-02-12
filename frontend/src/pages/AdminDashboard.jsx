@@ -245,6 +245,50 @@ export default function AdminDashboard(){
   const [dayModalKey, setDayModalKey] = useState('')
   const [dayModalEvents, setDayModalEvents] = useState([])
 
+  // Event creation state
+  const [isCreateOpen, setIsCreateOpen] = useState(false)
+  const [createForm, setCreateForm] = useState({
+    title: '', description: '', location: '', start: '', end: '', all_day: true, audience: 'all', visibility: 'internal'
+  })
+  const [creating, setCreating] = useState(false)
+
+  const handleDayClick = (key, dayEvents, date) => {
+    if (dayEvents.length > 0) {
+      setDayModalKey(key)
+      setDayModalEvents(dayEvents)
+      setDayModalOpen(true)
+    } else {
+      // Pre-fill creation form with the clicked date
+      const isoDate = date.toISOString().slice(0, 10)
+      setCreateForm(prev => ({
+        ...prev,
+        start: `${isoDate}T08:00`,
+        end: `${isoDate}T17:00`
+      }))
+      setIsCreateOpen(true)
+    }
+  }
+
+  const handleCreateEvent = async (e) => {
+    e.preventDefault()
+    setCreating(true)
+    try {
+      await api.post('/communications/events/', createForm)
+      setIsCreateOpen(false)
+      setCreateForm({
+        title: '', description: '', location: '', start: '', end: '', all_day: true, audience: 'all', visibility: 'internal'
+      })
+      // Refresh events
+      const eventsRes = await api.get('/communications/events/')
+      const baseEvents = Array.isArray(eventsRes.data) ? eventsRes.data : (eventsRes.data?.results || [])
+      setEvents(prev => [...baseEvents, ...prev.filter(x => x.source === 'exam')])
+    } catch (err) {
+      alert('Failed to create event')
+    } finally {
+      setCreating(false)
+    }
+  }
+
   const statCards = !stats ? [] : [
     {
       title: 'Students',
@@ -513,17 +557,9 @@ export default function AdminDashboard(){
 
                 {/* Modern Mini Calendar */}
                 <div className="space-y-3">
-                  {/* Legend and Filters */}
-                  <div className="hidden sm:flex flex-wrap items-center gap-2 text-[11px]">
-                    {/* Legend chips */}
-                    <span className="px-2 py-0.5 rounded-full border bg-emerald-50 text-emerald-700 border-emerald-200">Students</span>
-                    <span className="px-2 py-0.5 rounded-full border bg-purple-50 text-purple-700 border-purple-200">Teachers</span>
-                    <span className="px-2 py-0.5 rounded-full border bg-amber-50 text-amber-700 border-amber-200">Parents</span>
-                    <span className="px-2 py-0.5 rounded-full border bg-rose-50 text-rose-700 border-rose-200">Exams</span>
-                    <span className="px-2 py-0.5 rounded-full border bg-sky-50 text-sky-700 border-sky-200">Holidays</span>
-                    <span className="px-2 py-0.5 rounded-full border bg-blue-50 text-blue-700 border-blue-200">Other</span>
-                    {/* Filters */}
-                    <div className="ml-auto flex flex-wrap items-center gap-1">
+                  {/* Filters */}
+                  <div className="hidden sm:flex flex-wrap items-center gap-2 text-[11px] w-full">
+                    <div className="flex flex-wrap items-center gap-1">
                       {[
                         ['students','Students'],
                         ['teachers','Teachers'],
@@ -563,7 +599,7 @@ export default function AdminDashboard(){
                           if (color && dayEvents.length>0) tileBg = color.chip.split(' ').find(c=>c.startsWith('bg-')) || tileBg
                           if (holidayName) tileBg = 'bg-yellow-50'
                           return (
-                            <button type="button" onClick={()=>{ setDayModalKey(key); setDayModalEvents(dayEvents); setDayModalOpen(true) }} key={i} className={`text-left relative rounded-xl min-h-[56px] sm:min-h-[68px] p-1.5 sm:p-2 text-[10px] sm:text-xs border ${holidayName? 'border-yellow-300' : (inMonth? 'border-gray-200':'border-gray-200/70')} ${tileBg} hover:border-brand-300 transition-all`}>
+                            <button type="button" onClick={() => handleDayClick(key, dayEvents, d)} key={i} className={`text-left relative rounded-xl min-h-[56px] sm:min-h-[68px] p-1.5 sm:p-2 text-[10px] sm:text-xs border ${holidayName? 'border-yellow-300' : (inMonth? 'border-gray-200':'border-gray-200/70')} ${tileBg} hover:border-brand-300 transition-all group`}>
                               <div className="flex items-center justify-between">
                                 <div className={`${inMonth? 'text-gray-800':'text-gray-400'} text-[10px] sm:text-[11px] font-semibold`}>{d.getDate()}</div>
                                 <div className="flex items-center gap-1">
@@ -571,6 +607,11 @@ export default function AdminDashboard(){
                                   {isToday && <span className="text-[9px] sm:text-[10px] px-1.5 py-0.5 rounded-full bg-brand-50 text-brand-700 border border-brand-200">Today</span>}
                                 </div>
                               </div>
+                              {dayEvents.length === 0 && !holidayName && (
+                                <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <span className="text-brand-600 font-bold text-lg">+</span>
+                                </div>
+                              )}
                               <div className="mt-1 flex flex-wrap gap-1">
                                 {dayEvents.slice(0,2).map(ev => {
                                   const c = colorForEvent(ev)
@@ -649,23 +690,115 @@ export default function AdminDashboard(){
       </div>
       {/* Day Popover Modal */}
       <Modal open={dayModalOpen} onClose={()=>setDayModalOpen(false)} title={`Events — ${dayModalKey}`} size="md">
-        <div className="space-y-2">
-          {dayModalEvents.length === 0 ? (
-            <div className="text-sm text-gray-600">No events on this day.</div>
-          ) : (
-            dayModalEvents.map(ev => (
-              <div key={ev.id} className="border rounded-lg p-3 flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="font-medium truncate">{ev.title}</div>
-                  <div className="text-xs text-gray-600 truncate">{ev.all_day ? 'All day' : `${new Date(ev.start).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})} - ${new Date(ev.end).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}`} {ev.location && `• ${ev.location}`}</div>
+        <div className="space-y-4">
+          <div className="flex justify-between items-center">
+            <h3 className="text-sm font-semibold text-gray-900">Scheduled Events</h3>
+            <button
+              onClick={() => {
+                setDayModalOpen(false)
+                const isoDate = dayModalKey
+                setCreateForm(prev => ({ ...prev, start: `${isoDate}T08:00`, end: `${isoDate}T17:00` }))
+                setIsCreateOpen(true)
+              }}
+              className="text-xs px-2 py-1 rounded bg-brand-600 text-white hover:bg-brand-700 transition-colors"
+            >
+              + Add Event
+            </button>
+          </div>
+          <div className="space-y-2">
+            {dayModalEvents.length === 0 ? (
+              <div className="text-sm text-gray-600 italic">No events on this day.</div>
+            ) : (
+              dayModalEvents.map(ev => (
+                <div key={ev.id} className="border rounded-lg p-3 flex items-center justify-between gap-3 bg-white">
+                  <div className="min-w-0">
+                    <div className="font-medium truncate text-sm">{ev.title}</div>
+                    <div className="text-xs text-gray-500 truncate">{ev.all_day ? 'All day' : `${new Date(ev.start).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})} - ${new Date(ev.end).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}`} {ev.location && `• ${ev.location}`}</div>
+                  </div>
+                  <div className="shrink-0 flex items-center gap-2">
+                    <button onClick={()=>{ setDayModalOpen(false); navigate('/admin/events') }} className="px-2 py-1 text-xs rounded border border-gray-200 bg-white hover:bg-gray-50">Open</button>
+                  </div>
                 </div>
-                <div className="shrink-0 flex items-center gap-2">
-                  <button onClick={()=>{ setDayModalOpen(false); navigate('/admin/events') }} className="px-2 py-1 text-sm rounded border bg-white hover:bg-gray-50">Open</button>
-                </div>
-              </div>
-            ))
-          )}
+              ))
+            )}
+          </div>
         </div>
+      </Modal>
+
+      {/* Quick Event Creation Modal */}
+      <Modal open={isCreateOpen} onClose={() => setIsCreateOpen(false)} title="Create New Event" size="md">
+        <form onSubmit={handleCreateEvent} className="space-y-4">
+          <div className="grid grid-cols-1 gap-4">
+            <label className="block">
+              <span className="text-sm font-medium text-gray-700">Event Title *</span>
+              <input
+                required
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-brand-500 focus:ring-brand-500 sm:text-sm border p-2"
+                value={createForm.title}
+                onChange={e => setCreateForm({ ...createForm, title: e.target.value })}
+                placeholder="e.g. Staff Meeting"
+              />
+            </label>
+            <div className="grid grid-cols-2 gap-4">
+              <label className="block">
+                <span className="text-sm font-medium text-gray-700">Start Time</span>
+                <input
+                  type="datetime-local"
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-brand-500 focus:ring-brand-500 sm:text-sm border p-2"
+                  value={createForm.start}
+                  onChange={e => setCreateForm({ ...createForm, start: e.target.value })}
+                />
+              </label>
+              <label className="block">
+                <span className="text-sm font-medium text-gray-700">End Time</span>
+                <input
+                  type="datetime-local"
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-brand-500 focus:ring-brand-500 sm:text-sm border p-2"
+                  value={createForm.end}
+                  onChange={e => setCreateForm({ ...createForm, end: e.target.value })}
+                />
+              </label>
+            </div>
+            <label className="block">
+              <span className="text-sm font-medium text-gray-700">Description</span>
+              <textarea
+                rows={2}
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-brand-500 focus:ring-brand-500 sm:text-sm border p-2"
+                value={createForm.description}
+                onChange={e => setCreateForm({ ...createForm, description: e.target.value })}
+              />
+            </label>
+            <label className="block">
+              <span className="text-sm font-medium text-gray-700">Target Audience</span>
+              <select
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-brand-500 focus:ring-brand-500 sm:text-sm border p-2"
+                value={createForm.audience}
+                onChange={e => setCreateForm({ ...createForm, audience: e.target.value })}
+              >
+                <option value="all">Everyone</option>
+                <option value="students">Students</option>
+                <option value="teachers">Teachers</option>
+                <option value="parents">Parents</option>
+              </select>
+            </label>
+          </div>
+          <div className="flex justify-end gap-3 pt-2">
+            <button
+              type="button"
+              onClick={() => setIsCreateOpen(false)}
+              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={creating}
+              className="px-4 py-2 text-sm font-medium text-white bg-brand-600 border border-transparent rounded-md hover:bg-brand-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-500 disabled:opacity-50"
+            >
+              {creating ? 'Creating...' : 'Create Event'}
+            </button>
+          </div>
+        </form>
       </Modal>
     </React.Fragment>
   )

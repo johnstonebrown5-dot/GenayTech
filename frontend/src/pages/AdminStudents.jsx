@@ -47,9 +47,40 @@ export default function AdminStudents(){
   const [isLoading, setIsLoading] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [confirmStudent, setConfirmStudent] = useState(null)
-  const [confirmTargetActive, setConfirmTargetActive] = useState(true)
   const [confirmSubmitting, setConfirmSubmitting] = useState(false)
   const [confirmAgree, setConfirmAgree] = useState(false)
+  const [confirmAction, setConfirmAction] = useState('') // 'deactivate' | 'delete' | 'transfer'
+
+  const handleAction = async (student, action) => {
+    setConfirmStudent(student)
+    setConfirmAction(action)
+    setConfirmAgree(false)
+    setConfirmOpen(true)
+  }
+
+  const runIndividualAction = async () => {
+    if (!confirmStudent || confirmSubmitting) return
+    try {
+      setConfirmSubmitting(true)
+      if (confirmAction === 'delete') {
+        await api.delete(`/academics/students/${confirmStudent.id}/`)
+        showSuccess('Deleted', `Student ${confirmStudent.name} deleted.`)
+      } else if (confirmAction === 'transfer') {
+        await api.patch(`/academics/students/${confirmStudent.id}/`, { is_transferred: true, is_active: false })
+        showSuccess('Transferred', `Student ${confirmStudent.name} marked as transferred.`)
+      } else {
+        // deactive / toggle active
+        await api.patch(`/academics/students/${confirmStudent.id}/`, { is_active: !confirmStudent.is_active })
+        showSuccess('Updated', `Student ${confirmStudent.name} status updated.`)
+      }
+      await load()
+      setConfirmOpen(false)
+    } catch (e) {
+      showError('Action Failed', e?.response?.data?.detail || 'Could not complete action.')
+    } finally {
+      setConfirmSubmitting(false)
+    }
+  }
 
   // Tab: active vs graduated vs inactive
   const [tab, setTab] = useState('active') // 'active' | 'graduated' | 'inactive'
@@ -951,10 +982,23 @@ export default function AdminStudents(){
                         {s.klass_detail?.name || s.klass || 'Not Assigned'}
                       </div>
                       <button
-                        onClick={()=>{ setConfirmStudent(s); setConfirmTargetActive(!s.is_active); setConfirmAgree(false); setConfirmOpen(true); }}
-                        className={`${s.is_active ? 'bg-red-100 text-red-700 hover:bg-red-200' : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'} h-9 px-3 text-xs font-semibold rounded-xl shrink-0`}
+                        onClick={()=>handleAction(s, 'deactivate')}
+                        className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-full border text-[11px] font-medium transition-all ${s.is_active ? 'border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100' : 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'}`}
                       >
+                        <span className={`w-1.5 h-1.5 rounded-full ${s.is_active ? 'bg-amber-500' : 'bg-emerald-500'}`}></span>
                         {s.is_active ? 'Deactivate' : 'Activate'}
+                      </button>
+                      <button
+                        onClick={()=>handleAction(s, 'transfer')}
+                        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full border border-blue-200 bg-blue-50 text-blue-700 text-[11px] font-medium hover:bg-blue-100 transition-all"
+                      >
+                        ✈️ Transfer
+                      </button>
+                      <button
+                        onClick={()=>handleAction(s, 'delete')}
+                        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full border border-rose-200 bg-rose-50 text-rose-700 text-[11px] font-medium hover:bg-rose-100 transition-all"
+                      >
+                        🗑️ Delete
                       </button>
                     </div>
                   </div>
@@ -1147,13 +1191,25 @@ export default function AdminStudents(){
                             View Details
                           </Link>
                           <button
-                            onClick={()=>{ setConfirmStudent(s); setConfirmTargetActive(!s.is_active); setConfirmAgree(false); setConfirmOpen(true); }}
+                            onClick={()=>handleAction(s, 'deactivate')}
                             className={`inline-flex items-center px-3 py-1.5 border text-xs font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 transition-all duration-200 ${s.is_active ? 'text-red-700 bg-red-100 hover:bg-red-200 border-transparent focus:ring-red-500' : 'text-emerald-700 bg-emerald-100 hover:bg-emerald-200 border-transparent focus:ring-emerald-500'}`}
                           >
                             <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v8m-4-4h8" />
                             </svg>
                             {s.is_active ? 'Deactivate' : 'Activate'}
+                          </button>
+                          <button
+                            onClick={()=>handleAction(s, 'transfer')}
+                            className="inline-flex items-center px-3 py-1.5 border border-blue-200 text-xs font-medium rounded-md text-blue-700 bg-blue-50 hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200"
+                          >
+                            ✈️ Transfer
+                          </button>
+                          <button
+                            onClick={()=>handleAction(s, 'delete')}
+                            className="inline-flex items-center px-3 py-1.5 border border-rose-200 text-xs font-medium rounded-md text-rose-700 bg-rose-50 hover:bg-rose-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-rose-500 transition-all duration-200"
+                          >
+                            🗑️ Delete
                           </button>
                         </div>
                       </td>
@@ -1343,67 +1399,45 @@ export default function AdminStudents(){
         </div>
       </Modal>
 
+      {/* Action Confirmation Modal */}
       <Modal
         open={confirmOpen}
-        onClose={()=>{ if(!confirmSubmitting){ setConfirmOpen(false); setConfirmStudent(null); } }}
-        title={confirmTargetActive ? 'Activate Student' : 'Deactivate Student'}
-        size="md"
+        onClose={() => !confirmSubmitting && setConfirmOpen(false)}
+        title="Confirm Action"
+        size="sm"
       >
         <div className="space-y-4">
-          {!confirmTargetActive && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-800">
-              <p className="font-semibold mb-2">Before you deactivate, please acknowledge:</p>
-              <ul className="list-disc list-inside space-y-1">
-                <li>The student will not be counted among exam participants.</li>
-                <li>The student will not be assigned fees or new invoices.</li>
-                <li>The student will not receive emails or messages.</li>
-                <li>Their login will be disabled immediately.</li>
-                <li>Admins can still view the student record from the admin side.</li>
-              </ul>
-              <label className="flex items-center gap-2 mt-3 text-red-900">
-                <input type="checkbox" checked={confirmAgree} onChange={(e)=>setConfirmAgree(e.target.checked)} />
-                <span>I understand and agree to deactivate this student.</span>
-              </label>
-            </div>
-          )}
-          {confirmTargetActive && (
-            <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 text-sm text-emerald-800">
-              <p className="font-semibold mb-2">Activate this student?</p>
-              <ul className="list-disc list-inside space-y-1">
-                <li>The student will be eligible for exams.</li>
-                <li>Fees and invoices may be assigned again.</li>
-                <li>They may receive emails and messages.</li>
-                <li>Their login will be enabled.</li>
-              </ul>
-            </div>
-          )}
-          <div className="flex justify-end gap-2">
+          <p className="text-sm text-gray-600">
+            This action cannot be undone. Are you sure you want to proceed?
+          </p>
+          
+          <div className="flex items-center gap-2">
+            <input 
+              type="checkbox" 
+              id="confirmAgree" 
+              checked={confirmAgree} 
+              onChange={e => setConfirmAgree(e.target.checked)} 
+              className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+            />
+            <label htmlFor="confirmAgree" className="text-xs text-gray-700 select-none cursor-pointer font-medium">
+              I understand and wish to proceed
+            </label>
+          </div>
+
+          <div className="flex justify-end gap-3 pt-2">
             <button
-              onClick={()=>{ if(!confirmSubmitting){ setConfirmOpen(false); setConfirmStudent(null); } }}
-              className="px-4 py-2 border rounded-lg text-gray-700 hover:bg-gray-50"
+              onClick={() => setConfirmOpen(false)}
               disabled={confirmSubmitting}
+              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
             >
               Cancel
             </button>
             <button
-              onClick={async ()=>{
-                if(!confirmStudent) return;
-                if(!confirmTargetActive && !confirmAgree) return;
-                try{
-                  setConfirmSubmitting(true)
-                  await api.post(`/academics/students/${confirmStudent.id}/set-active/`, { is_active: confirmTargetActive })
-                  await load()
-                  setConfirmOpen(false)
-                  setConfirmStudent(null)
-                }catch(e){
-                }finally{
-                  setConfirmSubmitting(false)
-                }
-              }}
-              className={`${confirmTargetActive ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-red-600 hover:bg-red-700'} px-4 py-2 rounded-lg text-white disabled:opacity-50`}
-              disabled={confirmSubmitting || (!confirmTargetActive ? !confirmAgree : false)}
+              onClick={runIndividualAction}
+              disabled={confirmSubmitting || !confirmAgree}
+              className="px-4 py-2 text-sm font-medium text-white rounded-lg transition-all bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
             >
-              {confirmSubmitting ? 'Please wait...' : (confirmTargetActive ? 'Activate' : 'Deactivate')}
+              {confirmSubmitting ? 'Processing...' : 'Confirm'}
             </button>
           </div>
         </div>

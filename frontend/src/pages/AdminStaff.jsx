@@ -15,7 +15,7 @@ export default function AdminStaff(){
   const [showAttach, setShowAttach] = useState(false)
   const [attachUserId, setAttachUserId] = useState('')
   const [savingAttach, setSavingAttach] = useState(false)
-  const [attachForm, setAttachForm] = useState({ department:'', position:'', national_id:'', kra_pin:'', nhif_no:'', nssf_no:'', address:'' })
+  const [attachForm, setAttachForm] = useState({ department:'', position:'', national_id:'', kra_pin:'', nhif_no:'', nssf_no:'', address:'', phone_number:'' })
   const [search, setSearch] = useState('')
 
   const { showSuccess, showError } = useNotification()
@@ -81,7 +81,7 @@ export default function AdminStaff(){
 
   const openAttach = (userId) => {
     setAttachUserId(String(userId||''))
-    setAttachForm({ department:'', position:'', national_id:'', kra_pin:'', nhif_no:'', nssf_no:'', address:'' })
+    setAttachForm({ department:'', position:'', national_id:'', kra_pin:'', nhif_no:'', nssf_no:'', address:'', phone_number:'' })
     setShowAttach(true)
   }
 
@@ -208,6 +208,7 @@ export default function AdminStaff(){
           <form onSubmit={saveAttach} className="grid gap-3 md:grid-cols-2">
             <input className="border p-2 rounded" placeholder="Department" value={attachForm.department} onChange={e=>setAttachForm({...attachForm, department:e.target.value})} />
             <input className="border p-2 rounded" placeholder="Position" value={attachForm.position} onChange={e=>setAttachForm({...attachForm, position:e.target.value})} />
+            <input className="border p-2 rounded" placeholder="Phone Number" value={attachForm.phone_number} onChange={e=>setAttachForm({...attachForm, phone_number:e.target.value})} />
             <input className="border p-2 rounded" placeholder="National ID" value={attachForm.national_id} onChange={e=>setAttachForm({...attachForm, national_id:e.target.value})} />
             <input className="border p-2 rounded" placeholder="KRA PIN" value={attachForm.kra_pin} onChange={e=>setAttachForm({...attachForm, kra_pin:e.target.value})} />
             <input className="border p-2 rounded" placeholder="NHIF No" value={attachForm.nhif_no} onChange={e=>setAttachForm({...attachForm, nhif_no:e.target.value})} />

@@ -487,10 +487,10 @@ class InvoiceViewSet(viewsets.ModelViewSet):
             invoice.status = 'unpaid'
         invoice.save(update_fields=['status'])
 
-        # Notify student of payment and updated balance
+        # Notify student/guardian (queues SMS, email and in-app where possible)
         try:
             notify_payment_received(invoice, pay)
-        except Exception as e:
+        except Exception:
             pass
 
         return Response({
@@ -2290,14 +2290,9 @@ def mpesa_callback(request):
             invoice.status = 'unpaid'
         invoice.save(update_fields=['status'])
 
-        # Notify student and guardian
+        # Notify student/guardian (queues SMS, email and in-app where possible)
         try:
-            student = invoice.student
-            msg = f"Dear {student.name}, payment of KES {amount} received for {invoice.category.name if invoice.category else 'Fees'}. Receipt: {receipt}. Balance: KES {float(invoice.amount) - total_paid}."
-            if student.phone:
-                send_sms(student.phone, msg, school_id=student.school_id)
-            if student.email:
-                send_email_safe("Fee Payment Received", msg, student.email, school_id=student.school_id)
+            notify_payment_received(invoice, pay)
         except Exception as e:
             logger.error(f"Notification failed: {e}")
 
@@ -2342,14 +2337,19 @@ def mpesa_callback(request):
                     remaining -= alloc
                     allocated = True
                     continue
-                
-                Payment.objects.create(
+
+                pay = Payment.objects.create(
                     invoice=inv,
                     amount=float(alloc),
                     method='mpesa',
                     reference=receipt or (checkout_id or ''),
                     recorded_by=None,
                 )
+                # Notify student/guardian of the allocation
+                try:
+                    notify_payment_received(inv, pay)
+                except Exception:
+                    pass
                 logger.info(f"Allocated {alloc} to Invoice {inv.id}")
                 remaining -= alloc
                 # update invoice status
@@ -2494,13 +2494,17 @@ def coop_mpesa_callback(request):
                     remaining -= alloc
                     allocated = True
                     continue
-                Payment.objects.create(
+                pay = Payment.objects.create(
                     invoice=inv,
                     amount=float(alloc),
                     method='mpesa',
                     reference=receipt or (checkout_id or ''),
                     recorded_by=None,
                 )
+                try:
+                    notify_payment_received(inv, pay)
+                except Exception:
+                    pass
                 remaining -= alloc
                 new_paid = paid_so_far + float(alloc)
                 if new_paid >= float(inv.amount):
