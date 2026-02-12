@@ -279,6 +279,7 @@ class Student(models.Model):
         help_text='Whether the student is a day scholar or a boarder.'
     )
     is_active = models.BooleanField(default=True, help_text='When false, the student is inactive: excluded from exams, fees, messaging, and login disabled.')
+    is_transferred = models.BooleanField(default=False, help_text='When true, the student has been transferred out: excluded from all school operations.')
 
 class TeacherDuty(models.Model):
     STATUS_CHOICES = (

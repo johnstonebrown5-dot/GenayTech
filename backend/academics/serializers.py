@@ -210,7 +210,7 @@ class StudentListSerializer(serializers.ModelSerializer):
         model = Student
         fields = [
             'id','admission_no','name','dob','gender','upi_number','guardian_id','guardian_name','guardian_passport_no','birth_certificate_no','klass','klass_detail','photo','photo_url',
-            'is_graduated','graduation_year','boarding_status','is_active'
+            'is_graduated','graduation_year','boarding_status','is_active','is_transferred'
         ]
 
     def get_photo_url(self, obj):

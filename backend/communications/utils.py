@@ -195,7 +195,7 @@ def render_template(template: str, context: dict) -> str:
     return msg
 
 
-def _send_sms_via_textwave_rest(*, base_url: str, api_key: str, phone: str, message: str, sender: str | None) -> bool:
+def _send_sms_via_textwave_rest(*, base_url: str, api_key: str, phone: str, message: str, sender: str | None, school_id: int | None = None) -> bool:
     try:
         base_url = str(base_url or '').strip().rstrip('/')
         if not base_url:
@@ -292,6 +292,19 @@ def _send_sms_via_textwave_rest(*, base_url: str, api_key: str, phone: str, mess
 
         if resp.status_code >= 400:
             logger.warning("TextWave SMS send failed (%s): %s", resp.status_code, (resp.text or '')[:500])
+            # Check for insufficient balance and notify superusers
+            if resp.status_code == 402 and 'INSUFFICIENT_BALANCE' in (resp.text or ''):
+                try:
+                    from accounts.models import User
+                    from .models import Notification
+                    superusers = User.objects.filter(is_superuser=True)
+                    msg = f"SMS balance is insufficient for school_id={school_id}. Please top up your TextWave account."
+                    for user in superusers:
+                        Notification.objects.create(user=user, message=msg, type='in_app')
+                        if user.email:
+                            send_email_safe("SMS Balance Low", msg, user.email, school_id=school_id)
+                except Exception as e:
+                    logger.exception("Failed to send balance low notifications: %s", e)
             return False
 
         try:
@@ -312,7 +325,7 @@ def _send_sms_via_textwave_rest(*, base_url: str, api_key: str, phone: str, mess
         return False
 
 
-def send_sms(phone: str, message: str, school_id: int | None = None) -> bool:
+def send_sms(phone: str, message: str, school_id: int | None = None, max_len: int | None = None) -> bool:
     """
     Send SMS via configured provider. Returns True if accepted for delivery.
     """
@@ -334,6 +347,18 @@ def send_sms(phone: str, message: str, school_id: int | None = None) -> bool:
             message = f"From : {school_name}\n\n{message}\nTHANKYOU"
         except Exception:
             pass
+
+    # Enforce max length (applies to the final text that will be sent)
+    try:
+        if max_len is not None:
+            ml = int(max_len)
+            if ml > 0 and isinstance(message, str) and len(message) > ml:
+                if ml <= 3:
+                    message = message[:ml]
+                else:
+                    message = message[: ml - 3] + '...'
+    except Exception:
+        pass
 
     provider = 'textwave'
     # Normalize phone into E.164 if possible (defaults to KE)
@@ -378,7 +403,7 @@ def send_sms(phone: str, message: str, school_id: int | None = None) -> bool:
     if not api_key or not base_url:
         logger.warning("TextWave credentials missing; skipping SMS to %s (school_id=%s)", phone, school_id)
         return False
-    ok = _send_sms_via_textwave_rest(base_url=base_url, api_key=api_key, phone=phone, message=message, sender=sender)
+    ok = _send_sms_via_textwave_rest(base_url=base_url, api_key=api_key, phone=phone, message=message, sender=sender, school_id=school_id)
     return bool(ok)
 
 

@@ -1450,7 +1450,7 @@ class ClassViewSet(viewsets.ModelViewSet):
             if phone and channel in ('sms', 'both'):
                 ok_sms = False
                 try:
-                    ok_sms = send_sms(phone, msg, school_id=school_id)
+                    ok_sms = send_sms(phone, msg, school_id=school_id, max_len=150)
                 except Exception:
                     ok_sms = False
                 try:
@@ -4529,7 +4529,7 @@ class StudentViewSet(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend]
 
     # Allow server-side filtering by class, gender, active/graduation status, and year
-    filterset_fields = ['klass', 'gender', 'is_graduated', 'graduation_year', 'is_active']
+    filterset_fields = ['klass', 'gender', 'is_graduated', 'graduation_year', 'is_active', 'is_transferred']
     # Support JSON (default axios), form, and multipart (for photo uploads)
     parser_classes = [JSONParser, FormParser, MultiPartParser]
 
@@ -4591,6 +4591,12 @@ class StudentViewSet(viewsets.ModelViewSet):
         grade = self.request.query_params.get('grade')
         if grade:
             qs = qs.filter(klass__grade_level=grade)
+
+        # By default, exclude transferred students unless explicitly requested
+        is_transferred = self.request.query_params.get('is_transferred')
+        if is_transferred is None:
+            qs = qs.exclude(is_transferred=True)
+
         # Optional: by default, include both active and inactive. Frontend can pass is_active to filter.
         # Text search by name or admission number (case-insensitive)
         q = self.request.query_params.get('q')
