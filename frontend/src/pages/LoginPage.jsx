@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react'
-import AppLogo from '../components/AppLogo'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../auth'
 import { useNotification } from '../components/NotificationContext'
-import api, { toAbsoluteUrl } from '../api'
- 
+import api from '../api'
+import loginDesktopBg from '../../LOGIN.png'
+import loginMobileBg from '../../MOBILE LOGIN.png'
+
 
 export default function LoginPage() {
   const { login } = useAuth()
@@ -18,12 +19,10 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [formStep, setFormStep] = useState('role') // 'role' | 'credentials' | 'verifying' | 'reset'
-  const [rolling, setRolling] = useState(false) // circle roll animation
   const [capsLockOn, setCapsLockOn] = useState(false)
   const [remember, setRemember] = useState(true)
   const [mounted, setMounted] = useState(false)
   const [installReady, setInstallReady] = useState(false)
-  const [isStandaloneApp, setIsStandaloneApp] = useState(false)
   const [tilt, setTilt] = useState({ x: 0, y: 0 })
   const [showAppIntro, setShowAppIntro] = useState(false)
   const [school, setSchool] = useState({ homepage: { hero: {} } })
@@ -161,16 +160,6 @@ export default function LoginPage() {
   }
   
 
-  const heroImages = (() => {
-    const imgs = school?.homepage?.hero?.images || []
-    const fallbacks = [
-      new URL('../../images/pexels-kwakugriffn-14554003.jpg', import.meta.url).href,
-      new URL('../../images/pexels-gabby-k-6289065.jpg', import.meta.url).href,
-      new URL('../../images/pexels-akelaphotography-448877.jpg', import.meta.url).href,
-    ]
-    return (imgs.length ? imgs.map(toAbsoluteUrl) : fallbacks).slice(0, 5)
-  })()
-
   useEffect(() => {
     // trigger entrance animation once mounted
     const t = setTimeout(() => setMounted(true), 50)
@@ -197,9 +186,6 @@ export default function LoginPage() {
       const dismissed = typeof window !== 'undefined' && window.localStorage && window.localStorage.getItem('eduTrackAppIntroDismissed') === '1'
       if (isStandalone && !dismissed) {
         setShowAppIntro(true)
-      }
-      if (isStandalone) {
-        setIsStandaloneApp(true)
       }
     } catch {}
   }, [])
@@ -233,8 +219,24 @@ export default function LoginPage() {
   }
 
   const roles = [
-    { key: 'staff', label: 'Staff', icon: '👥' },
-    { key: 'student', label: 'Student', icon: '🎓' },
+    {
+      key: 'staff',
+      label: 'Staff',
+      icon: (
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-6 w-6 text-slate-700">
+          <path d="M16 11c1.66 0 2.99-1.57 2.99-3.5S17.66 4 16 4s-3 1.57-3 3.5S14.34 11 16 11Zm-8 0c1.66 0 2.99-1.57 2.99-3.5S9.66 4 8 4 5 5.57 5 7.5 6.34 11 8 11Zm0 2c-2.33 0-7 1.17-7 3.5V20h14v-3.5C15 14.17 10.33 13 8 13Zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V20h7v-3.5c0-2.33-4.67-3.5-7-3.5Z" />
+        </svg>
+      ),
+    },
+    {
+      key: 'student',
+      label: 'Student',
+      icon: (
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-6 w-6 text-slate-700">
+          <path d="M12 3 1 9l11 6 9-4.91V17h2V9L12 3Zm0 14L5.21 13.2 3 14.4 12 19l9-4.6-2.21-1.2L12 17Z" />
+        </svg>
+      ),
+    },
   ]
 
   const submit = async (e) => {
@@ -340,482 +342,365 @@ export default function LoginPage() {
   return (
     <div
       className="relative min-h-screen w-full overflow-hidden bg-black"
-      style={heroImages[0]
-        ? {
-            backgroundImage:
-              `linear-gradient(to bottom, rgba(30,64,175,0.5), rgba(15,23,42,0.85)), ` +
-              `radial-gradient(1100px 520px at -10% -20%, rgba(79,70,229,0.45), transparent 65%), ` +
-              `radial-gradient(900px 520px at 110% 10%, rgba(129,140,248,0.25), transparent 65%), ` +
-              `url(${heroImages[0]})`,
-            backgroundSize: 'cover',
-            backgroundPosition: 'center',
-            backgroundRepeat: 'no-repeat',
-          }
-        : undefined}
     >
       <a href="/login?super=1" className="sr-only">Super admin login</a>
-      {/* Dark / blur overlay to keep content readable */}
-      <div className="absolute inset-0 -z-10 bg-slate-950/60 backdrop-blur-[3px]" />
+      {/* Desktop Content */}
+      <main
+        className="hidden sm:flex relative z-10 min-h-screen items-stretch justify-end"
+        style={{
+          backgroundImage: `url(${loginDesktopBg})`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          backgroundRepeat: 'no-repeat',
+        }}
+      >
+        <div className="relative w-full max-w-lg flex flex-col">
+          <div className="relative flex-1 overflow-hidden bg-white/10 backdrop-blur-3xl shadow-[-20px_0_80px_rgba(0,0,0,0.15)] border-l border-white/10 flex flex-col justify-center">
+            <div className="absolute inset-0 pointer-events-none" style={{ backgroundImage: 'linear-gradient(to bottom, rgba(255,255,255,0.05) 0%, transparent 100%)' }} />
+            <div className="relative px-10 py-12">
+              <div className="text-center">
+                {formStep === 'credentials' && (
+                  <div className="absolute top-8 left-10">
+                      <button 
+                        onClick={handleBackToRole} 
+                        className="flex items-center gap-2 text-sm font-bold text-sky-400 hover:text-cyan-400 transition-colors group bg-transparent border-none"
+                      >
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4 transition-transform group-hover:-translate-x-1">
+                        <path d="M19 12H5M12 19l-7-7 7-7"/>
+                      </svg>
+                      BACK
+                    </button>
+                  </div>
+                )}
+                <h2 className="text-3xl font-bold text-sky-400 tracking-tight mb-1">Sign in</h2>
+                {formStep === 'role' && (
+                  <p className="text-sm text-white/50 font-medium">Choose your account type to continue.</p>
+                )}
+                {formStep === 'credentials' && (
+                  <div className="mt-2 text-sm text-white/50 flex items-center justify-center gap-3">
+                    <span>Enter your school email and password.</span>
+                  </div>
+                )}
+              </div>
 
-      {/* Desktop/Tablet Content - always full-screen like app view */}
-      <main className="hidden sm:flex relative z-10 min-h-screen items-center justify-center">
-        <div className="w-full h-full">
-          <div className="w-full h-full">
-            <div className="relative overflow-hidden bg-white/95 h-screen">
-              <div className="grid md:grid-cols-[1.08fr_1fr] h-full">
-                {/* Left hero panel */}
-                <div className="relative overflow-hidden">
-                  <div
-                    className="absolute inset-0"
-                    style={heroImages[0]
-                      ? {
-                          backgroundImage:
-                            // Match app header purple with a softer, more transparent overlay
-                            `linear-gradient(to bottom right, rgba(79,70,229,0.60), rgba(96,165,250,0.45)), ` +
-                            // Subtle white glow towards the right for smoother blend into the form side
-                            `linear-gradient(to right, rgba(255,255,255,0.08), rgba(255,255,255,0.22)), ` +
-                            `url(${heroImages[0]})`,
-                          backgroundSize: 'cover',
-                          backgroundPosition: 'center',
-                          backgroundRepeat: 'no-repeat',
-                        }
-                      : undefined}
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/35 via-indigo-600/28 to-sky-500/30" />
-                  {/* Curved divider edge */}
-                  <div className="hidden md:block absolute -right-24 top-0 h-full w-56 bg-white/95 rounded-full shadow-[0_0_40px_rgba(15,23,42,0.35)]" />
-                  <div className={`relative z-10 h-full px-10 lg:px-12 py-10 flex flex-col justify-between text-white transition-all duration-500 ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
-                    <div>
-                      <div className="flex items-center gap-3">
-                        <AppLogo size={44} className="h-11 w-11 rounded-2xl bg-white/10 p-1.5 shadow-soft" />
-                        <div className="text-sm font-semibold tracking-[0.28em] uppercase text-white/80">Genay Technologies</div>
-                      </div>
-                      <h1 className="mt-6 text-3xl lg:text-4xl font-extrabold tracking-tight leading-tight">Welcome back</h1>
-                      <p className="mt-3 text-sm lg:text-[15px] text-white/85 max-w-sm">
-                        Sign in to access attendance, results, finance and messaging in one simple dashboard.
-                      </p>
-                    </div>
-                    <div className="mt-4 flex flex-col gap-2 text-xs text-white/80">
-                      {(school?.social_links?.facebook || school?.social_links?.twitter || school?.social_links?.instagram || school?.social_links?.youtube || school?.social_links?.website) && (
-                        <div className="flex items-center gap-4">
-                          {school?.social_links?.facebook && (
-                            <a
-                              aria-label="Facebook"
-                              href={school.social_links.facebook}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="inline-flex h-16 w-16 items-center justify-center rounded-full bg-transparent transition-transform hover:scale-110"
-                            >
-                              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="h-10 w-10" fill="#1877F2">
-                                <path d="M13.5 9H15V6h-1.5C11.57 6 10 7.57 10 9.5V11H8v3h2v7h3v-7h2.06l.44-3H13v-1.5c0-.28.22-.5.5-.5Z" />
-                              </svg>
-                            </a>
-                          )}
-                          {school?.social_links?.twitter && (
-                            <a
-                              aria-label="Twitter"
-                              href={school.social_links.twitter}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="inline-flex h-16 w-16 items-center justify-center rounded-full bg-transparent transition-transform hover:scale-110"
-                            >
-                              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="h-10 w-10" fill="#1DA1F2">
-                                <path d="M22 5.8c-.7.3-1.4.5-2.2.6.8-.5 1.3-1.1 1.6-2-.8.5-1.7.9-2.6 1.1C18 4.7 17 4.2 15.9 4.2c-2.1 0-3.8 1.8-3.8 3.9 0 .3 0 .6.1.9-3.2-.2-6-1.8-7.9-4.2-.3.6-.5 1.2-.5 1.9 0 1.3.6 2.4 1.6 3.1-.6 0-1.1-.2-1.6-.4 0 2 1.4 3.6 3.2 4-.3.1-.7.1-1 .1-.2 0-.5 0-.7-.1.5 1.6 2 2.8 3.8 2.9-1.4 1.1-3.2 1.7-5.1 1.7H2c1.8 1.2 4 1.9 6.3 1.9 7.5 0 11.7-6.4 11.7-12 0-.2 0-.4 0-.6.8-.6 1.4-1.2 2-2Z" />
-                              </svg>
-                            </a>
-                          )}
-                          {school?.social_links?.instagram && (
-                            <a
-                              aria-label="Instagram"
-                              href={school.social_links.instagram}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="inline-flex h-16 w-16 items-center justify-center rounded-full bg-transparent transition-transform hover:scale-110"
-                            >
-                              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="h-10 w-10" fill="#E1306C">
-                                <path d="M7 2h10a5 5 0 0 1 5 5v10a5 5 0 0 1-5 5H7a5 5 0 0 1-5-5V7a5 5 0 0 1 5-5Zm5 5a5 5 0 1 0 .001 10.001A5 5 0 0 0 12 7Zm0 2.5a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5ZM18 6.5a1 1 0 1 0 0 2 1 1 0 0 0 0-2Z" />
-                              </svg>
-                            </a>
-                          )}
-                          {school?.social_links?.youtube && (
-                            <a
-                              aria-label="YouTube"
-                              href={school.social_links.youtube}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="inline-flex h-16 w-16 items-center justify-center rounded-full bg-transparent transition-transform hover:scale-110"
-                            >
-                              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="h-10 w-10" fill="#FF0000">
-                                <path d="M23 8.2a4 4 0 0 0-2.8-2.9C18.3 5 12 5 12 5s-6.3 0-8.2.3A4 4 0 0 0 1 8.2 41.3 41.3 0 0 0 1 12c0 3.8.3 3.8.8 5.8A4 4 0 0 0 4.6 20C6.5 20.3 12 20.3 12 20.3s6.3 0 8.2-.3a4 4 0 0 0 2.8-2.9c.5-2 .8-2 .8-5.8s-.3-3.8-.8-5.8ZM9.8 15.5V8.5l6 3.5-6 3.5Z" />
-                              </svg>
-                            </a>
-                          )}
-                          {school?.social_links?.website && (
-                            <a
-                              aria-label="Website"
-                              href={school.social_links.website}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="inline-flex h-16 w-16 items-center justify-center rounded-full bg-transparent transition-transform hover:scale-110"
-                            >
-                              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="h-10 w-10" fill="#FFFFFF">
-                                <path d="M12 2a10 10 0 1 0 10 10A10.011 10.011 0 0 0 12 2Zm6.93 9h-2.4a15.78 15.78 0 0 0-1.15-5.01A8.019 8.019 0 0 1 18.93 11ZM9.39 11a13.319 13.319 0 0 1 1.11-4.64A13.507 13.507 0 0 1 12 4.06a13.507 13.507 0 0 1 1.5 2.3A13.319 13.319 0 0 1 14.61 11ZM8.53 5.99A15.78 15.78 0 0 0 7.47 11h-2.4A8.019 8.019 0 0 1 8.53 5.99ZM5.07 13h2.4a15.78 15.78 0 0 0 1.15 5.01A8.019 8.019 0 0 1 5.07 13Zm3.32 0h3.22v4.94A11.48 11.48 0 0 1 10 16.7a11.48 11.48 0 0 1-1.61-3.7Zm4.24 4.94V13h3.22a11.48 11.48 0 0 1-1.61 3.7 11.48 11.48 0 0 1-1.61 1.24ZM15.53 13h2.4a8.019 8.019 0 0 1-3.46 5.01A15.78 15.78 0 0 0 15.53 13Z" />
-                              </svg>
-                            </a>
-                          )}
-                        </div>
-                      )}
-                      <div className="flex items-center gap-4">
-                        <div className="flex items-center gap-2">
-                          <span className="h-2 w-2 rounded-full bg-emerald-400" />
-                          <span>Secure connection</span>
-                        </div>
-                        <div className="hidden md:flex items-center gap-2">
-                          <span className="h-2 w-2 rounded-full bg-sky-300" />
-                          <span>Powered by Genay Technologies</span>
-                        </div>
-                      </div>
-                    </div>
+              {formStep === 'role' && (
+                <div className="mt-10 space-y-6">
+                  <div className="grid grid-cols-2 gap-6" role="radiogroup" aria-label="Select role">
+                    {roles.map((r) => {
+                      const selected = role === r.key
+                      return (
+                        <button
+                          key={r.key}
+                          type="button"
+                          onClick={() => handleRoleSelect(r.key)}
+                          role="radio"
+                          aria-checked={selected}
+                          aria-label={r.label}
+                          className={`group relative flex flex-col items-center justify-center gap-3 rounded-2xl border transition-all duration-300 ${selected ? 'bg-white/95 border-white shadow-lg' : 'bg-white/5 border-white/10 hover:bg-white/10 shadow-sm'}`}
+                        >
+                          <div className={`p-3 rounded-xl ${selected ? 'bg-slate-50' : 'bg-white/5'}`}>
+                            {React.cloneElement(r.icon, { className: `h-8 w-8 ${selected ? 'text-slate-700' : 'text-white/60'}` })}
+                          </div>
+                          <span className={`text-sm font-bold tracking-tight ${selected ? 'text-slate-900' : 'text-white/60'}`}>{r.label}</span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                  <button
+                    onClick={() => { if (!role) return; setFormStep('credentials') }}
+                    disabled={!role}
+                    className="w-full rounded-2xl bg-gradient-to-r from-sky-500 to-cyan-400 py-4 text-white text-base font-bold shadow-lg hover:shadow-xl hover:translate-y-[-2px] active:translate-y-[0px] transition-all disabled:opacity-30"
+                  >
+                    Continue
+                  </button>
+                  <div className="text-[12px] font-medium text-white/40 text-center opacity-80">
+                    Not sure which to pick? Ask your school administrator.
                   </div>
                 </div>
+              )}
 
-                {/* Right login form column */}
-                <div className="relative flex items-center justify-center bg-slate-50/70 px-8 lg:px-12 py-10">
-                  <div className="w-full max-w-md">
-                    <div className="mb-4">
-                      <h2 className="text-xl font-semibold text-slate-900 tracking-wide">Sign in</h2>
-                      {formStep === 'role' && (
-                        <p className="mt-1 text-sm text-slate-500">Choose your account type to continue.</p>
-                      )}
-                      {formStep === 'credentials' && (
-                        <div className="mt-1 text-xs text-slate-500 flex items-center justify-between">
-                          <span>Enter your school email and password.</span>
-                          <button onClick={handleBackToRole} className="text-[11px] text-sky-700 hover:underline">Change role</button>
-                        </div>
-                      )}
+              {formStep === 'credentials' && (
+                <div className="mt-6 space-y-4">
+                  <div className={`flex items-center justify-center ${error ? 'animate-shake' : ''}`}>
+                    <div className={`inline-flex items-center justify-center h-10 w-10 rounded-full border text-indigo-700 bg-indigo-50/70 border-indigo-100 shadow-soft ${isLoading ? 'animate-pulse' : ''}`} aria-hidden>
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        className="w-5 h-5"
+                      >
+                        <path
+                          d="M8.5 10V8.75a3.5 3.5 0 1 1 7 0V10"
+                          className="stroke-current"
+                          strokeWidth="1.6"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                        <rect
+                          x="6.75"
+                          y="10"
+                          width="10.5"
+                          height="8"
+                          rx="2"
+                          className="stroke-current"
+                          strokeWidth="1.6"
+                        />
+                        <circle cx="12" cy="14" r="1" className="fill-current" />
+                      </svg>
+                    </div>
+                  </div>
+                  {error && (
+                    <div className="text-center text-[11px] text-red-700">Check your email and password, then try again.</div>
+                  )}
+                  <form onSubmit={submit} className="space-y-8">
+                    <div className="space-y-6">
+                      <div className="relative group">
+                        <input
+                          id="login-username"
+                          type="text"
+                          value={username}
+                          onChange={(e)=>setUsername(e.target.value)}
+                          autoComplete="username"
+                          inputMode="email"
+                          autoCapitalize="none"
+                          autoCorrect="off"
+                          aria-label="Email (username)"
+                          placeholder=" "
+                          className="peer w-full rounded-2xl border border-white/10 bg-white/5 px-5 pt-6 pb-2 text-[15px] text-white focus:outline-none focus:ring-1 focus:ring-white/30 transition-all placeholder:opacity-0"
+                          required
+                        />
+                        <label 
+                          htmlFor="login-username" 
+                          className="absolute left-5 top-4 text-[13px] font-medium text-white/60 uppercase tracking-[0.1em] transition-all peer-placeholder-shown:top-4 peer-placeholder-shown:text-[15px] peer-focus:top-1.5 peer-focus:text-[11px] peer-focus:text-white/80 peer-[:not(:placeholder-shown)]:top-1.5 peer-[:not(:placeholder-shown)]:text-[11px] peer-[:not(:placeholder-shown)]:text-white/80 pointer-events-none"
+                        >
+                          Email / Username
+                        </label>
+                        <div className="mt-1.5 px-1 text-[11px] text-white/20">Admins: use your registered email.</div>
+                      </div>
+
+                      <div className="relative group">
+                        <input
+                          id="login-password"
+                          type={showPassword ? 'text' : 'password'}
+                          value={password}
+                          onChange={(e)=>setPassword(e.target.value)}
+                          onKeyUp={(e)=> setCapsLockOn(e.getModifierState && e.getModifierState('CapsLock'))}
+                          autoComplete="current-password"
+                          aria-label="Password"
+                          placeholder=" "
+                          className="peer w-full rounded-2xl border border-white/10 bg-white/5 px-5 pt-6 pb-2 text-[15px] text-white focus:outline-none focus:ring-1 focus:ring-white/30 transition-all placeholder:opacity-0"
+                          required
+                        />
+                        <label 
+                          htmlFor="login-password" 
+                          className="absolute left-5 top-4 text-[13px] font-medium text-white/60 uppercase tracking-[0.1em] transition-all peer-placeholder-shown:top-4 peer-placeholder-shown:text-[15px] peer-focus:top-1.5 peer-focus:text-[11px] peer-focus:text-white/80 peer-[:not(:placeholder-shown)]:top-1.5 peer-[:not(:placeholder-shown)]:text-[11px] peer-[:not(:placeholder-shown)]:text-white/80 pointer-events-none"
+                        >
+                          Password
+                        </label>
+                        <button
+                          type="button"
+                          aria-pressed={showPassword}
+                          aria-label={showPassword ? 'Hide password' : 'Show password'}
+                          onClick={()=>setShowPassword(v=>!v)}
+                          className="absolute right-5 top-1/2 -translate-y-1/2 text-[12px] font-bold text-white/40 hover:text-white/70 transition-colors pt-2"
+                        >
+                          {showPassword ? 'HIDE' : 'SHOW'}
+                        </button>
+                        {capsLockOn && (
+                          <div className="absolute -bottom-5 right-1 text-[10px] font-bold text-amber-500/80 uppercase tracking-tighter">Caps Lock ON</div>
+                        )}
+                      </div>
                     </div>
 
-                    {formStep === 'role' && (
-                      <div className="space-y-5">
-                        <div className="grid grid-cols-2 gap-4" role="radiogroup" aria-label="Select role">
-                          {roles.map((r) => {
-                            const selected = role === r.key
-                            return (
-                              <button
-                                key={r.key}
-                                type="button"
-                                onClick={() => handleRoleSelect(r.key)}
-                                role="radio"
-                                aria-checked={selected}
-                                aria-label={r.label}
-                                className={`flex flex-col items-center justify-center gap-2 rounded-xl border py-3 text-sm font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-300 ${selected ? 'bg-gradient-to-r from-fuchsia-500 to-indigo-500 text-white border-transparent shadow-md' : 'bg-white text-slate-700 border-slate-200 hover:border-sky-300 hover:bg-slate-50'}`}
-                              >
-                                <span className="text-lg">{r.icon}</span>
-                                <span>{r.label}</span>
-                              </button>
-                            )
-                          })}
+                    <div className="flex items-center justify-between px-1">
+                      <label className="inline-flex items-center gap-2.5 text-[12px] font-semibold text-white/40 select-none cursor-pointer group">
+                        <div className="relative flex items-center justify-center">
+                          <input type="checkbox" className="peer sr-only" checked={remember} onChange={(e)=>setRemember(e.target.checked)} />
+                          <div className="h-5 w-5 rounded-lg border-2 border-white/10 bg-white/5 transition-all peer-checked:bg-sky-400 peer-checked:border-sky-400" />
+                          <svg className="absolute h-3 w-3 text-white opacity-0 transition-opacity peer-checked:opacity-100" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="4">
+                            <path d="M5 13l4 4L19 7" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
                         </div>
-                        <button
-                          onClick={() => { if (!role) return; setFormStep('credentials') }}
-                          disabled={!role}
-                          className="w-full rounded-full bg-gradient-to-r from-indigo-500 via-indigo-500 to-sky-500 py-3 text-white text-sm font-semibold shadow-md disabled:opacity-60 disabled:shadow-none transition-transform hover:translate-y-[-1px]"
-                        >
-                          Continue
-                        </button>
-                        <div className="text-[11px] text-slate-500 text-center">
-                          Not sure which to pick? Ask your school administrator.
-                        </div>
+                        <span className="group-hover:text-white/60 transition-colors">Keep me signed in</span>
+                      </label>
+                      <button type="button" onClick={openReset} className="text-[12px] font-bold text-rose-500 hover:text-rose-400 hover:underline underline-offset-4 transition-all tracking-tight bg-transparent border-none">FORGOT PASSWORD?</button>
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={isLoading}
+                      className="group relative w-full overflow-hidden rounded-2xl bg-gradient-to-r from-sky-500 to-cyan-400 px-8 py-5 text-[16px] font-black tracking-widest text-white shadow-2xl transition-all hover:scale-[1.01] active:scale-[0.99] disabled:opacity-40"
+                    >
+                      <span className="relative z-10">{isLoading ? 'VERIFYING...' : 'SIGN IN'}</span>
+                    </button>
+                  </form>
+                </div>
+              )}
+
+              {formStep === 'reset' && (
+                <div className="mt-6 space-y-6">
+                  <div className="absolute top-8 left-10">
+                    <button 
+                      onClick={closeReset} 
+                      className="flex items-center gap-2 text-sm font-bold text-sky-400 hover:text-cyan-400 transition-colors group bg-transparent border-none"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4 transition-transform group-hover:-translate-x-1">
+                        <path d="M19 12H5M12 19l-7-7 7-7"/>
+                      </svg>
+                      BACK
+                    </button>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-xl font-bold text-sky-400 tracking-tight">Reset password</h2>
+                  </div>
+                  <p className="text-sm text-white/60 font-medium">
+                    {resetStep === 'confirm' 
+                      ? <>Enter a new password for <span className="text-white font-bold">{resetEmail}</span>.</>
+                      : 'Enter your email and we will send you a 6 digit code to create a new password.'}
+                  </p>
+
+                  {resetStep !== 'confirm' && (
+                    <form onSubmit={resetStep === 'request' ? submitResetRequest : (e) => { e.preventDefault(); handleConfirmResetCode() }} className="space-y-6">
+                      <div className="relative group">
+                        <input
+                          type="email"
+                          value={resetEmail}
+                          onChange={(e)=>setResetEmail(e.target.value)}
+                          required
+                          placeholder=" "
+                          className="peer w-full rounded-2xl border border-white/10 bg-white/5 px-5 pt-6 pb-2 text-[15px] text-white focus:outline-none focus:ring-1 focus:ring-white/30 transition-all placeholder:opacity-0"
+                        />
+                        <label className="absolute left-5 top-4 text-[13px] font-medium text-white/60 uppercase tracking-[0.1em] transition-all peer-placeholder-shown:top-4 peer-placeholder-shown:text-[15px] peer-focus:top-1.5 peer-focus:text-[11px] peer-focus:text-white/80 peer-[:not(:placeholder-shown)]:top-1.5 peer-[:not(:placeholder-shown)]:text-[11px] peer-[:not(:placeholder-shown)]:text-white/80 pointer-events-none">
+                          Email address
+                        </label>
                       </div>
-                    )}
-
-                    {formStep === 'credentials' && (
-                      <div className="mt-4 space-y-4">
-                        <div className={`flex items-center justify-center ${error ? 'animate-shake' : ''}`}>
-                          <div className={`inline-flex items-center justify-center h-10 w-10 rounded-full border text-rose-600 bg-rose-50/80 border-rose-100 shadow-soft ${isLoading ? 'animate-pulse' : ''}`} aria-hidden>
-                            <svg
-                              xmlns="http://www.w3.org/2000/svg"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              className="w-5 h-5"
-                            >
-                              <path
-                                d="M8.5 10V8.75a3.5 3.5 0 1 1 7 0V10"
-                                className="stroke-current"
-                                strokeWidth="1.6"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                              />
-                              <rect
-                                x="6.75"
-                                y="10"
-                                width="10.5"
-                                height="8"
-                                rx="2"
-                                className="stroke-current"
-                                strokeWidth="1.6"
-                              />
-                              <circle cx="12" cy="14" r="1" className="fill-current" />
-                            </svg>
-                          </div>
-                        </div>
-                        {error && (
-                          <div className="text-center text-[11px] text-red-700">Check your email and password, then try again.</div>
-                        )}
-                        <form onSubmit={submit} className="space-y-4">
-                          <div className="space-y-1">
-                            <label htmlFor="login-username" className="block text-[11px] font-medium text-slate-700 uppercase tracking-[0.18em]">Username</label>
-                            <div className="relative">
-                              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
-                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5"><path d="M12 12c2.761 0 5-2.239 5-5s-2.239-5-5-5-5 2.239-5 5 2.239 5 5 5zm0 2c-3.866 0-7 3.134-7 7h14c0-3.866-3.134-7-7-7z"/></svg>
-                              </span>
-                              <input
-                                id="login-username"
-                                type="text"
-                                value={username}
-                                onChange={(e)=>setUsername(e.target.value)}
-                                autoComplete="username"
-                                inputMode="email"
-                                autoCapitalize="none"
-                                autoCorrect="off"
-                                aria-label="Email (username)"
-                                placeholder="Email (username)"
-                                className="w-full rounded-md border border-slate-200 bg-white px-10 py-3 text-[15px] shadow-sm focus:outline-none focus:ring-2 focus:ring-rose-300 focus:border-rose-400 transition"
-                                required
-                              />
-                            </div>
-                            <div className="mt-1 text-[11px] text-slate-500">Admins: use the email you signed up with.</div>
-                          </div>
-                          <div className="space-y-1">
-                            <label htmlFor="login-password" className="block text-[11px] font-medium text-slate-700 uppercase tracking-[0.18em]">Password</label>
-                            <div className="relative">
-                              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
-                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5"><path d="M17 8V7a5 5 0 10-10 0v1H5v12h14V8h-2zm-8 0V7a3 3 0 016 0v1H9z"/></svg>
-                              </span>
-                              <input
-                                id="login-password"
-                                type={showPassword ? 'text' : 'password'}
-                                value={password}
-                                onChange={(e)=>setPassword(e.target.value)}
-                                onKeyUp={(e)=> setCapsLockOn(e.getModifierState && e.getModifierState('CapsLock'))}
-                                autoComplete="current-password"
-                                aria-label="Password"
-                                placeholder="Password"
-                                className="w-full rounded-md border border-slate-200 bg-white px-10 py-3 pr-16 text-[15px] shadow-sm focus:outline-none focus:ring-2 focus:ring-rose-300 focus:border-rose-400 transition"
-                                required
-                              />
-                              <button
-                                type="button"
-                                aria-pressed={showPassword}
-                                aria-label={showPassword ? 'Hide password' : 'Show password'}
-                                onClick={()=>setShowPassword(v=>!v)}
-                                className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] font-semibold text-rose-600 hover:text-rose-700"
-                              >
-                                {showPassword ? 'Hide' : 'Show'}
-                              </button>
-                            </div>
-                            {capsLockOn && (
-                              <div className="mt-1 text-[11px] text-amber-700">Caps Lock is ON</div>
-                            )}
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <label className="inline-flex items-center gap-2 text-[11px] text-slate-700 select-none">
-                              <input type="checkbox" className="accent-rose-500" checked={remember} onChange={(e)=>setRemember(e.target.checked)} />
-                              Remember me
-                            </label>
-                            <button type="button" onClick={openReset} className="text-[11px] text-rose-600 hover:underline">Forgot password?</button>
-                          </div>
-                          <button
-                            type="submit"
-                            disabled={isLoading}
-                            className="w-full rounded-full bg-gradient-to-r from-indigo-500 via-indigo-500 to-sky-500 text-white font-semibold py-3 disabled:opacity-60 shadow-md transition-transform active:scale-[.99]"
-                          >
-                            {isLoading ? 'Signing In…' : 'Login'}
-                          </button>
-                        </form>
-                      </div>
-                    )}
-
-                    {formStep === 'reset' && (
-                      <div className="mt-4 space-y-4">
-                        <div className="flex items-center justify-between">
-                          <h2 className="text-sm font-semibold text-slate-900">Reset password</h2>
-                          <button
-                            type="button"
-                            onClick={closeReset}
-                            className="text-[11px] text-slate-500 hover:text-slate-700"
-                          >
-                            Back to login
-                          </button>
-                        </div>
-                        <p className="text-xs text-slate-500">
-                          {resetStep === 'confirm'
-                            ? <>Enter a new password for <span className="font-medium">{resetEmail}</span>.</>
-                            : 'Enter your email and we will send you a 6 digit code to create a new password.'}
-                        </p>
-
-                        {resetStep !== 'confirm' && (
-                          <form
-                            onSubmit={resetStep === 'request'
-                              ? submitResetRequest
-                              : (e) => {
-                                  e.preventDefault()
-                                  handleConfirmResetCode()
-                                }
-                            }
-                            className="space-y-3"
-                          >
-                            <div className="space-y-1">
-                              <label className="block text-[11px] font-medium text-slate-700">Email</label>
-                              <input
-                                type="email"
-                                value={resetEmail}
-                                onChange={(e)=>setResetEmail(e.target.value)}
-                                required
-                                className={`w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 ${resetError && resetStep === 'request' ? 'border-red-300 bg-red-50/60' : 'border-slate-200'}`}
-                              />
-                            </div>
-                            {resetStep === 'verify' && (
-                              <>
-                                <div className="space-y-1">
-                                  <label className="block text-[11px] font-medium text-slate-700">6 digit code</label>
-                                  <input
-                                    type="text"
-                                    inputMode="numeric"
-                                    maxLength={6}
-                                    value={resetCode}
-                                    onChange={(e)=>{
-                                      const value = e.target.value.replace(/[^0-9]/g,'')
-                                      setResetCode(value)
-                                      setResetCodeConfirmed(false)
-                                      if (value.length === 6) {
-                                        handleConfirmResetCode(value)
-                                      }
-                                    }}
-                                    required
-                                    className={`w-full rounded-md border px-3 py-2 text-sm tracking-[0.4em] text-center focus:outline-none focus:ring-2 focus:ring-indigo-300 ${resetError ? 'border-red-300 bg-red-50/60' : 'border-slate-200'}`}
-                                  />
-                                  <div className="mt-1 flex items-center justify-end text-[11px] text-slate-500">
-                                    <button
-                                      type="button"
-                                      onClick={handleResendCode}
-                                      disabled={resetResendIn > 0 || resetResending}
-                                      className="text-[11px] font-medium text-indigo-600 disabled:text-slate-400 disabled:cursor-not-allowed hover:underline tabular-nums"
-                                    >
-                                      {resetResendIn > 0
-                                        ? `Resend in ${Math.floor(resetResendIn / 60)}:${(resetResendIn % 60).toString().padStart(2,'0')}`
-                                        : (resetResending ? 'Resending…' : 'Resend code')}
-                                    </button>
-                                  </div>
-                                </div>
-                              </>
-                            )}
-                            {resetError && (
-                              <div className="flex items-start gap-2 text-[11px] text-red-700 bg-red-50 border border-red-200 rounded-md px-2.5 py-1.5">
-                                <span className="mt-[2px] h-3 w-3 rounded-full border border-red-400 flex items-center justify-center text-[9px] font-bold">!</span>
-                                <span>{resetError}</span>
-                              </div>
-                            )}
-                            {resetMessage && (
-                              <div className="text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-md px-2 py-1.5">{resetMessage}</div>
-                            )}
+                      
+                      {resetStep === 'verify' && (
+                        <div className="relative group">
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            maxLength={6}
+                            value={resetCode}
+                            onChange={(e)=>{
+                              const val = e.target.value.replace(/[^0-9]/g,'')
+                              setResetCode(val)
+                              setResetCodeConfirmed(false)
+                              if(val.length === 6) handleConfirmResetCode(val)
+                            }}
+                            required
+                            placeholder=" "
+                            className="peer w-full rounded-2xl border border-white/10 bg-white/5 px-5 pt-6 pb-2 text-[15px] text-white text-center tracking-[0.5em] font-mono focus:outline-none focus:ring-1 focus:ring-white/30 transition-all placeholder:opacity-0"
+                          />
+                          <label className="absolute left-1/2 -translate-x-1/2 top-4 text-[13px] font-medium text-white/60 uppercase tracking-[0.1em] transition-all peer-placeholder-shown:top-4 peer-placeholder-shown:text-[15px] peer-focus:top-1.5 peer-focus:text-[11px] peer-focus:text-white/80 peer-[:not(:placeholder-shown)]:top-1.5 peer-[:not(:placeholder-shown)]:text-[11px] peer-[:not(:placeholder-shown)]:text-white/80 pointer-events-none">
+                            6 Digit Code
+                          </label>
+                          <div className="mt-2 flex justify-end">
                             <button
-                              type="submit"
-                              disabled={resetLoading}
-                              className="w-full mt-1 rounded-full bg-gradient-to-r from-indigo-500 via-indigo-500 to-sky-500 text-white text-sm font-semibold py-2.5 disabled:opacity-60"
+                              type="button"
+                              onClick={handleResendCode}
+                              disabled={resetResendIn > 0 || resetResending}
+                              className="text-[11px] font-bold text-sky-400 disabled:text-white/20 uppercase tracking-tight bg-transparent"
                             >
-                              {resetStep === 'request'
-                                ? (resetLoading ? 'Sending code…' : 'Send code')
-                                : (resetLoading ? 'Checking…' : 'Check code')}
+                              {resetResendIn > 0 ? `Resend in ${Math.floor(resetResendIn/60)}:${(resetResendIn%60).toString().padStart(2,'0')}` : (resetResending ? 'Sending...' : 'Resend code')}
                             </button>
-                          </form>
-                        )}
+                          </div>
+                        </div>
+                      )}
 
-                        {resetStep === 'confirm' && (
-                          <form onSubmit={submitResetConfirm} className="space-y-3">
-                            <div className="space-y-1">
-                              <label className="block text-[11px] font-medium text-slate-700">New password</label>
-                              <input
-                                type="password"
-                                value={resetNewPassword}
-                                onChange={(e)=>setResetNewPassword(e.target.value)}
-                                minLength={6}
-                                required
-                                className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
-                              />
-                            </div>
-                            {resetError && (
-                              <div className="flex items-start gap-2 text-[11px] text-red-700 bg-red-50 border border-red-200 rounded-md px-2.5 py-1.5">
-                                <span className="mt-[2px] h-3 w-3 rounded-full border border-red-400 flex items-center justify-center text-[9px] font-bold">!</span>
-                                <span>{resetError}</span>
-                              </div>
-                            )}
-                            {resetMessage && (
-                              <div className="text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-md px-2 py-1.5">{resetMessage}</div>
-                            )}
-                            <button
-                              type="submit"
-                              disabled={resetLoading}
-                              className="w-full mt-1 rounded-full bg-gradient-to-r from-indigo-500 via-indigo-500 to-sky-500 text-white text-sm font-semibold py-2.5 disabled:opacity-60"
-                            >
-                              {resetLoading ? 'Updating…' : 'Save new password'}
-                            </button>
-                          </form>
-                        )}
+                      {resetError && <div className="text-[11px] font-bold text-rose-500 bg-rose-500/10 border border-rose-500/20 rounded-xl px-4 py-3">{resetError}</div>}
+                      {resetMessage && <div className="text-[11px] font-bold text-emerald-400 bg-emerald-400/10 border border-emerald-400/20 rounded-xl px-4 py-3">{resetMessage}</div>}
+                      
+                      <button
+                        type="submit"
+                        disabled={resetLoading}
+                        className="group relative w-full overflow-hidden rounded-2xl bg-gradient-to-r from-sky-500 to-cyan-400 px-8 py-5 text-[16px] font-black tracking-widest text-white shadow-2xl transition-all hover:scale-[1.01] active:scale-[0.99] disabled:opacity-40"
+                      >
+                        {resetStep === 'request' ? (resetLoading ? 'SENDING...' : 'SEND RESET CODE') : (resetLoading ? 'VERIFYING...' : 'VERIFY CODE')}
+                      </button>
+                    </form>
+                  )}
+
+                  {resetStep === 'confirm' && (
+                    <form onSubmit={submitResetConfirm} className="space-y-6">
+                      <div className="relative group">
+                        <input
+                          type="password"
+                          value={resetNewPassword}
+                          onChange={(e)=>setResetNewPassword(e.target.value)}
+                          minLength={6}
+                          required
+                          placeholder=" "
+                          className="peer w-full rounded-2xl border border-white/10 bg-white/5 px-5 pt-6 pb-2 text-[15px] text-white focus:outline-none focus:ring-1 focus:ring-white/30 transition-all placeholder:opacity-0"
+                        />
+                        <label className="absolute left-5 top-4 text-[13px] font-medium text-white/60 uppercase tracking-[0.1em] transition-all peer-placeholder-shown:top-4 peer-placeholder-shown:text-[15px] peer-focus:top-1.5 peer-focus:text-[11px] peer-focus:text-white/80 peer-[:not(:placeholder-shown)]:top-1.5 peer-[:not(:placeholder-shown)]:text-[11px] peer-[:not(:placeholder-shown)]:text-white/80 pointer-events-none">
+                          New Password
+                        </label>
                       </div>
-                    )}
+                      
+                      {resetError && <div className="text-[11px] font-bold text-rose-500 bg-rose-500/10 border border-rose-500/20 rounded-xl px-4 py-3">{resetError}</div>}
+                      
+                      <button
+                        type="submit"
+                        disabled={resetLoading}
+                        className="group relative w-full overflow-hidden rounded-2xl bg-gradient-to-r from-sky-500 to-cyan-400 px-8 py-5 text-[16px] font-black tracking-widest text-white shadow-2xl transition-all hover:scale-[1.01] active:scale-[0.99] disabled:opacity-40"
+                      >
+                        {resetLoading ? 'UPDATING...' : 'SAVE NEW PASSWORD'}
+                      </button>
+                    </form>
+                  )}
+                </div>
+              )}
+
+              <div className="mt-10 relative">
+                <div className="flex items-center justify-center">
+                  <div className="px-6 py-3 rounded-full bg-white/5 border border-white/10 shadow-sm flex items-center gap-3 transition-all hover:bg-white/10">
+                    <div className="h-6 w-6 rounded-full bg-white/20 flex items-center justify-center text-[11px] text-white font-bold">G</div>
+                    <span className="text-[14px] font-bold text-white/60">www.GenayTech.com</span>
                   </div>
                 </div>
               </div>
+
+              {formStep === 'verifying' && (
+                <>
+                  <div className="mt-6 text-center">
+                    <h3 className="text-sky-700 font-extrabold tracking-wide">VERIFYING</h3>
+                    <p className="text-black/70 text-sm">Please wait while we check your credentials</p>
+                  </div>
+                  <div className="mt-3 flex items-center justify-center">
+                    <div className="flex gap-1.5 items-end h-3" aria-hidden>
+                      <span className="w-1.5 h-1.5 rounded-full bg-sky-600/80 animate-bounce" style={{ animationDelay: '0ms' }} />
+                      <span className="w-1.5 h-1.5 rounded-full bg-sky-600/70 animate-bounce" style={{ animationDelay: '120ms' }} />
+                      <span className="w-1.5 h-1.5 rounded-full bg-sky-600/60 animate-bounce" style={{ animationDelay: '240ms' }} />
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
+          </div>
+          <div className="absolute bottom-8 left-12 flex items-center gap-6 text-[12px] font-medium text-white/80">
+            <div className="flex items-center gap-2">
+              <div className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              Secure connection
+            </div>
+            <span>•</span>
+            <span>© {new Date().getFullYear()} Genay Technologies</span>
           </div>
         </div>
-
-        {/* Verifying overlay */}
-        {formStep === 'verifying' && (
-          <div className="absolute inset-0 z-20 flex items-center justify-center">
-            <div className="absolute inset-0 bg-black/30 backdrop-blur-sm transition-opacity" />
-            <div className="relative bg-white/95 backdrop-blur-md rounded-2xl px-8 py-7 shadow-[0_20px_60px_rgba(0,0,0,0.25)] ring-1 ring-black/5 border border-white/60 flex flex-col items-center gap-4" role="status" aria-busy="true" aria-live="polite">
-              <div className="relative w-24 h-24">
-                <div className="absolute inset-0 rounded-full border-2 border-black/10" />
-                <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-sky-600 animate-spin" />
-                <div className="absolute inset-2 rounded-full border-2 border-transparent border-t-sky-400 animate-spin" style={{ animationDuration: '800ms', animationDirection: 'reverse' }} />
-                <div className="absolute inset-[22px] rounded-full bg-sky-600/20 animate-pulse" />
-              </div>
-              <div className="text-center">
-                <h3 className="text-sky-700 font-extrabold tracking-wide">VERIFYING</h3>
-                <p className="text-black/70 text-sm">Please wait while we check your credentials</p>
-              </div>
-              <div className="flex gap-1.5 items-end h-3" aria-hidden>
-                <span className="w-1.5 h-1.5 rounded-full bg-sky-600/80 animate-bounce" style={{ animationDelay: '0ms' }} />
-                <span className="w-1.5 h-1.5 rounded-full bg-sky-600/70 animate-bounce" style={{ animationDelay: '120ms' }} />
-                <span className="w-1.5 h-1.5 rounded-full bg-sky-600/60 animate-bounce" style={{ animationDelay: '240ms' }} />
-              </div>
-              <div className="w-60 h-1.5 bg-black/10 rounded-full overflow-hidden">
-                <div className="h-full bg-gradient-to-r from-sky-500 via-sky-400 to-sky-600 animate-pulse rounded-full" style={{ width: '72%' }} />
-              </div>
-            </div>
-          </div>
-        )}
       </main>
 
-      {/* Mobile-only content */}
-      <div className="sm:hidden relative z-10 flex min-h-screen flex-col items-stretch bg-indigo-950/5">
-        <div className="pointer-events-none absolute inset-0 -z-10">
-          <div className="absolute inset-x-0 top-0 h-40 bg-gradient-to-r from-indigo-600 via-indigo-500 to-sky-500 opacity-95" />
-        </div>
-        {/* Global floating balloons background */}
-        <div className="pointer-events-none absolute inset-x-6 top-16 bottom-8 z-0">
-          <div className="absolute bottom-[-40px] left-2 h-9 w-9 rounded-full bg-gradient-to-b from-sky-300 to-sky-500 opacity-70 animate-float-up-slow" />
-          <div className="absolute bottom-[-48px] right-4 h-11 w-11 rounded-full bg-gradient-to-b from-sky-300 to-sky-500 opacity-70 animate-float-up-medium" style={{ animationDelay: '2.2s' }} />
-          <div className="absolute bottom-[-56px] left-1/2 -translate-x-1/2 h-8 w-8 rounded-full bg-gradient-to-b from-amber-300 to-amber-500 opacity-75 animate-float-up-fast" style={{ animationDelay: '4s' }} />
-          <div className="absolute bottom-[-52px] left-1/4 h-7 w-7 rounded-full bg-gradient-to-b from-emerald-300 to-emerald-500 opacity-60 animate-float-up-medium" style={{ animationDelay: '6s' }} />
-        </div>
-        {/* Top brand area */}
-        <div className="pt-6 pb-2 flex flex-col items-center justify-start text-white relative z-10">
-          <div className="text-[11px] font-semibold tracking-[0.28em] uppercase">GENAY TECHNOLOGIES</div>
-          <p className="mt-2 text-[11px] text-white/90">Login to access your school dashboards.</p>
-        </div>
+      {/* Mobile-only content with background */}
+      <div 
+        className="sm:hidden relative z-10 flex min-h-screen flex-col items-stretch"
+        style={{
+          backgroundImage: `url(${loginMobileBg})`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          backgroundRepeat: 'no-repeat',
+        }}
+      >
+        {/* No overlay, pure background */}
+        {/* Top brand area removed */}
 
         {showAppIntro ? (
           <div className="relative z-10 flex-1 flex flex-col items-center justify-center px-8 pb-12 text-center text-slate-800">
@@ -851,7 +736,7 @@ export default function LoginPage() {
                 className="relative w-full overflow-hidden rounded-[32px] bg-white shadow-[0_20px_40px_rgba(15,23,42,0.25)] border border-indigo-100 transition-all duration-500 ease-out will-change-transform"
                 style={{ transform: mobileTiltTransform, opacity: mounted ? 1 : 0 }}
               >
-              <div className="h-16 bg-gradient-to-r from-indigo-600 via-indigo-500 to-sky-500 flex items-center justify-between px-5 text-white">
+              <div className="h-16 bg-gradient-to-r from-sky-400 to-cyan-400 flex items-center justify-between px-5 text-white">
                 <span className="text-sm font-semibold">Login</span>
                 <div className="flex items-center gap-3">
                   <span className="text-[11px] opacity-80">{role ? role.charAt(0).toUpperCase() + role.slice(1) : 'Select role'}</span>
@@ -898,7 +783,7 @@ export default function LoginPage() {
                         setFormStep('credentials');
                       }}
                       disabled={!role}
-                      className="w-full rounded-full bg-gradient-to-r from-indigo-500 via-indigo-500 to-indigo-600 py-3 text-white text-sm font-semibold tracking-wide shadow-md disabled:opacity-60 disabled:shadow-none transition-all"
+                      className="w-full rounded-full bg-gradient-to-r from-sky-400 to-cyan-400 py-3 text-white text-sm font-semibold tracking-wide shadow-md disabled:opacity-60 disabled:shadow-none transition-all"
                     >
                       Continue
                     </button>
@@ -911,6 +796,8 @@ export default function LoginPage() {
                       </button>
                     )}
                     <div className="text-[11px] text-gray-500 text-center">Need help choosing? Contact the school admin.</div>
+                    {/* Mobile Footer inside card */}
+                    <div className="pt-2 text-center text-[10px] text-gray-400">© {new Date().getFullYear()} Genay Technologies</div>
                   </div>
                 )}
 
@@ -1016,7 +903,7 @@ export default function LoginPage() {
                       <button
                         type="submit"
                         disabled={isLoading}
-                        className="w-full rounded-full bg-gradient-to-r from-indigo-500 via-indigo-500 to-sky-500 text-white font-semibold py-2.5 disabled:opacity-60 disabled:shadow-none shadow-md mt-1"
+                        className="w-full rounded-full bg-gradient-to-r from-sky-400 to-cyan-400 text-white font-semibold py-2.5 disabled:opacity-60 disabled:shadow-none shadow-md mt-1"
                       >
                         {isLoading ? 'Signing In…' : 'Login'}
                       </button>
@@ -1117,7 +1004,7 @@ export default function LoginPage() {
                         <button
                           type="submit"
                           disabled={resetLoading}
-                          className="w-full mt-1 rounded-full bg-gradient-to-r from-indigo-500 via-indigo-500 to-sky-500 text-white text-sm font-semibold py-2.5 disabled:opacity-60"
+                          className="w-full mt-1 rounded-full bg-gradient-to-r from-sky-400 to-cyan-400 text-white text-sm font-semibold py-2.5 disabled:opacity-60"
                         >
                           {resetStep === 'request'
                             ? (resetLoading ? 'Sending code…' : 'Send code')
@@ -1151,7 +1038,7 @@ export default function LoginPage() {
                         <button
                           type="submit"
                           disabled={resetLoading}
-                          className="w-full mt-1 rounded-full bg-gradient-to-r from-indigo-500 via-indigo-500 to-sky-500 text-white text-sm font-semibold py-2.5 disabled:opacity-60"
+                          className="w-full mt-1 rounded-full bg-gradient-to-r from-sky-400 to-cyan-400 text-white text-sm font-semibold py-2.5 disabled:opacity-60"
                         >
                           {resetLoading ? 'Updating…' : 'Save new password'}
                         </button>
@@ -1170,28 +1057,27 @@ export default function LoginPage() {
               <div className="relative bg-white/90 backdrop-blur-md rounded-2xl px-6 py-6 shadow-[0_16px_48px_rgba(0,0,0,0.3)] ring-1 ring-white/50 border-hairline flex flex-col items-center gap-3" role="status" aria-busy="true" aria-live="polite">
                 <div className="relative w-20 h-20">
                   <div className="absolute inset-0 rounded-full border-2 border-black/10" />
-                  <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-indigo-600 animate-spin" />
-                  <div className="absolute inset-2 rounded-full border-2 border-transparent border-t-indigo-400 animate-spin" style={{ animationDuration: '800ms', animationDirection: 'reverse' }} />
-                  <div className="absolute inset-[18px] rounded-full bg-indigo-600/20 animate-pulse" />
+                  <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-cyan-400 animate-spin" />
+                  <div className="absolute inset-2 rounded-full border-2 border-transparent border-t-sky-300 animate-spin" style={{ animationDuration: '800ms', animationDirection: 'reverse' }} />
+                  <div className="absolute inset-[18px] rounded-full bg-sky-400/20 animate-pulse" />
                 </div>
                 <div className="text-center">
-                  <h3 className="text-indigo-700 text-sm font-extrabold tracking-wide">VERIFYING</h3>
+                  <h3 className="text-sky-400 text-sm font-extrabold tracking-wide">VERIFYING</h3>
                   <p className="text-black/70 text-xs">Please wait…</p>
                 </div>
                 <div className="flex gap-1 items-end h-2.5" aria-hidden>
-                  <span className="w-1.5 h-1.5 rounded-full bg-indigo-600/80 animate-bounce" style={{ animationDelay: '0ms' }} />
-                  <span className="w-1.5 h-1.5 rounded-full bg-indigo-600/70 animate-bounce" style={{ animationDelay: '120ms' }} />
-                  <span className="w-1.5 h-1.5 rounded-full bg-indigo-600/60 animate-bounce" style={{ animationDelay: '240ms' }} />
+                  <span className="w-1.5 h-1.5 rounded-full bg-sky-400/80 animate-bounce" style={{ animationDelay: '0ms' }} />
+                  <span className="w-1.5 h-1.5 rounded-full bg-sky-400/70 animate-bounce" style={{ animationDelay: '120ms' }} />
+                  <span className="w-1.5 h-1.5 rounded-full bg-sky-400/60 animate-bounce" style={{ animationDelay: '240ms' }} />
                 </div>
                 <div className="w-44 h-1.5 bg-black/10 rounded-full overflow-hidden">
-                  <div className="h-full bg-gradient-to-r from-indigo-500 via-indigo-400 to-indigo-600 animate-pulse rounded-full" style={{ width: '70%' }} />
+                  <div className="h-full bg-gradient-to-r from-sky-500 via-sky-400 to-cyan-400 animate-pulse rounded-full" style={{ width: '70%' }} />
                 </div>
               </div>
             </div>
           )}
 
-          {/* Footer */}
-          <div className="mt-4 text-center text-[11px] text-white/80">© {new Date().getFullYear()} Genay Technologies</div>
+          {/* Footer removed from here and moved inside card */}
         </div>
         )}
       </div>
