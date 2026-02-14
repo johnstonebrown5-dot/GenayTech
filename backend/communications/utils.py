@@ -297,14 +297,20 @@ def _send_sms_via_textwave_rest(*, base_url: str, api_key: str, phone: str, mess
             # Check for insufficient balance and notify superusers
             if resp.status_code == 402 and 'INSUFFICIENT_BALANCE' in (resp.text or ''):
                 try:
-                    from accounts.models import User
-                    from .models import Notification
-                    superusers = User.objects.filter(is_superuser=True)
-                    msg = f"SMS balance is insufficient for school_id={school_id}. Please top up your TextWave account."
-                    for user in superusers:
-                        Notification.objects.create(user=user, message=msg, type='in_app')
-                        if user.email:
-                            send_email_safe("SMS Balance Low", msg, user.email, school_id=school_id)
+                    # Throttle "Insufficient Balance" alerts to once per school every 12 hours
+                    # to avoid spamming admins during bulk SMS failures.
+                    cache_key = f"sms_balance_alert_sent_{school_id or 'system'}"
+                    if not cache.get(cache_key):
+                        from accounts.models import User
+                        from .models import Notification
+                        superusers = User.objects.filter(is_superuser=True)
+                        msg = f"SMS balance is insufficient for school_id={school_id}. Please top up your TextWave account."
+                        for user in superusers:
+                            Notification.objects.create(user=user, message=msg, type='in_app')
+                            if user.email:
+                                send_email_safe("SMS Balance Low", msg, user.email, school_id=school_id)
+                        # Set cache flag for 12 hours (43200 seconds)
+                        cache.set(cache_key, True, 43200)
                 except Exception as e:
                     logger.exception("Failed to send balance low notifications: %s", e)
             return False
@@ -1172,10 +1178,11 @@ def create_message_for_role(school_id: int, sender_id: int, body: str, role: str
     recs = [MessageRecipient(message=msg, user=u) for u in recipients_qs]
     if recs:
         MessageRecipient.objects.bulk_create(recs, ignore_conflicts=True)
-    try:
-        queue_message_delivery(msg.id)
-    except Exception:
-        pass
+    if queue_delivery:
+        try:
+            queue_message_delivery(msg.id)
+        except Exception:
+            pass
     return msg.id
 
 
@@ -1350,7 +1357,7 @@ def resolve_default_sender_id(school_id: int):
     return getattr(u, 'id', None)
 
 
-def create_broadcast_message(school_id: int, sender_id: int, body: str):
+def create_broadcast_message(school_id: int, sender_id: int, body: str, *, queue_delivery: bool = True):
     """Create a broadcast message to everyone in the school and materialize recipients."""
     from django.contrib.auth import get_user_model
     from .models import Message, MessageRecipient

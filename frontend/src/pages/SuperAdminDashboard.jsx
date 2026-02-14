@@ -164,7 +164,7 @@ export default function SuperAdminDashboard(){
         </div>
       </div>
 
-      <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-4">
+      <div className="grid sm:grid-cols-2 lg:grid-cols-6 gap-4">
         <div className="relative overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
           <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-indigo-500 to-purple-600" />
           <div className="p-4">
@@ -173,6 +173,16 @@ export default function SuperAdminDashboard(){
             <div className="mt-1 text-[11px] text-gray-600">All tenants in the system</div>
           </div>
         </div>
+
+        <div className="relative overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+          <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-emerald-500 to-teal-600" />
+          <div className="p-4">
+            <div className="text-xs font-semibold tracking-wide text-gray-600 uppercase">Active students</div>
+            <div className="mt-2 text-2xl font-extrabold tracking-tight text-gray-900">{analysis ? Number(totals?.active_students || 0).toLocaleString() : '—'}</div>
+            <div className="mt-1 text-[11px] text-gray-600">Across all schools</div>
+          </div>
+        </div>
+
         <div className="relative overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
           <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-violet-500 to-fuchsia-600" />
           <div className="p-4">

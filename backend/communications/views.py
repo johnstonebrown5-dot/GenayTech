@@ -420,7 +420,14 @@ class MessageViewSet(viewsets.ModelViewSet):
         # serializer handles school, sender, recipients
         msg = serializer.save()
         # Queue async delivery to email/SMS
-        if getattr(settings, 'MESSAGES_QUEUE_DELIVERY', True):
+        should_queue = bool(getattr(settings, 'MESSAGES_QUEUE_DELIVERY', True))
+        # Role-based messages should always be forwarded via SMS/Email (in addition to in-app).
+        try:
+            if getattr(msg, 'audience', None) == Message.Audience.ROLE:
+                should_queue = True
+        except Exception:
+            pass
+        if should_queue:
             try:
                 queue_message_delivery(msg.id)
             except Exception:

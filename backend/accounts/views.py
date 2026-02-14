@@ -33,6 +33,7 @@ from django.core.files.storage import default_storage
 from django.core.files.base import ContentFile
 import requests
 from communications.utils import send_email_safe_html, send_email_safe
+from communications.utils import create_broadcast_message, resolve_default_sender_id
 from django.utils.dateparse import parse_datetime, parse_date
 from time import perf_counter
 from django.db import connection
@@ -142,6 +143,19 @@ class TokenObtainPairViewWithLogging(TokenObtainPairView):
             data = super().validate(attrs)
             u = getattr(self, 'user', None)
             if u is not None:
+                # Block logins for inactive schools (except superusers/staff)
+                try:
+                    if not (getattr(u, 'is_superuser', False) or getattr(u, 'is_staff', False)):
+                        school_id = getattr(u, 'school_id', None)
+                        if school_id:
+                            active = School.objects.filter(id=school_id).values_list('is_active', flat=True).first()
+                            if active is False:
+                                raise AuthenticationFailed('Your school has been deactivated. Please contact your administrator.')
+                except AuthenticationFailed:
+                    raise
+                except Exception:
+                    pass
+
                 if not (getattr(u, 'is_superuser', False) or getattr(u, 'is_staff', False)):
                     role = str(getattr(u, 'role', '') or '').lower()
                     if role == 'admin':
@@ -2165,6 +2179,7 @@ def superadmin_system_analysis(request):
         t0 = perf_counter()
         students_qs = Student.objects.filter(Q(school_id=sid) | Q(klass__school_id=sid)).filter(is_graduated=False).distinct()
         students_count = students_qs.count()
+        students_active_count = students_qs.filter(is_active=True, is_transferred=False).count()
         lat['students_count_ms'] = round((perf_counter() - t0) * 1000.0, 2)
 
         t0 = perf_counter()
@@ -2268,6 +2283,7 @@ def superadmin_system_analysis(request):
             'trial_student_limit': getattr(s, 'trial_student_limit', None),
             'counts': {
                 'students': students_count,
+                'active_students': students_active_count,
                 'teachers': teachers_count,
                 'classes': classes_count,
                 'invoices': invoices_count,
@@ -2349,6 +2365,7 @@ def superadmin_system_analysis(request):
         'db_size_bytes': total_db_bytes,
         'db_size_gb': round(total_db_bytes / (1024**3), 4) if total_db_bytes else 0,
         'students': sum((i.get('counts') or {}).get('students') or 0 for i in out),
+        'active_students': sum((i.get('counts') or {}).get('active_students') or 0 for i in out),
         'teachers': sum((i.get('counts') or {}).get('teachers') or 0 for i in out),
         'classes': sum((i.get('counts') or {}).get('classes') or 0 for i in out),
         'invoices': sum((i.get('counts') or {}).get('invoices') or 0 for i in out),
@@ -2620,6 +2637,7 @@ def superadmin_school_detail(request, id: int):
         return Response({"detail": "Moved to recycle bin"}, status=200)
 
     data = request.data or {}
+    prev_is_active = bool(getattr(school, 'is_active', True))
     update_fields = []
     for field in ('name', 'code', 'address', 'motto', 'aim'):
         if field in data and data.get(field) is not None:
@@ -2658,6 +2676,20 @@ def superadmin_school_detail(request, id: int):
             update_fields.append('trial_expires_at')
     if update_fields:
         school.save(update_fields=list(set(update_fields)))
+
+        # If the school was just deactivated, notify users so they understand why they can't log in.
+        try:
+            new_is_active = bool(getattr(school, 'is_active', True))
+            if prev_is_active and (not new_is_active):
+                sender_id = getattr(getattr(request, 'user', None), 'id', None) or resolve_default_sender_id(school.id)
+                if sender_id:
+                    body = (
+                        f"Access to {getattr(school, 'name', 'your school')} has been disabled by the administrator. "
+                        "You cannot log in while the school is inactive. If you believe this is a mistake, please contact your school administrator."
+                    )
+                    create_broadcast_message(school.id, int(sender_id), body, queue_delivery=False)
+        except Exception:
+            pass
     return Response({"detail": "updated"})
 
 
