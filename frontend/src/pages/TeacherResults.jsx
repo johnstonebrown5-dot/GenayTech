@@ -1,10 +1,205 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import api from '../api'
-import AdminResults from './AdminResults'
+import { teacherQueries } from '../utils/teacherQueries'
 
 export default function TeacherResults(){
-  return <AdminResults />
+  const navigate = useNavigate()
+  const [classes, setClasses] = useState([])
+  const [selectedClass, setSelectedClass] = useState('')
+  const [publishedExams, setPublishedExams] = useState([])
+  const [selectedExam, setSelectedExam] = useState('')
+  const [summary, setSummary] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    let mounted = true
+    ;(async () => {
+      try{
+        setLoading(true)
+        setError('')
+        const list = await teacherQueries.getMyClasses()
+        if (!mounted) return
+        setClasses(list || [])
+        setSelectedClass(list?.[0]?.id ? String(list[0].id) : '')
+      }catch(e){
+        if (mounted) setError(e?.response?.data?.detail || e?.message || 'Failed to load your classes')
+      }finally{
+        if (mounted) setLoading(false)
+      }
+    })()
+    return () => { mounted = false }
+  }, [])
+
+  const currentClass = useMemo(
+    () => (classes || []).find(c => String(c.id) === String(selectedClass)) || null,
+    [classes, selectedClass]
+  )
+
+  useEffect(() => {
+    if (!selectedClass){ setPublishedExams([]); setSelectedExam(''); return }
+    let mounted = true
+    ;(async () => {
+      try{
+        setLoading(true)
+        setError('')
+        const all = await teacherQueries.fetchAllPages('/academics/exams/?include_history=true&page_size=1000')
+        const getKlassId = (e) => String(e?.klass ?? e?.class ?? e?.klass_id ?? e?.class_id ?? '')
+        const isPublished = (e) => {
+          if (typeof e?.published === 'boolean') return e.published === true
+          if (typeof e?.is_published === 'boolean') return e.is_published === true
+          const s = String(e?.status || '').toLowerCase()
+          if (s) return s === 'published' || s === 'final' || s === 'complete'
+          if (e?.published_at) return true
+          return false
+        }
+        const examsForClass = (all || []).filter(e => getKlassId(e) === String(selectedClass) && isPublished(e))
+        examsForClass.sort((a,b)=>{
+          const da = a.date ? new Date(a.date).getTime() : 0
+          const db = b.date ? new Date(b.date).getTime() : 0
+          if (db !== da) return db - da
+          return (b.id||0) - (a.id||0)
+        })
+        if (!mounted) return
+        setPublishedExams(examsForClass)
+        setSelectedExam(examsForClass?.[0]?.id ? String(examsForClass[0].id) : '')
+      }catch(e){
+        if (mounted) setError(e?.response?.data?.detail || e?.message || 'Failed to load exams')
+      }finally{
+        if (mounted) setLoading(false)
+      }
+    })()
+    return () => { mounted = false }
+  }, [selectedClass])
+
+  useEffect(() => {
+    if (!selectedExam){ setSummary(null); return }
+    let mounted = true
+    ;(async () => {
+      try{
+        setLoading(true)
+        setError('')
+        const { data } = await teacherQueries.getExamSummary(selectedExam)
+        if (!mounted) return
+        setSummary(data || null)
+      }catch(e){
+        if (mounted) setError(e?.response?.data?.detail || e?.message || 'Failed to load results')
+      }finally{
+        if (mounted) setLoading(false)
+      }
+    })()
+    return () => { mounted = false }
+  }, [selectedExam])
+
+  return (
+    <div className="teacher-results-page px-2 md:px-6 py-4 md:py-6 space-y-4 max-w-7xl mx-auto min-h-[75vh]">
+      <div className="rounded-2xl border border-gray-200 bg-gradient-to-r from-indigo-50 via-white to-sky-50 shadow-sm p-4 md:p-5">
+        <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-3">
+          <div>
+            <div className="text-base md:text-xl font-semibold tracking-tight text-gray-900">Results</div>
+            <div className="text-[11px] md:text-xs text-gray-600">You can only view results for classes you teach.</div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full md:w-auto">
+            <label className="text-xs text-gray-600">
+              <span className="block mb-1">Class</span>
+              <select
+                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                value={selectedClass}
+                onChange={e=>setSelectedClass(e.target.value)}
+                disabled={loading || !(classes||[]).length}
+              >
+                {(classes||[]).map(c => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </label>
+            <label className="text-xs text-gray-600">
+              <span className="block mb-1">Exam</span>
+              <select
+                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                value={selectedExam}
+                onChange={e=>setSelectedExam(e.target.value)}
+                disabled={loading || !(publishedExams||[]).length}
+              >
+                <option value="">{(publishedExams||[]).length ? 'Select exam…' : 'No published exams'}</option>
+                {(publishedExams||[]).map(e => (
+                  <option key={e.id} value={e.id}>{e.name} • {e.year} • T{e.term} • {e.date}</option>
+                ))}
+              </select>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      {error && (
+        <div className="bg-red-50 text-red-700 px-4 py-3 rounded-2xl border border-red-200 text-sm">{error}</div>
+      )}
+
+      {!loading && selectedClass && (publishedExams||[]).length === 0 && (
+        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4 text-sm text-gray-700">
+          No published exams found for <strong>{currentClass?.name || 'this class'}</strong>.
+        </div>
+      )}
+
+      {loading && (
+        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4 text-sm text-gray-600">Loading…</div>
+      )}
+
+      {!loading && summary && (
+        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+          <div className="px-4 py-3 border-b border-gray-100 flex flex-col md:flex-row md:items-center md:justify-between gap-1">
+            <div className="text-sm md:text-base font-medium text-gray-900">
+              {summary?.exam?.name || 'Exam'} • Year {summary?.exam?.year || ''} • T{summary?.exam?.term || ''} • {currentClass?.name || ''}
+            </div>
+            <div className="text-[11px] text-gray-500">Students: {Array.isArray(summary?.students) ? summary.students.length : 0}</div>
+          </div>
+
+          <div className="overflow-auto">
+            <div className="min-w-[820px]">
+              <table className="min-w-full text-xs md:text-sm">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="border px-2 py-1 text-left w-20">Position</th>
+                    <th className="border px-2 py-1 text-left w-64">Student</th>
+                    {(summary?.subjects || []).map(s => (
+                      <th key={s.id} className="border px-2 py-1 text-left">{s.code || s.name}</th>
+                    ))}
+                    <th className="border px-2 py-1 text-left w-24">Total</th>
+                    <th className="border px-2 py-1 text-left w-24">Slip</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(summary?.students || []).map((st, idx) => (
+                    <tr key={st.id} className={idx % 2 ? 'bg-white' : 'bg-gray-50/40'}>
+                      <td className="border px-2 py-1">{st.position}</td>
+                      <td className="border px-2 py-1">{st.name}</td>
+                      {(summary?.subjects || []).map(s => {
+                        const pct = st?.subject_percentages?.[String(s.id)]
+                        const value = (pct != null && pct !== '') ? `${pct}%` : (st?.marks?.[String(s.id)] ?? '-')
+                        return (
+                          <td key={s.id} className="border px-2 py-1">{value}</td>
+                        )
+                      })}
+                      <td className="border px-2 py-1 font-medium">{st.total}</td>
+                      <td className="border px-2 py-1">
+                        <button
+                          type="button"
+                          onClick={() => navigate(`/teacher/students/${st.id}/report-card?exam=${encodeURIComponent(String(selectedExam||''))}`)}
+                          className="px-2.5 py-1 rounded border border-gray-200 bg-white hover:bg-gray-50 text-[11px]"
+                        >
+                          View
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
 }
 
 function TeacherResultsLegacy(){

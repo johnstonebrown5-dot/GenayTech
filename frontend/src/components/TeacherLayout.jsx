@@ -4,6 +4,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth'
 import { useLock } from './LockProvider'
 import api from '../api'
+import { teacherQueries } from '../utils/teacherQueries'
 
 const baseNavItems = [
   { to: '/teacher', label: 'Dashboard', icon: '📊' },
@@ -132,7 +133,7 @@ export default function TeacherLayout({ children }){
     let mounted = true
     ;(async () => {
       try {
-        const { data } = await api.get('/auth/school/info/')
+        const { data } = await teacherQueries.getSchoolInfo()
         if (mounted) {
           setSchoolName(data?.name || '')
           setSchoolLogo(data?.logo_url || data?.logo || '')
@@ -154,30 +155,14 @@ export default function TeacherLayout({ children }){
   // Poll unread messages (inbox + system)
   useEffect(() => {
     let mounted = true
-    const computeUnread = (arr) => {
-      const myId = user?.id
-      if (!Array.isArray(arr) || !myId) return 0
-      return arr.reduce((acc, m) => {
-        const rec = Array.isArray(m.recipients) ? m.recipients : []
-        const mine = rec.find(r => r.user === myId)
-        return acc + (mine && !mine.read ? 1 : 0)
-      }, 0)
-    }
     const load = async () => {
       try {
-        const [inb, sys] = await Promise.allSettled([
-          api.get('/communications/messages/'),
-          api.get('/communications/messages/system/'),
-        ])
-        const inboxList = inb.status === 'fulfilled' ? (Array.isArray(inb.value.data) ? inb.value.data : (inb.value.data?.results || [])) : []
-        const sysList = sys.status === 'fulfilled' ? (Array.isArray(sys.value.data) ? sys.value.data : (sys.value.data?.results || [])) : []
-        const total = computeUnread(inboxList) + computeUnread(sysList)
+        const info = await teacherQueries.getUnreadMessageInfo(user?.id)
+        const total = Number(info?.totalUnread || 0)
         if (mounted) {
           setUnreadCount(total)
-          const bOnly = Array.isArray(sysList) ? sysList.filter(m => m.is_broadcast) : []
-          const bCount = computeUnread(bOnly)
-          setBroadcastUnread(bCount)
-          const latest = Array.isArray(bOnly) && bOnly.length > 0 ? bOnly[0] : null
+          setBroadcastUnread(Number(info?.broadcastUnread || 0))
+          const latest = info?.latestBroadcast || null
           const latestBody = String(latest?.body || '').trim()
           const candidate = latest && latestBody && !dismissedIds.includes(latest.id) ? latest : null
           setBroadcastBanner(candidate)
@@ -196,13 +181,12 @@ export default function TeacherLayout({ children }){
     let mounted = true
     ;(async()=>{
       try{
-        const [meRes, clsRes] = await Promise.all([
-          api.get('/auth/me/').catch(()=>({ data:null })),
-          api.get('/academics/classes/mine/').catch(()=>({ data:[] })),
+        const [meRes, classes] = await Promise.all([
+          teacherQueries.getMe().catch(()=>({ data:null })),
+          teacherQueries.getMyClasses(),
         ])
         if (!mounted) return
         const meId = String(meRes?.data?.id || '')
-        const classes = Array.isArray(clsRes?.data)? clsRes.data : []
         const mine = classes.find(c => {
           const tid = c?.teacher
           const tdet = c?.teacher_detail
@@ -226,36 +210,10 @@ export default function TeacherLayout({ children }){
     const safeSet = (setter, val) => { if (mounted) setter(val) }
     ;(async () => {
       try {
-        // Try "current" endpoints first
-        let year = null
-        let term = null
-        try {
-          const yr = await api.get('/academics/academic_years/current/')
-          year = yr.data
-        } catch {}
-        try {
-          const tr = await api.get('/academics/terms/current/')
-          term = tr.data
-        } catch {}
-
-        // Fallback to mine/first available year
-        if (!year) {
-          try {
-            const mine = await api.get('/academics/academic_years/mine/')
-            const list = Array.isArray(mine.data?.results) ? mine.data.results : (Array.isArray(mine.data)? mine.data : [])
-            year = list[0] || null
-          } catch {}
-        }
-
-        // Fallback: get terms of current year from backend helper (teacher-authorized)
-        if (!term) {
-          try {
-            const t = await api.get('/academics/terms/of-current-year/')
-            const arr = Array.isArray(t.data?.results) ? t.data.results : (Array.isArray(t.data)? t.data : [])
-            term = arr.find(x=>x.is_current) || arr.sort((a,b)=> (a.number||0)-(b.number||0))[0] || null
-          } catch {}
-        }
-
+        const [year, term] = await Promise.all([
+          teacherQueries.getCurrentAcademicYear(),
+          teacherQueries.getCurrentTerm(),
+        ])
         safeSet(setCurrentYear, year || null)
         safeSet(setCurrentTerm, term || null)
       } catch (e) {

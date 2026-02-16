@@ -420,11 +420,12 @@ export default function TeacherPreviewResults(){
   return (
     <div className="teacher-preview-results-page px-0 md:px-6 py-4 md:py-6 space-y-4 max-w-7xl mx-auto min-h-[80vh]">
       <div className="relative overflow-hidden rounded-2xl border border-gray-200 bg-gradient-to-r from-indigo-50 via-white to-sky-50 shadow-sm">
-        <div className="p-4 md:p-5 flex items-start justify-between gap-4">
+        <div className="p-4 md:p-5 flex flex-col sm:flex-row sm:items-start justify-between gap-3 sm:gap-4">
           <div>
             <h1 className="text-base md:text-xl font-semibold tracking-tight text-gray-900">Unpublished Results</h1>
             <div className="text-[11px] md:text-xs text-gray-600">Preview any exam that is not yet published. Read only.</div>
           </div>
+          <div className="flex flex-col sm:flex-row gap-2 sm:items-center sm:justify-end sm:ml-auto w-full sm:w-auto">
           <label className="text-xs md:text-sm text-gray-700 flex items-center gap-2 w-full sm:w-auto">
             <span className="shrink-0">Exam</span>
             <select
@@ -439,7 +440,8 @@ export default function TeacherPreviewResults(){
               ))}
             </select>
           </label>
-          <button onClick={handlePrint} disabled={!summary} className="text-xs md:text-sm px-3 py-2 rounded-xl border border-gray-200 bg-white text-gray-700 disabled:opacity-60">Print</button>
+          <button onClick={handlePrint} disabled={!summary} className="text-xs md:text-sm px-3 py-2 rounded-xl border border-gray-200 bg-white text-gray-700 disabled:opacity-60 w-full sm:w-auto">Print</button>
+          </div>
         </div>
       </div>
 
@@ -453,10 +455,73 @@ export default function TeacherPreviewResults(){
         <div className="bg-white/90 backdrop-blur rounded-2xl border border-gray-200 shadow-sm px-4 py-3 text-sm text-gray-700">Loading…</div>
       ) : selectedExam && summary ? (
         <div className="bg-white/95 backdrop-blur rounded-2xl border border-gray-200 shadow-sm">
-          <div className="p-4 flex items-center justify-between">
+          <div className="p-4 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
             <div className="text-sm md:text-base text-gray-800 font-medium">{summary?.exam?.name || 'Exam'} • Year {summary?.exam?.year || ''} • T{summary?.exam?.term || ''} • {classNameById(summary?.exam?.klass)}</div>
+            <div className="text-[11px] text-gray-500">Students: {Array.isArray(summary?.students) ? summary.students.length : 0}</div>
           </div>
-          <div className="overflow-auto -mx-2 md:mx-0">
+
+          <div className="md:hidden px-3 pb-4 grid gap-3">
+            {summary.students.map((st) => {
+              const grand = subjects.reduce((sum, s)=>{
+                const pct = Number(st?.subject_percentages?.[String(s.id)])
+                return sum + (Number.isFinite(pct) ? pct : 0)
+              }, 0)
+              const name = studentMap[String(st.id)]?.name || st.name || st.id
+              const adm = studentMap[String(st.id)]?.admission_no || st.admission_no || '-'
+              return (
+                <div key={st.id} className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+                  <div className="px-3 py-2 bg-gradient-to-r from-indigo-50 via-white to-sky-50 flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold text-gray-900 truncate">{name}</div>
+                      <div className="text-[11px] text-gray-600">Adm: {adm}{st?.position ? ` • Pos: ${st.position}` : ''}</div>
+                    </div>
+                    <div className="flex flex-col items-end">
+                      <div className="text-[10px] text-gray-500">Total</div>
+                      <div className="text-sm font-bold text-indigo-700 leading-tight">{grand}</div>
+                    </div>
+                  </div>
+
+                  <div className="px-3 py-2">
+                    <div className="grid grid-cols-2 gap-2">
+                      {subjects.map(s => {
+                        const pct = Number(st?.subject_percentages?.[String(s.id)])
+                        const showPct = Number.isFinite(pct) ? `${pct}%` : '0%'
+                        const comps = componentsMap[s.id] || []
+                        const hasComps = Array.isArray(comps) && comps.length>0
+                        return (
+                          <div key={s.id} className="rounded-xl border border-gray-200 bg-gray-50/60 px-2 py-1.5">
+                            <div className="text-[10px] font-semibold text-gray-700 truncate" title={s.name || s.code}>{s.code || s.name}</div>
+                            <div className="text-xs font-bold text-gray-900">{showPct}</div>
+                            {hasComps && (
+                              <div className="mt-0.5 text-[10px] text-gray-500 line-clamp-2">
+                                {comps.slice(0,3).map(c => {
+                                  const val = st?.component_marks?.[String(s.id)]?.[String(c.id)]
+                                  const label = c.code || c.name || 'Paper'
+                                  return `${label}:${(val!=='' && val!=null) ? val : '-'}`
+                                }).join(' • ')}
+                                {comps.length > 3 ? ` • +${comps.length-3} more` : ''}
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+
+                    <div className="mt-3 flex justify-end">
+                      <button
+                        onClick={()=> navigate(`/teacher/students/${st.id}/report-card?exam=${encodeURIComponent(String(selectedExam||''))}`)}
+                        className="px-3 py-1.5 rounded-xl border border-gray-200 bg-white text-xs font-medium text-gray-700 hover:bg-gray-50"
+                      >
+                        View slip
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+
+          <div className="hidden md:block overflow-auto -mx-2 md:mx-0">
             <div className="inline-block min-w-[900px] align-middle">
               <table className="min-w-full text-xs md:text-sm">
                 <thead className="bg-gray-50 sticky top-0 z-10">

@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import api from '../api'
+import { teacherQueries } from '../utils/teacherQueries'
 
 const statuses = [
   { value: 'present', label: 'Present' },
@@ -26,19 +27,19 @@ export default function TeacherAttendance(){
       try{
         setLoading(true)
         const [cls, meRes] = await Promise.all([
-          api.get('/academics/classes/mine/'),
-          api.get('/auth/me/').catch(()=>({ data:null })),
+          teacherQueries.getMyClasses(),
+          teacherQueries.getMe().catch(()=>({ data:null })),
         ])
         if (!mounted) return
-        setClasses(cls.data || [])
-        if (cls.data && cls.data.length>0){
+        setClasses(cls || [])
+        if (cls && cls.length>0){
           const meId = String(meRes?.data?.id || '')
           // Prefer the class where I'm the class teacher
-          const prefer = (cls.data||[]).find(c => {
+          const prefer = (cls||[]).find(c => {
             const candIds = [c?.teacher, c?.teacher_detail?.id, c?.teacher_detail?.user?.id].map(v=> (v==null? '' : String(v)))
             return candIds.includes(meId)
           })
-          setSelected(String(prefer?.id || cls.data[0].id))
+          setSelected(String(prefer?.id || cls[0].id))
         }
         if (meRes?.data) setMe(meRes.data)
       }catch(e){ setError(e?.response?.data?.detail || e?.message) }
@@ -52,9 +53,8 @@ export default function TeacherAttendance(){
     let mounted = true
     ;(async ()=>{
       try{
-        const res = await api.get(`/academics/students/?klass=${selected}`)
+        const arr = await teacherQueries.getClassStudents(selected)
         if (!mounted) return
-        const arr = Array.isArray(res.data) ? res.data : (Array.isArray(res?.data?.results) ? res.data.results : [])
         setStudents(arr)
         // default everyone to present
         const def = {}
