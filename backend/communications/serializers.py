@@ -157,6 +157,9 @@ class MessageSerializer(serializers.ModelSerializer):
         recipient_role = validated_data.get('recipient_role')
         reply_to = validated_data.get('reply_to')
 
+        # Pop non-model fields early so they can be used in channel enforcement below
+        recipient_ids = self.initial_data.get('recipient_ids', [])
+
         send_sms = self.initial_data.get('send_sms', True)
         send_email = self.initial_data.get('send_email', True)
 
@@ -176,6 +179,43 @@ class MessageSerializer(serializers.ModelSerializer):
                 except Exception:
                     pass
 
+        # Enforce rule: Subject teacher messages to parents should not use SMS.
+        # Parent forwarding happens via student guardian phone in delivery, so we disable SMS whenever a teacher
+        # messages student recipients that are outside their class-teacher roster (i.e., acting as subject teacher).
+        if getattr(user, 'role', None) == 'teacher' and audience == Message.Audience.USERS:
+            try:
+                from academics.models import ClassSubjectTeacher
+                # Students where the sender is the class teacher
+                class_teacher_student_ids = set(
+                    Student.objects.filter(
+                        klass__teacher_id=user.id,
+                        is_active=True,
+                        user__isnull=False,
+                    ).values_list('user_id', flat=True)
+                )
+                # Students where the sender teaches as a subject teacher (any class)
+                taught_class_ids = ClassSubjectTeacher.objects.filter(
+                    teacher_id=user.id,
+                ).values_list('klass_id', flat=True)
+                subject_student_ids = set(
+                    Student.objects.filter(
+                        klass_id__in=taught_class_ids,
+                        is_active=True,
+                        user__isnull=False,
+                    ).values_list('user_id', flat=True)
+                )
+                recipient_set = set()
+                for x in (recipient_ids or []):
+                    try:
+                        recipient_set.add(int(x))
+                    except Exception:
+                        continue
+                # If any student is a subject-taught student but not a class-teacher student, disable SMS
+                if ((recipient_set & subject_student_ids) - class_teacher_student_ids):
+                    send_sms = False
+            except Exception:
+                pass
+
         try:
             send_sms = bool(send_sms)
         except Exception:
@@ -184,9 +224,6 @@ class MessageSerializer(serializers.ModelSerializer):
             send_email = bool(send_email)
         except Exception:
             send_email = True
-
-        # Pop non-model fields
-        recipient_ids = self.initial_data.get('recipient_ids', [])
 
         msg = Message.objects.create(
             school=school,
@@ -221,15 +258,29 @@ class MessageSerializer(serializers.ModelSerializer):
         if role == 'teacher':
             # Teachers can always message admins directly.
             admin_q = Q(role='admin')
-            # Additionally, allow class teachers to message students in their own classes.
+            # Additionally, allow teachers to message students they teach:
+            # - class-teacher students
+            # - subject-teacher students (classes mapped via ClassSubjectTeacher)
             try:
-                allowed_student_ids = list(
+                from academics.models import ClassSubjectTeacher
+                class_teacher_ids = set(
                     Student.objects.filter(
                         klass__teacher_id=user.id,
                         is_active=True,
                         user__isnull=False,
                     ).values_list('user_id', flat=True)
                 )
+                taught_class_ids = ClassSubjectTeacher.objects.filter(
+                    teacher_id=user.id,
+                ).values_list('klass_id', flat=True)
+                subject_teacher_ids = set(
+                    Student.objects.filter(
+                        klass_id__in=taught_class_ids,
+                        is_active=True,
+                        user__isnull=False,
+                    ).values_list('user_id', flat=True)
+                )
+                allowed_student_ids = list(class_teacher_ids | subject_teacher_ids)
             except Exception:
                 allowed_student_ids = []
             student_q = Q(role='student', id__in=allowed_student_ids) if allowed_student_ids else Q(pk__in=[])
