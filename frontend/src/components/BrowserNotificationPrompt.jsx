@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
+import { useWebPush } from '../utils/webPush'
 
 const STORAGE_KEYS = {
   dismissed: 'notif_prompt_dismissed',
@@ -22,6 +23,7 @@ function canShowPrompt() {
 export default function BrowserNotificationPrompt() {
   const [visible, setVisible] = useState(false)
   const [requesting, setRequesting] = useState(false)
+  const { subscribeToPush } = useWebPush()
 
   useEffect(() => {
     setVisible(canShowPrompt())
@@ -33,20 +35,24 @@ export default function BrowserNotificationPrompt() {
       setRequesting(true)
       const result = await Notification.requestPermission()
       if (result === 'granted') {
-        // Register SW (if not already) and show a welcome notification
+        // Register SW and subscribe to push
         if ('serviceWorker' in navigator) {
           try {
             const reg = await navigator.serviceWorker.register('/sw.js')
-            const registration = await navigator.serviceWorker.ready.catch(() => reg)
-            if (registration?.showNotification) {
-              registration.showNotification('Notifications enabled', {
+            await navigator.serviceWorker.ready
+            
+            // Perform Web Push subscription
+            await subscribeToPush()
+
+            if (reg?.showNotification) {
+              reg.showNotification('Notifications enabled', {
                 body: 'You will receive alerts even when this tab is inactive.',
                 icon: '/favicon.ico',
                 badge: '/favicon.ico',
               })
             }
           } catch (e) {
-            // noop
+            console.error('Error during push setup:', e)
           }
         }
         localStorage.setItem(STORAGE_KEYS.dismissed, '1')
