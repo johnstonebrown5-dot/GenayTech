@@ -799,8 +799,10 @@ def process_arrears_campaign(campaign_id: int):
             except Exception:
                 balance_val = 0.0
             balance_str = f"{balance_val:,.2f}"
+            admission_no = getattr(stu, 'admission_no', '')
             context = {
                 'student_name': getattr(stu, 'name', ''),
+                'admission_no': admission_no,
                 'class': klass_name,
                 'balance': balance_str,
                 'balance_formatted': f"{currency} {balance_str}",
@@ -810,6 +812,13 @@ def process_arrears_campaign(campaign_id: int):
             tpl = campaign.message or ''
             if ('{balance' not in tpl) and ('{balance_formatted' not in tpl):
                 msg = f"{msg} Outstanding balance: {currency} {balance_str}."
+
+            # Automatically prepend student name and admission number if they aren't explicitly in the template
+            if '{student_name}' not in tpl and '{admission_no}' not in tpl:
+                msg = f"Student: {context['student_name']} ({admission_no}) Class: {klass_name}. {msg}"
+            elif '{admission_no}' not in tpl:
+                # If name is there but admission no isn't, inject it
+                msg = msg.replace(context['student_name'], f"{context['student_name']} ({admission_no})")
 
             # In-app
             # Queue in-app notification if enabled
@@ -928,6 +937,7 @@ def process_message_delivery(message_id: int):
     from academics.models import Student
     try:
         msg = Message.objects.select_related('sender', 'school').get(pk=message_id)
+        sender_id = getattr(msg, 'sender_id', None)
         send_sms_enabled = bool(getattr(msg, 'send_sms', True))
         send_email_enabled = bool(getattr(msg, 'send_email', True))
         # Iterate recipients
@@ -943,6 +953,13 @@ def process_message_delivery(message_id: int):
             u = r.user
             if not u or (hasattr(u, 'is_active') and not u.is_active):
                 continue
+            # If the sender was included as a recipient (to show the message in their inbox),
+            # do not forward SMS/Email back to the sender.
+            try:
+                if sender_id is not None and getattr(u, 'id', None) == sender_id:
+                    continue
+            except Exception:
+                pass
             # Resolve student record (for guardian phone / student email fallbacks)
             stu = None
             try:
@@ -1033,6 +1050,7 @@ def deliver_message_collect(message_id: int) -> dict:
     }
     try:
         msg = Message.objects.select_related('sender', 'school').get(pk=message_id)
+        sender_id = getattr(msg, 'sender_id', None)
         send_sms_enabled = bool(getattr(msg, 'send_sms', True))
         send_email_enabled = bool(getattr(msg, 'send_email', True))
         # If recipients exist, we consider in-app as created (Message + MessageRecipient rows)
@@ -1050,6 +1068,12 @@ def deliver_message_collect(message_id: int) -> dict:
             u = r.user
             if not u:
                 continue
+            # Do not forward SMS/Email back to sender when sender is included as a recipient
+            try:
+                if sender_id is not None and getattr(u, 'id', None) == sender_id:
+                    continue
+            except Exception:
+                pass
             stu = None
             try:
                 if getattr(u, 'role', None) == 'student':
@@ -1302,8 +1326,12 @@ def notify_payment_received(invoice, payment) -> bool:
         method = getattr(payment, 'method', 'payment')
         ref = getattr(payment, 'reference', '')
         student_name = getattr(student, 'name', 'Student')
+        admission_no = getattr(student, 'admission_no', '')
+        klass_name = getattr(getattr(student, 'klass', None), 'name', '')
+
         body = (
-            f"Payment received: {amt:.2f} via {method}" + (f" (Ref: {ref})" if ref else "") +
+            f"Payment received for {student_name} ({admission_no}) Class: {klass_name}. "
+            f"Amount: {amt:.2f} via {method}" + (f" (Ref: {ref})" if ref else "") +
             f". Invoice #{invoice.id}. New balance: {balance:.2f}."
         )
 

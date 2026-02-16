@@ -273,12 +273,12 @@ export default function AdminClassPrintReportCards({ classIdProp = null, embedde
         }
       `}</style>
       <div className="print-root max-w-6xl mx-auto space-y-3">
-        <div className="flex items-center justify-between no-print">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 no-print mb-4">
           <h1 className="text-lg sm:text-xl font-semibold">{title}</h1>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-3">
             <div className="flex items-center gap-2">
-              <label className="text-sm text-gray-600" htmlFor="examSelect">Exam</label>
-              <select id="examSelect" className="px-2 py-1.5 border rounded bg-white text-sm" value={recentExam?.id || ''} onChange={(e)=>{
+              <label className="text-sm text-gray-600 whitespace-nowrap" htmlFor="examSelect">Exam</label>
+              <select id="examSelect" className="px-2 py-1.5 border rounded bg-white text-sm min-w-[140px]" value={recentExam?.id || ''} onChange={(e)=>{
                 const ex = examsForClass.find(x=>String(x.id)===String(e.target.value))
                 setRecentExam(ex || null)
               }}>
@@ -287,15 +287,17 @@ export default function AdminClassPrintReportCards({ classIdProp = null, embedde
                 ))}
               </select>
             </div>
-            <div className="hidden sm:flex items-center gap-2">
+            <div className="flex sm:flex items-center gap-2">
               <label className="text-sm text-gray-600">Layout</label>
               <div className="flex rounded overflow-hidden border">
-                <button type="button" onClick={()=>setLayout('cards')} className={`px-2 py-1 text-sm ${layout==='cards'?'bg-gray-800 text-white':'bg-white'}`}>Report Cards</button>
-                <button type="button" onClick={()=>setLayout('summary')} className={`px-2 py-1 text-sm ${layout==='summary'?'bg-gray-800 text-white':'bg-white'}`}>Summary</button>
+                <button type="button" onClick={()=>setLayout('cards')} className={`px-2 py-1 text-sm ${layout==='cards'?'bg-gray-800 text-white':'bg-white'}`}>Cards</button>
+                <button type="button" onClick={()=>setLayout('summary')} className={`px-2 py-1 text-sm ${layout==='summary'?'bg-gray-800 text-white':'bg-white'}`}>List</button>
               </div>
             </div>
-            {!embedded && (<Link to={backTo} className="px-3 py-1.5 rounded border hover:bg-gray-50">Back</Link>)}
-            <button onClick={handlePrint} className="px-3 py-1.5 rounded bg-indigo-600 text-white hover:bg-indigo-700">Print</button>
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              {!embedded && (<Link to={backTo} className="flex-1 sm:flex-none text-center px-3 py-1.5 rounded border hover:bg-gray-50 text-sm">Back</Link>)}
+              <button onClick={handlePrint} className="flex-1 sm:flex-none px-3 py-1.5 rounded bg-indigo-600 text-white hover:bg-indigo-700 text-sm">Print</button>
+            </div>
           </div>
         </div>
 
@@ -395,16 +397,20 @@ export default function AdminClassPrintReportCards({ classIdProp = null, embedde
                           {school?.motto ? (<div className="uppercase text-xs tracking-wider text-gray-600">{school.motto}</div>) : null}
                         </div>
 
-                        <div className="px-6 grid grid-cols-2 gap-4 text-sm">
+                        <div className="px-4 sm:px-6 grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
                           <div className="space-y-1">
-                            <div><span className="text-gray-600">Students name</span><div className="font-medium">{st.name}</div></div>
-                            <div><span className="text-gray-600">Class</span><div className="font-medium">{klass?.name || '-'}</div></div>
-                            <div><span className="text-gray-600">Grade</span><div className="font-medium">{klass?.grade_level || '-'}</div></div>
-                            <div><span className="text-gray-600">Admission number</span><div className="font-medium">{admissions.get(st.id) || '-'}</div></div>
+                            <div><span className="text-gray-600 block text-xs uppercase font-medium">Student Name</span><div className="font-semibold text-slate-900">{st.name}</div></div>
+                            <div className="flex gap-4 sm:block">
+                              <div className="flex-1"><span className="text-gray-600 block text-xs uppercase font-medium">Class</span><div className="font-semibold text-slate-900">{klass?.name || '-'}</div></div>
+                              <div className="flex-1"><span className="text-gray-600 block text-xs uppercase font-medium">Grade</span><div className="font-semibold text-slate-900">{klass?.grade_level || '-'}</div></div>
+                            </div>
+                            <div><span className="text-gray-600 block text-xs uppercase font-medium">Admission Number</span><div className="font-semibold text-slate-900">{admissions.get(st.id) || '-'}</div></div>
                           </div>
-                          <div className="space-y-1 text-right">
-                            <div><span className="text-gray-600">TERM</span><div className="font-medium">T{recentExam?.term || '-'}</div></div>
-                            <div><span className="text-gray-600">ACADEMIC YEAR</span><div className="font-medium">{recentExam?.year || '-'}</div></div>
+                          <div className="space-y-1 text-left sm:text-right">
+                            <div className="flex gap-4 sm:block sm:justify-end">
+                              <div className="flex-1 sm:flex-none"><span className="text-gray-600 block text-xs uppercase font-medium">Term</span><div className="font-semibold text-slate-900">T{recentExam?.term || '-'}</div></div>
+                              <div className="flex-1 sm:flex-none"><span className="text-gray-600 block text-xs uppercase font-medium">Academic Year</span><div className="font-semibold text-slate-900">{recentExam?.year || '-'}</div></div>
+                            </div>
                           </div>
                         </div>
 

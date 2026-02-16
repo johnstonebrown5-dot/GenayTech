@@ -45,12 +45,14 @@ export default function TeacherManageClass(){
   )
 
   return (
-    <div className="px-0 md:px-0">
-      <div className="mb-3">
-        <h1 className="text-xl font-semibold text-slate-900">Manage My Class</h1>
-        <div className="text-sm text-slate-600">{myClass?.name || 'Class'} · ID {myClass?.id}</div>
+    <div className="px-0 md:px-0 max-w-full overflow-hidden">
+      <div className="mb-3 px-4 md:px-0 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+        <div>
+          <h1 className="text-xl font-semibold text-slate-900">Manage My Class</h1>
+          <div className="text-sm text-slate-600">{myClass?.name || 'Class'} · ID {myClass?.id}</div>
+        </div>
       </div>
-      <div className="flex items-center gap-2 mb-4">
+      <div className="flex items-center gap-2 mb-4 overflow-x-auto pb-2 px-4 md:px-0 scrollbar-hide no-scrollbar" style={{ WebkitOverflowScrolling: 'touch' }}>
         <TabButton active={tab==='info'} onClick={()=>setTab('info')}>Class Info</TabButton>
         <TabButton active={tab==='add'} onClick={()=>setTab('add')}>Add Student</TabButton>
         <TabButton active={tab==='edit'} onClick={()=>setTab('edit')}>Edit Students</TabButton>
@@ -58,12 +60,14 @@ export default function TeacherManageClass(){
         <TabButton active={tab==='fees'} onClick={()=>setTab('fees')}>Send Fees Notifications</TabButton>
         <TabButton active={tab==='reportcards'} onClick={()=>setTab('reportcards')}>Report Cards</TabButton>
       </div>
-      {tab === 'info' && <ClassInfoPanel classId={myClass.id} initialInnerTab={initialInnerView} />}
-      {tab === 'add' && <AddStudentPanel classId={myClass.id} />}
-      {tab === 'edit' && <EditStudentsPanel classId={myClass.id} />}
-      {tab === 'message' && <MessageStudentsPanel classId={myClass.id} />}
-      {tab === 'fees' && <FeesNotifyPanel classId={myClass.id} />}
-      {tab === 'reportcards' && <TeacherClassReportCardsPanel classId={myClass.id} />}
+      <div className="w-full">
+        {tab === 'info' && <ClassInfoPanel classId={myClass.id} initialInnerTab={initialInnerView} />}
+        {tab === 'add' && <AddStudentPanel classId={myClass.id} />}
+        {tab === 'edit' && <EditStudentsPanel classId={myClass.id} />}
+        {tab === 'message' && <MessageStudentsPanel classId={myClass.id} />}
+        {tab === 'fees' && <FeesNotifyPanel classId={myClass.id} />}
+        {tab === 'reportcards' && <TeacherClassReportCardsPanel classId={myClass.id} />}
+      </div>
     </div>
   )
 }
@@ -78,7 +82,7 @@ function TeacherClassReportCardsPanel({ classId }){
 
 function TabButton({ active, onClick, children }){
   return (
-    <button onClick={onClick} className={`${active? 'bg-blue-600 text-white' : 'bg-white text-slate-700 hover:bg-slate-50'} border border-slate-200 px-3 py-1.5 rounded-lg text-sm shadow-sm`}>
+    <button onClick={onClick} className={`${active? 'bg-blue-600 text-white' : 'bg-white text-slate-700 hover:bg-slate-50'} border border-slate-200 px-3 py-1.5 rounded-lg text-sm shadow-sm whitespace-nowrap flex-shrink-0 transition-colors`}>
       {children}
     </button>
   )
@@ -103,23 +107,6 @@ function AddStudentPanel({ classId }){
       setForm({ admission_no:'', name:'', dob:'', gender:'' })
     }catch(err){ setError(err?.response?.data?.detail || 'Failed to add student') }
     finally{ setSaving(false) }
-  }
-
-  const deleteOldLogs = async () => {
-    setDeleting(true)
-    setDeleteMsg('')
-    try{
-      const days = parseInt(String(deleteDays||'').trim(), 10)
-      const body = Number.isFinite(days) && days > 0 ? { days } : { days: 30 }
-      const { data } = await api.post(`/academics/classes/${classId}/delete-old-logs/`, body)
-      const n = Number(data?.deleted || 0)
-      setDeleteMsg(`Deleted ${n} old log(s)`) 
-      loadLogs()
-    }catch(err){
-      setDeleteMsg(err?.response?.data?.detail || 'Delete failed')
-    }finally{
-      setDeleting(false)
-    }
   }
 
   return (
@@ -303,6 +290,7 @@ function MessageStudentsPanel({ classId }){
   const [deleteDays, setDeleteDays] = useState('30')
   const [deleting, setDeleting] = useState(false)
   const [deleteMsg, setDeleteMsg] = useState('')
+  const [showFilters, setShowFilters] = useState(false)
 
   const loadLogs = async () => {
     setLogsLoading(true); setLogsError('')
@@ -314,6 +302,23 @@ function MessageStudentsPanel({ classId }){
       setLogsError(err?.response?.data?.detail || 'Failed to load logs')
     }finally{
       setLogsLoading(false)
+    }
+  }
+
+  const deleteOldLogs = async () => {
+    setDeleting(true)
+    setDeleteMsg('')
+    try{
+      const days = parseInt(String(deleteDays || '').trim(), 10)
+      const body = Number.isFinite(days) && days > 0 ? { days } : { days: 30 }
+      const { data } = await api.post(`/academics/classes/${classId}/delete-old-logs/`, body)
+      const n = Number(data?.deleted || 0)
+      setDeleteMsg(`Deleted ${n} old log(s)`)
+      loadLogs()
+    }catch(err){
+      setDeleteMsg(err?.response?.data?.detail || 'Delete failed')
+    }finally{
+      setDeleting(false)
     }
   }
 
@@ -461,46 +466,60 @@ function MessageStudentsPanel({ classId }){
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2">
           <div className="font-medium">Sent Messages Logs</div>
           <div className="flex items-center gap-2">
-            <button type="button" onClick={loadLogs} className="text-sm px-3 py-1.5 rounded border">Refresh</button>
+            <button
+              type="button"
+              onClick={() => setShowFilters(!showFilters)}
+              className="md:hidden text-sm px-3 py-1.5 rounded border bg-white flex items-center gap-1"
+            >
+              <svg className={`w-4 h-4 transition-transform ${showFilters ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+              </svg>
+              {showFilters ? 'Hide Filters' : 'Show Filters'}
+            </button>
+            <button type="button" onClick={loadLogs} className="text-sm px-3 py-1.5 rounded border bg-white">Refresh</button>
           </div>
         </div>
 
-        <div className="flex flex-col md:flex-row md:items-end gap-3 mb-3">
-          <Select
-            label="Category"
-            value={category}
-            onChange={setCategory}
-            options={[{value:'all',label:'All'},{value:'class',label:'Class Messages'},{value:'fees',label:'Fees Notifications'}]}
-          />
-          <Select
-            label="Channel"
-            value={channel}
-            onChange={setChannel}
-            options={[{value:'all',label:'All'},{value:'in_app',label:'In-app'},{value:'sms',label:'SMS'},{value:'email',label:'Email'}]}
-          />
-          <Select
-            label="Status"
-            value={statusFilter}
-            onChange={setStatusFilter}
-            options={[{value:'all',label:'All'},{value:'ok',label:'OK'},{value:'fail',label:'Failed'}]}
-          />
-          <Select
-            label="Sort"
-            value={sortMode}
-            onChange={setSortMode}
-            options={[{value:'newest',label:'Newest first'},{value:'oldest',label:'Oldest first'},{value:'failed_first',label:'Failed first'}]}
-          />
+        <div className={`${showFilters ? 'flex' : 'hidden md:flex'} flex-col md:flex-row md:items-end gap-3 mb-3 bg-slate-50 md:bg-transparent p-3 md:p-0 rounded-lg border md:border-0`}>
+          <div className="grid grid-cols-2 md:flex gap-2">
+            <Select
+              label="Category"
+              value={category}
+              onChange={setCategory}
+              options={[{value:'all',label:'All'},{value:'class',label:'Class Messages'},{value:'fees',label:'Fees Notifications'}]}
+            />
+            <Select
+              label="Channel"
+              value={channel}
+              onChange={setChannel}
+              options={[{value:'all',label:'All'},{value:'in_app',label:'In-app'},{value:'sms',label:'SMS'},{value:'email',label:'Email'}]}
+            />
+          </div>
+          <div className="grid grid-cols-2 md:flex gap-2">
+            <Select
+              label="Status"
+              value={statusFilter}
+              onChange={setStatusFilter}
+              options={[{value:'all',label:'All'},{value:'ok',label:'OK'},{value:'fail',label:'Failed'}]}
+            />
+            <Select
+              label="Sort"
+              value={sortMode}
+              onChange={setSortMode}
+              options={[{value:'newest',label:'Newest first'},{value:'oldest',label:'Oldest first'},{value:'failed_first',label:'Failed first'}]}
+            />
+          </div>
         </div>
 
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-3">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
           <div className="text-sm text-slate-600">
             Failed deliveries: {selectableIds.length}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
               onClick={()=> { setStatusFilter('fail'); setSortMode('failed_first') }}
-              className="text-sm px-3 py-1.5 rounded border"
+              className="text-sm px-3 py-1.5 rounded border bg-white flex-1 sm:flex-none"
             >
               Failed Only
             </button>
@@ -508,17 +527,17 @@ function MessageStudentsPanel({ classId }){
               type="button"
               disabled={resending || selected.size === 0}
               onClick={resendSelected}
-              className={`${(resending || selected.size === 0) ? 'opacity-50 cursor-not-allowed' : ''} text-sm px-3 py-1.5 rounded bg-blue-600 text-white`}
+              className={`${(resending || selected.size === 0) ? 'opacity-50 cursor-not-allowed' : ''} text-sm px-3 py-1.5 rounded bg-blue-600 text-white flex-1 sm:flex-none`}
             >
-              {resending ? 'Resending...' : `Resend Selected (${selected.size})`}
+              {resending ? '...' : `Resend (${selected.size})`}
             </button>
-            <div className="flex items-end gap-2">
-              <label className="grid text-xs">
-                <span className="text-slate-600">Delete logs older than (days)</span>
-                <input type="number" min="1" value={deleteDays} onChange={e=>setDeleteDays(e.target.value)} className="px-2 py-1 border rounded" />
-              </label>
-              <button type="button" disabled={deleting} onClick={deleteOldLogs} className={`${deleting? 'opacity-50 cursor-not-allowed':''} text-sm px-3 py-1.5 rounded border`}>{deleting? 'Deleting...' : 'Delete Old Logs'}</button>
-            </div>
+          </div>
+          <div className="flex items-end gap-2 bg-slate-50 p-2 rounded-lg border border-slate-100 w-full sm:w-auto">
+            <label className="flex-1 grid text-xs">
+              <span className="text-slate-600 mb-1">Clean logs older than (days)</span>
+              <input type="number" min="1" value={deleteDays} onChange={e=>setDeleteDays(e.target.value)} className="px-2 py-1.5 border rounded w-full bg-white" />
+            </label>
+            <button type="button" disabled={deleting} onClick={deleteOldLogs} className={`${deleting? 'opacity-50 cursor-not-allowed':''} text-sm px-3 py-1.5 rounded border bg-white h-[34px]`}>{deleting? '...' : 'Delete'}</button>
           </div>
         </div>
 
@@ -782,6 +801,8 @@ function ClassInfoPanel({ classId, initialInnerTab }){
   const [error, setError] = useState('')
   const [history, setHistory] = useState(null)
   const [loadingHistory, setLoadingHistory] = useState(true)
+  const [showIn, setShowIn] = useState(false)
+  const [showOut, setShowOut] = useState(false)
   const subjectAssignments = useMemo(() => {
     const map = {}
     for (const a of (klass?.subject_teachers || [])) {
@@ -988,10 +1009,10 @@ function ClassInfoPanel({ classId, initialInnerTab }){
       {error && <div className="mb-3 text-sm text-red-700 bg-red-50 border border-red-200 rounded p-2">{error}</div>}
       {!loading && !error && innerTab==='info' && (
         <>
-          <div className="grid md:grid-cols-3 gap-3 mb-4">
-            <InfoCard label="Grade" value={klass?.grade_level || '-'} color="indigo" />
-            <InfoCard label="Stream" value={klass?.stream_detail?.name || '-'} color="emerald" />
-            <InfoCard label="Class Teacher" value={(klass?.teacher_detail ? `${klass.teacher_detail.first_name} ${klass.teacher_detail.last_name}` : '—')} color="fuchsia" />
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4 px-4 md:px-0">
+            <InfoCard label="Grade" value={klass?.grade_level || '-'} color="indigo" icon="school" />
+            <InfoCard label="Stream" value={klass?.stream_detail?.name || '-'} color="emerald" icon="layers" />
+            <InfoCard label="Class Teacher" value={(klass?.teacher_detail ? `${klass.teacher_detail.first_name} ${klass.teacher_detail.last_name}` : '—')} color="fuchsia" icon="user" />
           </div>
 
           <div className="p-3 rounded-none sm:rounded-xl border-t border-b sm:border border-slate-200 bg-slate-50">
@@ -1005,58 +1026,78 @@ function ClassInfoPanel({ classId, initialInnerTab }){
               <div className="grid md:grid-cols-3 gap-3">
                 <div className="md:col-span-2 grid md:grid-cols-2 gap-3">
                   <div className="rounded-lg border border-indigo-200 overflow-hidden bg-white">
-                    <div className="px-3 py-2 text-sm font-medium bg-indigo-50 border-b border-indigo-100">Students In</div>
-                    <div className="max-h-64 overflow-auto">
-                      <table className="min-w-full text-sm">
-                        <thead className="bg-indigo-50">
-                          <tr>
-                            <th className="px-3 py-2 text-left">Student</th>
-                            <th className="px-3 py-2 text-left">From</th>
-                            <th className="px-3 py-2 text-left">When</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {(history.students_in||[]).length === 0 ? (
-                            <tr><td className="px-3 py-3 text-gray-500" colSpan={3}>No entries.</td></tr>
-                          ) : (
-                            (history.students_in||[]).slice(0,20).map((h, i) => (
-                              <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-indigo-50/50'}>
-                                <td className="px-3 py-2 border-t">{h.student_name}</td>
-                                <td className="px-3 py-2 border-t">{h.from || '-'}</td>
-                                <td className="px-3 py-2 border-t">{h.year ? `${h.year}-T${h.term||'-'}` : (h.created_at || '').slice(0,10)}</td>
-                              </tr>
-                            ))
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
+                    <button 
+                      onClick={() => setShowIn(!showIn)}
+                      className="w-full flex items-center justify-between px-3 py-2 text-sm font-medium bg-indigo-50 border-b border-indigo-100 hover:bg-indigo-100 transition-colors"
+                    >
+                      <span>Students In</span>
+                      <svg className={`w-4 h-4 transition-transform ${showIn ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+                    {showIn && (
+                      <div className="max-h-64 overflow-auto">
+                        <table className="min-w-full text-sm">
+                          <thead className="bg-indigo-50">
+                            <tr>
+                              <th className="px-3 py-2 text-left">Student</th>
+                              <th className="px-3 py-2 text-left">From</th>
+                              <th className="px-3 py-2 text-left">When</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {(history.students_in||[]).length === 0 ? (
+                              <tr><td className="px-3 py-3 text-gray-500" colSpan={3}>No entries.</td></tr>
+                            ) : (
+                              (history.students_in||[]).slice(0,20).map((h, i) => (
+                                <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-indigo-50/50'}>
+                                  <td className="px-3 py-2 border-t">{h.student_name}</td>
+                                  <td className="px-3 py-2 border-t">{h.from || '-'}</td>
+                                  <td className="px-3 py-2 border-t">{h.year ? `${h.year}-T${h.term||'-'}` : (h.created_at || '').slice(0,10)}</td>
+                                </tr>
+                              ))
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
                   </div>
                   <div className="rounded-lg border border-amber-200 overflow-hidden bg-white">
-                    <div className="px-3 py-2 text-sm font-medium bg-amber-50 border-b border-amber-100">Students Out</div>
-                    <div className="max-h-64 overflow-auto">
-                      <table className="min-w-full text-sm">
-                        <thead className="bg-amber-50">
-                          <tr>
-                            <th className="px-3 py-2 text-left">Student</th>
-                            <th className="px-3 py-2 text-left">To</th>
-                            <th className="px-3 py-2 text-left">When</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {(history.students_out||[]).length === 0 ? (
-                            <tr><td className="px-3 py-3 text-gray-500" colSpan={3}>No entries.</td></tr>
-                          ) : (
-                            (history.students_out||[]).slice(0,20).map((h, i) => (
-                              <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-amber-50/40'}>
-                                <td className="px-3 py-2 border-t">{h.student_name}</td>
-                                <td className="px-3 py-2 border-t">{h.to || '-'}</td>
-                                <td className="px-3 py-2 border-t">{h.year ? `${h.year}-T${h.term||'-'}` : (h.created_at || '').slice(0,10)}</td>
-                              </tr>
-                            ))
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
+                    <button 
+                      onClick={() => setShowOut(!showOut)}
+                      className="w-full flex items-center justify-between px-3 py-2 text-sm font-medium bg-amber-50 border-b border-amber-100 hover:bg-amber-100 transition-colors"
+                    >
+                      <span>Students Out</span>
+                      <svg className={`w-4 h-4 transition-transform ${showOut ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+                    {showOut && (
+                      <div className="max-h-64 overflow-auto">
+                        <table className="min-w-full text-sm">
+                          <thead className="bg-amber-50">
+                            <tr>
+                              <th className="px-3 py-2 text-left">Student</th>
+                              <th className="px-3 py-2 text-left">To</th>
+                              <th className="px-3 py-2 text-left">When</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {(history.students_out||[]).length === 0 ? (
+                              <tr><td className="px-3 py-3 text-gray-500" colSpan={3}>No entries.</td></tr>
+                            ) : (
+                              (history.students_out||[]).slice(0,20).map((h, i) => (
+                                <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-amber-50/40'}>
+                                  <td className="px-3 py-2 border-t">{h.student_name}</td>
+                                  <td className="px-3 py-2 border-t">{h.to || '-'}</td>
+                                  <td className="px-3 py-2 border-t">{h.year ? `${h.year}-T${h.term||'-'}` : (h.created_at || '').slice(0,10)}</td>
+                                </tr>
+                              ))
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
                   </div>
                 </div>
                 <div className="rounded-lg border bg-white">
@@ -1472,17 +1513,60 @@ function buildCombinedList(currentStudents, otherStudents, classAName, classBNam
   return combined
 }
 
-function InfoCard({ label, value, color='indigo' }){
+function InfoCard({ label, value, color='indigo', icon }){
   const palettes = {
-    indigo: { wrap: 'border-indigo-100 bg-indigo-50', title: 'text-gray-500', val: 'text-gray-800' },
-    emerald: { wrap: 'border-emerald-100 bg-emerald-50', title: 'text-gray-500', val: 'text-gray-800' },
-    fuchsia: { wrap: 'border-fuchsia-100 bg-fuchsia-50', title: 'text-gray-500', val: 'text-gray-800' },
+    indigo: { 
+      wrap: 'border-indigo-100 bg-gradient-to-br from-indigo-50 to-white', 
+      title: 'text-indigo-600', 
+      val: 'text-indigo-900',
+      iconBg: 'bg-indigo-100 text-indigo-600'
+    },
+    emerald: { 
+      wrap: 'border-emerald-100 bg-gradient-to-br from-emerald-50 to-white', 
+      title: 'text-emerald-600', 
+      val: 'text-emerald-900',
+      iconBg: 'bg-emerald-100 text-emerald-600'
+    },
+    fuchsia: { 
+      wrap: 'border-fuchsia-100 bg-gradient-to-br from-fuchsia-50 to-white', 
+      title: 'text-fuchsia-600', 
+      val: 'text-fuchsia-900',
+      iconBg: 'bg-fuchsia-100 text-fuchsia-600'
+    },
   }
   const pal = palettes[color] || palettes.indigo
+  
+  const icons = {
+    school: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path d="M12 14l9-5-9-5-9 5 9 5z" />
+        <path d="M12 14l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.052 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14z" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 14l9-5-9-5-9 5 9 5zm0 0l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14zm-4 6v-7.5l4-2.222" />
+      </svg>
+    ),
+    layers: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+      </svg>
+    ),
+    user: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+      </svg>
+    )
+  }
+
   return (
-    <div className={`p-4 rounded-xl border shadow-sm ${pal.wrap}`}>
-      <div className={`text-[11px] uppercase tracking-wide ${pal.title}`}>{label}</div>
-      <div className={`mt-1 text-lg font-semibold ${pal.val}`}>{value}</div>
+    <div className={`p-4 rounded-2xl border shadow-sm ${pal.wrap} flex items-center gap-4 transition-all hover:shadow-md`}>
+      {icon && (
+        <div className={`shrink-0 w-10 h-10 rounded-xl flex items-center justify-center ${pal.iconBg}`}>
+          {icons[icon]}
+        </div>
+      )}
+      <div>
+        <div className={`text-[11px] uppercase font-bold tracking-wider ${pal.title}`}>{label}</div>
+        <div className={`mt-0.5 text-lg font-bold ${pal.val}`}>{value}</div>
+      </div>
     </div>
   )
 }

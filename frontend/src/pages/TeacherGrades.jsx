@@ -31,6 +31,7 @@ export default function TeacherGrades(){
   const { showSuccess, showError } = useNotification()
   const [invalid, setInvalid] = useState({}) // { student_id: true }
   const saveTimersRef = useRef({}) // { student_id: timeoutId }
+  const saveTimersAllRef = useRef({}) // { `${compId}:${studentId}`: timeoutId }
   const examsCacheRef = useRef({})
   const [examsLoading, setExamsLoading] = useState(false)
   const [studentsLoading, setStudentsLoading] = useState(false)
@@ -62,6 +63,14 @@ export default function TeacherGrades(){
     const e = exams.find(x=> String(x.id)===String(selectedExamId))
     return e ? String(e.name || 'Exam') : 'Exam'
   }, [exams, selectedExamId])
+
+  const componentDisplay = useMemo(()=>{
+    if (entryMode !== 'single') return ''
+    if (!selectedComponentId) return components.length ? 'Whole Subject' : 'Whole Subject'
+    const c = components.find(x=> String(x.id)===String(selectedComponentId))
+    if (!c) return 'Paper'
+    return c.code ? `${c.code} - ${c.name}` : String(c.name || 'Paper')
+  }, [entryMode, selectedComponentId, components])
 
   // Student search
   const [searchQuery, setSearchQuery] = useState('')
@@ -459,6 +468,31 @@ export default function TeacherGrades(){
     if (bad) {
       const unit = inputAs==='percent' ? '%' : total
       showError('Invalid input', `Value must be between 0 and ${unit}.`, 3000)
+    }
+
+    if (!bad){
+      const key = `${compId}:${studentId}`
+      const t = saveTimersAllRef.current[key]
+      if (t) clearTimeout(t)
+      saveTimersAllRef.current[key] = setTimeout(async () => {
+        try{
+          const examId = Number(selectedExamId)
+          const subjectId = Number(selectedSubject)
+          const out = outOfPerComp?.[compId] ? Number(outOfPerComp[compId]) : undefined
+          const base = (inputAs === 'percent') ? percentToMarks(raw, out || examMeta.total_marks || 100) : String(raw)
+          const num = Math.round(Number(base))
+          if (!examId || !subjectId || Number.isNaN(num)) return
+          const item = { exam: examId, subject: subjectId, student: studentId, component: Number(compId), marks: num }
+          if (out) item.out_of = out
+          await saveResults([item])
+        }catch(e){
+          let msg = e?.response?.data?.detail
+          if (!msg && e?.response?.data){
+            try{ msg = JSON.stringify(e.response.data) }catch{}
+          }
+          showError('Auto-save failed', msg || 'Could not save mark', 4000)
+        }
+      }, 600)
     }
   }
 
@@ -1244,7 +1278,7 @@ export default function TeacherGrades(){
   return (
     <div className="teacher-grades-page px-2 md:px-4 lg:px-6 py-1 md:py-4 space-y-2 md:space-y-4 max-w-6xl mx-auto pb-24 md:pb-0 min-h-screen">
       {/* Header */}
-      <div className="relative overflow-hidden rounded-2xl border border-gray-200 bg-gradient-to-r from-indigo-500 via-indigo-600 to-sky-500 shadow-md">
+      <div className="hidden md:block relative overflow-hidden rounded-2xl border border-gray-200 bg-gradient-to-r from-indigo-500 via-indigo-600 to-sky-500 shadow-md">
         <div className="pointer-events-none absolute -right-16 -top-16 h-40 w-40 rounded-full bg-white/15 blur-2" />
         <div className="p-2 md:p-4 flex items-center justify-between gap-2 md:gap-3">
           <div>
@@ -1285,6 +1319,59 @@ export default function TeacherGrades(){
               aria-label="Change exam and subject"
             >
               {subjectDisplay} • {examDisplay}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="sticky top-2 z-30">
+        <div className="rounded-xl border border-indigo-100 bg-white/95 backdrop-blur shadow-sm px-3 py-2 flex items-start md:items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-2 text-xs md:text-sm">
+            <span className="px-2 py-0.5 rounded-full bg-sky-50 text-sky-700 border border-sky-200">
+              Class:
+              <strong className="ml-1">{(classes.find(c=>String(c.id)===String(selectedClass))||{}).name || selectedClass || '—'}</strong>
+            </span>
+            <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+              Subject:
+              <strong className="ml-1">{subjectDisplay || '—'}</strong>
+            </span>
+            <span className="px-2 py-0.5 rounded-full bg-violet-50 text-violet-700 border border-violet-200">
+              {entryMode === 'all' ? (
+                <>
+                  Papers:
+                  <strong className="ml-1">All</strong>
+                </>
+              ) : (
+                <>
+                  Paper:
+                  <strong className="ml-1">{componentDisplay || '—'}</strong>
+                </>
+              )}
+            </span>
+            <span className="px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+              Exam:
+              <strong className="ml-1">{examDisplay || '—'}</strong>
+            </span>
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {entryMode === 'all' && components.length > 0 && (
+              <div className="hidden lg:flex items-center gap-1.5 max-w-[420px] overflow-hidden">
+                {components.slice(0,6).map(c=> (
+                  <span key={c.id} className="px-2 py-0.5 rounded-full bg-gray-50 text-gray-700 border border-gray-200 text-[11px]">
+                    {c.code || c.name}
+                  </span>
+                ))}
+                {components.length > 6 && (
+                  <span className="text-[11px] text-gray-500">+{components.length - 6} more</span>
+                )}
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={()=>setFormModalOpen(true)}
+              className="text-xs md:text-sm px-3 py-1.5 rounded-full bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm"
+            >
+              Change
             </button>
           </div>
         </div>
@@ -1402,6 +1489,24 @@ export default function TeacherGrades(){
               <div className="px-2 py-1 rounded border bg-gray-50">Date: <span className="font-medium text-gray-800 ml-1">{examMeta.date}</span></div>
             </div>
           )}
+
+          <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-100">
+            <button
+              type="button"
+              onClick={() => setFormModalOpen(false)}
+              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-xl hover:bg-gray-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              disabled={!selectedExamId || studentsLoading}
+              onClick={() => setFormModalOpen(false)}
+              className="px-6 py-2 text-sm font-medium text-white bg-indigo-600 rounded-xl hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+            >
+              Confirm
+            </button>
+          </div>
         </div>
       </Modal>
 
@@ -1616,18 +1721,11 @@ export default function TeacherGrades(){
               placeholder="Search student by name or admission"
               className="w-full md:w-80 border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-300"
             />
-            <button
-              type="button"
-              onClick={()=>setSearchQuery(searchQuery)}
-              className="px-3 py-2 rounded-xl text-sm bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm"
-            >
-              Search
-            </button>
             {searchQuery && (
               <button
                 type="button"
                 onClick={()=>setSearchQuery('')}
-                className="px-3 py-2 rounded-xl text-sm bg-white text-gray-700 border border-gray-200 hover:bg-gray-50"
+                className="px-3 py-2 rounded-xl text-sm bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 flex-shrink-0"
               >
                 Clear
               </button>

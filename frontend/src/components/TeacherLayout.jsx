@@ -25,6 +25,9 @@ export default function TeacherLayout({ children }){
   const { lock } = useLock()
   const [isOpen, setIsOpen] = useState(true)
   const [isMobileOpen, setIsMobileOpen] = useState(false)
+  const [isMobileViewport, setIsMobileViewport] = useState(() => {
+    try { return typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(max-width: 767px)').matches } catch { return false }
+  })
   const [schoolName, setSchoolName] = useState('')
   const [schoolLogo, setSchoolLogo] = useState('')
   const [currentTerm, setCurrentTerm] = useState(null)
@@ -106,6 +109,23 @@ export default function TeacherLayout({ children }){
   useEffect(() => {
     try { window.localStorage.setItem('teacher_dark_mode', darkMode ? '1' : '0') } catch {}
   }, [darkMode])
+
+  useEffect(() => {
+    try {
+      if (typeof window === 'undefined' || !window.matchMedia) return
+      const m = window.matchMedia('(max-width: 767px)')
+      const onChange = () => setIsMobileViewport(Boolean(m.matches))
+      onChange()
+      if (typeof m.addEventListener === 'function') m.addEventListener('change', onChange)
+      else if (typeof m.addListener === 'function') m.addListener(onChange)
+      return () => {
+        try {
+          if (typeof m.removeEventListener === 'function') m.removeEventListener('change', onChange)
+          else if (typeof m.removeListener === 'function') m.removeListener(onChange)
+        } catch {}
+      }
+    } catch {}
+  }, [])
 
   // Load school info for header
   useEffect(() => {
@@ -283,8 +303,22 @@ export default function TeacherLayout({ children }){
     return items
   })()
 
+  const activePageLabel = (() => {
+    const p = String(pathname || '')
+    const exact = navItems.find(i => String(i?.to || '') === p)
+    if (exact?.label) return exact.label
+    const prefix = navItems
+      .filter(i => i?.to && i.to !== '/teacher')
+      .find(i => p.startsWith(String(i.to) + '/'))
+    if (prefix?.label) return prefix.label
+    if (p.startsWith('/teacher')) return 'Teacher'
+    return 'App'
+  })()
+
+  const effectiveDarkMode = false
+
   return (
-    <div className={`min-h-screen bg-gray-50 teacher-theme ${darkMode ? 'teacher-theme-dark' : ''}`}>
+    <div className={`min-h-screen bg-gray-50 teacher-theme ${effectiveDarkMode ? 'teacher-theme-dark' : ''}`}>
       {broadcastBanner && (
         <div className="sticky top-0 z-40 w-full bg-red-600 text-white">
           <div className="px-3 md:px-4 py-2 flex items-start gap-2">
@@ -312,7 +346,19 @@ export default function TeacherLayout({ children }){
         </div>
       )}
       {/* Top bar - refreshed style */}
-      <header className="sticky top-0 z-30 bg-white/80 backdrop-blur supports-[backdrop-filter]:bg-white/60 text-gray-900 px-3 md:px-4 h-14 flex items-center gap-2 md:gap-3 shadow-md border-b border-gray-100">
+      <header
+        className="sticky top-0 z-30 bg-white/80 backdrop-blur supports-[backdrop-filter]:bg-white/60 text-gray-900 px-3 md:px-4 h-14 flex items-center gap-2 md:gap-3 shadow-md border-b border-gray-100"
+        onClick={(e) => {
+          try {
+            if (typeof window !== 'undefined' && window.matchMedia && !window.matchMedia('(max-width: 767px)').matches) return
+            const t = e.target
+            if (t && typeof t.closest === 'function') {
+              if (t.closest('button, a, input, select, textarea, [role="button"], [data-no-header-menu]')) return
+            }
+          } catch {}
+          setIsMobileOpen(true)
+        }}
+      >
         <button
           className="p-2 rounded hover:bg-gray-100 hidden md:inline-flex"
           aria-label="Collapse sidebar"
@@ -343,7 +389,10 @@ export default function TeacherLayout({ children }){
           </button>
         </div>
         <div className="flex-1 flex items-center justify-center px-1 md:px-2">
-          <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full border border-gray-200 bg-white/80 shadow-sm text-xs md:text-sm text-gray-700 truncate">
+          <div className="md:hidden text-sm font-semibold text-gray-800 truncate max-w-[70vw] text-center">
+            {activePageLabel}
+          </div>
+          <div className="hidden md:inline-flex items-center gap-2 px-2.5 py-1 rounded-full border border-gray-200 bg-white/80 shadow-sm text-xs md:text-sm text-gray-700 truncate">
             {schoolLogo ? (
               <img src={schoolLogo} alt="School logo" className="h-5 w-5 md:h-5 object-contain rounded" />
             ) : null}
@@ -356,9 +405,19 @@ export default function TeacherLayout({ children }){
           </div>
         </div>
         <div className="ml-auto flex items-center gap-2 md:gap-3">
+          <button
+            type="button"
+            onClick={() => setIsMobileOpen(true)}
+            className="md:hidden p-2 rounded-full border border-gray-200 bg-white/90 hover:bg-white shadow-sm flex items-center justify-center"
+            aria-label="Open menu"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+            </svg>
+          </button>
           <Link
             to="/teacher/profile"
-            className="inline-flex items-center gap-2 px-2 py-1 rounded-full border border-gray-200 bg-white/90 hover:bg-white shadow-sm transition-colors"
+            className="hidden md:inline-flex items-center gap-2 px-2 py-1 rounded-full border border-gray-200 bg-white/90 hover:bg-white shadow-sm transition-colors"
             aria-label="Open profile"
           >
             <div className="h-8 w-8 rounded-full bg-indigo-600 text-white flex items-center justify-center text-xs font-semibold">
@@ -479,8 +538,9 @@ export default function TeacherLayout({ children }){
             </button>
             <button
               type="button"
-              onClick={() => setDarkMode(v => !v)}
-              className="flex-1 px-3 py-2 rounded-lg text-sm font-medium bg-white/5 text-white border border-white/30 hover:bg-white/15 transition-colors"
+              disabled
+              onClick={() => {}}
+              className="flex-1 px-3 py-2 rounded-lg text-sm font-medium bg-white/5 text-white border border-white/30 hover:bg-white/15 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
             >
               {darkMode ? 'Light mode' : 'Dark mode'}
             </button>
@@ -504,50 +564,10 @@ export default function TeacherLayout({ children }){
         </aside>
 
         {/* Content area */}
-        <main className={`transition-all duration-200 px-0 md:px-6 pt-1 pb-16 md:pt-6 md:pb-6 ${isOpen? 'md:ml-64':'md:ml-16'}`}>
+        <main className={`transition-all duration-200 px-0 md:px-6 pt-1 pb-6 md:pt-6 md:pb-6 ${isOpen? 'md:ml-64':'md:ml-16'}`}>
           {children}
         </main>
       </div>
-      {/* Bottom Nav (mobile) - floating dock */}
-      <nav className="sm:hidden fixed bottom-2 inset-x-2 z-30">
-        <div className="max-w-xl mx-auto rounded-2xl border border-slate-200/70 bg-white/90 backdrop-blur-xl shadow-xl px-2 py-1.5 flex items-center justify-around">
-          {([
-            { to: '/teacher', label: 'Dashboard', icon: '📊' },
-            { to: '/teacher/classes', label: 'Classes', icon: '📚' },
-            { to: '/teacher/grades', label: 'Grades', icon: '📝' },
-            { to: '/teacher/messages', label: 'Messages', icon: '✉️' },
-            { type: 'more', label: 'More', icon: '⋯' },
-          ]).map(item => {
-            const isMore = item.type === 'more'
-            const active = isMore ? isMobileOpen : pathname === item.to
-            const commonClasses = `relative flex flex-col items-center justify-center flex-1 gap-0.5 text-[11px] transition-colors rounded-xl px-2 py-1 ${active ? 'bg-emerald-50 text-emerald-700' : 'text-slate-500'}`
-            const iconClass = `text-base ${active ? 'scale-110' : ''}`
-            if (isMore){
-              return (
-                <button
-                  key="teacher-bottom-more"
-                  type="button"
-                  onClick={() => setIsMobileOpen(true)}
-                  className={commonClasses}
-                >
-                  <span className={iconClass} aria-hidden>{item.icon}</span>
-                  <span className="leading-tight">{item.label}</span>
-                </button>
-              )
-            }
-            return (
-              <Link
-                key={item.to}
-                to={item.to}
-                className={commonClasses}
-              >
-                <span className={iconClass} aria-hidden>{item.icon}</span>
-                <span className="leading-tight">{item.label}</span>
-              </Link>
-            )
-          })}
-        </div>
-      </nav>
       {/* Floating Logout button for mobile only */}
       {(() => {
         const root = typeof document !== 'undefined' ? document.getElementById('floating-actions-root') : null

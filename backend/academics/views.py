@@ -329,12 +329,14 @@ class ClassViewSet(viewsets.ModelViewSet):
         # Prepare messaging context
         school = getattr(klass, 'school', None)
         school_id = getattr(school, 'id', None)
-        sender_id = resolve_default_sender_id(school_id) if school_id else None
+        from communications.utils import resolve_default_sender_id, queue_message_delivery
+        
+        # Use current user as sender if available, else fallback
+        sender_id = getattr(user, 'id', None) or (resolve_default_sender_id(school_id) if school_id else None)
 
         notified = 0
         sms_attempts = 0
         email_attempts = 0
-        recipients_in_app = []
         items = []
 
         for stu in students:
@@ -357,69 +359,38 @@ class ClassViewSet(viewsets.ModelViewSet):
                 f" - {class_name}. Total billed: {total_billed:.2f}, Paid: {total_paid:.2f}, Balance: {balance:.2f}."
             )
 
-            # Queue in-app message if student has linked user
-            if sender_id and getattr(stu, 'user_id', None):
-                recipients_in_app.append(stu.user_id)
-
-            # SMS to guardian
-            phone = getattr(stu, 'guardian_id', None)
-            if phone:
+            # Create a per-student Message object to leverage the queued delivery pipeline
+            # This ensures each parent/student gets their own specific balance details.
+            if school_id and sender_id:
                 try:
-                    ok_sms = send_sms(phone, body, school_id=school_id)
-                except Exception:
-                    ok_sms = False
-                try:
-                    log_delivery(
+                    msg = Message.objects.create(
                         school_id=school_id,
-                        channel='sms',
-                        recipient=str(phone),
-                        ok=bool(ok_sms),
-                        message=body,
-                        context=f"fees:class:{klass.id};student:{stu.id}",
+                        sender_id=sender_id,
+                        body=body,
+                        audience=Message.Audience.USERS,
+                        system_tag=f"fees_notice:class:{klass.id};student:{stu.id}",
+                        send_sms=True,
+                        send_email=(channel == 'both'),
                     )
+                    
+                    # Add recipient if linked user exists
+                    if getattr(stu, 'user_id', None):
+                        MessageRecipient.objects.create(message=msg, user_id=stu.user_id)
+                    
+                    # Queue async delivery
+                    queue_message_delivery(msg.id)
+                    
+                    # Increment local counters for response
+                    if getattr(stu, 'guardian_id', None):
+                        sms_attempts += 1
+                    if (channel == 'both') and (getattr(stu, 'email', None) or getattr(getattr(stu, 'user', None), 'email', None)):
+                        email_attempts += 1
+                    
+                    notified += 1
                 except Exception:
                     pass
-                if ok_sms:
-                    sms_attempts += 1
-
-            # Optional email
-            if channel == 'both':
-                email = getattr(stu, 'email', None) or getattr(getattr(stu, 'user', None), 'email', None)
-                if email:
-                    try:
-                        subj = f"Fees balance update - {class_name}"
-                        ok_email = send_email_safe(subj, body, email, school_id=school_id)
-                    except Exception:
-                        ok_email = False
-                    try:
-                        log_delivery(
-                            school_id=school_id,
-                            channel='email',
-                            recipient=str(email),
-                            ok=bool(ok_email),
-                            message=body,
-                            context=f"fees:class:{klass.id};student:{stu.id}",
-                        )
-                    except Exception:
-                        pass
-                    if ok_email:
-                        email_attempts += 1
 
             items.append({'student_id': stu.id, 'balance': balance})
-            notified += 1
-
-        # Mirror to chat/messages in bulk
-        if sender_id and recipients_in_app:
-            try:
-                create_messages_for_users(
-                    school_id=school_id,
-                    sender_id=sender_id,
-                    body=f"Fees balances have been updated for your account. Please check portal/SMS.",
-                    recipient_user_ids=list(set(recipients_in_app)),
-                    system_tag=f"fees_notice:class:{klass.id}",
-                )
-            except Exception:
-                pass
 
         return Response({
             'detail': 'fees_notifications_queued',
@@ -456,95 +427,82 @@ class ClassViewSet(viewsets.ModelViewSet):
         class_name = getattr(klass, 'name', '') or getattr(klass, 'grade_level', '') or 'Class'
         sender_name = getattr(user, 'username', None) or 'Teacher'
 
-        # In-app (single broadcast message with many recipients)
-        in_app_message_id = None
-        in_app_recipients = 0
+        # In-app (single broadcast message with many recipients) + queued SMS/Email forwarding
         try:
             recipient_user_ids = [int(s.user_id) for s in students if getattr(s, 'user_id', None)]
             recipient_user_ids = list(set(recipient_user_ids))
         except Exception:
             recipient_user_ids = []
-        if school_id and recipient_user_ids:
-            try:
-                msg = Message.objects.create(
-                    school_id=school_id,
-                    sender_id=getattr(user, 'id', None),
-                    body=body,
-                    audience=Message.Audience.USERS,
-                    system_tag=f"class_broadcast:class:{klass.id}",
-                    is_broadcast=True,
-                )
-                recs = [MessageRecipient(message=msg, user_id=uid) for uid in recipient_user_ids]
-                if recs:
-                    MessageRecipient.objects.bulk_create(recs, ignore_conflicts=True)
-                in_app_message_id = msg.id
-                in_app_recipients = len(recipient_user_ids)
-            except Exception:
-                in_app_message_id = None
-                in_app_recipients = 0
 
+        if not school_id:
+            return Response({'detail': 'No school'}, status=status.HTTP_400_BAD_REQUEST)
+        if not recipient_user_ids:
+            return Response({'detail': 'No linked student portal accounts found for students in this class'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Also add the sender as a recipient so the message appears in the sender's inbox.
+        try:
+            sender_id = int(getattr(user, 'id', None) or 0)
+        except Exception:
+            sender_id = 0
+        if sender_id:
+            recipient_user_ids = list(set(recipient_user_ids + [sender_id]))
+
+        msg = Message.objects.create(
+            school_id=school_id,
+            sender_id=getattr(user, 'id', None),
+            body=body,
+            audience=Message.Audience.USERS,
+            system_tag=f"class_broadcast:class:{klass.id}",
+            is_broadcast=True,
+            send_sms=True,
+            send_email=True,
+        )
+        recs = [MessageRecipient(message=msg, user_id=uid) for uid in recipient_user_ids]
+        if recs:
+            MessageRecipient.objects.bulk_create(recs, ignore_conflicts=True)
+
+        # Estimate attempts (actual ok/fail will be visible in DeliveryLog later)
         sms_attempts = 0
-        sms_ok = 0
         email_attempts = 0
-        email_ok = 0
+        try:
+            from django.contrib.auth import get_user_model
+            User = get_user_model()
+            users = list(User.objects.filter(id__in=recipient_user_ids).only('id', 'phone', 'email', 'role'))
+            user_by_id = {u.id: u for u in users}
+            stu_rows = list(Student.objects.filter(user_id__in=recipient_user_ids, is_active=True).only('user_id', 'guardian_id', 'email'))
+            stu_by_uid = {s.user_id: s for s in stu_rows if getattr(s, 'user_id', None)}
+            for uid in recipient_user_ids:
+                u = user_by_id.get(uid)
+                s = stu_by_uid.get(uid)
+                phone = (getattr(u, 'phone', '') or '').strip() if u else ''
+                if (not phone) and s is not None:
+                    phone = (getattr(s, 'guardian_id', '') or '').strip()
+                if phone:
+                    sms_attempts += 1
+                email = (getattr(u, 'email', '') or '').strip() if u else ''
+                if (not email) and s is not None:
+                    email = (getattr(s, 'email', '') or '').strip()
+                if email:
+                    email_attempts += 1
+        except Exception:
+            sms_attempts = 0
+            email_attempts = 0
 
-        for stu in students:
-            # SMS to guardian phone
-            phone = str(getattr(stu, 'guardian_id', None) or '').strip()
-            if phone:
-                sms_attempts += 1
-                ok_sms = False
-                try:
-                    ok_sms = send_sms(phone, body, school_id=school_id)
-                except Exception:
-                    ok_sms = False
-                if ok_sms:
-                    sms_ok += 1
-                try:
-                    log_delivery(
-                        school_id=school_id,
-                        channel='sms',
-                        recipient=str(phone),
-                        ok=bool(ok_sms),
-                        message=body,
-                        context=f"classmsg:class:{klass.id};student:{stu.id}",
-                    )
-                except Exception:
-                    pass
-
-            # Email to student email (or linked user email)
-            recipient_email = getattr(stu, 'email', None) or getattr(getattr(stu, 'user', None), 'email', None)
-            if recipient_email:
-                email_attempts += 1
-                ok_email = False
-                try:
-                    subj = f"Message from {sender_name} - {class_name}"
-                    ok_email = send_email_safe(subj, body, str(recipient_email), school_id=school_id)
-                except Exception:
-                    ok_email = False
-                if ok_email:
-                    email_ok += 1
-                try:
-                    log_delivery(
-                        school_id=school_id,
-                        channel='email',
-                        recipient=str(recipient_email),
-                        ok=bool(ok_email),
-                        message=body,
-                        context=f"classmsg:class:{klass.id};student:{stu.id}",
-                    )
-                except Exception:
-                    pass
+        try:
+            from communications.utils import queue_message_delivery
+            queue_message_delivery(msg.id)
+        except Exception:
+            pass
 
         return Response({
-            'detail': 'class_message_sent',
+            'detail': 'class_message_queued',
             'class_id': klass.id,
-            'in_app_message_id': in_app_message_id,
-            'in_app_recipients': in_app_recipients,
+            'in_app_message_id': msg.id,
+            'in_app_recipients': len(recipient_user_ids),
             'sms_attempts': sms_attempts,
-            'sms_ok': sms_ok,
+            'sms_ok': 0,
             'email_attempts': email_attempts,
-            'email_ok': email_ok,
+            'email_ok': 0,
         })
 
     @action(detail=True, methods=['post'], permission_classes=[IsTeacherOrAdmin], url_path='message-student')
@@ -705,7 +663,12 @@ class ClassViewSet(viewsets.ModelViewSet):
                 .select_related('sender')
                 .order_by('-created_at', '-id')
             )
+            msg_ids = []
             for m in msg_qs[:limit]:
+                try:
+                    msg_ids.append(int(getattr(m, 'id', 0) or 0))
+                except Exception:
+                    pass
                 tag = str(getattr(m, 'system_tag', '') or '')
                 category = 'class' if tag.startswith('class_broadcast:') else ('fees' if tag.startswith('fees_notice:') else 'other')
                 items.append({
@@ -747,6 +710,38 @@ class ClassViewSet(viewsets.ModelViewSet):
                     'created_at': getattr(rec, 'created_at', None),
                     'sender': None,
                 })
+        except Exception:
+            pass
+
+        # Also include delivery logs created by the unified message delivery pipeline
+        # (context like "message:<id>;user:<id>") for class broadcasts.
+        try:
+            if msg_ids:
+                q = Q()
+                for mid in msg_ids:
+                    q |= Q(context__contains=f"message:{mid};")
+                dl2 = (
+                    DeliveryLog.objects
+                    .filter(school_id=school_id)
+                    .filter(q)
+                    .only('id', 'channel', 'recipient', 'ok', 'message_snippet', 'context', 'created_at')
+                    .order_by('-created_at', '-id')
+                )
+                for rec in dl2[:limit]:
+                    ctx = str(getattr(rec, 'context', '') or '')
+                    category = 'class'
+                    if ctx.startswith('fees:'):
+                        category = 'fees'
+                    items.append({
+                        'id': f"dl:{rec.id}",
+                        'category': category,
+                        'channel': getattr(rec, 'channel', None),
+                        'ok': bool(getattr(rec, 'ok', False)),
+                        'recipient': getattr(rec, 'recipient', None),
+                        'message': getattr(rec, 'message_snippet', None),
+                        'created_at': getattr(rec, 'created_at', None),
+                        'sender': None,
+                    })
         except Exception:
             pass
 

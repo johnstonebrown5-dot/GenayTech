@@ -297,6 +297,7 @@ export default function StudentDashboard(){
           financeSummaryLoaded: false,
           invoicesLoaded: false,
           student: null,
+          schoolInfo: null,
           assessments: [],
           examResults: [],
           invoices: [],
@@ -308,6 +309,7 @@ export default function StudentDashboard(){
 
     const hydrateFromCache = (c) => {
       setStudent(c.student || null)
+      setSchoolInfo(c.schoolInfo || null)
       setAssessments(c.assessments || [])
       setExamResults(c.examResults || [])
       setInvoices(c.invoices || [])
@@ -323,6 +325,17 @@ export default function StudentDashboard(){
         // Hydrate UI immediately from cache before optional tab-specific fetches.
         hydrateFromCache(c)
 
+        if (c.baseLoaded && !c.schoolInfo) {
+          try {
+            const scRes = await api.get('/auth/school/info/', { timeout: 15000, _skipGlobalLoading: true })
+            if (!mounted) return
+            c.schoolInfo = scRes.data
+            setSchoolInfo(scRes.data)
+          } catch {
+            if (!mounted) return
+          }
+        }
+
         // If academics is already loaded, ensure we show the latest expanded exam if none open
         if (currentTab === 'academics' && c.academicsLoaded) {
           hydrateFromCache(c)
@@ -337,6 +350,7 @@ export default function StudentDashboard(){
             ])
             if (!mounted) return
             c.student = stRes.data
+            c.schoolInfo = scRes.data
             setSchoolInfo(scRes.data)
             c.baseLoaded = true
             hydrateFromCache(c)
@@ -503,6 +517,39 @@ export default function StudentDashboard(){
     if (!__studentDashboardCache) return loading
     return !__studentDashboardCache.invoicesLoaded
   }, [loading, currentTab])
+
+  useEffect(() => {
+    if (!financeDetailsOpen) return
+    // On the dashboard tab we usually only preload summary; fetch invoices on-demand for the View modal.
+    if (__studentDashboardCache?.invoicesLoaded) return
+
+    let alive = true
+    ;(async () => {
+      try {
+        const invRes = await api.get('/finance/invoices/my/', {
+          params: { page_size: 200 },
+          timeout: 20000,
+          _skipGlobalLoading: true,
+        })
+        if (!alive) return
+        const inv = (Array.isArray(invRes?.data) ? invRes.data : (invRes?.data?.results || []))
+        setInvoices(inv)
+        if (__studentDashboardCache) {
+          __studentDashboardCache.invoices = inv
+          __studentDashboardCache.invoicesLoaded = true
+        }
+      } catch {
+        if (!alive) return
+        setInvoices([])
+        if (__studentDashboardCache) {
+          __studentDashboardCache.invoices = []
+          __studentDashboardCache.invoicesLoaded = true
+        }
+      }
+    })()
+
+    return () => { alive = false }
+  }, [financeDetailsOpen])
 
   const isAcademicsLoading = useMemo(() => {
     if (!__studentDashboardCache) return loading
