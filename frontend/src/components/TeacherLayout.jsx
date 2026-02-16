@@ -145,6 +145,18 @@ export default function TeacherLayout({ children }){
     return () => { mounted = false }
   }, [])
 
+  // Prefetch important teacher data so tab navigation doesn't keep reloading
+  useEffect(() => {
+    let alive = true
+    ;(async () => {
+      try{
+        await teacherQueries.prefetchTeacherBootstrap(user?.id)
+      }catch{}
+      if (!alive) return
+    })()
+    return () => { alive = false }
+  }, [user?.id])
+
   // Keep browser tab title in sync with active school
   useEffect(() => {
     if (typeof document !== 'undefined') {
@@ -157,7 +169,9 @@ export default function TeacherLayout({ children }){
     let mounted = true
     const load = async () => {
       try {
-        const info = await teacherQueries.getUnreadMessageInfo(user?.id)
+        const cacheKey = user?.id != null ? `unread_info:${String(user.id)}` : ''
+        const cachedInfo = cacheKey ? teacherQueries.cache.get(cacheKey) : null
+        const info = cachedInfo || await teacherQueries.getUnreadMessageInfo(user?.id)
         const total = Number(info?.totalUnread || 0)
         if (mounted) {
           setUnreadCount(total)

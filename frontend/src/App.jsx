@@ -119,22 +119,28 @@ import { maintenanceEnabled, maintenanceMessage, helpCenterPath } from './featur
 function ProtectedRoute({ children, roles, ownerRole }) {
   const { user, loading } = useAuth()
   const location = useLocation()
-  if (loading) return <div className="p-8">Loading...</div>
-  if (!user) return <Navigate to="/login" />
-  if (!roles) return children
-  // Treat superuser/staff as admin
-  const isAdminAccess = roles.includes('admin') && (user?.is_superuser || user?.is_staff || user?.role === 'admin')
-  const hasRole = roles.includes(user?.role)
-  if (isAdminAccess || hasRole) {
-    // If user is accessing a route owned by a different role (e.g., admin -> teacher), require re-auth
-    if (ownerRole && user?.role !== ownerRole) {
-      return <Navigate to="/reauth" state={{ redirectTo: location.pathname }} replace />
+  
+  // If we have a user, show children immediately even if background loading is happening
+  if (user) {
+    if (!roles) return children
+    const isAdminAccess = roles.includes('admin') && (user?.is_superuser || user?.is_staff || user?.role === 'admin')
+    const hasRole = roles.includes(user?.role)
+    if (isAdminAccess || hasRole) {
+      if (ownerRole && user?.role !== ownerRole) {
+        return <Navigate to="/reauth" state={{ redirectTo: location.pathname }} replace />
+      }
+      return children
     }
-    return children
+    if ((user?.is_superuser || user?.is_staff) && roles.includes('admin')) return children
+    return <Navigate to="/unauthorized" state={{ from: location.pathname }} replace />
   }
-  // If user has no explicit role but is superuser, allow admin
-  if ((user?.is_superuser || user?.is_staff) && roles.includes('admin')) return children
-  return <Navigate to="/unauthorized" state={{ from: location.pathname }} replace />
+
+  // Only show loading if we are actually fetching the user for the first time and have no cache
+  if (loading) return <div className="p-8 flex items-center justify-center min-h-screen">
+    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+  </div>
+  
+  return <Navigate to="/login" />
 }
 
 function RoleRedirect() {

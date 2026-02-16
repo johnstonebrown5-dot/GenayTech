@@ -289,6 +289,18 @@ export default function StudentDashboard(){
 
     const ensureCache = () => {
       if (!__studentDashboardCache) {
+        // Try to load from localStorage for cross-session persistence
+        const persistent = localStorage.getItem('student_dashboard_cache')
+        if (persistent) {
+          try {
+            __studentDashboardCache = JSON.parse(persistent)
+          } catch (e) {
+            __studentDashboardCache = null
+          }
+        }
+      }
+
+      if (!__studentDashboardCache) {
         __studentDashboardCache = {
           baseLoaded: false,
           dashboardLoaded: false,
@@ -307,6 +319,12 @@ export default function StudentDashboard(){
       return __studentDashboardCache
     }
 
+    const saveToPersistentCache = (c) => {
+      try {
+        localStorage.setItem('student_dashboard_cache', JSON.stringify(c))
+      } catch (e) {}
+    }
+
     const hydrateFromCache = (c) => {
       setStudent(c.student || null)
       setSchoolInfo(c.schoolInfo || null)
@@ -317,81 +335,68 @@ export default function StudentDashboard(){
     }
 
     ;(async () => {
-      setLoading(true)
+      // If we have cached data, don't show the initial loading spinner
+      const c = ensureCache()
+      const hasInitialData = c.baseLoaded || c.dashboardLoaded || c.academicsLoaded || c.financeLoaded
+      setLoading(!hasInitialData)
       setError('')
       try {
-        const c = ensureCache()
-
         // Hydrate UI immediately from cache before optional tab-specific fetches.
         hydrateFromCache(c)
 
-        if (c.baseLoaded && !c.schoolInfo) {
+        if (!c.schoolInfo) {
           try {
             const scRes = await api.get('/auth/school/info/', { timeout: 15000, _skipGlobalLoading: true })
             if (!mounted) return
             c.schoolInfo = scRes.data
             setSchoolInfo(scRes.data)
+            saveToPersistentCache(c)
           } catch {
             if (!mounted) return
           }
-        }
-
-        // If academics is already loaded, ensure we show the latest expanded exam if none open
-        if (currentTab === 'academics' && c.academicsLoaded) {
-          hydrateFromCache(c)
         }
 
         // Base student record (required for personalized sections)
-        if (!c.baseLoaded) {
-          try {
-            const [stRes, scRes] = await Promise.all([
-              api.get('/academics/students/my/', { timeout: 15000, _skipGlobalLoading: true }),
-              api.get('/auth/school/info/', { timeout: 15000, _skipGlobalLoading: true })
-            ])
-            if (!mounted) return
-            c.student = stRes.data
-            c.schoolInfo = scRes.data
-            setSchoolInfo(scRes.data)
-            c.baseLoaded = true
-            hydrateFromCache(c)
-          } catch {
-            if (!mounted) return
-          }
+        try {
+          const [stRes, scRes] = await Promise.all([
+            api.get('/academics/students/my/', { timeout: 15000, _skipGlobalLoading: true }),
+            api.get('/auth/school/info/', { timeout: 15000, _skipGlobalLoading: true })
+          ])
+          if (!mounted) return
+          c.student = stRes.data
+          c.schoolInfo = scRes.data
+          setSchoolInfo(scRes.data)
+          c.baseLoaded = true
+          saveToPersistentCache(c)
+          hydrateFromCache(c)
+        } catch {
+          if (!mounted) return
         }
 
         // Prefetch core personalized data for the main dashboard once per session.
-        if (currentTab === 'dashboard' && !c.dashboardLoaded) {
+        if (currentTab === 'dashboard') {
           const settled = await Promise.allSettled([
-            c.baseLoaded ? Promise.resolve({ data: c.student }) : api.get('/academics/students/my/', { timeout: 15000, _skipGlobalLoading: true }),
             api.get('/academics/assessments/my/', { timeout: 15000, _skipGlobalLoading: true }),
             api.get('/finance/invoices/my-summary/', { timeout: 15000, _skipGlobalLoading: true }),
           ])
           if (!mounted) return
-          const [stS, assS, sumS] = settled
-          if (stS.status === 'fulfilled') {
-            c.student = stS.value?.data || c.student
-            c.baseLoaded = true
+          const [assS, sumS] = settled
+          
+          if (assS.status === 'fulfilled') {
+            c.assessments = Array.isArray(assS.value?.data) ? assS.value.data : (assS.value?.data?.results || [])
           }
-          c.assessments = assS.status==='fulfilled' ? (Array.isArray(assS.value?.data) ? assS.value.data : (assS.value?.data?.results || [])) : (c.assessments || [])
-          c.summary = sumS.status==='fulfilled' ? (sumS.value?.data || { total_billed:0, total_paid:0, balance:0 }) : (c.summary || { total_billed:0, total_paid:0, balance:0 })
-          c.financeSummaryLoaded = true
+          if (sumS.status === 'fulfilled') {
+            c.summary = sumS.value?.data || { total_billed: 0, total_paid: 0, balance: 0 }
+            c.financeSummaryLoaded = true
+          }
+          
           c.dashboardLoaded = true
+          saveToPersistentCache(c)
           hydrateFromCache(c)
         }
 
-        // 2) Tab-specific data loads once per tab (only when user opens that tab)
-        if (currentTab === 'academics' && !c.academicsLoaded) {
-          if (!c.baseLoaded) {
-            try {
-              const stRes = await api.get('/academics/students/my/', { timeout: 15000, _skipGlobalLoading: true })
-              if (!mounted) return
-              c.student = stRes.data
-              c.baseLoaded = true
-              hydrateFromCache(c)
-            } catch {
-              if (!mounted) return
-            }
-          }
+        // 2) Tab-specific data loads
+        if (currentTab === 'academics') {
           const stId = c.student?.id
           const settled = await Promise.allSettled([
             api.get('/academics/assessments/my/'),
@@ -399,53 +404,45 @@ export default function StudentDashboard(){
           ])
           if (!mounted) return
           const [assS, exmS] = settled
-          c.assessments = assS.status==='fulfilled' ? (Array.isArray(assS.value?.data) ? assS.value.data : (assS.value?.data?.results || [])) : []
-          c.examResults = exmS.status==='fulfilled' ? (Array.isArray(exmS.value?.data) ? exmS.value.data : (exmS.value?.data?.results || [])) : []
+          
+          if (assS.status === 'fulfilled') {
+            c.assessments = Array.isArray(assS.value?.data) ? assS.value.data : (assS.value?.data?.results || [])
+          }
+          if (exmS.status === 'fulfilled') {
+            c.examResults = Array.isArray(exmS.value?.data) ? exmS.value.data : (exmS.value?.data?.results || [])
+          }
+          
           c.academicsLoaded = true
+          saveToPersistentCache(c)
           hydrateFromCache(c)
         }
 
-        if (currentTab === 'finance' && !c.financeLoaded) {
-          // Load summary first (fast, small payload) so totals render immediately.
-          if (!c.financeSummaryLoaded) {
-            try {
-              const sumRes = await api.get('/finance/invoices/my-summary/', { timeout: 15000, _skipGlobalLoading: true })
-              if (!mounted) return
-              c.summary = sumRes.data || { total_billed:0, total_paid:0, balance:0 }
-              c.financeSummaryLoaded = true
-            } catch (e) {
-              // Set flag even on failure to prevent infinite loading
-              c.financeSummaryLoaded = true
-              c.summary = { total_billed:0, total_paid:0, balance:0 }
-              if (!mounted) return
-            }
+        if (currentTab === 'finance') {
+          // Load summary and detailed invoices
+          const settled = await Promise.allSettled([
+            api.get('/finance/invoices/my-summary/', { timeout: 15000, _skipGlobalLoading: true }),
+            api.get('/finance/invoices/my/', { params: { page_size: 200 }, timeout: 20000, _skipGlobalLoading: true })
+          ])
+          
+          if (!mounted) return
+          const [sumS, invS] = settled
+          
+          if (sumS.status === 'fulfilled') {
+            c.summary = sumS.value?.data || { total_billed: 0, total_paid: 0, balance: 0 }
+            c.financeSummaryLoaded = true
           }
-
-          // Then load detailed invoices (may be large, paginated)
-          if (!c.invoicesLoaded) {
-            try {
-              const invRes = await api.get('/finance/invoices/my/', {
-                params: { page_size: 200 },
-                timeout: 20000,
-                _skipGlobalLoading: true,
-              })
-              if (!mounted) return
-              c.invoices = Array.isArray(invRes.data) ? invRes.data : (invRes.data?.results || [])
-              c.invoicesLoaded = true
-            } catch {
-              // Set flag even on failure to prevent infinite loading
-              c.invoices = []
-              c.invoicesLoaded = true
-              if (!mounted) return
-            }
+          if (invS.status === 'fulfilled') {
+            c.invoices = Array.isArray(invS.value?.data) ? invS.value.data : (invS.value?.data?.results || [])
+            c.invoicesLoaded = true
           }
+          
           c.financeLoaded = true
+          saveToPersistentCache(c)
           hydrateFromCache(c)
         }
       } catch (e) {
         if (!mounted) return
-        // Only block page when we cannot load the student record (non-finance tabs).
-        if (currentTab !== 'finance') {
+        if (currentTab !== 'finance' && !c.baseLoaded) {
           setError(e?.response?.data?.detail || e?.message || 'Failed to load your profile')
         }
       } finally {

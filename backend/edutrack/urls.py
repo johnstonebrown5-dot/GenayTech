@@ -57,6 +57,7 @@ urlpatterns = [
     path('api/finance/', include('finance.urls')),
     path('api/communications/', include('communications.urls')),
     path('api/reports/', include('reports.urls')),
+    path('api/webpush/', include('webpush.urls')),
 ]
 
 # Serve media files (e.g., uploaded logos) in development

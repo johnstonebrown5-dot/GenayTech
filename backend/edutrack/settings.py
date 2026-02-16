@@ -1,7 +1,13 @@
 import os
 from pathlib import Path
 from datetime import timedelta
-from dotenv import load_dotenv
+try:
+    from dotenv import load_dotenv
+except ImportError:
+    # If using the 'dotenv' package instead of 'python-dotenv'
+    from dotenv import read_dotenv
+    def load_dotenv(dotenv_path=None, **kwargs):
+        return read_dotenv(dotenv_path)
 from corsheaders.defaults import default_headers
 import dj_database_url
 from urllib.parse import urlparse
@@ -109,7 +115,15 @@ INSTALLED_APPS = [
     'finance',
     'communications',
     'reports',
+    'webpush',
 ]
+
+# Webpush Settings
+WEBPUSH_SETTINGS = {
+    "VAPID_PUBLIC_KEY": os.getenv("VAPID_PUBLIC_KEY"),
+    "VAPID_PRIVATE_KEY": os.getenv("VAPID_PRIVATE_KEY"),
+    "VAPID_ADMIN_EMAIL": os.getenv("SUPPORT_EMAIL", "edutrack46@gmail.com")
+}
 
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',

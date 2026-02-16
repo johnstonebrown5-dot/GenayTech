@@ -11,11 +11,38 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     const token = localStorage.getItem('access')
     if (!token) { setLoading(false); return }
+
+    // Load from cache first for instant UI
+    const cachedUser = localStorage.getItem('user_data')
+    if (cachedUser) {
+      try {
+        const parsed = JSON.parse(cachedUser)
+        setUser(parsed)
+        setLoading(false)  // Set loading false immediately
+      } catch (e) {
+        // Ignore invalid cache
+      }
+    }
+
+    // Fetch fresh data in background
     api.get('/auth/me/').then(res => {
       const me = res.data
       try { localStorage.setItem('auth_user_id', String(me?.id ?? '')) } catch {}
-      setUser(me)
-    }).finally(() => setLoading(false))
+      // Update state if different
+      setUser(prev => {
+        if (JSON.stringify(prev) !== JSON.stringify(me)) {
+          try { localStorage.setItem('user_data', JSON.stringify(me)) } catch {}
+          return me
+        }
+        return prev
+      })
+    }).catch(() => {
+      // If fetch fails and no cache, clear and set loading false
+      if (!cachedUser) {
+        setUser(null)
+        setLoading(false)
+      }
+    })
   }, [])
 
   const login = async (username, password) => {
@@ -30,6 +57,7 @@ export function AuthProvider({ children }) {
     setUser(meData)
     try {
       localStorage.setItem('auth_user_id', String(meData?.id ?? ''))
+      localStorage.setItem('user_data', JSON.stringify(meData))  // Cache user data
       // Broadcast login to other tabs
       localStorage.setItem('auth_event', `login:${Date.now()}`)
     } catch {}

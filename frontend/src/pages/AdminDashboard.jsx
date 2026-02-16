@@ -18,15 +18,20 @@ import {
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, Tooltip, Legend)
 
 export default function AdminDashboard(){
-  const [stats, setStats] = useState(null)
-  const [events, setEvents] = useState([])
-  const [loading, setLoading] = useState(true)
+  const [stats, setStats] = useState(() => {
+    try {
+      const cached = localStorage.getItem('admin_dashboard_stats')
+      return cached ? JSON.parse(cached) : null
+    } catch { return null }
+  })
+  const [events, setEvents] = useState(() => {
+    try {
+      const cached = localStorage.getItem('admin_dashboard_events')
+      return cached ? JSON.parse(cached) : []
+    } catch { return [] }
+  })
+  const [loading, setLoading] = useState(!stats)
   const navigate = useNavigate()
-  const [isCompact, setIsCompact] = useState(false)
-  const [showTrends, setShowTrends] = useState(true)
-  const [calendarMode, setCalendarMode] = useState('calendar')
-  const sliderRef = useRef(null)
-  const [activeSlide, setActiveSlide] = useState(0)
 
   useEffect(()=>{ (async()=>{
     try {
@@ -35,7 +40,11 @@ export default function AdminDashboard(){
         api.get('/communications/events/'),
         api.get('/academics/exams/', { params: { include_history: true } }).catch(()=>({ data: [] })),
       ])
-      setStats(summaryRes.data)
+      
+      const newStats = summaryRes.data
+      setStats(newStats)
+      localStorage.setItem('admin_dashboard_stats', JSON.stringify(newStats))
+
       const baseEvents = Array.isArray(eventsRes.data) ? eventsRes.data : (eventsRes.data?.results || [])
       const exams = Array.isArray(examsRes.data) ? examsRes.data : (examsRes.data?.results || [])
       const examEvents = exams.map(x => {
@@ -54,10 +63,13 @@ export default function AdminDashboard(){
           source: 'exam',
         }
       })
-      setEvents([...baseEvents, ...examEvents])
+      const newEvents = [...baseEvents, ...examEvents]
+      setEvents(newEvents)
+      localStorage.setItem('admin_dashboard_events', JSON.stringify(newEvents))
+      
       setLoading(false)
     } catch (e) {
-      setStats({ error: true })
+      if (!stats) setStats({ error: true })
       setLoading(false)
     }
   })() },[])

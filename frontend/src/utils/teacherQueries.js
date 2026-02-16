@@ -1,5 +1,45 @@
 import api from '../api'
 
+const _cache = new Map()
+
+const _now = () => Date.now()
+
+const _cacheGet = (key) => {
+  const hit = _cache.get(key)
+  if (!hit) return null
+  if (hit.expiresAt && hit.expiresAt <= _now()) {
+    _cache.delete(key)
+    return null
+  }
+  return hit
+}
+
+const _setCache = (key, value, { ttlMs = 30000 } = {}) => {
+  const expiresAt = ttlMs ? _now() + ttlMs : 0
+  _cache.set(key, { value, expiresAt })
+  return value
+}
+
+const cached = async (key, fetcher, { ttlMs = 30000 } = {}) => {
+  const hit = _cacheGet(key)
+  if (hit && hit.value !== undefined) return hit.value
+  if (hit && hit.promise) return hit.promise
+
+  const p = (async () => {
+    try {
+      const v = await fetcher()
+      _setCache(key, v, { ttlMs })
+      return v
+    } finally {
+      const cur = _cache.get(key)
+      if (cur && cur.promise) _cache.set(key, { value: cur.value, expiresAt: cur.expiresAt })
+    }
+  })()
+
+  _cache.set(key, { promise: p, value: hit?.value, expiresAt: hit?.expiresAt || 0 })
+  return p
+}
+
 const isAbsUrl = (u) => typeof u === 'string' && /^https?:\/\//i.test(u)
 
 const toApiRelative = (nextUrl) => {
@@ -51,10 +91,16 @@ export const teacherQueries = {
   listFrom,
   fetchAllPages,
 
-  getMe: () => api.get('/auth/me/'),
-  getSchoolInfo: () => api.get('/auth/school/info/'),
+  cache: {
+    get: (key) => _cacheGet(String(key || ''))?.value,
+    set: (key, value, opts) => _setCache(String(key || ''), value, opts),
+    clear: (key) => { if (key) _cache.delete(String(key)); else _cache.clear() },
+  },
 
-  getMyClasses: async () => {
+  getMe: () => cached('me', () => api.get('/auth/me/'), { ttlMs: 60 * 1000 }),
+  getSchoolInfo: () => cached('school_info', () => api.get('/auth/school/info/'), { ttlMs: 10 * 60 * 1000 }),
+
+  getMyClasses: async () => cached('my_classes', async () => {
     try {
       const r = await api.get('/academics/classes/mine/')
       const arr = listFrom(r?.data)
@@ -65,24 +111,27 @@ export const teacherQueries = {
       return listFrom(r2?.data)
     } catch {}
     return []
-  },
+  }, { ttlMs: 5 * 60 * 1000 }),
 
   getClassStudents: async (classId) => {
     const cid = String(classId || '').trim()
     if (!cid) return []
+    const key = `class_students:${cid}`
     const urls = [
       `/academics/students/?klass=${encodeURIComponent(cid)}&page_size=200`,
       `/academics/students/?class=${encodeURIComponent(cid)}&page_size=200`,
       `/academics/students/?klass_id=${encodeURIComponent(cid)}&page_size=200`,
       `/academics/students/?class_id=${encodeURIComponent(cid)}&page_size=200`,
     ]
-    for (const u of urls) {
-      try {
-        const arr = await fetchAllPages(u)
-        if (arr.length) return arr
-      } catch {}
-    }
-    return []
+    return cached(key, async () => {
+      for (const u of urls) {
+        try {
+          const arr = await fetchAllPages(u)
+          if (arr.length) return arr
+        } catch {}
+      }
+      return []
+    }, { ttlMs: 2 * 60 * 1000 })
   },
 
   getUnreadMessageInfo: async (userId) => {
@@ -100,7 +149,7 @@ export const teacherQueries = {
     return { totalUnread, broadcastUnread, latestBroadcast, inboxList, sysList }
   },
 
-  getCurrentAcademicYear: async () => {
+  getCurrentAcademicYear: async () => cached('current_year', async () => {
     try {
       const r = await api.get('/academics/academic_years/current/')
       if (r?.data) return r.data
@@ -111,9 +160,9 @@ export const teacherQueries = {
       return arr[0] || null
     } catch {}
     return null
-  },
+  }, { ttlMs: 5 * 60 * 1000 }),
 
-  getCurrentTerm: async () => {
+  getCurrentTerm: async () => cached('current_term', async () => {
     try {
       const r = await api.get('/academics/terms/current/')
       if (r?.data) return r.data
@@ -124,11 +173,15 @@ export const teacherQueries = {
       return arr.find(x => x?.is_current) || arr.sort((a, b) => (a?.number || 0) - (b?.number || 0))[0] || null
     } catch {}
     return null
+  }, { ttlMs: 5 * 60 * 1000 }),
+
+  getExamSummary: (examId) => {
+    const id = String(examId || '').trim()
+    if (!id) return Promise.reject(new Error('Missing exam id'))
+    return cached(`exam_summary:${id}`, () => api.get(`/academics/exams/${id}/summary/`), { ttlMs: 60 * 1000 })
   },
 
-  getExamSummary: (examId) => api.get(`/academics/exams/${examId}/summary/`),
-
-  getUnpublishedExams: async () => {
+  getUnpublishedExams: async () => cached('unpublished_exams', async () => {
     const list = await fetchAllPages('/academics/exams/?include_history=true&page_size=1000')
     const isUnpub = (e) => {
       if (typeof e?.published === 'boolean') return e.published === false
@@ -139,6 +192,21 @@ export const teacherQueries = {
       return true
     }
     return (list || []).filter(isUnpub)
+  }, { ttlMs: 60 * 1000 }),
+
+  prefetchTeacherBootstrap: async (userId) => {
+    const uid = userId == null ? '' : String(userId)
+    const tasks = [
+      teacherQueries.getMe().catch(()=>null),
+      teacherQueries.getSchoolInfo().catch(()=>null),
+      teacherQueries.getMyClasses().catch(()=>[]),
+      teacherQueries.getCurrentAcademicYear().catch(()=>null),
+      teacherQueries.getCurrentTerm().catch(()=>null),
+      teacherQueries.getUnpublishedExams().catch(()=>[]),
+    ]
+    if (uid) tasks.push(cached(`unread_info:${uid}`, () => teacherQueries.getUnreadMessageInfo(uid), { ttlMs: 10 * 1000 }).catch(()=>null))
+    await Promise.allSettled(tasks)
+    return true
   },
 }
 

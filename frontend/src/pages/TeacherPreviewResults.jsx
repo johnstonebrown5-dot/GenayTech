@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import api from '../api'
+import { teacherQueries } from '../utils/teacherQueries'
 
 export default function TeacherPreviewResults(){
   const navigate = useNavigate()
@@ -40,14 +41,12 @@ export default function TeacherPreviewResults(){
     ;(async()=>{
       try{
         setLoading(true); setError('')
-        const [clsRes, exRes] = await Promise.all([
-          api.get('/academics/classes/mine/'),
-          api.get('/academics/exams/', { params: { include_history: true, page_size: 1000 } })
+        const [cls, all] = await Promise.all([
+          teacherQueries.getMyClasses(),
+          teacherQueries.fetchAllPages('/academics/exams/?include_history=true&page_size=1000')
         ])
         if (!mounted) return
-        const cls = Array.isArray(clsRes?.data) ? clsRes.data : (Array.isArray(clsRes?.data?.results) ? clsRes.data.results : [])
-        const all = Array.isArray(exRes?.data) ? exRes.data : (Array.isArray(exRes?.data?.results) ? exRes.data.results : [])
-        setClasses(cls)
+        setClasses(cls || [])
         const isUnpub = (e)=>{
           if (typeof e?.published === 'boolean') return e.published === false
           if (typeof e?.is_published === 'boolean') return e.is_published === false
@@ -55,7 +54,7 @@ export default function TeacherPreviewResults(){
           if (e?.published_at) return false
           return true
         }
-        const mapName = (id)=> cls.find(c=> String(c.id)===String(id))?.name || id
+        const mapName = (id)=> (cls || []).find(c=> String(c.id)===String(id))?.name || id
         const uniq = new Map()
         for (const e of all){ if (e && isUnpub(e)) uniq.set(e.id, e) }
         const list = Array.from(uniq.values()).sort((a,b)=>{
@@ -77,7 +76,8 @@ export default function TeacherPreviewResults(){
     let alive = true
     ;(async()=>{
       try{
-        const { data } = await api.get('/auth/school/info/')
+        const r = await teacherQueries.getSchoolInfo()
+        const data = r?.data
         if (!alive) return
         setSchool({ name: data?.name || '', logo: data?.logo_url || data?.logo || '', motto: data?.motto || data?.tagline || '' })
       }catch{ if(alive) setSchool({ name: '', logo: '', motto: '' }) }
@@ -93,7 +93,7 @@ export default function TeacherPreviewResults(){
         setLoading(true); setError('')
         let data = null
         try{
-          const res = await api.get(`/academics/exams/${selectedExam}/summary/`)
+          const res = await teacherQueries.getExamSummary(selectedExam)
           data = res?.data || null
           // Normalize: ensure per-student subject_percentages exist
           if (data && Array.isArray(data.students) && Array.isArray(data.subjects)){
@@ -280,7 +280,13 @@ export default function TeacherPreviewResults(){
       try{
         const subs = Array.isArray(summary?.subjects) ? summary.subjects : []
         setSubjects(subs)
-        if (!subs.length) { setComponentsMap({}); return }
+        const anyComponentMarks = Array.isArray(summary?.students)
+          ? summary.students.some(st => st?.component_marks && Object.keys(st.component_marks || {}).length)
+          : false
+        const anyComponentColumns = Array.isArray(summary?.columns)
+          ? summary.columns.some(c => c?.type === 'component')
+          : false
+        if (!subs.length || (!anyComponentMarks && !anyComponentColumns)) { setComponentsMap({}); return }
         const entries = await Promise.all(subs.map(async (s)=>{
           try{
             const r = await api.get(`/academics/subject_components/?subject=${s.id}`)
@@ -304,26 +310,24 @@ export default function TeacherPreviewResults(){
     let alive = true
     ;(async()=>{
       try{
+        // If summary already includes usable student identity, don't do extra calls.
+        const hasIdentity = Array.isArray(summary?.students) && summary.students.every(s => {
+          const n = String(s?.name || '').trim()
+          return n && !/^\d+$/.test(n)
+        })
+        const hasAdmission = Array.isArray(summary?.students) && summary.students.some(s => String(s?.admission_no || '').trim())
+        if (hasIdentity && hasAdmission){
+          const m = {}
+          for (const s of summary.students){
+            if (s && s.id!=null) m[String(s.id)] = { name: s.name, admission_no: s.admission_no }
+          }
+          if (alive) setStudentMap(m)
+          return
+        }
         const cid = summary?.exam?.klass ?? summary?.exam?.class ?? summary?.exam?.klass_id ?? summary?.exam?.class_id
         let arr = []
         if (cid){
-          const tryFetch = async () => {
-            const urls = [
-              `/academics/students/?klass=${cid}`,
-              `/academics/students/?class=${cid}`,
-              `/academics/students/?klass_id=${cid}`,
-              `/academics/students/?class_id=${cid}`,
-            ]
-            for (const u of urls){
-              try{
-                const r = await api.get(u)
-                const a = Array.isArray(r?.data) ? r.data : (Array.isArray(r?.data?.results) ? r.data.results : [])
-                if (a && a.length) return a
-              }catch{}
-            }
-            return []
-          }
-          arr = await tryFetch()
+          arr = await teacherQueries.getClassStudents(cid)
         }
         // fallback to per-student lookup if no class roster
         if (!arr.length){
@@ -418,7 +422,7 @@ export default function TeacherPreviewResults(){
   }
 
   return (
-    <div className="teacher-preview-results-page px-0 md:px-6 py-4 md:py-6 space-y-4 max-w-7xl mx-auto min-h-[80vh]">
+    <div className="teacher-preview-results-page px-2 md:px-6 py-4 md:py-6 space-y-4 max-w-7xl mx-auto min-h-[80vh]">
       <div className="relative overflow-hidden rounded-2xl border border-gray-200 bg-gradient-to-r from-indigo-50 via-white to-sky-50 shadow-sm">
         <div className="p-4 md:p-5 flex flex-col sm:flex-row sm:items-start justify-between gap-3 sm:gap-4">
           <div>
@@ -426,7 +430,7 @@ export default function TeacherPreviewResults(){
             <div className="text-[11px] md:text-xs text-gray-600">Preview any exam that is not yet published. Read only.</div>
           </div>
           <div className="flex flex-col sm:flex-row gap-2 sm:items-center sm:justify-end sm:ml-auto w-full sm:w-auto">
-          <label className="text-xs md:text-sm text-gray-700 flex items-center gap-2 w-full sm:w-auto">
+          <label className="text-xs md:text-sm text-gray-700 flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 w-full sm:w-auto">
             <span className="shrink-0">Exam</span>
             <select
               className="w-full sm:w-80 border border-gray-200 rounded-xl px-3 py-2 text-xs md:text-sm bg-white disabled:bg-gray-50 disabled:text-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-300"
@@ -477,12 +481,12 @@ export default function TeacherPreviewResults(){
                     </div>
                     <div className="flex flex-col items-end">
                       <div className="text-[10px] text-gray-500">Total</div>
-                      <div className="text-sm font-bold text-indigo-700 leading-tight">{grand}</div>
+                      <div className="text-sm font-bold text-indigo-700 leading-tight">{Number(st?.total) || grand}</div>
                     </div>
                   </div>
 
                   <div className="px-3 py-2">
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       {subjects.map(s => {
                         const pct = Number(st?.subject_percentages?.[String(s.id)])
                         const showPct = Number.isFinite(pct) ? `${pct}%` : '0%'

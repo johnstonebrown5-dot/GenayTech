@@ -286,7 +286,13 @@ def me(request):
     except Exception:
         pass
     if request.method == 'GET':
-        return Response(UserSerializer(user, context={"request": request}).data)
+        cache_key = f"user_me:{user.id}"
+        cached_data = cache.get(cache_key)
+        if cached_data:
+            return Response(cached_data)
+        data = UserSerializer(user, context={"request": request}).data
+        cache.set(cache_key, data, 300)  # Cache for 5 minutes
+        return Response(data)
 
     # PATCH update
     data = request.data
@@ -336,6 +342,7 @@ def me(request):
                 pass
     if changed_fields:
         user.save(update_fields=list(set(changed_fields)))
+    cache.delete(f"user_me:{user.id}")
     return Response(UserSerializer(user, context={"request": request}).data)
 
 
