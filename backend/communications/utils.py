@@ -783,6 +783,15 @@ def process_arrears_campaign(campaign_id: int):
         email_sent = 0
         email_failed = 0
         for stu in students.select_related('user', 'klass'):
+            # Check for cancellation between recipients
+            try:
+                campaign.refresh_from_db(fields=['cancel_requested'])
+                if campaign.cancel_requested:
+                    logger.info("Arrears campaign %s cancelled during processing", campaign_id)
+                    break
+            except Exception:
+                pass
+
             klass_name = getattr(getattr(stu, 'klass', None), 'name', '')
             currency = getattr(settings, 'CURRENCY', 'KES')
             try:
@@ -1367,6 +1376,10 @@ def create_broadcast_message(school_id: int, sender_id: int, body: str, *, queue
         sender_id=sender_id,
         body=body,
         audience=Message.Audience.ALL,
+        send_sms=True,
+        send_email=True,
+        is_broadcast=True,
+        system_tag='Alert'
     )
     recipients_qs = User.objects.filter(school_id=school_id)
     recs = [MessageRecipient(message=msg, user=u) for u in recipients_qs]

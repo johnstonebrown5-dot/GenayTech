@@ -462,6 +462,88 @@ def users(request):
             qs = qs.none()
     if role:
         qs = qs.filter(role=role)
+
+    # Restrict student visibility: only Admins, Finance, Class Teacher, and Subject Teachers
+    if not (request.user.is_superuser or request.user.is_staff) and getattr(request.user, 'role', '') == 'student':
+        try:
+            from academics.models import Student, Class, ClassSubjectTeacher
+            # Get student's class teacher and subject teachers
+            stu_profile = Student.objects.filter(user_id=request.user.id).first()
+            teacher_ids = set()
+            if stu_profile and stu_profile.klass:
+                # Class teacher
+                if stu_profile.klass.teacher_id:
+                    teacher_ids.add(stu_profile.klass.teacher_id)
+                # Subject teachers
+                subs = ClassSubjectTeacher.objects.filter(klass_id=stu_profile.klass_id).values_list('teacher_id', flat=True)
+                teacher_ids.update(subs)
+            
+            # Filter queryset: Admins, Finance, or identified Teachers
+            qs = qs.filter(
+                Q(role__in=['admin', 'finance']) | 
+                Q(id__in=teacher_ids)
+            ).distinct()
+        except Exception as e:
+            # Fallback to just admin/finance if something fails
+            qs = qs.filter(role__in=['admin', 'finance'])
+    
+    # Restrict teacher visibility: only Students in their class, Finance, all Subject Teachers, and Admins
+    if not (request.user.is_superuser or request.user.is_staff) and getattr(request.user, 'role', '') == 'teacher':
+        try:
+            from academics.models import Student, Class, ClassSubjectTeacher
+            # 1. Get IDs of students in the classes where this user is the class teacher
+            class_student_user_ids = list(Student.objects.filter(
+                klass__teacher_id=request.user.id,
+                is_active=True
+            ).values_list('user_id', flat=True))
+            
+            # 2. Get IDs of all subject teachers in the school
+            subject_teacher_ids = list(ClassSubjectTeacher.objects.filter(
+                klass__school_id=user_school_id
+            ).values_list('teacher_id', flat=True))
+
+            # 3. Get IDs of students in all classes where this user is a subject teacher
+            taught_class_ids = ClassSubjectTeacher.objects.filter(
+                teacher_id=request.user.id
+            ).values_list('klass_id', flat=True)
+            
+            subject_student_user_ids = list(Student.objects.filter(
+                klass_id__in=taught_class_ids,
+                is_active=True
+            ).values_list('user_id', flat=True))
+            
+            # Combined list of students
+            all_student_user_ids = set(class_student_user_ids + subject_student_user_ids)
+            
+            # Filter queryset: Admins, Subject Teachers, or Students in taught classes
+            qs = qs.filter(
+                Q(role__in=['admin']) |
+                Q(id__in=subject_teacher_ids) |
+                Q(id__in=all_student_user_ids)
+            ).distinct()
+        except Exception:
+            # Fallback to just admin if something fails
+            qs = qs.filter(role__in=['admin'])
+
+    # Restrict Finance visibility: only Students, Admin, and Class Teachers
+    if not (request.user.is_superuser or request.user.is_staff) and getattr(request.user, 'role', '') == 'finance':
+        try:
+            from academics.models import Class
+            # Get IDs of all class teachers
+            class_teacher_ids = list(Class.objects.filter(
+                school_id=user_school_id,
+                teacher_id__isnull=False
+            ).values_list('teacher_id', flat=True))
+            
+            # Filter queryset: Admins, Students, or Class Teachers
+            qs = qs.filter(
+                Q(role__in=['admin', 'student']) |
+                Q(id__in=class_teacher_ids)
+            ).distinct()
+        except Exception:
+            # Fallback to admin/student if something fails
+            qs = qs.filter(role__in=['admin', 'student'])
+    
     if q:
         q = q.strip()
         if q:

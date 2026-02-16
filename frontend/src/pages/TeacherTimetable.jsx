@@ -63,12 +63,19 @@ export default function TeacherTimetable() {
       if(planIdQS){
         chosenPlan = { id: planIdQS, name: `Plan ${planIdQS}` }
       } else {
-        // Try fetch plans for both admin and teacher (read-only for teacher)
+        // Prefer published (in-use) plan; fallback to latest
         try{
-          const res = await api.get('/academics/timetable/plans/')
-          const list = Array.isArray(res.data)? res.data : (res.data?.results||[])
-          chosenPlan = list?.[0] || null
+          const pub = await api.get('/academics/timetable/plans/?status=published')
+          const pubList = Array.isArray(pub.data)? pub.data : (pub.data?.results||[])
+          chosenPlan = pubList?.[0] || null
         }catch(e){}
+        if(!chosenPlan){
+          try{
+            const res = await api.get('/academics/timetable/plans/')
+            const list = Array.isArray(res.data)? res.data : (res.data?.results||[])
+            chosenPlan = list?.[0] || null
+          }catch(e){}
+        }
       }
       // Fallback: derive from localStorage keys
       if(!chosenPlan){

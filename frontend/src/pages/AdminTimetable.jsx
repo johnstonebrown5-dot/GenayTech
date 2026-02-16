@@ -526,6 +526,21 @@ export default function AdminTimetable() {
     try{ await fetchPlans() }catch(e){}
   }
 
+  const publishPlan = async(id)=>{
+    if(!id) return
+    setSaving(true)
+    try{
+      await api.post(`/academics/timetable/plans/${id}/publish/`)
+      const list = await fetchPlans()
+      const updated = (list||[]).find(p=>p.id===id) || null
+      if(updated){
+        setCurrentPlan(updated)
+        if(updated?.template) setSelectedTemplateId(updated.template)
+      }
+    }catch(e){}
+    setSaving(false)
+  }
+
   const deletePlan = async(id)=>{
     if(!id) return
     // eslint-disable-next-line no-alert
@@ -1561,6 +1576,17 @@ export default function AdminTimetable() {
                               <div className="inline-flex gap-2">
                                 <button className="px-3 py-1.5 rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50">Edit</button>
                                 <button className="px-3 py-1.5 rounded-lg border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100">Assign</button>
+                                {status !== 'published' ? (
+                                  <button
+                                    disabled={saving}
+                                    onClick={()=>publishPlan(p.id)}
+                                    className={`px-3 py-1.5 rounded-lg border ${saving ? 'bg-gray-100 text-gray-500 border-gray-200 cursor-not-allowed' : 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'}`}
+                                  >
+                                    Mark In Use
+                                  </button>
+                                ) : (
+                                  <button disabled className="px-3 py-1.5 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 cursor-not-allowed">In Use</button>
+                                )}
                                 <button onClick={()=>deletePlan(p.id)} className="px-3 py-1.5 rounded-lg border border-red-200 bg-red-50 text-red-700 hover:bg-red-100">Delete</button>
                               </div>
                             </td>

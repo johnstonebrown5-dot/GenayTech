@@ -20,10 +20,17 @@ export default function TeacherBlockTimetable(){
     try{
       // plan (teacher-safe): try API, else fallback from localStorage keys
       let chosenPlan = null
-      try{ const res = await api.get('/academics/timetable/plans/')
-        const list = Array.isArray(res.data)? res.data : (res.data?.results||[])
-        chosenPlan = list?.[0] || null
+      try{
+        const pub = await api.get('/academics/timetable/plans/?status=published')
+        const pubList = Array.isArray(pub.data)? pub.data : (pub.data?.results||[])
+        chosenPlan = pubList?.[0] || null
       }catch{}
+      if(!chosenPlan){
+        try{ const res = await api.get('/academics/timetable/plans/')
+          const list = Array.isArray(res.data)? res.data : (res.data?.results||[])
+          chosenPlan = list?.[0] || null
+        }catch{}
+      }
       if(!chosenPlan){
         try{
           const keys = Object.keys(localStorage)

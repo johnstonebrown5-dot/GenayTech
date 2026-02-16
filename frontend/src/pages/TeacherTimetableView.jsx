@@ -42,9 +42,16 @@ export default function TeacherTimetableView(){
         try{ const res = await api.get(`/academics/timetable/plans/${planIdQS}/`); chosenPlan = res.data }catch(e){}
       }
       if(!chosenPlan){
-        const res = await api.get('/academics/timetable/plans/')
-        const list = Array.isArray(res.data)? res.data : (res.data?.results||[])
-        chosenPlan = list?.[0] || null
+        try{
+          const pub = await api.get('/academics/timetable/plans/?status=published')
+          const pubList = Array.isArray(pub.data)? pub.data : (pub.data?.results||[])
+          chosenPlan = pubList?.[0] || null
+        }catch(e){}
+        if(!chosenPlan){
+          const res = await api.get('/academics/timetable/plans/')
+          const list = Array.isArray(res.data)? res.data : (res.data?.results||[])
+          chosenPlan = list?.[0] || null
+        }
       }
       setPlan(chosenPlan)
 

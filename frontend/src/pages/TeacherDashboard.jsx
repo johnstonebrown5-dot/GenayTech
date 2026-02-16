@@ -110,7 +110,10 @@ function DutiesPanel({ duties=[], onChanged }){
 
         // Load minimal timetable data to derive next class
         try{
-          const plans = await api.get('/academics/timetable/plans/').then(r=> Array.isArray(r.data)? r.data : (r.data?.results||[])).catch(()=>[])
+          const published = await api.get('/academics/timetable/plans/?status=published').then(r=> Array.isArray(r.data)? r.data : (r.data?.results||[])).catch(()=>[])
+          const plans = published && published.length
+            ? published
+            : await api.get('/academics/timetable/plans/').then(r=> Array.isArray(r.data)? r.data : (r.data?.results||[])).catch(()=>[])
           const p = plans?.[0] || null
           setPlan(p)
           if (p?.id){

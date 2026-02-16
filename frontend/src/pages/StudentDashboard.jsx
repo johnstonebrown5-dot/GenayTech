@@ -35,6 +35,8 @@ export default function StudentDashboard(){
   const [error, setError] = useState('')
   const [invoices, setInvoices] = useState([])
   const [summary, setSummary] = useState({ total_billed: 0, total_paid: 0, balance: 0 })
+  const [financeDetailsOpen, setFinanceDetailsOpen] = useState(false)
+  const [financeDetailsMode, setFinanceDetailsMode] = useState('invoices')
   // Report Card modal
   const [showReport, setShowReport] = useState(false)
   // Derive current tab from URL: /student, /student/academics, /student/finance
@@ -165,6 +167,41 @@ export default function StudentDashboard(){
     return Array.from(buckets.entries())
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([label, total]) => ({ label, avg: total }))
+  }, [invoices])
+
+  const invoiceRows = useMemo(() => {
+    const list = Array.isArray(invoices) ? invoices : (invoices?.results || [])
+    return list.map(inv => ({
+      id: inv.id,
+      date: inv.created_at || inv.due_date || inv.date || inv.updated_at,
+      reference: inv.reference || `Invoice #${inv.id}`,
+      description: inv.description || inv.term_label || (inv.category_detail?.name || 'Invoice'),
+      amount: Number(inv.amount || 0),
+      status: inv.status || 'unpaid',
+    }))
+  }, [invoices])
+
+  const paymentRows = useMemo(() => {
+    const list = Array.isArray(invoices) ? invoices : (invoices?.results || [])
+    const rows = []
+    for (const inv of list) {
+      const pays = Array.isArray(inv.payments) ? inv.payments : []
+      for (const p of pays) {
+        rows.push({
+          id: p.id,
+          date: p.created_at || p.date,
+          reference: p.reference || `PAY-${p.id}`,
+          method: p.method || 'Unknown',
+          amount: Number(p.amount || 0),
+        })
+      }
+    }
+    rows.sort((a,b)=>{
+      const da = new Date(a.date||0).getTime() || 0
+      const db = new Date(b.date||0).getTime() || 0
+      return db - da
+    })
+    return rows
   }, [invoices])
 
   // Build fee statement rows from invoices and their embedded payments
@@ -647,14 +684,36 @@ export default function StudentDashboard(){
       {/* Summary cards */}
       <div className="px-3 sm:px-0 grid md:grid-cols-3 gap-3 sm:gap-4">
         <div className="bg-amber-500 text-white rounded-xl shadow-sm p-4">
-          <div className="text-xs sm:text-sm opacity-90 font-medium">Total Billed</div>
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-xs sm:text-sm opacity-90 font-medium">Total Billed</div>
+            <button
+              type="button"
+              onClick={() => { setFinanceDetailsMode('invoices'); setFinanceDetailsOpen(true) }}
+              className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-full bg-white/15 hover:bg-white/20 border border-white/20 transition"
+              title="View invoices"
+            >
+              <span>View</span>
+              <span className="text-xs">→</span>
+            </button>
+          </div>
           <div className="text-xl sm:text-2xl font-bold mt-1">
             {isFinanceSummaryLoading ? <Skeleton className="h-7 w-32 bg-white/25" /> : money(summary.total_billed)}
           </div>
           <div className="text-[10px] sm:text-xs mt-1 opacity-80">All time invoiced</div>
         </div>
         <div className="bg-green-600 text-white rounded-xl shadow-sm p-4">
-          <div className="text-xs sm:text-sm opacity-90 font-medium">Total Paid</div>
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-xs sm:text-sm opacity-90 font-medium">Total Paid</div>
+            <button
+              type="button"
+              onClick={() => { setFinanceDetailsMode('payments'); setFinanceDetailsOpen(true) }}
+              className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-full bg-white/15 hover:bg-white/20 border border-white/20 transition"
+              title="View payments"
+            >
+              <span>View</span>
+              <span className="text-xs">→</span>
+            </button>
+          </div>
           <div className="text-xl sm:text-2xl font-bold mt-1">
             {isFinanceSummaryLoading ? <Skeleton className="h-7 w-32 bg-white/25" /> : money(summary.total_paid)}
           </div>
@@ -1261,6 +1320,70 @@ export default function StudentDashboard(){
         </button>
       </div>
     </form>
+  </Modal>
+
+  <Modal
+    open={financeDetailsOpen}
+    onClose={() => setFinanceDetailsOpen(false)}
+    title={financeDetailsMode === 'payments' ? 'Payment details' : 'Invoice details'}
+    size="lg"
+  >
+    {isInvoicesLoading ? (
+      <div className="text-sm text-gray-600">Loading…</div>
+    ) : (
+      <div className="space-y-3">
+        <div className="overflow-auto border border-gray-200 rounded-lg">
+          <table className="min-w-full text-sm">
+            <thead className="bg-gray-50 text-gray-700">
+              {financeDetailsMode === 'payments' ? (
+                <tr>
+                  <th className="text-left px-3 py-2 font-semibold">Date</th>
+                  <th className="text-left px-3 py-2 font-semibold">Reference</th>
+                  <th className="text-left px-3 py-2 font-semibold">Method</th>
+                  <th className="text-right px-3 py-2 font-semibold">Amount</th>
+                </tr>
+              ) : (
+                <tr>
+                  <th className="text-left px-3 py-2 font-semibold">Date</th>
+                  <th className="text-left px-3 py-2 font-semibold">Reference</th>
+                  <th className="text-left px-3 py-2 font-semibold">Description</th>
+                  <th className="text-right px-3 py-2 font-semibold">Amount</th>
+                  <th className="text-left px-3 py-2 font-semibold">Status</th>
+                </tr>
+              )}
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {(financeDetailsMode === 'payments' ? paymentRows : invoiceRows).length === 0 ? (
+                <tr>
+                  <td colSpan={financeDetailsMode === 'payments' ? 4 : 5} className="px-3 py-6 text-center text-gray-500">
+                    No {financeDetailsMode === 'payments' ? 'payments' : 'invoices'} found.
+                  </td>
+                </tr>
+              ) : (
+                (financeDetailsMode === 'payments' ? paymentRows : invoiceRows).map((row) => (
+                  <tr key={`${financeDetailsMode}-${row.id}`} className="hover:bg-gray-50">
+                    <td className="px-3 py-2 whitespace-nowrap text-gray-700">{row.date ? new Date(row.date).toLocaleDateString() : '-'}</td>
+                    <td className="px-3 py-2 whitespace-nowrap text-gray-700">{row.reference}</td>
+                    {financeDetailsMode === 'payments' ? (
+                      <>
+                        <td className="px-3 py-2 whitespace-nowrap text-gray-700">{String(row.method || '').toUpperCase()}</td>
+                        <td className="px-3 py-2 whitespace-nowrap text-right font-semibold text-gray-900">{money(row.amount)}</td>
+                      </>
+                    ) : (
+                      <>
+                        <td className="px-3 py-2 text-gray-700 min-w-[220px]">{row.description}</td>
+                        <td className="px-3 py-2 whitespace-nowrap text-right font-semibold text-gray-900">{money(row.amount)}</td>
+                        <td className="px-3 py-2 whitespace-nowrap text-gray-700">{String(row.status || '').toUpperCase()}</td>
+                      </>
+                    )}
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    )}
   </Modal>
 
   </div>

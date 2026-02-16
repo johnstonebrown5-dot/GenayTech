@@ -6062,6 +6062,62 @@ class TimetablePlanViewSet(viewsets.ModelViewSet):
             raise ValidationError({'school': 'School is required'})
         serializer.save(school=school, created_by=getattr(self.request, 'user', None))
 
+    @action(detail=True, methods=['post'], url_path='publish', permission_classes=[IsAdmin])
+    def publish(self, request, pk=None):
+        plan = self.get_object()
+        school_id = getattr(plan, 'school_id', None)
+        term_id = getattr(plan, 'term_id', None)
+
+        # Enforce a single published timetable per (school, term)
+        try:
+            TimetablePlan.objects.filter(school_id=school_id, term_id=term_id, status='published').exclude(pk=plan.pk).update(status='archived')
+        except Exception:
+            pass
+
+        TimetablePlan.objects.filter(pk=plan.pk).update(status='published')
+
+        # Notify all teachers (in-app + email + SMS) using existing messaging pipeline
+        try:
+            from django.contrib.auth import get_user_model
+            from communications.utils import resolve_default_sender_id, create_personalized_messages_for_users
+            if school_id:
+                User = get_user_model()
+                teacher_users = User.objects.filter(school_id=school_id, role='teacher', is_active=True).only('id', 'first_name', 'last_name', 'username')
+                if teacher_users.exists():
+                    sender_id = resolve_default_sender_id(school_id)
+                    if sender_id:
+                        try:
+                            base_url = request.build_absolute_uri('/')
+                        except Exception:
+                            base_url = '/'
+                        base_url = base_url.rstrip('/')
+                        link = f"{base_url}/teacher/timetable?planId={getattr(plan, 'id', '')}"
+                        term = getattr(plan, 'term', None)
+                        term_label = getattr(term, 'name', None) or (f"T{getattr(term, 'number', '')}" if getattr(term, 'number', None) else '')
+                        pairs = []
+                        for u in teacher_users:
+                            try:
+                                name = (f"{getattr(u, 'first_name', '')} {getattr(u, 'last_name', '')}").strip() or getattr(u, 'username', 'Teacher')
+                                msg = (
+                                    f"Hello {name}, a new timetable {('for ' + term_label) if term_label else ''} is now in use. "
+                                    f"View your timetable here: {link}"
+                                )
+                                pairs.append((u.id, msg))
+                            except Exception:
+                                continue
+                        if pairs:
+                            create_personalized_messages_for_users(
+                                school_id=school_id,
+                                sender_id=sender_id,
+                                user_body_pairs=pairs,
+                                system_tag='timetable_publish',
+                                queue_delivery=True,
+                            )
+        except Exception:
+            pass
+
+        return Response({'detail': 'published'})
+
     @action(detail=True, methods=['post'], url_path='generate', permission_classes=[IsAdmin])
     def generate(self, request, pk=None):
         plan = self.get_object()

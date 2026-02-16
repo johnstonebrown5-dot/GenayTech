@@ -159,6 +159,23 @@ class MessageSerializer(serializers.ModelSerializer):
 
         send_sms = self.initial_data.get('send_sms', True)
         send_email = self.initial_data.get('send_email', True)
+
+        # Enforce rule: Students messaging Finance or Teachers only get Email forwarding, no SMS.
+        if user.role == 'student':
+            if audience == Message.Audience.ROLE and recipient_role in ('finance', 'teacher'):
+                send_sms = False
+            elif audience == Message.Audience.USERS:
+                # If any recipient is a teacher or finance, we'll be conservative and disable SMS for the whole message
+                # or we could filter later, but disabling at message level is safer for this rule.
+                try:
+                    from django.contrib.auth import get_user_model
+                    User = get_user_model()
+                    has_staff_recipient = User.objects.filter(id__in=recipient_ids, role__in=['teacher', 'finance']).exists()
+                    if has_staff_recipient:
+                        send_sms = False
+                except Exception:
+                    pass
+
         try:
             send_sms = bool(send_sms)
         except Exception:
