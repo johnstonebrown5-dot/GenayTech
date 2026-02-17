@@ -38,55 +38,16 @@ export default function StudentPayFees(){
 
     try {
       setSubmitting(true)
-      setStkStatus('initiating')
-
-      const beforeSumRes = await api.get('/finance/invoices/my-summary/', { timeout: 15000 })
-      const beforeBalance = Number(beforeSumRes?.data?.balance || 0)
-
-      const { data } = await api.post('/finance/invoices/pay-balance-stk/', { phone: norm, amount: amt, simulate: false }, { timeout: 60000 })
-      const checkoutId = data?.daraja?.CheckoutRequestID || data?.daraja?.checkoutRequestID || ''
-
-      setStkStatus('sent')
-      setStkStatus('polling')
-
-      const started = Date.now()
-      let updated = false
-      while (Date.now() - started < 60000) {
-        await new Promise(r => setTimeout(r, 3000))
-
-        if (checkoutId) {
-          try {
-            const ipRes = await api.get('/finance/incoming-payments/', { params: { source: 'mpesa', external_id: checkoutId }, timeout: 15000, _skipGlobalLoading: true })
-            const ipList = Array.isArray(ipRes.data) ? ipRes.data : (ipRes.data?.results || [])
-            const ip = ipList?.[0]
-            const st = String(ip?.status || '').toLowerCase()
-            if (st === 'matched' || st === 'reconciled' || (ip?.reference && String(ip.reference).trim())) {
-              updated = true
-              break
-            }
-          } catch {
-          }
-        }
-
-        try {
-          const pollSum = await api.get('/finance/invoices/my-summary/', { timeout: 15000, _skipGlobalLoading: true })
-          const nowBal = Number(pollSum?.data?.balance)
-          if (Number.isFinite(nowBal) && nowBal !== beforeBalance) { updated = true; break }
-        } catch {
-        }
-      }
-
-      if (!updated) {
-        setStkStatus('failed')
-        setError('STK sent, but no confirmation was received in time. It may complete later or has failed.')
-        return
-      }
-
-      setStkStatus('success')
-      navigate('/student/finance', { replace: true, state: { refreshFinance: true } })
+      // Redirect immediately to confirm page, let it handle the STK initiation
+      navigate('/student/finance/confirm', { 
+        state: { 
+          amount: amt, 
+          phone: norm,
+          autoInitiate: true
+        } 
+      })
     } catch (err) {
-      setStkStatus('failed')
-      setError(err?.response?.data?.detail || err?.message || 'Failed to initiate STK push')
+      setError(err?.message || 'Failed to proceed to confirmation')
     } finally {
       setSubmitting(false)
     }

@@ -30,6 +30,7 @@ import StudentReportCardViewer from './pages/StudentReportCardViewer'
 import StudentAllReportCards from './pages/StudentAllReportCards'
 import StudentPayFees from './pages/StudentPayFees'
 import StudentVerifyPayment from './pages/StudentVerifyPayment'
+import ConfirmPayment from './pages/ConfirmPayment'
 import StudentLayout from './components/StudentLayout'
 import FinanceDashboard from './pages/FinanceDashboard';
 import FinanceLayout from './components/FinanceLayout';
@@ -119,6 +120,15 @@ import { maintenanceEnabled, maintenanceMessage, helpCenterPath } from './featur
 function ProtectedRoute({ children, roles, ownerRole }) {
   const { user, loading } = useAuth()
   const location = useLocation()
+
+  const roleHome = (u) => {
+    if (!u) return '/login'
+    if (u?.is_superuser) return '/superadmin'
+    if (u?.is_staff || u?.role === 'admin') return '/admin'
+    const r = String(u?.role || '').trim()
+    if (!r) return '/login'
+    return `/${r}`
+  }
   
   // If we have a user, show children immediately even if background loading is happening
   if (user) {
@@ -132,7 +142,8 @@ function ProtectedRoute({ children, roles, ownerRole }) {
       return children
     }
     if ((user?.is_superuser || user?.is_staff) && roles.includes('admin')) return children
-    return <Navigate to="/unauthorized" state={{ from: location.pathname }} replace />
+    // If user is authenticated but not allowed here, redirect to their allowed home.
+    return <Navigate to={roleHome(user)} state={{ from: location.pathname }} replace />
   }
 
   // Only show loading if we are actually fetching the user for the first time and have no cache
@@ -143,10 +154,22 @@ function ProtectedRoute({ children, roles, ownerRole }) {
   return <Navigate to="/login" />
 }
 
+function PublicOnlyRoute({ children }) {
+  const { user, loading } = useAuth()
+  // If we already know the user, do not show the login page.
+  if (user) return <Navigate to="/app" replace />
+  // While bootstrapping a session from cached token/user, avoid flashing login.
+  if (loading) return <div className="p-8 flex items-center justify-center min-h-screen">
+    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+  </div>
+  return children
+}
+
 function RoleRedirect() {
   const { user } = useAuth()
   if (!user) return <Navigate to="/login" />
   if (user?.is_superuser) return <Navigate to="/superadmin" />
+  if (user?.is_staff || user?.role === 'admin') return <Navigate to="/admin" />
   return <Navigate to={`/${user.role}`} />
 }
 
@@ -317,7 +340,7 @@ export default function App() {
             <Route path="/teachers/:id" element={<PublicTeacherProfile />} />
             <Route path="/admissions" element={<PublicAdmissions />} />
             <Route path="/news/:id" element={<PublicNewsDetail />} />
-            <Route path="/login" element={<LoginPage />} />
+            <Route path="/login" element={<PublicOnlyRoute><LoginPage /></PublicOnlyRoute>} />
             <Route path="/trial" element={<TrialOnboarding />} />
             <Route path="/verify-email" element={<VerifyEmail />} />
             <Route path="/help" element={<ProtectedRoute roles={["admin","teacher","student","finance"]}><HelpCenter/></ProtectedRoute>} />
@@ -397,9 +420,10 @@ export default function App() {
               <Route path="messages" element={<Messages/>} />
               <Route path="academics" element={<StudentDashboard/>} />
               <Route path="report-card" element={<StudentAllReportCards/>} />
-              <Route path="finance" element={<StudentDashboard/>} />
               <Route path="finance/pay" element={<StudentPayFees/>} />
+              <Route path="finance/confirm" element={<ConfirmPayment/>} />
               <Route path="finance/verify" element={<StudentVerifyPayment/>} />
+              <Route path="finance" element={<StudentDashboard/>} />
             </Route>
             <Route path="/finance" element={<ProtectedRoute roles={["finance"]}><FinanceLayout><Outlet/></FinanceLayout></ProtectedRoute>}>
               <Route index element={<FinanceDashboard/>} />

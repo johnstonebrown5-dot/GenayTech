@@ -36,7 +36,17 @@ export function AuthProvider({ children }) {
         }
         return prev
       })
-    }).catch(() => {
+    }).catch((err) => {
+      const status = err?.response?.status
+      // If token is invalid/expired, force logout so routes redirect to login.
+      if (status === 401 || status === 403) {
+        try { localStorage.removeItem('access') } catch {}
+        try { localStorage.removeItem('refresh') } catch {}
+        try { localStorage.removeItem('user_data') } catch {}
+        setUser(null)
+        setLoading(false)
+        return
+      }
       // If fetch fails and no cache, clear and set loading false
       if (!cachedUser) {
         setUser(null)
