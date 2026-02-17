@@ -24,6 +24,11 @@ export default function AdminDashboard(){
       return cached ? JSON.parse(cached) : null
     } catch { return null }
   })
+  const [isCompact, setIsCompact] = useState(false)
+  const [showTrends, setShowTrends] = useState(true)
+  const [calendarMode, setCalendarMode] = useState('calendar')
+  const sliderRef = useRef(null)
+  const [activeSlide, setActiveSlide] = useState(0)
   const [events, setEvents] = useState(() => {
     try {
       const cached = localStorage.getItem('admin_dashboard_events')

@@ -1,9 +1,13 @@
+import logging
+
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from django.db.models import Q
 from .models import Notification, Event, ArrearsMessageCampaign, Message, MessageRecipient, DeliveryLog, ServiceReview
 from accounts.models import School
 from academics.models import Student
+
+logger = logging.getLogger(__name__)
 
 User = get_user_model()
 
@@ -89,6 +93,21 @@ class MessageSerializer(serializers.ModelSerializer):
     def get_sender_username(self, obj):
         return getattr(obj.sender, 'username', None)
 
+    def _normalize_recipient_ids(self, value):
+        if value is None:
+            return []
+        if isinstance(value, (int, str)):
+            value = [value]
+        if not isinstance(value, (list, tuple)):
+            return []
+        out = []
+        for x in value:
+            try:
+                out.append(int(x))
+            except Exception:
+                continue
+        return out
+
     def validate(self, attrs):
         request = self.context.get('request')
         user = getattr(request, 'user', None)
@@ -97,7 +116,7 @@ class MessageSerializer(serializers.ModelSerializer):
 
         audience = attrs.get('audience') or getattr(self.instance, 'audience', None)
         recipient_role = attrs.get('recipient_role')
-        recipient_ids = self.initial_data.get('recipient_ids', [])
+        recipient_ids = self._normalize_recipient_ids(self.initial_data.get('recipient_ids', []))
         reply_to = attrs.get('reply_to')
 
         # Validate reply_to belongs to same school
@@ -150,151 +169,142 @@ class MessageSerializer(serializers.ModelSerializer):
         return attrs
 
     def create(self, validated_data):
-        request = self.context.get('request')
-        user = request.user
-        school = getattr(user, 'school', None)
-        audience = validated_data.get('audience')
-        recipient_role = validated_data.get('recipient_role')
-        reply_to = validated_data.get('reply_to')
+        try:
+            request = self.context.get('request')
+            user = request.user
 
-        # Pop non-model fields early so they can be used in channel enforcement below
-        recipient_ids = self.initial_data.get('recipient_ids', [])
-
-        send_sms = self.initial_data.get('send_sms', True)
-        send_email = self.initial_data.get('send_email', True)
-
-        # Enforce rule: Students messaging Finance or Teachers only get Email forwarding, no SMS.
-        if user.role == 'student':
-            if audience == Message.Audience.ROLE and recipient_role in ('finance', 'teacher'):
-                send_sms = False
-            elif audience == Message.Audience.USERS:
-                # If any recipient is a teacher or finance, we'll be conservative and disable SMS for the whole message
-                # or we could filter later, but disabling at message level is safer for this rule.
+            school = getattr(user, 'school', None)
+            if not school and getattr(user, 'school_id', None):
                 try:
-                    from django.contrib.auth import get_user_model
-                    User = get_user_model()
-                    has_staff_recipient = User.objects.filter(id__in=recipient_ids, role__in=['teacher', 'finance']).exists()
-                    if has_staff_recipient:
+                    school = School.objects.get(id=user.school_id)
+                except Exception:
+                    school = None
+            if not school:
+                raise serializers.ValidationError({'detail': 'Your account is not linked to a school.'})
+
+            audience = validated_data.get('audience')
+            recipient_role = validated_data.get('recipient_role')
+            reply_to = validated_data.get('reply_to')
+            recipient_ids = self._normalize_recipient_ids(self.initial_data.get('recipient_ids', []))
+
+            send_sms = self.initial_data.get('send_sms', True)
+            send_email = self.initial_data.get('send_email', True)
+
+            if getattr(user, 'role', None) == 'student':
+                if audience == Message.Audience.ROLE and recipient_role in ('finance', 'teacher'):
+                    send_sms = False
+                elif audience == Message.Audience.USERS:
+                    try:
+                        has_staff_recipient = User.objects.filter(id__in=recipient_ids, role__in=['teacher', 'finance']).exists()
+                        if has_staff_recipient:
+                            send_sms = False
+                    except Exception:
+                        pass
+
+            if getattr(user, 'role', None) == 'teacher' and audience == Message.Audience.USERS:
+                try:
+                    from academics.models import ClassSubjectTeacher
+                    class_teacher_student_ids = set(
+                        Student.objects.filter(
+                            klass__teacher_id=user.id,
+                            is_active=True,
+                            user__isnull=False,
+                        ).values_list('user_id', flat=True)
+                    )
+                    taught_class_ids = ClassSubjectTeacher.objects.filter(
+                        teacher_id=user.id,
+                    ).values_list('klass_id', flat=True)
+                    subject_student_ids = set(
+                        Student.objects.filter(
+                            klass_id__in=taught_class_ids,
+                            is_active=True,
+                            user__isnull=False,
+                        ).values_list('user_id', flat=True)
+                    )
+                    recipient_set = set(recipient_ids or [])
+                    if ((recipient_set & subject_student_ids) - class_teacher_student_ids):
                         send_sms = False
                 except Exception:
                     pass
 
-        # Enforce rule: Subject teacher messages to parents should not use SMS.
-        # Parent forwarding happens via student guardian phone in delivery, so we disable SMS whenever a teacher
-        # messages student recipients that are outside their class-teacher roster (i.e., acting as subject teacher).
-        if getattr(user, 'role', None) == 'teacher' and audience == Message.Audience.USERS:
             try:
-                from academics.models import ClassSubjectTeacher
-                # Students where the sender is the class teacher
-                class_teacher_student_ids = set(
-                    Student.objects.filter(
-                        klass__teacher_id=user.id,
-                        is_active=True,
-                        user__isnull=False,
-                    ).values_list('user_id', flat=True)
-                )
-                # Students where the sender teaches as a subject teacher (any class)
-                taught_class_ids = ClassSubjectTeacher.objects.filter(
-                    teacher_id=user.id,
-                ).values_list('klass_id', flat=True)
-                subject_student_ids = set(
-                    Student.objects.filter(
-                        klass_id__in=taught_class_ids,
-                        is_active=True,
-                        user__isnull=False,
-                    ).values_list('user_id', flat=True)
-                )
-                recipient_set = set()
-                for x in (recipient_ids or []):
-                    try:
-                        recipient_set.add(int(x))
-                    except Exception:
-                        continue
-                # If any student is a subject-taught student but not a class-teacher student, disable SMS
-                if ((recipient_set & subject_student_ids) - class_teacher_student_ids):
-                    send_sms = False
+                send_sms = bool(send_sms)
             except Exception:
-                pass
+                send_sms = True
+            try:
+                send_email = bool(send_email)
+            except Exception:
+                send_email = True
 
-        try:
-            send_sms = bool(send_sms)
+            msg = Message.objects.create(
+                school=school,
+                sender=user,
+                body=validated_data['body'],
+                audience=audience,
+                recipient_role=recipient_role,
+                reply_to=reply_to if reply_to else None,
+                send_sms=send_sms,
+                send_email=send_email,
+            )
+
+            if audience == Message.Audience.ALL:
+                try:
+                    msg.system_tag = 'Alert'
+                    msg.is_broadcast = True
+                    msg.save(update_fields=['system_tag', 'is_broadcast'])
+                except Exception:
+                    pass
+
+            recipients_qs = User.objects.none()
+            if audience == Message.Audience.ALL:
+                recipients_qs = User.objects.filter(school_id=school.id)
+            elif audience == Message.Audience.ROLE:
+                recipients_qs = User.objects.filter(school_id=school.id, role=recipient_role)
+            elif audience == Message.Audience.USERS:
+                recipients_qs = User.objects.filter(id__in=recipient_ids, school_id=school.id)
+
+            role = getattr(user, 'role', None)
+            if role == 'teacher':
+                admin_q = Q(role='admin')
+                try:
+                    from academics.models import ClassSubjectTeacher
+                    class_teacher_ids = set(
+                        Student.objects.filter(
+                            klass__teacher_id=user.id,
+                            is_active=True,
+                            user__isnull=False,
+                        ).values_list('user_id', flat=True)
+                    )
+                    taught_class_ids = ClassSubjectTeacher.objects.filter(
+                        teacher_id=user.id,
+                    ).values_list('klass_id', flat=True)
+                    subject_teacher_ids = set(
+                        Student.objects.filter(
+                            klass_id__in=taught_class_ids,
+                            is_active=True,
+                            user__isnull=False,
+                        ).values_list('user_id', flat=True)
+                    )
+                    allowed_student_ids = list(class_teacher_ids | subject_teacher_ids)
+                except Exception:
+                    allowed_student_ids = []
+                student_q = Q(role='student', id__in=allowed_student_ids) if allowed_student_ids else Q(pk__in=[])
+                recipients_qs = recipients_qs.filter(admin_q | student_q)
+            elif role == 'finance':
+                recipients_qs = recipients_qs.filter(role__in=['admin', 'teacher', 'student'])
+            elif role == 'student':
+                recipients_qs = recipients_qs.filter(role__in=['admin', 'finance'])
+
+            recipients = [MessageRecipient(message=msg, user=r) for r in recipients_qs]
+            if recipients:
+                MessageRecipient.objects.bulk_create(recipients, ignore_conflicts=True)
+
+            return msg
+        except serializers.ValidationError:
+            raise
         except Exception:
-            send_sms = True
-        try:
-            send_email = bool(send_email)
-        except Exception:
-            send_email = True
-
-        msg = Message.objects.create(
-            school=school,
-            sender=user,
-            body=validated_data['body'],
-            audience=audience,
-            recipient_role=recipient_role,
-            reply_to=reply_to if reply_to else None,
-            send_sms=send_sms,
-            send_email=send_email,
-        )
-
-        if audience == Message.Audience.ALL:
-            try:
-                msg.system_tag = 'Alert'
-                msg.is_broadcast = True
-                msg.save(update_fields=['system_tag', 'is_broadcast'])
-            except Exception:
-                pass
-
-        # Resolve recipients according to audience with role constraints
-        recipients_qs = User.objects.none()
-        if audience == Message.Audience.ALL:
-            recipients_qs = User.objects.filter(school_id=school.id)
-        elif audience == Message.Audience.ROLE:
-            recipients_qs = User.objects.filter(school_id=school.id, role=recipient_role)
-        elif audience == Message.Audience.USERS:
-            recipients_qs = User.objects.filter(id__in=recipient_ids, school_id=school.id)
-
-        # Enforce role-based constraints on USERS audience by filtering only allowed targets
-        role = getattr(user, 'role', None)
-        if role == 'teacher':
-            # Teachers can always message admins directly.
-            admin_q = Q(role='admin')
-            # Additionally, allow teachers to message students they teach:
-            # - class-teacher students
-            # - subject-teacher students (classes mapped via ClassSubjectTeacher)
-            try:
-                from academics.models import ClassSubjectTeacher
-                class_teacher_ids = set(
-                    Student.objects.filter(
-                        klass__teacher_id=user.id,
-                        is_active=True,
-                        user__isnull=False,
-                    ).values_list('user_id', flat=True)
-                )
-                taught_class_ids = ClassSubjectTeacher.objects.filter(
-                    teacher_id=user.id,
-                ).values_list('klass_id', flat=True)
-                subject_teacher_ids = set(
-                    Student.objects.filter(
-                        klass_id__in=taught_class_ids,
-                        is_active=True,
-                        user__isnull=False,
-                    ).values_list('user_id', flat=True)
-                )
-                allowed_student_ids = list(class_teacher_ids | subject_teacher_ids)
-            except Exception:
-                allowed_student_ids = []
-            student_q = Q(role='student', id__in=allowed_student_ids) if allowed_student_ids else Q(pk__in=[])
-            recipients_qs = recipients_qs.filter(admin_q | student_q)
-        elif role == 'finance':
-            recipients_qs = recipients_qs.filter(role__in=['admin','teacher','student'])
-        elif role == 'student':
-            recipients_qs = recipients_qs.filter(role__in=['admin','finance'])
-
-        recipients = [MessageRecipient(message=msg, user=r) for r in recipients_qs]
-        if recipients:
-            MessageRecipient.objects.bulk_create(recipients, ignore_conflicts=True)
-
-        return msg
+            logger.exception('Message create failed')
+            raise serializers.ValidationError({'detail': 'Failed to send message. Please try again.'})
 
 
 class ServiceReviewSerializer(serializers.ModelSerializer):
