@@ -276,14 +276,14 @@ export default function StudentLayout({ children }){
       <nav className="sm:hidden fixed bottom-0 inset-x-0 z-30 border-t border-slate-200 bg-white/95 backdrop-blur-xl">
         <div className="max-w-xl mx-auto flex items-stretch justify-around py-1.5">
           {mobileNavItems.map(item => {
-            const active = pathname === item.to
+            const active = pathname === item.to || (item.to === '/student/finance' && pathname.startsWith('/student/finance')) || (item.to === '/student/academics' && pathname.startsWith('/student/academics'))
             return (
               <Link
                 key={item.to}
                 to={item.to}
-                className={`flex flex-col items-center justify-center flex-1 gap-0.5 text-[11px] ${active ? 'text-emerald-600' : 'text-slate-500'}`}
+                className={`flex flex-col items-center justify-center flex-1 gap-0.5 text-[11px] ${active ? 'text-emerald-600 font-bold' : 'text-slate-500'}`}
               >
-                <span className={`text-lg ${active ? 'scale-110' : ''}`} aria-hidden>{item.icon}</span>
+                <span className={`text-lg transition-transform duration-200 ${active ? 'scale-110' : ''}`} aria-hidden>{item.icon}</span>
                 <span className="leading-tight">{item.label}</span>
               </Link>
             )

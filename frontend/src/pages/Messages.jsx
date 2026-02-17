@@ -587,8 +587,8 @@ export default function Messages(){
   return (
     <div className="messages-page mx-auto max-w-6xl w-full h-[calc(100vh-5rem)] bg-white md:bg-white md:border md:rounded-2xl overflow-hidden flex md:shadow-card">
       {/* Left: Users list */}
-      <aside className={`w-full sm:w-80 border-r flex-col md:bg-white ${activeUser || viewTab === 'system' ? 'hidden sm:flex' : 'flex'}`}>
-        <div className="flex flex-col p-4 border-b bg-white">
+      <aside className={`w-full sm:w-80 border-r flex-col md:bg-white overflow-hidden ${activeUser || viewTab === 'system' ? 'hidden sm:flex' : 'flex'}`}>
+        <div className="flex flex-col p-4 border-b bg-white sticky top-0 z-20">
           <h1 className="text-xl font-bold text-slate-900 mb-4">Messages</h1>
           <div className="flex p-1 bg-slate-100 rounded-xl">
             <button
@@ -754,9 +754,9 @@ export default function Messages(){
       </aside>
 
       {/* Right: Chat thread or System feed */}
-      <section className={`relative flex-1 flex flex-col overflow-hidden ${!activeUser && viewTab !== 'system' ? 'hidden sm:flex' : 'flex'}`}>
+      <section className={`relative flex-1 flex flex-col overflow-hidden h-full ${!activeUser && viewTab !== 'system' ? 'hidden sm:flex' : 'flex'}`}>
         {/* Chat header */}
-        <div className="h-14 px-3 sm:px-4 flex items-center justify-between sticky top-0 z-10 bg-white border-b border-slate-100 shadow-sm">
+        <div className="h-14 px-3 sm:px-4 flex items-center justify-between sticky top-0 z-20 bg-white border-b border-slate-100 shadow-sm backdrop-blur-md bg-white/90">
           <div className="flex items-center gap-3">
             {(activeUser || viewTab === 'system') && (
               <button 

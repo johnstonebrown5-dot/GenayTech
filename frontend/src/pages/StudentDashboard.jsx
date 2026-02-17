@@ -37,6 +37,9 @@ export default function StudentDashboard(){
   const [summary, setSummary] = useState({ total_billed: 0, total_paid: 0, balance: 0 })
   const [financeDetailsOpen, setFinanceDetailsOpen] = useState(false)
   const [financeDetailsMode, setFinanceDetailsMode] = useState('invoices')
+  const [refreshingFinance, setRefreshingFinance] = useState(false)
+  const [refreshingAcademics, setRefreshingAcademics] = useState(false)
+  const [statementFilter, setStatementFilter] = useState('all') // all | invoice | payment
   // Report Card modal
   const [showReport, setShowReport] = useState(false)
   // Derive current tab from URL: /student, /student/academics, /student/finance
@@ -169,6 +172,26 @@ export default function StudentDashboard(){
       .map(([label, total]) => ({ label, avg: total }))
   }, [invoices])
 
+  const transactionPillClasses = (r) => {
+    if (r?.type !== 'payment') return 'bg-slate-50 text-slate-700 border-slate-200'
+    const m = String(r?.method || '').toLowerCase()
+    if (m.includes('mpesa') || m.includes('m-pesa')) return 'bg-emerald-50 text-emerald-700 border-emerald-100'
+    if (m.includes('cash')) return 'bg-amber-50 text-amber-800 border-amber-100'
+    if (m.includes('bank') || m.includes('transfer')) return 'bg-sky-50 text-sky-700 border-sky-100'
+    if (m.includes('card') || m.includes('visa') || m.includes('master')) return 'bg-purple-50 text-purple-700 border-purple-100'
+    return 'bg-indigo-50 text-indigo-700 border-indigo-100'
+  }
+
+  const transactionRowAccentClasses = (r) => {
+    if (r?.type !== 'payment') return 'border-slate-200'
+    const m = String(r?.method || '').toLowerCase()
+    if (m.includes('mpesa') || m.includes('m-pesa')) return 'border-emerald-200'
+    if (m.includes('cash')) return 'border-amber-200'
+    if (m.includes('bank') || m.includes('transfer')) return 'border-sky-200'
+    if (m.includes('card') || m.includes('visa') || m.includes('master')) return 'border-purple-200'
+    return 'border-indigo-200'
+  }
+
   const invoiceRows = useMemo(() => {
     const list = Array.isArray(invoices) ? invoices : (invoices?.results || [])
     return list.map(inv => ({
@@ -222,11 +245,13 @@ export default function StudentDashboard(){
         })
         const pays = Array.isArray(inv.payments) ? inv.payments : []
         for (const p of pays) {
+          const method = String(p.method || '').trim() || 'Unknown'
           rows.push({
             type: 'payment',
             date: p.created_at,
             ref: p.reference || `PAY-${p.id}`,
-            description: `Payment (${String(p.method || '').toUpperCase()})`,
+            method,
+            description: `Payment (${method.toUpperCase()})`,
             debit: 0,
             credit: Number(p.amount || 0),
             status: 'payment',
@@ -253,6 +278,13 @@ export default function StudentDashboard(){
       return withBalance.reverse()
     } catch { return [] }
   }, [invoices])
+
+  const filteredFeeStatement = useMemo(() => {
+    const rows = Array.isArray(feeStatement) ? feeStatement : []
+    if (statementFilter === 'invoice') return rows.filter(r => r?.type === 'invoice')
+    if (statementFilter === 'payment') return rows.filter(r => r?.type === 'payment')
+    return rows
+  }, [feeStatement, statementFilter])
 
   const paymentsByMethod = useMemo(() => {
     const byMethod = new Map()
@@ -287,6 +319,22 @@ export default function StudentDashboard(){
   useEffect(()=>{
     let mounted = true
 
+    const now = () => Date.now()
+    const isFresh = (ts, ttlMs) => {
+      const t = Number(ts || 0)
+      if (!t) return false
+      return (now() - t) < ttlMs
+    }
+
+    const TTL = {
+      base: 12 * 60 * 60 * 1000,
+      dashboard: 5 * 60 * 1000,
+      academics: 5 * 60 * 1000, // Reduced from 30m to 5m for better responsiveness
+      financeSummary: 60 * 1000,
+      invoices: 5 * 60 * 1000,
+      finance: 2 * 60 * 1000,
+    }
+
     const ensureCache = () => {
       if (!__studentDashboardCache) {
         // Try to load from localStorage for cross-session persistence
@@ -308,6 +356,12 @@ export default function StudentDashboard(){
           financeLoaded: false,
           financeSummaryLoaded: false,
           invoicesLoaded: false,
+          baseFetchedAt: 0,
+          dashboardFetchedAt: 0,
+          academicsFetchedAt: 0,
+          financeFetchedAt: 0,
+          financeSummaryFetchedAt: 0,
+          invoicesFetchedAt: 0,
           student: null,
           schoolInfo: null,
           assessments: [],
@@ -358,87 +412,115 @@ export default function StudentDashboard(){
 
         // Base student record (required for personalized sections)
         try {
-          const [stRes, scRes] = await Promise.all([
-            api.get('/academics/students/my/', { timeout: 15000, _skipGlobalLoading: true }),
-            api.get('/auth/school/info/', { timeout: 15000, _skipGlobalLoading: true })
-          ])
-          if (!mounted) return
-          c.student = stRes.data
-          c.schoolInfo = scRes.data
-          setSchoolInfo(scRes.data)
-          c.baseLoaded = true
-          saveToPersistentCache(c)
-          hydrateFromCache(c)
+          const shouldFetchBase = !c.baseLoaded || !isFresh(c.baseFetchedAt, TTL.base)
+          if (shouldFetchBase) {
+            const [stRes, scRes] = await Promise.all([
+              api.get('/academics/students/my/', { timeout: 15000, _skipGlobalLoading: true }),
+              api.get('/auth/school/info/', { timeout: 15000, _skipGlobalLoading: true })
+            ])
+            if (!mounted) return
+            c.student = stRes.data
+            c.schoolInfo = scRes.data
+            setSchoolInfo(scRes.data)
+            c.baseLoaded = true
+            c.baseFetchedAt = now()
+            saveToPersistentCache(c)
+            hydrateFromCache(c)
+          }
         } catch {
           if (!mounted) return
         }
 
         // Prefetch core personalized data for the main dashboard once per session.
         if (currentTab === 'dashboard') {
-          const settled = await Promise.allSettled([
-            api.get('/academics/assessments/my/', { timeout: 15000, _skipGlobalLoading: true }),
-            api.get('/finance/invoices/my-summary/', { timeout: 15000, _skipGlobalLoading: true }),
-          ])
-          if (!mounted) return
-          const [assS, sumS] = settled
-          
-          if (assS.status === 'fulfilled') {
-            c.assessments = Array.isArray(assS.value?.data) ? assS.value.data : (assS.value?.data?.results || [])
+          const shouldFetchDashboard = !c.dashboardLoaded || !isFresh(c.dashboardFetchedAt, TTL.dashboard)
+          if (shouldFetchDashboard) {
+            const settled = await Promise.allSettled([
+              api.get('/academics/assessments/my/', { timeout: 15000, _skipGlobalLoading: true }),
+              api.get('/finance/invoices/my-summary/', { timeout: 15000, _skipGlobalLoading: true }),
+            ])
+            if (!mounted) return
+            const [assS, sumS] = settled
+            
+            if (assS.status === 'fulfilled') {
+              c.assessments = Array.isArray(assS.value?.data) ? assS.value.data : (assS.value?.data?.results || [])
+            }
+            if (sumS.status === 'fulfilled') {
+              c.summary = sumS.value?.data || { total_billed: 0, total_paid: 0, balance: 0 }
+              c.financeSummaryLoaded = true
+              c.financeSummaryFetchedAt = now()
+            }
+            
+            c.dashboardLoaded = true
+            c.dashboardFetchedAt = now()
+            saveToPersistentCache(c)
+            hydrateFromCache(c)
           }
-          if (sumS.status === 'fulfilled') {
-            c.summary = sumS.value?.data || { total_billed: 0, total_paid: 0, balance: 0 }
-            c.financeSummaryLoaded = true
-          }
-          
-          c.dashboardLoaded = true
-          saveToPersistentCache(c)
-          hydrateFromCache(c)
         }
 
         // 2) Tab-specific data loads
         if (currentTab === 'academics') {
           const stId = c.student?.id
-          const settled = await Promise.allSettled([
-            api.get('/academics/assessments/my/'),
-            stId ? api.get(`/academics/exam_results/?student=${stId}`) : Promise.resolve({ data: [] }),
-          ])
-          if (!mounted) return
-          const [assS, exmS] = settled
-          
-          if (assS.status === 'fulfilled') {
-            c.assessments = Array.isArray(assS.value?.data) ? assS.value.data : (assS.value?.data?.results || [])
+          const shouldFetchAcademics = !c.academicsLoaded || !isFresh(c.academicsFetchedAt, TTL.academics)
+          if (shouldFetchAcademics) {
+            const settled = await Promise.allSettled([
+              api.get('/academics/assessments/my/'),
+              stId ? api.get(`/academics/exam_results/?student=${stId}`) : Promise.resolve({ data: [] }),
+            ])
+            if (!mounted) return
+            const [assS, exmS] = settled
+            
+            if (assS.status === 'fulfilled') {
+              c.assessments = Array.isArray(assS.value?.data) ? assS.value.data : (assS.value?.data?.results || [])
+            }
+            if (exmS.status === 'fulfilled') {
+              c.examResults = Array.isArray(exmS.value?.data) ? exmS.value.data : (exmS.value?.data?.results || [])
+            }
+            
+            c.academicsLoaded = true
+            c.academicsFetchedAt = now()
+            saveToPersistentCache(c)
+            hydrateFromCache(c)
           }
-          if (exmS.status === 'fulfilled') {
-            c.examResults = Array.isArray(exmS.value?.data) ? exmS.value.data : (exmS.value?.data?.results || [])
-          }
-          
-          c.academicsLoaded = true
-          saveToPersistentCache(c)
-          hydrateFromCache(c)
         }
 
         if (currentTab === 'finance') {
-          // Load summary and detailed invoices
-          const settled = await Promise.allSettled([
-            api.get('/finance/invoices/my-summary/', { timeout: 15000, _skipGlobalLoading: true }),
-            api.get('/finance/invoices/my/', { params: { page_size: 200 }, timeout: 20000, _skipGlobalLoading: true })
-          ])
-          
-          if (!mounted) return
-          const [sumS, invS] = settled
-          
-          if (sumS.status === 'fulfilled') {
-            c.summary = sumS.value?.data || { total_billed: 0, total_paid: 0, balance: 0 }
-            c.financeSummaryLoaded = true
+          const shouldFetchFinance = !c.financeLoaded || !isFresh(c.financeFetchedAt, TTL.finance)
+          const shouldFetchSummary = !c.financeSummaryLoaded || !isFresh(c.financeSummaryFetchedAt, TTL.financeSummary)
+          const shouldFetchInvoices = !c.invoicesLoaded || !isFresh(c.invoicesFetchedAt, TTL.invoices)
+
+          if (shouldFetchFinance || shouldFetchSummary || shouldFetchInvoices) {
+            const reqs = []
+            reqs.push(shouldFetchSummary
+              ? api.get('/finance/invoices/my-summary/', { timeout: 15000, _skipGlobalLoading: true })
+              : Promise.resolve({ data: c.summary })
+            )
+            reqs.push(shouldFetchInvoices
+              ? api.get('/finance/invoices/my/', { params: { page_size: 200 }, timeout: 20000, _skipGlobalLoading: true })
+              : Promise.resolve({ data: c.invoices })
+            )
+
+            const settled = await Promise.allSettled(reqs)
+
+            if (!mounted) return
+            const [sumS, invS] = settled
+
+            if (sumS.status === 'fulfilled') {
+              c.summary = sumS.value?.data || { total_billed: 0, total_paid: 0, balance: 0 }
+              c.financeSummaryLoaded = true
+              c.financeSummaryFetchedAt = now()
+            }
+            if (invS.status === 'fulfilled') {
+              c.invoices = Array.isArray(invS.value?.data) ? invS.value.data : (invS.value?.data?.results || [])
+              c.invoicesLoaded = true
+              c.invoicesFetchedAt = now()
+            }
+
+            c.financeLoaded = true
+            c.financeFetchedAt = now()
+            saveToPersistentCache(c)
+            hydrateFromCache(c)
           }
-          if (invS.status === 'fulfilled') {
-            c.invoices = Array.isArray(invS.value?.data) ? invS.value.data : (invS.value?.data?.results || [])
-            c.invoicesLoaded = true
-          }
-          
-          c.financeLoaded = true
-          saveToPersistentCache(c)
-          hydrateFromCache(c)
         }
       } catch (e) {
         if (!mounted) return
@@ -452,6 +534,70 @@ export default function StudentDashboard(){
     return () => { mounted = false }
   }, [currentTab])
 
+  async function refreshAcademicsData() {
+    setRefreshingAcademics(true)
+    try {
+      const stId = student?.id || __studentDashboardCache?.student?.id
+      const settled = await Promise.allSettled([
+        api.get('/academics/assessments/my/', { timeout: 15000, _skipGlobalLoading: true }),
+        stId ? api.get(`/academics/exam_results/?student=${stId}`, { timeout: 15000, _skipGlobalLoading: true }) : Promise.resolve({ data: [] }),
+      ])
+
+      const [assS, exmS] = settled
+      const newAssessments = assS.status === 'fulfilled' ? (Array.isArray(assS.value?.data) ? assS.value.data : (assS.value?.data?.results || [])) : assessments
+      const newResults = exmS.status === 'fulfilled' ? (Array.isArray(exmS.value?.data) ? exmS.value.data : (exmS.value?.data?.results || [])) : examResults
+
+      setAssessments(newAssessments)
+      setExamResults(newResults)
+
+      if (__studentDashboardCache) {
+        __studentDashboardCache.assessments = newAssessments
+        __studentDashboardCache.examResults = newResults
+        __studentDashboardCache.academicsLoaded = true
+        __studentDashboardCache.academicsFetchedAt = Date.now()
+        try {
+          localStorage.setItem('student_dashboard_cache', JSON.stringify(__studentDashboardCache))
+        } catch {}
+      }
+    } catch (e) {
+      console.error("Failed to refresh academics:", e)
+    } finally {
+      setRefreshingAcademics(false)
+    }
+  }
+
+  async function refreshFinanceData(){
+    setRefreshingFinance(true)
+    try {
+      const [sumRes, invRes] = await Promise.all([
+        api.get('/finance/invoices/my-summary/', { timeout: 15000, _skipGlobalLoading: true }),
+        api.get('/finance/invoices/my/', { params: { page_size: 200 }, timeout: 20000, _skipGlobalLoading: true })
+      ])
+      const sum = sumRes?.data || { total_billed: 0, total_paid: 0, balance: 0 }
+      const inv = (Array.isArray(invRes?.data) ? invRes.data : (invRes?.data?.results || []))
+      setSummary(sum)
+      setInvoices(inv)
+      if (__studentDashboardCache) {
+        __studentDashboardCache.summary = sum
+        __studentDashboardCache.invoices = inv
+        __studentDashboardCache.financeLoaded = true
+        __studentDashboardCache.financeSummaryLoaded = true
+        __studentDashboardCache.invoicesLoaded = true
+        __studentDashboardCache.financeFetchedAt = Date.now()
+        __studentDashboardCache.financeSummaryFetchedAt = Date.now()
+        __studentDashboardCache.invoicesFetchedAt = Date.now()
+        try {
+          localStorage.setItem('student_dashboard_cache', JSON.stringify(__studentDashboardCache))
+        } catch {}
+      }
+      return true
+    } catch {
+      return false
+    } finally {
+      setRefreshingFinance(false)
+    }
+  }
+
   useEffect(() => {
     if (!location?.state?.refreshFinance) return
     if (currentTab !== 'finance') return
@@ -459,32 +605,8 @@ export default function StudentDashboard(){
     let alive = true
     ;(async () => {
       try {
-        const sumRes = await api.get('/finance/invoices/my-summary/', { timeout: 15000, _skipGlobalLoading: true })
+        await refreshFinanceData()
         if (!alive) return
-        const sum = sumRes?.data || { total_billed: 0, total_paid: 0, balance: 0 }
-        setSummary(sum)
-        if (__studentDashboardCache) {
-          __studentDashboardCache.summary = sum
-          __studentDashboardCache.financeLoaded = true
-        }
-
-        ;(async () => {
-          try {
-            const invRes = await api.get('/finance/invoices/my/', {
-              params: { page_size: 200 },
-              timeout: 20000,
-              _skipGlobalLoading: true,
-            })
-            if (!alive) return
-            const inv = (Array.isArray(invRes?.data) ? invRes.data : (invRes?.data?.results || []))
-            setInvoices(inv)
-            if (__studentDashboardCache) {
-              __studentDashboardCache.invoices = inv
-              __studentDashboardCache.financeLoaded = true
-            }
-          } catch {
-          }
-        })()
       } catch {
       } finally {
         try { navigate('/student/finance', { replace: true, state: null }) } catch {}
@@ -562,6 +684,15 @@ export default function StudentDashboard(){
     }
   }
 
+  function moneyPlain(n){
+    try {
+      const val = Number(n || 0)
+      return new Intl.NumberFormat('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(val)
+    } catch {
+      return String(n ?? '')
+    }
+  }
+
   function printFeeStatement(){
     try {
       const esc = (v) => {
@@ -587,17 +718,17 @@ export default function StudentDashboard(){
         const date = r?.date ? String(r.date).slice(0, 10) : '-'
         const ref = esc(r?.ref || '')
         const desc = esc(r?.description || '')
-        const debit = r?.debit ? money(r.debit) : ''
-        const credit = r?.credit ? money(r.credit) : ''
-        const bal = money(r?.balance)
+        const debit = r?.debit ? moneyPlain(r.debit) : ''
+        const credit = r?.credit ? moneyPlain(r.credit) : ''
+        const bal = moneyPlain(r?.balance)
         return `
           <tr>
             <td>${esc(date)}</td>
             <td>${ref}</td>
             <td>${desc}</td>
-            <td class="right">${esc(debit)}</td>
-            <td class="right">${esc(credit)}</td>
-            <td class="right"><b>${esc(bal)}</b></td>
+            <td style="text-align:right">${debit}</td>
+            <td style="text-align:right">${credit}</td>
+            <td style="text-align:right">${bal}</td>
           </tr>
         `
       }).join('')
@@ -741,7 +872,7 @@ export default function StudentDashboard(){
             </button>
           </div>
           <div className="text-xl sm:text-2xl font-bold mt-1">
-            {isFinanceSummaryLoading ? <Skeleton className="h-7 w-32 bg-white/25" /> : money(summary.total_billed)}
+            {isFinanceSummaryLoading ? <Skeleton className="h-7 w-32 bg-white/25" /> : moneyPlain(summary.total_billed)}
           </div>
           <div className="text-[10px] sm:text-xs mt-1 opacity-80">All time invoiced</div>
         </div>
@@ -759,14 +890,14 @@ export default function StudentDashboard(){
             </button>
           </div>
           <div className="text-xl sm:text-2xl font-bold mt-1">
-            {isFinanceSummaryLoading ? <Skeleton className="h-7 w-32 bg-white/25" /> : money(summary.total_paid)}
+            {isFinanceSummaryLoading ? <Skeleton className="h-7 w-32 bg-white/25" /> : moneyPlain(summary.total_paid)}
           </div>
           <div className="text-[10px] sm:text-xs mt-1 opacity-80">All time payments</div>
         </div>
         <div className="bg-sky-600 text-white rounded-xl shadow-sm p-4">
           <div className="text-xs sm:text-sm opacity-90 font-medium">Balance</div>
           <div className="text-xl sm:text-2xl font-bold mt-1">
-            {isFinanceSummaryLoading ? <Skeleton className="h-7 w-32 bg-white/25" /> : money(summary.balance)}
+            {isFinanceSummaryLoading ? <Skeleton className="h-7 w-32 bg-white/25" /> : moneyPlain(summary.balance)}
           </div>
           <div className="text-[10px] sm:text-xs mt-1 opacity-80">Outstanding</div>
         </div>
@@ -902,7 +1033,10 @@ export default function StudentDashboard(){
   {currentTab === 'finance' && (
     <div className="-mx-3 sm:mx-0 bg-white sm:rounded-3xl p-4 sm:p-6 border border-slate-200">
       <div className="flex items-center justify-between mb-6">
-        <h2 className="text-xl font-bold text-slate-900">Finance</h2>
+        <div className="min-w-0">
+          <h2 className="text-xl font-bold text-slate-900">Finance</h2>
+          <div className="text-xs text-slate-500 mt-0.5">Track your statement and confirm payments</div>
+        </div>
         <div className="flex bg-slate-100 p-1 rounded-xl">
           <button
             onClick={() => setFinanceSubTab('statement')}
@@ -918,6 +1052,45 @@ export default function StudentDashboard(){
           </button>
         </div>
       </div>
+
+      <div className="grid grid-cols-3 gap-2 sm:gap-3 mb-6">
+        <button
+          type="button"
+          onClick={() => { setStatementFilter('invoice'); setFinanceSubTab('statement') }}
+          className={`text-left rounded-2xl border bg-white p-3 sm:p-4 transition ${statementFilter === 'invoice' ? 'border-indigo-300 ring-2 ring-indigo-100' : 'border-slate-200 hover:bg-slate-50'}`}
+        >
+          <div className="text-[11px] text-slate-500 font-semibold">Billed in Ksh</div>
+          {isFinanceSummaryLoading ? (
+            <Skeleton className="h-6 w-24 mt-2" />
+          ) : (
+            <div className="text-sm sm:text-base font-bold text-slate-900 mt-1">{moneyPlain(summary?.total_billed)}</div>
+          )}
+        </button>
+        <button
+          type="button"
+          onClick={() => { setStatementFilter('payment'); setFinanceSubTab('statement') }}
+          className={`text-left rounded-2xl border bg-white p-3 sm:p-4 transition ${statementFilter === 'payment' ? 'border-emerald-300 ring-2 ring-emerald-100' : 'border-slate-200 hover:bg-slate-50'}`}
+        >
+          <div className="text-[11px] text-slate-500 font-semibold">Paid in Ksh</div>
+          {isFinanceSummaryLoading ? (
+            <Skeleton className="h-6 w-24 mt-2" />
+          ) : (
+            <div className="text-sm sm:text-base font-bold text-emerald-700 mt-1">{moneyPlain(summary?.total_paid)}</div>
+          )}
+        </button>
+        <button
+          type="button"
+          onClick={() => { setStatementFilter('all'); setFinanceSubTab('statement') }}
+          className={`text-left rounded-2xl border bg-white p-3 sm:p-4 transition ${statementFilter === 'all' ? 'border-slate-300 ring-2 ring-slate-100' : 'border-slate-200 hover:bg-slate-50'}`}
+        >
+          <div className="text-[11px] text-slate-500 font-semibold">Balance in Ksh</div>
+          {isFinanceSummaryLoading ? (
+            <Skeleton className="h-6 w-24 mt-2" />
+          ) : (
+            <div className="text-sm sm:text-base font-bold text-indigo-700 mt-1">{moneyPlain(summary?.balance)}</div>
+          )}
+        </button>
+      </div>
       
       <div className="space-y-6">
         {financeSubTab === 'statement' ? (
@@ -927,7 +1100,7 @@ export default function StudentDashboard(){
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-5 mb-5" id="fee-statement">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-3">
                 <h3 className="text-sm font-semibold text-slate-900">Fee Statement</h3>
-                <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+                <div className="w-full sm:w-auto flex flex-col sm:flex-row sm:flex-wrap items-center gap-2 sm:justify-end">
                   <button
                     className="w-full sm:w-auto text-xs px-3 py-2 sm:py-1.5 rounded bg-emerald-600 text-white hover:bg-emerald-700 print:hidden"
                     onClick={() => {
@@ -938,12 +1111,26 @@ export default function StudentDashboard(){
                     className="w-full sm:w-auto text-xs px-3 py-2 sm:py-1.5 rounded border border-slate-300 hover:bg-slate-50 print:hidden"
                     onClick={() => navigate('/student/finance/verify')}
                   >Verify Payment</button>
-                  <button
-                    className="w-full sm:w-auto text-xs px-3 py-2 sm:py-1.5 rounded border border-slate-300 hover:bg-slate-50 print:hidden"
-                    onClick={printFeeStatement}
-                  >
-                    Print
-                  </button>
+                  <div className="grid grid-cols-2 gap-2 w-full sm:w-auto">
+                    <button
+                      className="w-full sm:w-auto text-xs px-3 py-2 sm:py-1.5 rounded border border-slate-300 hover:bg-slate-50 print:hidden"
+                      onClick={printFeeStatement}
+                    >
+                      Print
+                    </button>
+                    <button
+                      className="w-full sm:w-auto text-xs px-3 py-2 sm:py-1.5 rounded border border-slate-300 hover:bg-slate-50 print:hidden disabled:opacity-60 disabled:cursor-not-allowed"
+                      onClick={() => refreshFinanceData()}
+                      disabled={refreshingFinance}
+                    >
+                      <span className="inline-flex items-center justify-center gap-2">
+                        {refreshingFinance && (
+                          <span className="inline-block h-3.5 w-3.5 rounded-full border-2 border-slate-300 border-t-slate-600 animate-spin" />
+                        )}
+                        {refreshingFinance ? 'Refreshing' : 'Refresh'}
+                      </span>
+                    </button>
+                  </div>
                 </div>
               </div>
               {isInvoicesLoading ? (
@@ -952,33 +1139,33 @@ export default function StudentDashboard(){
                   <Skeleton className="h-12 w-full" />
                   <Skeleton className="h-12 w-full" />
                 </div>
-              ) : Array.isArray(feeStatement) && feeStatement.length > 0 ? (
+              ) : Array.isArray(filteredFeeStatement) && filteredFeeStatement.length > 0 ? (
                 <>
                   <div className="sm:hidden space-y-2">
-                    {feeStatement.map((r, idx) => (
-                      <div key={idx} className="rounded-xl border border-slate-200 p-3">
+                    {filteredFeeStatement.map((r, idx) => (
+                      <div key={idx} className={`rounded-xl border ${transactionRowAccentClasses(r)} p-3`}>
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
                             <div className="text-xs text-slate-500">{r.date ? String(r.date).slice(0,10) : '-'}</div>
                             <div className="text-sm font-semibold text-slate-900 truncate">{r.description}</div>
                             <div className="text-[11px] text-slate-500 truncate">{r.ref}</div>
                           </div>
-                          <div className={`shrink-0 text-[11px] px-2 py-1 rounded-full border ${r.type==='payment' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-slate-50 text-slate-700 border-slate-200'}`}>
-                            {r.type==='payment' ? 'Payment' : 'Invoice'}
+                          <div className={`shrink-0 text-[11px] px-2 py-1 rounded-full border ${transactionPillClasses(r)}`}>
+                            {r.type==='payment' ? (r.method ? String(r.method).toUpperCase() : 'PAYMENT') : 'INVOICE'}
                           </div>
                         </div>
                         <div className="mt-2 grid grid-cols-3 gap-2 text-xs">
                           <div className="rounded-lg bg-slate-50 p-2">
                             <div className="text-[11px] text-slate-500">Debit</div>
-                            <div className="font-semibold text-slate-900">{r.debit ? money(r.debit) : '-'}</div>
+                            <div className="font-semibold text-slate-900">{r.debit ? moneyPlain(r.debit) : '-'}</div>
                           </div>
                           <div className="rounded-lg bg-slate-50 p-2">
                             <div className="text-[11px] text-slate-500">Credit</div>
-                            <div className="font-semibold text-slate-900">{r.credit ? money(r.credit) : '-'}</div>
+                            <div className="font-semibold text-slate-900">{r.credit ? moneyPlain(r.credit) : '-'}</div>
                           </div>
                           <div className="rounded-lg bg-slate-50 p-2">
                             <div className="text-[11px] text-slate-500">Balance</div>
-                            <div className={`font-semibold ${r.type==='payment' ? 'text-emerald-700' : 'text-slate-900'}`}>{money(r.balance)}</div>
+                            <div className={`font-semibold ${r.type==='payment' ? 'text-emerald-700' : 'text-slate-900'}`}>{moneyPlain(r.balance)}</div>
                           </div>
                         </div>
                       </div>
@@ -998,14 +1185,19 @@ export default function StudentDashboard(){
                         </tr>
                       </thead>
                       <tbody>
-                        {feeStatement.map((r, idx) => (
-                          <tr key={idx} className="border-t">
+                        {filteredFeeStatement.map((r, idx) => (
+                          <tr key={idx} className={`border-t ${r.type==='payment' ? 'bg-white' : ''}`}>
                             <td className="px-2 py-2 whitespace-nowrap">{r.date ? String(r.date).slice(0,10) : '-'}</td>
                             <td className="px-2 py-2 whitespace-nowrap">{r.ref}</td>
-                            <td className="px-2 py-2">{r.description}</td>
-                            <td className="px-2 py-2 text-right">{r.debit ? money(r.debit) : ''}</td>
-                            <td className="px-2 py-2 text-right">{r.credit ? money(r.credit) : ''}</td>
-                            <td className={`px-2 py-2 text-right font-medium ${r.type==='payment' ? 'text-emerald-700' : 'text-slate-900'}`}>{money(r.balance)}</td>
+                            <td className="px-2 py-2">
+                              <div className="flex items-center gap-2">
+                                <span className={`inline-flex shrink-0 text-[10px] px-2 py-0.5 rounded-full border ${transactionPillClasses(r)}`}>{r.type==='payment' ? (r.method ? String(r.method).toUpperCase() : 'PAYMENT') : 'INVOICE'}</span>
+                                <span className="min-w-0">{r.description}</span>
+                              </div>
+                            </td>
+                            <td className="px-2 py-2 text-right">{r.debit ? moneyPlain(r.debit) : ''}</td>
+                            <td className="px-2 py-2 text-right">{r.credit ? moneyPlain(r.credit) : ''}</td>
+                            <td className={`px-2 py-2 text-right font-medium ${r.type==='payment' ? 'text-emerald-700' : 'text-slate-900'}`}>{moneyPlain(r.balance)}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -1021,34 +1213,99 @@ export default function StudentDashboard(){
           </section>
         ) : (
           /* Reports Section */
-          <section className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
-            <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
-              <h3 className="text-sm font-semibold text-slate-700 mb-4 flex items-center gap-2">
-                <span className="p-1.5 bg-emerald-100 text-emerald-600 rounded-lg text-xs">📈</span>
-                Payments Over Time
-              </h3>
-              {paymentsOverTime && paymentsOverTime.length > 0 ? (
-                <div className="h-[300px] w-full">
-                  <ResponsiveLine data={paymentsOverTime} />
+          <section className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+            {/* Financial Overview Cards in Reports */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-2xl p-5 text-white shadow-md">
+                <div className="text-xs opacity-80 uppercase tracking-wider font-bold mb-1">Utilization</div>
+                <div className="text-2xl font-black">
+                  {summary?.total_billed > 0 
+                    ? ((summary.total_paid / summary.total_billed) * 100).toFixed(1) 
+                    : '0.0'}%
                 </div>
-              ) : (
-                <div className="py-12 text-center text-slate-400 text-sm italic">
-                  Not enough payment data to generate charts.
+                <div className="text-[11px] mt-2 opacity-90 leading-tight">
+                  Percentage of total fees paid to date.
                 </div>
-              )}
+              </div>
+              <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-2xl p-5 text-white shadow-md">
+                <div className="text-xs opacity-80 uppercase tracking-wider font-bold mb-1">Last Payment</div>
+                <div className="text-2xl font-black">
+                  {paymentRows?.[0] ? moneyPlain(paymentRows[0].amount) : '0.00'}
+                </div>
+                <div className="text-[11px] mt-2 opacity-90 leading-tight">
+                  {paymentRows?.[0] ? `Received on ${new Date(paymentRows[0].date).toLocaleDateString()}` : 'No payments recorded yet.'}
+                </div>
+              </div>
             </div>
 
-            <div className="bg-white border border-slate-100 rounded-2xl p-5">
-              <h3 className="text-sm font-semibold text-slate-800 mb-4">Payment Methods</h3>
-              {paymentsByMethod && paymentsByMethod.length > 0 ? (
-                <div className="h-[300px] w-full">
-                  <ResponsiveBar data={paymentsByMethod} />
+            {/* Charts Grid */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Payments Over Time */}
+              <div className="bg-white rounded-3xl p-5 border border-slate-100 shadow-sm flex flex-col">
+                <div className="flex items-center justify-between mb-6">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m19 21-7-7-7 7"/><path d="M19 3v14H5V3"/><path d="M10 7v4h4"/></svg>
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-bold text-slate-800">Payment History</h3>
+                      <p className="text-[10px] text-slate-500">Transaction volume over time</p>
+                    </div>
+                  </div>
                 </div>
-              ) : (
-                <div className="py-12 text-center text-slate-400 text-sm italic">
-                  No payment method data available.
+                
+                {paymentsOverTime && paymentsOverTime.length > 0 ? (
+                  <div className="h-[280px] w-full mt-auto">
+                    <ResponsiveLine data={paymentsOverTime} />
+                  </div>
+                ) : (
+                  <div className="flex-1 flex flex-col items-center justify-center py-12 text-center">
+                    <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-3">
+                      <span className="text-2xl">📉</span>
+                    </div>
+                    <p className="text-xs text-slate-400 font-medium italic">No payment history found</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Payment Methods */}
+              <div className="bg-white rounded-3xl p-5 border border-slate-100 shadow-sm flex flex-col">
+                <div className="flex items-center justify-between mb-6">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-emerald-50 text-emerald-600 rounded-xl">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v20"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-bold text-slate-800">Payment Channels</h3>
+                      <p className="text-[10px] text-slate-500">Distribution by method</p>
+                    </div>
+                  </div>
                 </div>
-              )}
+
+                {paymentsByMethod && paymentsByMethod.length > 0 ? (
+                  <div className="h-[280px] w-full mt-auto">
+                    <ResponsiveBar data={paymentsByMethod} />
+                  </div>
+                ) : (
+                  <div className="flex-1 flex flex-col items-center justify-center py-12 text-center">
+                    <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-3">
+                      <span className="text-2xl">📊</span>
+                    </div>
+                    <p className="text-xs text-slate-400 font-medium italic">No channel data available</p>
+                  </div>
+                )}
+              </div>
+            </div>
+            
+            {/* Helper Footer */}
+            <div className="bg-indigo-50/50 rounded-2xl p-4 border border-indigo-100/50">
+              <div className="flex items-start gap-3">
+                <span className="text-indigo-600 mt-0.5">💡</span>
+                <p className="text-[11px] text-indigo-700 leading-relaxed font-medium">
+                  These reports are generated based on your confirmed payments. 
+                  If a payment is missing, please go to the <b>Statement</b> tab and use <b>Verify Payment</b> to sync your latest transactions.
+                </p>
+              </div>
             </div>
           </section>
         )}
@@ -1059,7 +1316,10 @@ export default function StudentDashboard(){
   {currentTab === 'academics' && (
     <div className="-mx-3 sm:mx-0 bg-white sm:rounded-3xl p-4 sm:p-6 border border-slate-200">
       <div className="flex items-center justify-between mb-6">
-        <h2 className="text-xl font-bold text-slate-900">Academics</h2>
+        <div className="min-w-0">
+          <h2 className="text-xl font-bold text-slate-900">Academics</h2>
+          <div className="text-xs text-slate-500 mt-0.5">View your exam results and performance reports</div>
+        </div>
         <div className="flex bg-slate-100 p-1 rounded-xl">
           <button
             onClick={() => setAcademicsSubTab('exams')}
@@ -1080,32 +1340,70 @@ export default function StudentDashboard(){
         {academicsSubTab === 'exams' ? (
           /* Exams Section */
           <section>
-          <div className="flex items-center justify-between gap-3 mb-3">
-            <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Exams</h3>
-            <button
-              type="button"
-              onClick={() => {
-                setExamSearchOpen(v => !v)
-                if (examSearchOpen) setExamQuery('')
-              }}
-              className="inline-flex items-center justify-center w-9 h-9 rounded-xl border border-slate-200 bg-white hover:bg-slate-50"
-              aria-label="Search exams"
-              title="Search"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5 text-slate-600">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35m1.85-5.15a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
-            </button>
+          <div className="flex items-center justify-between gap-3 mb-4 bg-slate-50 p-4 rounded-2xl border border-slate-100">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-indigo-100 text-indigo-600 rounded-xl">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+              </div>
+              <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider">Exam Sessions</h3>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setExamSearchOpen(v => !v)
+                  if (examSearchOpen) setExamQuery('')
+                }}
+                className={`inline-flex items-center justify-center w-10 h-10 rounded-xl border transition-all ${examSearchOpen ? 'bg-indigo-600 border-indigo-600 text-white shadow-md shadow-indigo-100' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'}`}
+                aria-label="Search exams"
+                title="Search"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="w-5 h-5">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35m1.85-5.15a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              </button>
+              <button
+                type="button"
+                onClick={refreshAcademicsData}
+                disabled={refreshingAcademics}
+                className={`inline-flex items-center justify-center w-10 h-10 rounded-xl border transition-all ${refreshingAcademics ? 'bg-slate-50 border-slate-200 cursor-not-allowed' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'}`}
+                title="Refresh"
+              >
+                <svg 
+                  xmlns="http://www.w3.org/2000/svg" 
+                  width="18" 
+                  height="18" 
+                  viewBox="0 0 24 24" 
+                  fill="none" 
+                  stroke="currentColor" 
+                  strokeWidth="2.5" 
+                  strokeLinecap="round" 
+                  strokeLinejoin="round" 
+                  className={refreshingAcademics ? "animate-spin text-indigo-600" : ""}
+                >
+                  <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
+                  <path d="M21 3v5h-5"/>
+                  <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>
+                  <path d="M3 21v-5h5"/>
+                </svg>
+              </button>
+            </div>
           </div>
 
           {examSearchOpen && (
-            <div className="mb-3">
-              <input
-                value={examQuery}
-                onChange={(e) => setExamQuery(e.target.value)}
-                placeholder="Search exams..."
-                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-200"
-              />
+            <div className="mb-4 animate-in slide-in-from-top-2 duration-300">
+              <div className="relative">
+                <input
+                  value={examQuery}
+                  onChange={(e) => setExamQuery(e.target.value)}
+                  placeholder="Search exams by name..."
+                  className="w-full rounded-2xl border border-slate-200 bg-white pl-11 pr-4 py-3 text-sm outline-none focus:ring-4 focus:ring-indigo-50 focus:border-indigo-300 transition-all shadow-sm"
+                  autoFocus
+                />
+                <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                </div>
+              </div>
             </div>
           )}
           {isAcademicsLoading ? (
@@ -1411,12 +1709,12 @@ export default function StudentDashboard(){
                     {financeDetailsMode === 'payments' ? (
                       <>
                         <td className="px-3 py-2 whitespace-nowrap text-gray-700">{String(row.method || '').toUpperCase()}</td>
-                        <td className="px-3 py-2 whitespace-nowrap text-right font-semibold text-gray-900">{money(row.amount)}</td>
+                        <td className="px-3 py-2 whitespace-nowrap text-right font-semibold text-gray-900">{moneyPlain(row.amount)}</td>
                       </>
                     ) : (
                       <>
                         <td className="px-3 py-2 text-gray-700 min-w-[220px]">{row.description}</td>
-                        <td className="px-3 py-2 whitespace-nowrap text-right font-semibold text-gray-900">{money(row.amount)}</td>
+                        <td className="px-3 py-2 whitespace-nowrap text-right font-semibold text-gray-900">{moneyPlain(row.amount)}</td>
                         <td className="px-3 py-2 whitespace-nowrap text-gray-700">{String(row.status || '').toUpperCase()}</td>
                       </>
                     )}
