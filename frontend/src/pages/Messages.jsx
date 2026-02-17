@@ -1,8 +1,13 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
+import { Loader2, Search, User, ShieldAlert, Check, CheckCheck } from 'lucide-react'
 import api from '../api'
 import { useNotification } from '../components/NotificationContext'
 import { useAuth } from '../auth'
+
+// Global cache for users to persist across navigations
+let __usersCache = null;
+let __messagesCache = null;
 
 export default function Messages(){
   const { user } = useAuth()
@@ -28,6 +33,18 @@ export default function Messages(){
   const [broadcastMessage, setBroadcastMessage] = useState('')
   const isAdmin = user?.role === 'admin'
   const isFinance = user?.role === 'finance'
+
+  // Load from cache immediately
+  useEffect(() => {
+    if (__usersCache) setAllUsers(__usersCache);
+    if (__messagesCache) {
+      setInbox(__messagesCache.inbox || []);
+      setOutbox(__messagesCache.outbox || []);
+      setSystemMessages(__messagesCache.system || []);
+      setLoading(false);
+    }
+  }, []);
+
   const roleOptions = [
     { value: 'admin', label: 'Admin' },
     { value: 'teacher', label: 'Teacher' },
@@ -42,11 +59,14 @@ export default function Messages(){
     else setLoading(true)
     try {
       const [inb, out] = await Promise.all([
-        api.get('/communications/messages/'),
-        api.get('/communications/messages/outbox/'),
+        api.get('/communications/messages/', { timeout: 10000, _skipGlobalLoading: true }),
+        api.get('/communications/messages/outbox/', { timeout: 10000, _skipGlobalLoading: true }),
       ])
-      setInbox(Array.isArray(inb.data) ? inb.data : (inb.data?.results||[]))
-      setOutbox(Array.isArray(out.data) ? out.data : (out.data?.results||[]))
+      const iData = Array.isArray(inb.data) ? inb.data : (inb.data?.results||[])
+      const oData = Array.isArray(out.data) ? out.data : (out.data?.results||[])
+      setInbox(iData)
+      setOutbox(oData)
+      __messagesCache = { ...(__messagesCache || {}), inbox: iData, outbox: oData }
     } finally {
       if (silent) setIsSyncing(false)
       else setLoading(false)
@@ -57,8 +77,10 @@ export default function Messages(){
   const [systemMessages, setSystemMessages] = useState([])
   const loadSystem = async () => {
     try {
-      const res = await api.get('/communications/messages/system/')
-      setSystemMessages(Array.isArray(res.data) ? res.data : (res.data?.results||[]))
+      const res = await api.get('/communications/messages/system/', { timeout: 10000, _skipGlobalLoading: true })
+      const sData = Array.isArray(res.data) ? res.data : (res.data?.results||[])
+      setSystemMessages(sData)
+      __messagesCache = { ...(__messagesCache || {}), system: sData }
     } catch {
       setSystemMessages([])
     }
@@ -66,41 +88,34 @@ export default function Messages(){
 
   // Load users list by query (scoped to current school by backend)
   const loadUsers = async (q='') => {
+    if (loadingUsers) return;
     setLoadingUsers(true)
     try {
-      // Request a large page size so we get the full directory (backend caps at 2000)
-      let url = `/auth/users/?q=${encodeURIComponent(q)}&page_size=2000&include_orphans=1`
-      const acc = []
-      const seen = new Set()
-      let pages = 0
-      while (url && pages < 200) { // generous safety cap; follow `next` until null
-        const { data } = await api.get(url)
-        if (Array.isArray(data)) {
-          for (const u of data) { if (u && !seen.has(u.id)) { seen.add(u.id); acc.push(u) } }
-          break
-        }
-        const batch = Array.isArray(data?.results) ? data.results : (Array.isArray(data?.users) ? data.users : [])
-        for (const u of (batch||[])) { if (u && !seen.has(u.id)) { seen.add(u.id); acc.push(u) } }
-        // DRF may return absolute next URLs. Convert to API-relative if needed.
-        const nextUrl = data?.next || null
-        if (!nextUrl) { url = null }
-        else if (typeof nextUrl === 'string' && /^https?:\/\//i.test(nextUrl)) {
-          try {
-            const u = new URL(nextUrl)
-            const path = (u.pathname || '') + (u.search || '')
-            url = path.startsWith('/api/') ? path.replace('/api/', '/') : path
-          } catch {
-            url = null
-          }
-        } else {
-          url = nextUrl
-        }
-        pages += 1
+      // Use directory search for speed if there is a query, otherwise fetch full list with large page size
+      const { data } = await api.get('/auth/users/', { 
+        params: { q, page_size: q ? 50 : 500, include_orphans: 1 },
+        timeout: 10000,
+        _skipGlobalLoading: true
+      })
+      
+      const batch = Array.isArray(data) ? data : (data?.results || data?.users || [])
+      const filtered = batch.filter(u => u.id !== user?.id)
+      
+      if (!q) {
+        setAllUsers(filtered)
+        __usersCache = filtered
+      } else {
+        // When searching, merge with existing cache to keep current chat users visible
+        setAllUsers(prev => {
+          const merged = [...prev];
+          filtered.forEach(u => {
+            if (!merged.find(m => m.id === u.id)) merged.push(u);
+          });
+          return merged;
+        });
       }
-      // Show all users in the same school (backend already applies school scoping), except the current user
-      setAllUsers(acc.filter(u => u.id !== user?.id))
     } catch {
-      setAllUsers([])
+      if (!__usersCache) setAllUsers([])
     } finally {
       setLoadingUsers(false)
     }
@@ -570,106 +585,128 @@ export default function Messages(){
   }, [conversation.length])
 
   return (
-    <div className="messages-page mx-auto max-w-6xl w-full h-[calc(100vh-5rem)] bg-[#0b141a] md:bg-white md:border md:rounded-2xl overflow-hidden flex md:shadow-card">
+    <div className="messages-page mx-auto max-w-6xl w-full h-[calc(100vh-5rem)] bg-white md:bg-white md:border md:rounded-2xl overflow-hidden flex md:shadow-card">
       {/* Left: Users list */}
-      <aside className="hidden sm:flex w-80 border-r flex-col md:bg-white">
-        <div className="flex border-b messages-tabs md:bg-white md:px-2 md:py-2 md:border-b-0">
-          <button
-            onClick={()=>setViewTab('chats')}
-            className={`messages-tab flex-1 px-3 py-2 text-sm flex items-center justify-center gap-2 md:rounded-xl md:border md:border-transparent md:bg-gray-50/0 md:hover:bg-gray-50 md:transition ${viewTab==='chats'?'messages-tab--active md:bg-blue-50 md:border-blue-200 md:text-blue-700 md:font-medium':''}`}
-          >
-            <span>Chats</span>
-            {chatsUnread>0 && (
-              <span className="text-[10px] bg-blue-600 text-white rounded-full px-2 py-0.5">{chatsUnread>99?'99+':chatsUnread}</span>
-            )}
-          </button>
-          <button
-            onClick={()=>setViewTab('system')}
-            className={`messages-tab flex-1 px-3 py-2 text-sm flex items-center justify-center gap-2 md:rounded-xl md:border md:border-transparent md:bg-gray-50/0 md:hover:bg-gray-50 md:transition ${viewTab==='system'?'messages-tab--active md:bg-blue-50 md:border-blue-200 md:text-blue-700 md:font-medium':''}`}
-          >
-            <span>System</span>
-            {systemUnread>0 && (
-              <span className="text-[10px] bg-blue-600 text-white rounded-full px-2 py-0.5">{systemUnread>99?'99+':systemUnread}</span>
-            )}
-          </button>
-          {(isAdmin || isFinance) && (
-            <>
-              <button onClick={()=>setViewTab('role')} className={`messages-tab flex-1 px-3 py-2 text-sm md:rounded-xl md:border md:border-transparent md:hover:bg-gray-50 md:transition ${viewTab==='role'?'messages-tab--active md:bg-blue-50 md:border-blue-200 md:text-blue-700 md:font-medium':''}`}>Role</button>
-              {isAdmin && (
-                <button onClick={()=>setViewTab('broadcast')} className={`messages-tab flex-1 px-3 py-2 text-sm md:rounded-xl md:border md:border-transparent md:hover:bg-gray-50 md:transition ${viewTab==='broadcast'?'messages-tab--active md:bg-blue-50 md:border-blue-200 md:text-blue-700 md:font-medium':''}`}>Broadcast</button>
+      <aside className={`w-full sm:w-80 border-r flex-col md:bg-white ${activeUser || viewTab === 'system' ? 'hidden sm:flex' : 'flex'}`}>
+        <div className="flex flex-col p-4 border-b bg-white">
+          <h1 className="text-xl font-bold text-slate-900 mb-4">Messages</h1>
+          <div className="flex p-1 bg-slate-100 rounded-xl">
+            <button
+              onClick={() => setViewTab('chats')}
+              className={`flex-1 px-3 py-2 text-sm font-medium rounded-lg transition-all ${viewTab === 'chats' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+            >
+              <div className="flex items-center justify-center gap-2">
+                <span>Personal</span>
+                {chatsUnread > 0 && (
+                  <span className="text-[10px] bg-blue-600 text-white rounded-full px-1.5 py-0.5 min-w-[18px] text-center">
+                    {chatsUnread > 99 ? '99+' : chatsUnread}
+                  </span>
+                )}
+              </div>
+            </button>
+            <button
+              onClick={() => setViewTab('system')}
+              className={`flex-1 px-3 py-2 text-sm font-medium rounded-lg transition-all ${viewTab === 'system' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+            >
+              <div className="flex items-center justify-center gap-2">
+                <span>System</span>
+                {systemUnread > 0 && (
+                  <span className="text-[10px] bg-blue-600 text-white rounded-full px-1.5 py-0.5 min-w-[18px] text-center">
+                    {systemUnread > 99 ? '99+' : systemUnread}
+                  </span>
+                )}
+              </div>
+            </button>
+          </div>
+        </div>
+        
+        <div className="p-3 border-b bg-white">
+          <div className="relative">
+            <input
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              placeholder="Search conversations..."
+              autoComplete="off"
+              className="w-full border border-slate-200 rounded-xl pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 transition-all bg-slate-50"
+            />
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 absolute left-3 top-2.5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto bg-white">
+          {(isAdmin || isFinance) && (viewTab === 'role' || viewTab === 'broadcast') && (
+            <div className="p-2 border-b bg-slate-50">
+              <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
+                <button onClick={() => setViewTab('role')} className={`whitespace-nowrap px-3 py-1.5 rounded-lg text-xs font-medium border ${viewTab === 'role' ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-white border-slate-200 text-slate-600'}`}>Role Msg</button>
+                {isAdmin && (
+                  <button onClick={() => setViewTab('broadcast')} className={`whitespace-nowrap px-3 py-1.5 rounded-lg text-xs font-medium border ${viewTab === 'broadcast' ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-white border-slate-200 text-slate-600'}`}>Broadcast</button>
+                )}
+              </div>
+            </div>
+          )}
+          {viewTab === 'chats' && (
+            <div className="flex-1 overflow-y-auto md:pt-1">
+              {loadingUsers && (
+                <div className="p-3 text-sm text-gray-500">Loading users and conversations...</div>
               )}
-            </>
+              {!loadingUsers && sortedUsers.map(u => {
+                const isActive = activeUser?.id === u.id
+                const meta = userMeta.get(u.id)
+                const lastText = meta?.last?.body ? String(meta.last.body).slice(0, 50) : ''
+                const unread = meta?.unread || 0
+                const online = presenceMap.get(u.id)
+                const typing = typingMap.get(u.id)
+                const lastTime = meta?.last?.created_at ? new Date(meta.last.created_at) : null
+                const fmtTime = (d) => {
+                  if (!d) return ''
+                  const now = new Date()
+                  const sameDay = d.toDateString() === now.toDateString()
+                  return sameDay ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : d.toLocaleDateString()
+                }
+                return (
+                  <button
+                    key={u.id}
+                    onClick={()=>{ setActiveUser(u); setViewTab('chats') }}
+                    className={`messages-user-row w-full text-left px-3 py-2 border-b hover:bg-gray-50 md:rounded-xl md:mx-2 md:my-1 md:border md:border-gray-100 md:hover:border-gray-200 md:hover:bg-gray-50/80 ${isActive? 'messages-user-row--active bg-blue-50 md:border-blue-200':''}`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-full overflow-hidden bg-gray-100 flex items-center justify-center text-xs text-gray-600">
+                          {avatarUrl(u) ? (
+                            <img src={avatarUrl(u)} alt={displayFullName(u)} className="w-full h-full object-cover" />
+                          ) : (
+                            <span>{initials(u)}</span>
+                          )}
+                        </div>
+                        <span className={`w-2 h-2 rounded-full ${online? 'bg-emerald-500':'bg-gray-300'}`}></span>
+                        <div className="flex items-center gap-2">
+                          <div className="font-medium text-sm">{displayFullName(u)}</div>
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded-full border ${roleBadgeClass(u.role)}`}>{roleLabelMap[u.role] || u.role}</span>
+                        </div>
+                      </div>
+                      {unread>0 && (
+                        <span className="text-[10px] bg-blue-600 text-white rounded-full px-2 py-0.5">{unread}</span>
+                      )}
+                    </div>
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="text-xs text-gray-500 truncate">
+                        {typing ? <span className="text-emerald-600">typing…</span> : (lastText || <span className="italic text-gray-400">No messages</span>)}
+                      </div>
+                      {lastTime && (
+                        <span className="text-[10px] text-gray-400 whitespace-nowrap">{fmtTime(lastTime)}</span>
+                      )}
+                    </div>
+                  </button>
+                )
+              })}
+              {!loadingUsers && sortedUsers.length===0 && (
+                <div className="p-3 text-sm text-gray-500">No messages yet. Add users to start messaging.</div>
+              )}
+            </div>
           )}
         </div>
-        <div className="p-3 border-b md:border-b-0 md:pt-2">
-          <input
-            value={query}
-            onChange={e=>setQuery(e.target.value)}
-            placeholder="Search users..."
-            autoComplete="off"
-            className="w-full border rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-200"
-          />
-        </div>
-        {viewTab === 'chats' && (
-          <div className="flex-1 overflow-y-auto md:pt-1">
-            {loadingUsers && (
-              <div className="p-3 text-sm text-gray-500">Loading users and conversations...</div>
-            )}
-            {!loadingUsers && sortedUsers.map(u => {
-              const isActive = activeUser?.id === u.id
-              const meta = userMeta.get(u.id)
-              const lastText = meta?.last?.body ? String(meta.last.body).slice(0, 50) : ''
-              const unread = meta?.unread || 0
-              const online = presenceMap.get(u.id)
-              const typing = typingMap.get(u.id)
-              const lastTime = meta?.last?.created_at ? new Date(meta.last.created_at) : null
-              const fmtTime = (d) => {
-                if (!d) return ''
-                const now = new Date()
-                const sameDay = d.toDateString() === now.toDateString()
-                return sameDay ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : d.toLocaleDateString()
-              }
-              return (
-                <button
-                  key={u.id}
-                  onClick={()=>{ setActiveUser(u); setViewTab('chats') }}
-                  className={`messages-user-row w-full text-left px-3 py-2 border-b hover:bg-gray-50 md:rounded-xl md:mx-2 md:my-1 md:border md:border-gray-100 md:hover:border-gray-200 md:hover:bg-gray-50/80 ${isActive? 'messages-user-row--active bg-blue-50 md:border-blue-200':''}`}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 rounded-full overflow-hidden bg-gray-100 flex items-center justify-center text-xs text-gray-600">
-                        {avatarUrl(u) ? (
-                          <img src={avatarUrl(u)} alt={displayFullName(u)} className="w-full h-full object-cover" />
-                        ) : (
-                          <span>{initials(u)}</span>
-                        )}
-                      </div>
-                      <span className={`w-2 h-2 rounded-full ${online? 'bg-emerald-500':'bg-gray-300'}`}></span>
-                      <div className="flex items-center gap-2">
-                        <div className="font-medium text-sm">{displayFullName(u)}</div>
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full border ${roleBadgeClass(u.role)}`}>{roleLabelMap[u.role] || u.role}</span>
-                      </div>
-                    </div>
-                    {unread>0 && (
-                      <span className="text-[10px] bg-blue-600 text-white rounded-full px-2 py-0.5">{unread}</span>
-                    )}
-                  </div>
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="text-xs text-gray-500 truncate">
-                      {typing ? <span className="text-emerald-600">typing…</span> : (lastText || <span className="italic text-gray-400">No messages</span>)}
-                    </div>
-                    {lastTime && (
-                      <span className="text-[10px] text-gray-400 whitespace-nowrap">{fmtTime(lastTime)}</span>
-                    )}
-                  </div>
-                </button>
-              )
-            })}
-            {!loadingUsers && sortedUsers.length===0 && (
-              <div className="p-3 text-sm text-gray-500">No messages yet. Add users to start messaging.</div>
-            )}
-          </div>
-        )}
 
         {(isAdmin || isFinance) && viewTab === 'role' && (
           <form onSubmit={sendRole} className="p-3 space-y-2">
@@ -689,9 +726,9 @@ export default function Messages(){
               <p className="text-[11px] text-gray-500 leading-tight">
                 This message will be sent instantly to <strong>everyone</strong> in the school via:
                 <span className="flex items-center gap-2 mt-1 font-medium text-blue-600">
-                  <span>• In-app Message</span>
-                  <span>• SMS</span>
-                  <span>• Email</span>
+                  <span>&bull; In-app Message</span>
+                  <span>&bull; SMS</span>
+                  <span>&bull; Email</span>
                 </span>
               </p>
             </div>
@@ -717,109 +754,102 @@ export default function Messages(){
       </aside>
 
       {/* Right: Chat thread or System feed */}
-      {/* Mobile users list as main view when no chat is selected */}
-      {!activeUser && viewTab!== 'system' && (
-        <div className="sm:hidden flex-1 flex flex-col">
-          <div className="h-12 border-b px-3 flex items-center justify-between sticky top-0 bg-white z-10">
-            <div className="font-medium">Users</div>
-          </div>
-          <div className="p-3 border-b">
-            <input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search users..." autoComplete="off" className="w-full border rounded px-3 py-2" />
-          </div>
-          <div className="flex-1 overflow-y-auto">
-            {sortedUsers.map(u => {
-              const meta = userMeta.get(u.id)
-              const lastText = meta?.last?.body ? String(meta.last.body).slice(0, 50) : ''
-              const unread = meta?.unread || 0
-              const online = presenceMap.get(u.id)
-              return (
-                <button key={u.id} onClick={()=>{ setActiveUser(u) }} className="messages-user-row w-full text-left px-3 py-2 border-b hover:bg-gray-50">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 rounded-full overflow-hidden bg-gray-100 flex items-center justify-center text-xs text-gray-600">
-                        {avatarUrl(u) ? (
-                          <img src={avatarUrl(u)} alt={displayFullName(u)} className="w-full h-full object-cover" />
-                        ) : (
-                          <span>{initials(u)}</span>
-                        )}
-                      </div>
-                      <span className={`w-2 h-2 rounded-full ${online? 'bg-emerald-500':'bg-gray-300'}`}></span>
-                      <div className="flex items-center gap-2">
-                        <div className="font-medium text-sm">{displayFullName(u)}</div>
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full border ${roleBadgeClass(u.role)}`}>{roleLabelMap[u.role] || u.role}</span>
-                      </div>
-                    </div>
-                    {unread>0 && (<span className="text-[10px] bg-blue-600 text-white rounded-full px-2 py-0.5">{unread}</span>)}
-                  </div>
-                  <div className="text-xs text-gray-500 truncate">{lastText || <span className="italic text-gray-400">No messages</span>}</div>
-                </button>
-              )
-            })}
-            {!loadingUsers && sortedUsers.length===0 && (
-              <div className="p-3 text-sm text-gray-500">No messages yet. Add users to start messaging.</div>
+      <section className={`relative flex-1 flex flex-col overflow-hidden ${!activeUser && viewTab !== 'system' ? 'hidden sm:flex' : 'flex'}`}>
+        {/* Chat header */}
+        <div className="h-14 px-3 sm:px-4 flex items-center justify-between sticky top-0 z-10 bg-white border-b border-slate-100 shadow-sm">
+          <div className="flex items-center gap-3">
+            {(activeUser || viewTab === 'system') && (
+              <button 
+                className="sm:hidden p-1.5 rounded-full hover:bg-slate-100 text-slate-600 transition-colors" 
+                onClick={() => { setActiveUser(null); if(viewTab === 'system') setViewTab('chats') }} 
+                aria-label="Back"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
+              </button>
             )}
-          </div>
-        </div>
-      )}
-
-      {/* Chat section */}
-      <section className={`relative flex-1 flex flex-col overflow-hidden ${!activeUser && viewTab!=='system' ? 'hidden sm:flex' : ''}`}>
-        {/* WhatsApp-style chat header */}
-        <div className="h-14 px-2 sm:px-4 flex items-center justify-between sticky top-0 z-10 bg-[#202c33] text-slate-50 border-b border-black/20 md:bg-white md:text-slate-900 md:border-b md:border-gray-200">
-          <div className="font-medium">
-            <div className="flex items-center gap-2">
-              {activeUser && (
-                <button className="sm:hidden px-2 py-1 rounded border" onClick={()=>setActiveUser(null)} aria-label="Back">
-                  ←
-                </button>
-              )}
-              {viewTab==='system' ? (
-                <span>System</span>
-              ) : activeUser ? (
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-full overflow-hidden bg-gray-100 flex items-center justify-center text-xs text-gray-600">
-                    {avatarUrl(activeUser) ? (
-                      <img src={avatarUrl(activeUser)} alt={displayFullName(activeUser)} className="w-full h-full object-cover" />
-                    ) : (
-                      <span>{initials(activeUser)}</span>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span>{displayFullName(activeUser)}</span>
-                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full border ${roleBadgeClass(activeUser.role)}`}>{roleLabelMap[activeUser.role] || activeUser.role}</span>
+            {viewTab === 'system' ? (
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center text-blue-600">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <div>
+                  <div className="text-sm font-bold text-slate-900">System Notifications</div>
+                  <div className="text-[10px] text-emerald-600 font-medium">Live Feed</div>
+                </div>
+              </div>
+            ) : activeUser ? (
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-full overflow-hidden bg-slate-100 ring-2 ring-white shadow-sm flex items-center justify-center text-xs text-slate-600">
+                  {avatarUrl(activeUser) ? (
+                    <img src={avatarUrl(activeUser)} alt={displayFullName(activeUser)} className="w-full h-full object-cover" />
+                  ) : (
+                    <span>{initials(activeUser)}</span>
+                  )}
+                </div>
+                <div>
+                  <div className="text-sm font-bold text-slate-900">{displayFullName(activeUser)}</div>
+                  <div className="flex items-center gap-1.5">
+                    <span className={`w-1.5 h-1.5 rounded-full ${presenceMap.get(activeUser.id) ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'}`}></span>
+                    <span className="text-[10px] text-slate-500 font-medium">{presenceMap.get(activeUser.id) ? 'Online' : 'Offline'}</span>
+                    <span className="text-slate-200">|</span>
+                    <span className={`text-[10px] font-bold px-1.5 rounded-full border ${roleBadgeClass(activeUser.role)}`}>{roleLabelMap[activeUser.role] || activeUser.role}</span>
                   </div>
                 </div>
-              ) : (
-                <span>Select a user</span>
-              )}
-            </div>
+              </div>
+            ) : (
+              <div className="text-sm font-medium text-slate-400">Select a conversation</div>
+            )}
           </div>
-          <div className="flex items-center gap-2 text-xs text-slate-300">
+          
+          <div className="flex items-center gap-3">
             {isSyncing && (
-              <span className="inline-flex items-center gap-1">
-                <svg className="animate-spin h-4 w-4 text-gray-400" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
-                </svg>
+              <span className="hidden sm:inline-flex items-center gap-1.5 text-[10px] font-bold text-emerald-600 uppercase tracking-widest bg-emerald-50 px-2 py-1 rounded-full">
+                <Loader2 className="h-3 w-3 animate-spin" />
                 Syncing
               </span>
             )}
+            {activeUser && (
+              <button className="p-2 rounded-full hover:bg-slate-100 text-slate-400 transition-colors">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
+                </svg>
+              </button>
+            )}
           </div>
         </div>
+
         {/* Chat body */}
-        <div ref={chatRef} className="flex-1 px-2 sm:px-4 py-3 space-y-2 bg-[#0b141a] pb-28 sm:pb-4 md:bg-gray-50 md:pb-4">
-          {loading && viewTab!=='system' && <div className="text-sm text-slate-300">Loading...</div>}
-          {viewTab==='system' ? (
-            <div className="space-y-2">
+        <div ref={chatRef} className="flex-1 px-3 sm:px-4 py-4 space-y-3 bg-slate-50 overflow-y-auto scroll-smooth pb-32 sm:pb-6">
+          {loading && viewTab !== 'system' && (
+            <div className="flex items-center justify-center h-full">
+              <Loader2 className="h-8 w-8 text-blue-200 animate-spin" />
+            </div>
+          )}
+          
+          {viewTab === 'system' ? (
+            <div className="space-y-4 max-w-2xl mx-auto pb-10">
               {systemMessages.length === 0 && (
-                <div className="text-sm text-slate-300">No system messages.</div>
+                <div className="text-center py-20">
+                  <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-300">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0a2 2 0 01-2 2H6a2 2 0 01-2-2m16 0V5a2 2 0 00-2-2H6a2 2 0 00-2 2v11m16 0h-4m-8 0H4" />
+                    </svg>
+                  </div>
+                  <p className="text-sm text-slate-400 font-medium">No system notifications yet.</p>
+                </div>
               )}
               {systemMessages.map(m => (
-                <div key={m.id} className="flex justify-start">
-                  <div className="max-w-[80%] px-3 py-2 rounded-lg shadow-sm text-sm whitespace-pre-wrap bg-white border">
-                    <div className="text-[10px] text-gray-500 uppercase tracking-wide mb-1">{m.system_tag || 'system'}</div>
-                    {m.body}
-                    <div className="mt-1 text-[10px] text-gray-500">{new Date(m.created_at).toLocaleString()}</div>
+                <div key={m.id} className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+                  <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 hover:shadow-md transition-shadow">
+                    <div className="flex items-start justify-between mb-2">
+                      <span className="text-[10px] font-black uppercase tracking-widest text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">{m.system_tag || 'System'}</span>
+                      <span className="text-[10px] text-slate-400 font-medium">{new Date(m.created_at).toLocaleString()}</span>
+                    </div>
+                    <div className="text-sm text-slate-700 leading-relaxed font-medium">{m.body}</div>
                   </div>
                 </div>
               ))}
@@ -914,7 +944,7 @@ export default function Messages(){
         {viewTab!=='system' && (
         <>
         {/* WhatsApp-style composer bar */}
-        <form onSubmit={sendToActive} className="min-h-16 p-2 flex items-center gap-2 fixed inset-x-0 bottom-[4.5rem] z-20 bg-[#202c33] border-t border-black/30 sm:sticky sm:bottom-0 sm:inset-x-auto sm:rounded-b-xl md:bg-white md:border-t md:border-gray-200">
+        <form onSubmit={sendToActive} className="min-h-16 p-2 flex items-center gap-2 fixed inset-x-0 bottom-0 z-20 bg-white border-t border-slate-100 sm:sticky sm:bottom-0 sm:rounded-b-xl md:border-gray-200">
           {/* Forward banner */}
           {isAdmin && forwardSource && (
             <div className="absolute -top-8 left-0 right-0 px-2">
