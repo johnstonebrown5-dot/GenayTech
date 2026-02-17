@@ -40,6 +40,14 @@ export default function StudentDashboard(){
   const [refreshingFinance, setRefreshingFinance] = useState(false)
   const [refreshingAcademics, setRefreshingAcademics] = useState(false)
   const [statementFilter, setStatementFilter] = useState('all') // all | invoice | payment
+
+  const [calendarYear, setCalendarYear] = useState(null)
+  const [calendarTerm, setCalendarTerm] = useState(null)
+  const [calendarEvents, setCalendarEvents] = useState([])
+  const [calendarLoading, setCalendarLoading] = useState(false)
+  const [calendarError, setCalendarError] = useState('')
+  const [calendarViewMode, setCalendarViewMode] = useState('list') // list | calendar
+  const [calendarMonth, setCalendarMonth] = useState(() => { const d = new Date(); d.setDate(1); d.setHours(0,0,0,0); return d })
   // Report Card modal
   const [showReport, setShowReport] = useState(false)
   // Derive current tab from URL: /student, /student/academics, /student/finance
@@ -330,6 +338,7 @@ export default function StudentDashboard(){
       base: 12 * 60 * 60 * 1000,
       dashboard: 5 * 60 * 1000,
       academics: 5 * 60 * 1000, // Reduced from 30m to 5m for better responsiveness
+      calendar: 5 * 60 * 1000,
       financeSummary: 60 * 1000,
       invoices: 5 * 60 * 1000,
       finance: 2 * 60 * 1000,
@@ -353,12 +362,14 @@ export default function StudentDashboard(){
           baseLoaded: false,
           dashboardLoaded: false,
           academicsLoaded: false,
+          calendarLoaded: false,
           financeLoaded: false,
           financeSummaryLoaded: false,
           invoicesLoaded: false,
           baseFetchedAt: 0,
           dashboardFetchedAt: 0,
           academicsFetchedAt: 0,
+          calendarFetchedAt: 0,
           financeFetchedAt: 0,
           financeSummaryFetchedAt: 0,
           invoicesFetchedAt: 0,
@@ -366,6 +377,9 @@ export default function StudentDashboard(){
           schoolInfo: null,
           assessments: [],
           examResults: [],
+          calendarYear: null,
+          calendarTerm: null,
+          calendarEvents: [],
           invoices: [],
           summary: { total_billed: 0, total_paid: 0, balance: 0 },
         }
@@ -384,6 +398,9 @@ export default function StudentDashboard(){
       setSchoolInfo(c.schoolInfo || null)
       setAssessments(c.assessments || [])
       setExamResults(c.examResults || [])
+      setCalendarYear(c.calendarYear || null)
+      setCalendarTerm(c.calendarTerm || null)
+      setCalendarEvents(c.calendarEvents || [])
       setInvoices(c.invoices || [])
       setSummary(c.summary || { total_billed: 0, total_paid: 0, balance: 0 })
     }
@@ -434,6 +451,7 @@ export default function StudentDashboard(){
         // Prefetch core personalized data for the main dashboard once per session.
         if (currentTab === 'dashboard') {
           const shouldFetchDashboard = !c.dashboardLoaded || !isFresh(c.dashboardFetchedAt, TTL.dashboard)
+          const shouldFetchCalendar = !c.calendarLoaded || !isFresh(c.calendarFetchedAt, TTL.calendar)
           if (shouldFetchDashboard) {
             const settled = await Promise.allSettled([
               api.get('/academics/assessments/my/', { timeout: 15000, _skipGlobalLoading: true }),
@@ -453,6 +471,54 @@ export default function StudentDashboard(){
             
             c.dashboardLoaded = true
             c.dashboardFetchedAt = now()
+            saveToPersistentCache(c)
+            hydrateFromCache(c)
+          }
+
+          if (shouldFetchCalendar) {
+            const settledCal = await Promise.allSettled([
+              api.get('/academics/academic_years/current/', { timeout: 15000, _skipGlobalLoading: true }),
+              api.get('/academics/terms/current/', { timeout: 15000, _skipGlobalLoading: true }),
+              api.get('/communications/events/', { timeout: 15000, _skipGlobalLoading: true }),
+              api.get('/academics/exams/', { params: { include_history: true }, timeout: 15000, _skipGlobalLoading: true }).catch(()=>({ data: [] })),
+            ])
+
+            if (!mounted) return
+            const [cyS, ctS, evS, exS] = settledCal
+
+            if (cyS.status === 'fulfilled') c.calendarYear = cyS.value?.data || null
+            if (ctS.status === 'fulfilled') c.calendarTerm = ctS.value?.data || null
+
+            const baseEvents = evS.status === 'fulfilled'
+              ? (Array.isArray(evS.value?.data) ? evS.value.data : (evS.value?.data?.results || []))
+              : []
+
+            const exams = exS.status === 'fulfilled'
+              ? (Array.isArray(exS.value?.data) ? exS.value.data : (exS.value?.data?.results || []))
+              : []
+
+            const examEvents = (exams || []).map(x => {
+              const dateStr = x.date || x.exam_date || x.scheduled_date || new Date().toISOString().slice(0,10)
+              const startStr = `${dateStr}T00:00:00`
+              const endStr = `${dateStr}T23:59:59`
+              return {
+                id: `exam-${x.id}`,
+                title: `Exam: ${x.name}`,
+                description: `Exam for class ${x.klass_name || x.class_name || ''}`.trim(),
+                location: '',
+                start: startStr,
+                end: endStr,
+                all_day: true,
+                audience: 'students',
+                visibility: 'internal',
+                source: 'exam',
+              }
+            })
+
+            const combined = [...baseEvents, ...examEvents]
+            c.calendarEvents = combined
+            c.calendarLoaded = true
+            c.calendarFetchedAt = now()
             saveToPersistentCache(c)
             hydrateFromCache(c)
           }
@@ -533,6 +599,124 @@ export default function StudentDashboard(){
     })()
     return () => { mounted = false }
   }, [currentTab])
+
+  const calendarUpcoming = useMemo(() => {
+    try {
+      const list = Array.isArray(calendarEvents) ? calendarEvents : []
+      const nowT = Date.now()
+      const filtered = list
+        .filter(ev => {
+          const end = new Date(ev?.end || ev?.start || 0).getTime() || 0
+          return end >= nowT
+        })
+        .sort((a, b) => (new Date(a?.start || 0).getTime() || 0) - (new Date(b?.start || 0).getTime() || 0))
+      return filtered.slice(0, 6)
+    } catch {
+      return []
+    }
+  }, [calendarEvents])
+
+  function startOfMonth(d){ const x = new Date(d.getFullYear(), d.getMonth(), 1); x.setHours(0,0,0,0); return x }
+  function startOfCalendarGrid(d){
+    const first = startOfMonth(d)
+    const day = first.getDay()
+    const gridStart = new Date(first)
+    gridStart.setDate(first.getDate() - day)
+    gridStart.setHours(0,0,0,0)
+    return gridStart
+  }
+  function buildMonthGrid(d){
+    const start = startOfCalendarGrid(d)
+    const days = []
+    for (let i = 0; i < 42; i++) {
+      const day = new Date(start)
+      day.setDate(start.getDate() + i)
+      day.setHours(0,0,0,0)
+      days.push(day)
+    }
+    return days
+  }
+
+  const calendarMonthDays = useMemo(() => buildMonthGrid(calendarMonth), [calendarMonth])
+  const calendarEventsByDay = useMemo(() => {
+    const map = {}
+    const list = Array.isArray(calendarEvents) ? calendarEvents : []
+    for (const ev of list) {
+      try {
+        const key = new Date(ev?.start || 0).toISOString().slice(0, 10)
+        if (!map[key]) map[key] = []
+        map[key].push(ev)
+      } catch {}
+    }
+    for (const k of Object.keys(map)) {
+      map[k] = map[k].sort((a, b) => (new Date(a?.start || 0).getTime() || 0) - (new Date(b?.start || 0).getTime() || 0))
+    }
+    return map
+  }, [calendarEvents])
+
+  async function refreshCalendarData(){
+    setCalendarLoading(true)
+    setCalendarError('')
+    try {
+      const settledCal = await Promise.allSettled([
+        api.get('/academics/academic_years/current/', { timeout: 15000, _skipGlobalLoading: true }),
+        api.get('/academics/terms/current/', { timeout: 15000, _skipGlobalLoading: true }),
+        api.get('/communications/events/', { timeout: 15000, _skipGlobalLoading: true }),
+        api.get('/academics/exams/', { params: { include_history: true }, timeout: 15000, _skipGlobalLoading: true }).catch(()=>({ data: [] })),
+      ])
+
+      const [cyS, ctS, evS, exS] = settledCal
+      const cy = cyS.status === 'fulfilled' ? (cyS.value?.data || null) : null
+      const ct = ctS.status === 'fulfilled' ? (ctS.value?.data || null) : null
+
+      const baseEvents = evS.status === 'fulfilled'
+        ? (Array.isArray(evS.value?.data) ? evS.value.data : (evS.value?.data?.results || []))
+        : []
+      const exams = exS.status === 'fulfilled'
+        ? (Array.isArray(exS.value?.data) ? exS.value.data : (exS.value?.data?.results || []))
+        : []
+
+      const examEvents = (exams || []).map(x => {
+        const dateStr = x.date || x.exam_date || x.scheduled_date || new Date().toISOString().slice(0,10)
+        const startStr = `${dateStr}T00:00:00`
+        const endStr = `${dateStr}T23:59:59`
+        return {
+          id: `exam-${x.id}`,
+          title: `Exam: ${x.name}`,
+          description: `Exam for class ${x.klass_name || x.class_name || ''}`.trim(),
+          location: '',
+          start: startStr,
+          end: endStr,
+          all_day: true,
+          audience: 'students',
+          visibility: 'internal',
+          source: 'exam',
+        }
+      })
+
+      const combined = [...baseEvents, ...examEvents]
+      setCalendarYear(cy)
+      setCalendarTerm(ct)
+      setCalendarEvents(combined)
+
+      if (__studentDashboardCache) {
+        __studentDashboardCache.calendarYear = cy
+        __studentDashboardCache.calendarTerm = ct
+        __studentDashboardCache.calendarEvents = combined
+        __studentDashboardCache.calendarLoaded = true
+        __studentDashboardCache.calendarFetchedAt = Date.now()
+        try {
+          localStorage.setItem('student_dashboard_cache', JSON.stringify(__studentDashboardCache))
+        } catch {}
+      }
+      return true
+    } catch (e) {
+      setCalendarError(e?.response?.data?.detail || e?.message || 'Failed to load calendar')
+      return false
+    } finally {
+      setCalendarLoading(false)
+    }
+  }
 
   async function refreshAcademicsData() {
     setRefreshingAcademics(true)
@@ -1023,6 +1207,195 @@ export default function StudentDashboard(){
                   </div>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Academic Calendar */}
+      <div className="px-3 sm:px-0">
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+          <div className="bg-slate-50/50 px-4 py-3 border-b border-slate-100 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="text-lg">🗓️</span>
+              <div>
+                <h2 className="font-semibold text-slate-800">Academic Calendar</h2>
+                <div className="text-[11px] text-slate-500">
+                  {calendarTerm?.name || calendarTerm?.number ? (
+                    <>
+                      {calendarYear?.label ? <span>{calendarYear.label}</span> : <span>Current Year</span>}
+                      <span className="mx-2">•</span>
+                      <span>
+                        {calendarTerm?.name || `Term ${calendarTerm?.number || ''}`}
+                      </span>
+                    </>
+                  ) : (
+                    <span>Upcoming school activities</span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <div className="lg:hidden flex bg-slate-100 p-1 rounded-xl">
+                <button
+                  type="button"
+                  onClick={() => setCalendarViewMode('list')}
+                  className={`px-3 py-1 text-[11px] font-bold rounded-lg transition-all ${calendarViewMode === 'list' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                  LIST
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCalendarViewMode('calendar')}
+                  className={`px-3 py-1 text-[11px] font-bold rounded-lg transition-all ${calendarViewMode === 'calendar' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                  CALENDAR
+                </button>
+              </div>
+              <button
+                type="button"
+                onClick={refreshCalendarData}
+                disabled={calendarLoading}
+                className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60 disabled:cursor-not-allowed"
+                title="Refresh calendar"
+              >
+                <span className={`inline-block h-3.5 w-3.5 rounded-full border-2 border-slate-300 border-t-slate-600 ${calendarLoading ? 'animate-spin' : 'hidden'}`} />
+                <span>{calendarLoading ? 'Refreshing' : 'Refresh'}</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="p-4 md:p-6">
+            {calendarError && (
+              <div className="mb-3 rounded-xl bg-rose-50 border border-rose-100 text-rose-700 text-xs p-3">
+                {calendarError}
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {/* List (always visible on desktop) */}
+              <div className={`${calendarViewMode === 'list' ? 'block' : 'hidden'} lg:block`}>
+                <div className="flex items-center justify-between mb-3">
+                  <div className="text-xs font-black uppercase tracking-widest text-slate-400">Upcoming</div>
+                  <div className="text-[11px] text-slate-500">Next 6 items</div>
+                </div>
+
+                {calendarLoading && (!calendarUpcoming || calendarUpcoming.length === 0) ? (
+                  <div className="space-y-2">
+                    <Skeleton className="h-12 w-full" />
+                    <Skeleton className="h-12 w-full" />
+                    <Skeleton className="h-12 w-full" />
+                  </div>
+                ) : Array.isArray(calendarUpcoming) && calendarUpcoming.length > 0 ? (
+                  <div className="space-y-2">
+                    {calendarUpcoming.map((ev) => {
+                      const start = ev?.start ? new Date(ev.start) : null
+                      const dateLabel = start ? start.toLocaleDateString() : '-'
+                      const timeLabel = start
+                        ? (ev?.all_day ? 'All day' : start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }))
+                        : ''
+                      const isExam = ev?.source === 'exam' || String(ev?.title || '').toLowerCase().includes('exam')
+                      return (
+                        <div key={String(ev?.id || ev?.title || Math.random())} className="rounded-2xl border border-slate-200 bg-white p-3">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <div className="text-sm font-bold text-slate-900 truncate">{ev?.title || 'Event'}</div>
+                              {ev?.description && <div className="text-[11px] text-slate-500 mt-0.5 line-clamp-2">{ev.description}</div>}
+                              <div className="mt-2 flex flex-wrap items-center gap-2">
+                                <span className="text-[11px] px-2 py-0.5 rounded-full bg-slate-50 border border-slate-200 text-slate-700">
+                                  {dateLabel}
+                                </span>
+                                {timeLabel && (
+                                  <span className="text-[11px] px-2 py-0.5 rounded-full bg-slate-50 border border-slate-200 text-slate-700">
+                                    {timeLabel}
+                                  </span>
+                                )}
+                                <span className={`text-[11px] px-2 py-0.5 rounded-full border ${isExam ? 'bg-indigo-50 border-indigo-100 text-indigo-700' : 'bg-emerald-50 border-emerald-100 text-emerald-700'}`}>
+                                  {isExam ? 'Exam' : 'Event'}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                ) : (
+                  <div className="py-8 text-center text-slate-400 text-sm italic">
+                    No upcoming events.
+                  </div>
+                )}
+              </div>
+
+              {/* Calendar (always visible on desktop) */}
+              <div className={`${calendarViewMode === 'calendar' ? 'block' : 'hidden'} lg:block`}>
+                <div className="flex items-center justify-between mb-3">
+                  <div className="text-xs font-black uppercase tracking-widest text-slate-400">Month view</div>
+                  <div className="text-[11px] text-slate-500">{calendarMonth.toLocaleString(undefined, { month: 'long', year: 'numeric' })}</div>
+                </div>
+
+                <div className="flex items-center justify-between mb-3">
+                  <button
+                    type="button"
+                    onClick={() => setCalendarMonth(m => new Date(m.getFullYear(), m.getMonth() - 1, 1))}
+                    className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                  >
+                    Prev
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCalendarMonth(() => { const d = new Date(); d.setDate(1); d.setHours(0,0,0,0); return d })}
+                    className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                  >
+                    Today
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCalendarMonth(m => new Date(m.getFullYear(), m.getMonth() + 1, 1))}
+                    className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                  >
+                    Next
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-7 text-[10px] font-bold text-slate-400">
+                  {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d => (
+                    <div key={d} className="px-2 py-1">{d}</div>
+                  ))}
+                </div>
+
+                <div className="grid grid-cols-7 gap-1">
+                  {calendarMonthDays.map((d, i) => {
+                    const key = d.toISOString().slice(0, 10)
+                    const inMonth = d.getMonth() === calendarMonth.getMonth()
+                    const items = calendarEventsByDay[key] || []
+                    const top3 = items.slice(0, 2)
+                    return (
+                      <div key={i} className={`min-h-[88px] rounded-xl border p-1 ${inMonth ? 'bg-white border-slate-200' : 'bg-slate-50 border-slate-200/70'}`}>
+                        <div className={`text-[11px] font-bold mb-1 px-1 ${inMonth ? 'text-slate-700' : 'text-slate-400'}`}>{d.getDate()}</div>
+                        <div className="space-y-1">
+                          {top3.map(ev => {
+                            const isExam = ev?.source === 'exam' || String(ev?.title || '').toLowerCase().includes('exam')
+                            return (
+                              <div
+                                key={String(ev?.id || ev?.title || Math.random())}
+                                className={`text-[10px] truncate px-1 py-0.5 rounded-lg border ${isExam ? 'bg-indigo-50 border-indigo-100 text-indigo-700' : 'bg-emerald-50 border-emerald-100 text-emerald-700'}`}
+                                title={ev?.title || ''}
+                              >
+                                {ev?.title || 'Event'}
+                              </div>
+                            )
+                          })}
+                          {items.length > 2 && (
+                            <div className="text-[10px] text-slate-400 px-1">+{items.length - 2} more</div>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
             </div>
           </div>
         </div>

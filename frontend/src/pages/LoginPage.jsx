@@ -454,7 +454,8 @@ export default function LoginPage() {
                   )}
                   <form onSubmit={submit} className="space-y-8">
                     <div className="space-y-6">
-                      <div className="relative group">
+                      <fieldset className="rounded-2xl border border-white/20 bg-white/95 px-4 pb-2 pt-3 shadow-inner">
+                        <legend className="px-2 text-[11px] font-extrabold tracking-widest text-slate-600">USERNAME</legend>
                         <input
                           id="login-username"
                           type="text"
@@ -465,51 +466,42 @@ export default function LoginPage() {
                           autoCapitalize="none"
                           autoCorrect="off"
                           aria-label="Email (username)"
-                          placeholder=" "
-                          className="peer w-full rounded-2xl border border-white/10 bg-white/5 px-5 pt-6 pb-2 text-[15px] text-white focus:outline-none focus:ring-1 focus:ring-white/30 transition-all placeholder:opacity-0"
+                          placeholder="Email / Username"
+                          className="w-full bg-transparent px-1 py-2 text-[15px] text-emerald-600 font-bold placeholder:text-black placeholder:opacity-60 focus:outline-none"
                           required
                         />
-                        <label 
-                          htmlFor="login-username" 
-                          className="absolute left-5 top-4 text-[13px] font-medium text-white/60 uppercase tracking-[0.1em] transition-all peer-placeholder-shown:top-4 peer-placeholder-shown:text-[15px] peer-focus:top-1.5 peer-focus:text-[11px] peer-focus:text-white/80 peer-[:not(:placeholder-shown)]:top-1.5 peer-[:not(:placeholder-shown)]:text-[11px] peer-[:not(:placeholder-shown)]:text-white/80 pointer-events-none"
-                        >
-                          Email / Username
-                        </label>
-                        <div className="mt-1.5 px-1 text-[11px] text-white/20">Admins: use your registered email.</div>
-                      </div>
+                        <div className="mt-1 px-1 text-[11px] text-slate-500">Admins: use your registered email.</div>
+                      </fieldset>
 
-                      <div className="relative group">
-                        <input
-                          id="login-password"
-                          type={showPassword ? 'text' : 'password'}
-                          value={password}
-                          onChange={(e)=>setPassword(e.target.value)}
-                          onKeyUp={(e)=> setCapsLockOn(e.getModifierState && e.getModifierState('CapsLock'))}
-                          autoComplete="current-password"
-                          aria-label="Password"
-                          placeholder=" "
-                          className="peer w-full rounded-2xl border border-white/10 bg-white/5 px-5 pt-6 pb-2 text-[15px] text-white focus:outline-none focus:ring-1 focus:ring-white/30 transition-all placeholder:opacity-0"
-                          required
-                        />
-                        <label 
-                          htmlFor="login-password" 
-                          className="absolute left-5 top-4 text-[13px] font-medium text-white/60 uppercase tracking-[0.1em] transition-all peer-placeholder-shown:top-4 peer-placeholder-shown:text-[15px] peer-focus:top-1.5 peer-focus:text-[11px] peer-focus:text-white/80 peer-[:not(:placeholder-shown)]:top-1.5 peer-[:not(:placeholder-shown)]:text-[11px] peer-[:not(:placeholder-shown)]:text-white/80 pointer-events-none"
-                        >
-                          Password
-                        </label>
-                        <button
-                          type="button"
-                          aria-pressed={showPassword}
-                          aria-label={showPassword ? 'Hide password' : 'Show password'}
-                          onClick={()=>setShowPassword(v=>!v)}
-                          className="absolute right-5 top-1/2 -translate-y-1/2 text-[12px] font-bold text-white/40 hover:text-white/70 transition-colors pt-2"
-                        >
-                          {showPassword ? 'HIDE' : 'SHOW'}
-                        </button>
+                      <fieldset className="rounded-2xl border border-white/20 bg-white/95 px-4 pb-2 pt-3 shadow-inner">
+                        <legend className="px-2 text-[11px] font-extrabold tracking-widest text-slate-600">PASSWORD</legend>
+                        <div className="relative">
+                          <input
+                            id="login-password"
+                            type={showPassword ? 'text' : 'password'}
+                            value={password}
+                            onChange={(e)=>setPassword(e.target.value)}
+                            onKeyUp={(e)=> setCapsLockOn(e.getModifierState && e.getModifierState('CapsLock'))}
+                            autoComplete="current-password"
+                            aria-label="Password"
+                            placeholder="Password"
+                            className="w-full bg-transparent px-1 py-2 pr-14 text-[15px] text-emerald-600 font-bold placeholder:text-black placeholder:opacity-60 focus:outline-none"
+                            required
+                          />
+                          <button
+                            type="button"
+                            aria-pressed={showPassword}
+                            aria-label={showPassword ? 'Hide password' : 'Show password'}
+                            onClick={()=>setShowPassword(v=>!v)}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 text-[11px] font-extrabold text-slate-600 hover:text-slate-900 transition-colors"
+                          >
+                            {showPassword ? 'HIDE' : 'SHOW'}
+                          </button>
+                        </div>
                         {capsLockOn && (
-                          <div className="absolute -bottom-5 right-1 text-[10px] font-bold text-amber-500/80 uppercase tracking-tighter">Caps Lock ON</div>
+                          <div className="mt-1 px-1 text-[10px] font-bold text-amber-700 uppercase tracking-tighter">Caps Lock ON</div>
                         )}
-                      </div>
+                      </fieldset>
                     </div>
 
                     <div className="flex items-center justify-between px-1">
@@ -841,10 +833,8 @@ export default function LoginPage() {
                       <div className="text-[11px] text-red-700 text-center">Check your details and try again.</div>
                     )}
                     <form onSubmit={submit} className="space-y-3">
-                      <div className="space-y-1">
-                        <label htmlFor="m-login-username" className="block text-[12px] text-gray-700">
-                          Email (username)
-                        </label>
+                      <fieldset className="rounded-xl border border-indigo-100 bg-white px-3 pb-2 pt-2 shadow-inner">
+                        <legend className="px-2 text-[10px] font-extrabold tracking-widest text-slate-500">USERNAME</legend>
                         <input
                           id="m-login-username"
                           type="text"
@@ -855,14 +845,13 @@ export default function LoginPage() {
                           autoCapitalize="none"
                           autoCorrect="off"
                           aria-label="Email (username)"
-                          className="w-full rounded-lg border border-indigo-100 bg-white px-3 py-2 text-sm shadow-inner focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                          placeholder="Email / Username"
+                          className="w-full bg-transparent px-1 py-2 text-sm text-emerald-600 font-bold focus:outline-none placeholder:text-black placeholder:opacity-60"
                           required
                         />
-                      </div>
-                      <div className="space-y-1">
-                        <label htmlFor="m-login-password" className="block text-[12px] text-gray-700">
-                          Password
-                        </label>
+                      </fieldset>
+                      <fieldset className="rounded-xl border border-indigo-100 bg-white px-3 pb-2 pt-2 shadow-inner">
+                        <legend className="px-2 text-[10px] font-extrabold tracking-widest text-slate-500">PASSWORD</legend>
                         <div className="relative">
                           <input
                             id="m-login-password"
@@ -872,7 +861,8 @@ export default function LoginPage() {
                             onKeyUp={e => setCapsLockOn(e.getModifierState && e.getModifierState('CapsLock'))}
                             autoComplete="current-password"
                             aria-label="Password"
-                            className="w-full rounded-lg border border-indigo-100 bg-white px-3 py-2 text-sm pr-16 shadow-inner focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                            placeholder="Password"
+                            className="w-full bg-transparent px-1 py-2 pr-16 text-sm text-emerald-600 font-bold focus:outline-none placeholder:text-black placeholder:opacity-60"
                             required
                           />
                           <button
@@ -880,13 +870,13 @@ export default function LoginPage() {
                             aria-pressed={showPassword}
                             aria-label={showPassword ? 'Hide password' : 'Show password'}
                             onClick={() => setShowPassword(v => !v)}
-                            className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-indigo-700 font-semibold"
+                            className="absolute right-2 top-1/2 -translate-y-1/2 text-[11px] text-indigo-700 font-semibold"
                           >
                             {showPassword ? 'Hide' : 'Show'}
                           </button>
                         </div>
                         {capsLockOn && <div className="mt-1 text-[11px] text-amber-700">Caps Lock is ON</div>}
-                      </div>
+                      </fieldset>
                       <div className="flex items-center justify-between">
                         <label className="inline-flex items-center gap-2 text-[11px] text-gray-700 select-none">
                           <input type="checkbox" className="accent-indigo-600" checked={remember} onChange={e => setRemember(e.target.checked)} />
