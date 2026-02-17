@@ -944,7 +944,7 @@ export default function Messages(){
         {viewTab!=='system' && (
         <>
         {/* WhatsApp-style composer bar */}
-        <form onSubmit={sendToActive} className="min-h-16 p-2 flex items-center gap-2 fixed inset-x-0 bottom-0 z-20 bg-white border-t border-slate-100 sm:sticky sm:bottom-0 sm:rounded-b-xl md:border-gray-200">
+        <form onSubmit={sendToActive} className="min-h-16 p-2 flex items-center gap-2 fixed inset-x-0 bottom-16 z-20 bg-white border-t border-slate-100 sm:sticky sm:bottom-0 sm:rounded-b-xl md:border-gray-200">
           {/* Forward banner */}
           {isAdmin && forwardSource && (
             <div className="absolute -top-8 left-0 right-0 px-2">
