@@ -42,7 +42,14 @@ class CoopStkClient:
         # If a pre-generated token is provided, use it directly
         pre = os.getenv('COOP_ACCESS_TOKEN')
         if pre:
+            print(f"DEBUG: Using COOP_ACCESS_TOKEN from env: {pre[:10]}...")
             return pre
+
+        # Require basic credentials to attempt token fetch
+        if not self.client_id or not self.client_secret or not self.token_url:
+            raise ValueError('Missing required Co-op credentials: COOP_CLIENT_ID, COOP_CLIENT_SECRET, or COOP_TOKEN_URL.')
+
+        print(f"DEBUG: Fetching token from {self.token_url}")
         # Otherwise use OAuth2 client_credentials with Basic auth header
         auth = (self.client_id, self.client_secret)
         data = { 'grant_type': 'client_credentials' }
@@ -50,12 +57,33 @@ class CoopStkClient:
         scope = os.getenv('COOP_SCOPE')
         if scope:
             data['scope'] = scope
-        resp = requests.post(self.token_url, data=data, auth=auth, timeout=20)
-        resp.raise_for_status()
-        j = resp.json()
-        return j.get('access_token') or j.get('accessToken') or j.get('token')
+        
+        try:
+            response = requests.post(
+                self.token_url,
+                data=data,
+                auth=auth,
+                timeout=60
+            )
+            print(f"DEBUG: Token response status: {response.status_code}")
+            response.raise_for_status()
+            res_json = response.json()
+            token = res_json.get('access_token') or res_json
+            if isinstance(token, dict):
+                 # handle cases where the whole json is returned as token
+                 token = token.get('access_token')
+            return token
+        except Exception as e:
+            print(f"DEBUG: Token fetch failed: {str(e)}")
+            raise e
 
     def stk_push(self, phone: str, amount: float, account_ref: str = 'GENAYTECH', tx_desc: str = 'Fee Payment'):
+        # Basic validation for STK push
+        if not self.short_code or not self.passkey:
+            raise ValueError('Missing required STK config: COOP_SHORT_CODE or COOP_PASSKEY.')
+        if not self.base_url:
+            raise ValueError('Missing COOP_BASE_URL.')
+
         ts = self._timestamp()
         password = self._password(ts)
         token = self.get_token()
@@ -73,7 +101,24 @@ class CoopStkClient:
             "AccountReference": (account_ref or 'GENAYTECH')[:12],
             "TransactionDesc": (tx_desc or 'Fees')[:12],
         }
-        url = f"{self.base_url}{self.stk_path}"
-        resp = requests.post(url, json=payload, headers=headers, timeout=30)
-        resp.raise_for_status()
-        return resp.json()
+        # Correctly join URL and path
+        path = self.stk_path if self.stk_path.startswith('/') else f'/{self.stk_path}'
+        url = f"{self.base_url}{path}"
+        
+        print(f"DEBUG: Sending STK Push to {url}")
+        print(f"DEBUG: Payload: {payload}")
+        
+        try:
+            response = requests.post(
+                url,
+                json=payload,
+                headers=headers,
+                timeout=60
+            )
+            print(f"DEBUG: STK Push response status: {response.status_code}")
+            print(f"DEBUG: Response Body: {response.text}")
+            response.raise_for_status()
+            return response.json()
+        except Exception as e:
+            print(f"DEBUG: STK Push failed: {str(e)}")
+            raise e

@@ -12,6 +12,8 @@ class CoopApiClient:
         self.base_url = (base_url or os.getenv('COOP_OPENAPI_BASE', '')).rstrip('/')
         self.statement_path = statement_path or os.getenv('COOP_STATEMENT_PATH', '/Enquiry/Account/transactions/1.0.0')
 
+        self.full_statement_path = os.getenv('COOP_FULLSTATEMENT_PATH', '/Enquiry/FullStatement/Account/1.0.0')
+
     def get_token(self) -> str:
         pre = os.getenv('COOP_ACCESS_TOKEN')
         if pre:
@@ -21,10 +23,10 @@ class CoopApiClient:
         scope = os.getenv('COOP_SCOPE')
         if scope:
             data['scope'] = scope
-        resp = requests.post(self.token_url, data=data, auth=auth, timeout=20)
+        resp = requests.post(self.token_url, data=data, auth=auth, timeout=60)
         resp.raise_for_status()
         j = resp.json()
-        return j.get('access_token') or j.get('accessToken') or j.get('token')
+        return j.get('access_token') or j.get('accessToken') or j.get('token') or j.get('id_token')
 
     def get_transactions(self, account_number: str, date_from: str, date_to: str, **kwargs):
         token = self.get_token()
@@ -36,7 +38,7 @@ class CoopApiClient:
             "dateTo": date_to,
         }
         params.update({k: v for k, v in kwargs.items() if v is not None})
-        resp = requests.get(url, headers=headers, params=params, timeout=30)
+        resp = requests.get(url, headers=headers, params=params, timeout=60)
         resp.raise_for_status()
         data = resp.json()
         if isinstance(data, dict):
@@ -44,3 +46,17 @@ class CoopApiClient:
         else:
             items = data
         return items
+
+    def get_full_statement(self, account_number: str, date_from: str, date_to: str, **kwargs):
+        token = self.get_token()
+        headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
+        url = f"{self.base_url}{self.full_statement_path}"
+        params = {
+            "accountNumber": account_number,
+            "dateFrom": date_from,
+            "dateTo": date_to,
+        }
+        params.update({k: v for k, v in kwargs.items() if v is not None})
+        resp = requests.get(url, headers=headers, params=params, timeout=60)
+        resp.raise_for_status()
+        return resp.json()

@@ -32,7 +32,12 @@ export default function Messages(){
   const [roleMessage, setRoleMessage] = useState('')
   const [broadcastMessage, setBroadcastMessage] = useState('')
   const isAdmin = user?.role === 'admin'
-  const isFinance = user?.role === 'finance'
+
+  useEffect(() => {
+    if (!isAdmin && (viewTab === 'role' || viewTab === 'broadcast')) {
+      setViewTab('chats')
+    }
+  }, [isAdmin, viewTab])
 
   // Load from cache immediately
   useEffect(() => {
@@ -590,10 +595,10 @@ export default function Messages(){
       <aside className={`w-full sm:w-80 border-r flex-col md:bg-white overflow-hidden ${activeUser || viewTab === 'system' ? 'hidden sm:flex' : 'flex'}`}>
         <div className="flex flex-col p-4 border-b bg-white sticky top-0 z-20">
           <h1 className="text-xl font-bold text-slate-900 mb-4">Messages</h1>
-          <div className="flex p-1 bg-slate-100 rounded-xl">
+          <div className="flex p-1 bg-slate-100 rounded-xl flex-wrap gap-1">
             <button
               onClick={() => setViewTab('chats')}
-              className={`flex-1 px-3 py-2 text-sm font-medium rounded-lg transition-all ${viewTab === 'chats' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+              className={`flex-1 min-w-[120px] px-3 py-2 text-sm font-medium rounded-lg transition-all ${viewTab === 'chats' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
             >
               <div className="flex items-center justify-center gap-2">
                 <span>Personal</span>
@@ -606,7 +611,7 @@ export default function Messages(){
             </button>
             <button
               onClick={() => setViewTab('system')}
-              className={`flex-1 px-3 py-2 text-sm font-medium rounded-lg transition-all ${viewTab === 'system' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+              className={`flex-1 min-w-[120px] px-3 py-2 text-sm font-medium rounded-lg transition-all ${viewTab === 'system' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
             >
               <div className="flex items-center justify-center gap-2">
                 <span>System</span>
@@ -617,6 +622,28 @@ export default function Messages(){
                 )}
               </div>
             </button>
+
+            {isAdmin && (
+              <button
+                onClick={() => { setActiveUser(null); setViewTab('role') }}
+                className={`flex-1 min-w-[120px] px-3 py-2 text-sm font-medium rounded-lg transition-all ${viewTab === 'role' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+              >
+                <div className="flex items-center justify-center gap-2">
+                  <span>User Roles</span>
+                </div>
+              </button>
+            )}
+
+            {isAdmin && (
+              <button
+                onClick={() => { setActiveUser(null); setViewTab('broadcast') }}
+                className={`flex-1 min-w-[120px] px-3 py-2 text-sm font-medium rounded-lg transition-all ${viewTab === 'broadcast' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+              >
+                <div className="flex items-center justify-center gap-2">
+                  <span>Broadcast</span>
+                </div>
+              </button>
+            )}
           </div>
         </div>
         
@@ -636,13 +663,11 @@ export default function Messages(){
         </div>
 
         <div className="flex-1 overflow-y-auto bg-white">
-          {(isAdmin || isFinance) && (viewTab === 'role' || viewTab === 'broadcast') && (
+          {isAdmin && (viewTab === 'role' || viewTab === 'broadcast') && (
             <div className="p-2 border-b bg-slate-50">
               <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
                 <button onClick={() => setViewTab('role')} className={`whitespace-nowrap px-3 py-1.5 rounded-lg text-xs font-medium border ${viewTab === 'role' ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-white border-slate-200 text-slate-600'}`}>Role Msg</button>
-                {isAdmin && (
-                  <button onClick={() => setViewTab('broadcast')} className={`whitespace-nowrap px-3 py-1.5 rounded-lg text-xs font-medium border ${viewTab === 'broadcast' ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-white border-slate-200 text-slate-600'}`}>Broadcast</button>
-                )}
+                <button onClick={() => setViewTab('broadcast')} className={`whitespace-nowrap px-3 py-1.5 rounded-lg text-xs font-medium border ${viewTab === 'broadcast' ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-white border-slate-200 text-slate-600'}`}>Broadcast</button>
               </div>
             </div>
           )}
@@ -708,7 +733,7 @@ export default function Messages(){
           )}
         </div>
 
-        {(isAdmin || isFinance) && viewTab === 'role' && (
+        {isAdmin && viewTab === 'role' && (
           <form onSubmit={sendRole} className="p-3 space-y-2">
             <label className="text-xs text-gray-600">Send to role</label>
             <select className="w-full border rounded px-2 py-1" value={roleTarget} onChange={e=>setRoleTarget(e.target.value)}>

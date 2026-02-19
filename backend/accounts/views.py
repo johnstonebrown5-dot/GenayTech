@@ -2046,6 +2046,7 @@ def superadmin_demo_request_approve(request, id: int):
                 ),
                 recipient=r.admin_email,
                 school_id=getattr(school, 'id', None),
+                recipient_name=(r.admin_first_name or None),
             )
         except Exception:
             pass

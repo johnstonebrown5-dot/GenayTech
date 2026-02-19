@@ -42,7 +42,11 @@ def _log_payment_health_event(*, school_id: int | None, method: str, ok: bool, c
 
 class IsFinanceOrAdmin(permissions.BasePermission):
     def has_permission(self, request, view):
-        return request.user and request.user.is_authenticated and request.user.role in ('finance','admin')
+        return (
+            request.user
+            and request.user.is_authenticated
+            and (getattr(request.user, 'is_superuser', False) or request.user.role in ('finance', 'admin'))
+        )
 
 class InvoiceViewSet(viewsets.ModelViewSet):
     queryset = Invoice.objects.all()
@@ -68,10 +72,10 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         try:
             qs = PaymentMethod.objects.filter(school=school)
             if not qs.exists():
-                return {'mpesa','bank','cash','cheque'}
+                return {'mpesa','coop','bank','cash','cheque'}
             return set(qs.filter(enabled=True).values_list('key', flat=True))
         except Exception:
-            return {'mpesa','bank','cash','cheque'}
+            return {'mpesa','coop','bank','cash','cheque'}
 
     def get_queryset(self):
         qs = super().get_queryset().select_related('student')
@@ -458,7 +462,7 @@ class InvoiceViewSet(viewsets.ModelViewSet):
             _log_payment_health_event(school_id=getattr(school, 'id', None), method=str(method), ok=False, context='method_disabled')
             return Response({'detail': f'Payment method "{method}" is disabled by admin'}, status=400)
         # Students can only record M-Pesa payments; Bank/Cash restricted to Admin/Finance
-        if user.role not in ('admin','finance') and str(method).lower() != 'mpesa':
+        if user.role not in ('admin','finance') and str(method).lower() not in ('mpesa', 'coop'):
             _log_payment_health_event(school_id=getattr(school, 'id', None), method=str(method), ok=False, context='student_restricted')
             return Response({'detail': 'Only M-Pesa payments are allowed for students'}, status=403)
         reference = request.data.get('reference') or ''
@@ -779,17 +783,13 @@ class InvoiceViewSet(viewsets.ModelViewSet):
             logging.getLogger(__name__).exception('STK initiation failed')
             return Response({'detail': f'STK error: {e}'}, status=500)
 
-    @action(detail=False, methods=['post'], url_path='pay_balance_stk', permission_classes=[permissions.IsAuthenticated])
-    def pay_balance_stk_compat(self, request):
-        return self.pay_balance_stk(request)
-
 
 class IncomingPaymentViewSet(viewsets.ModelViewSet):
-    queryset = IncomingPayment.objects.all()
+    queryset = IncomingPayment.objects.all().select_related('matched_student')
     serializer_class = IncomingPaymentSerializer
     permission_classes = [IsFinanceOrAdmin]
     filter_backends = [DjangoFilterBackend]
-    filterset_fields = ['status', 'source', 'matched_student', 'external_id', 'account_ref', 'phone']
+    filterset_fields = ['status', 'matched_student', 'source', 'external_id', 'reference', 'account_ref', 'phone']
 
     def get_permissions(self):
         if getattr(self, 'action', None) in ('list', 'retrieve', 'verify_mpesa'):
@@ -909,6 +909,16 @@ class IncomingPaymentViewSet(viewsets.ModelViewSet):
         student = stu_qs.first()
         if not student:
             return Response({'detail': 'Student not found'}, status=404)
+
+        # Enforce enabled payment methods for this school
+        school_obj = getattr(getattr(student, 'klass', None), 'school', None)
+        try:
+            qs = PaymentMethod.objects.filter(school=school_obj)
+            enabled = {'mpesa', 'coop', 'bank', 'cash', 'cheque'} if not qs.exists() else set(qs.filter(enabled=True).values_list('key', flat=True))
+        except Exception:
+            enabled = {'mpesa', 'coop', 'bank', 'cash', 'cheque'}
+        if 'mpesa' not in enabled:
+            return Response({'detail': 'M-Pesa payments are disabled by admin'}, status=400)
 
         existing_pay = Payment.objects.filter(reference__iexact=receipt, invoice__student=student).order_by('-id').first()
         if existing_pay:
@@ -1234,6 +1244,30 @@ class IncomingPaymentViewSet(viewsets.ModelViewSet):
                     matched += 1
 
         return Response({'imported': created, 'skipped': skipped, 'auto_matched': matched}, status=201 if created else 200)
+
+    @action(detail=False, methods=['post'], url_path='fetch_coop_full_statement')
+    def fetch_coop_full_statement(self, request):
+        """Fetch full account statement from Co-op OpenAPI.
+        Body: {
+          account_number: string (required),
+          date_from: 'YYYY-MM-DD' (required),
+          date_to: 'YYYY-MM-DD' (required)
+        }
+
+        Requires COOP_* env vars (and COOP_OPENAPI_BASE, COOP_FULLSTATEMENT_PATH).
+        This endpoint does not persist transactions; it returns raw statement JSON for review.
+        """
+        acct = request.data.get('account_number') or request.data.get('account')
+        dfrom = request.data.get('date_from') or request.data.get('from')
+        dto = request.data.get('date_to') or request.data.get('to')
+        if not acct or not dfrom or not dto:
+            return Response({'detail': 'account_number, date_from and date_to are required'}, status=400)
+        try:
+            client = CoopApiClient()
+            data = client.get_full_statement(str(acct), str(dfrom), str(dto))
+            return Response({'account_number': str(acct), 'date_from': str(dfrom), 'date_to': str(dto), 'data': data})
+        except Exception as e:
+            return Response({'detail': f'Co-op API error: {e}'}, status=502)
 
     @action(detail=False, methods=['post'], url_path='auto_match')
     def auto_match(self, request):
@@ -1718,8 +1752,8 @@ class IncomingPaymentViewSet(viewsets.ModelViewSet):
             # Validate Mpesa method is enabled for the school
             sch = getattr(invoice.student.klass, 'school', None)
             enabled = self._enabled_methods_for_school(sch)
-            if 'mpesa' not in enabled:
-                return Response({'detail': 'Mpesa payments are disabled by admin'}, status=400)
+            if 'coop' not in enabled:
+                return Response({'detail': 'Co-op Lipa na M-Pesa is disabled by admin'}, status=400)
 
             # Determine if credentials exist for Co-op client
             have_creds = all(os.getenv(k) for k in ('COOP_CLIENT_ID','COOP_CLIENT_SECRET','COOP_BASE_URL','COOP_TOKEN_URL','COOP_SHORT_CODE','COOP_PASSKEY'))
@@ -1996,7 +2030,7 @@ class PaymentMethodViewSet(viewsets.ModelViewSet):
         # Auto-seed default methods for the school when none exist
         school = getattr(getattr(request, 'user', None), 'school', None)
         if school and not PaymentMethod.objects.filter(school=school).exists():
-            for key in ['cash','mpesa','bank','cheque']:
+            for key in ['cash','mpesa','coop','bank','cheque']:
                 PaymentMethod.objects.get_or_create(school=school, key=key, defaults={'enabled': True})
         return super().list(request, *args, **kwargs)
 
@@ -2273,7 +2307,7 @@ def mpesa_callback(request):
         pay = Payment.objects.create(
             invoice=invoice,
             amount=float(amount),
-            method='mpesa',
+            method='coop',
             reference=receipt or (checkout_id or ''),
             recorded_by=None,
         )
@@ -2341,7 +2375,7 @@ def mpesa_callback(request):
                 pay = Payment.objects.create(
                     invoice=inv,
                     amount=float(alloc),
-                    method='mpesa',
+                    method='coop',
                     reference=receipt or (checkout_id or ''),
                     recorded_by=None,
                 )
@@ -2434,7 +2468,11 @@ def coop_mpesa_callback(request):
             .get('stkCallback', {})
     )
     checkout_id = stk_cb.get('CheckoutRequestID')
-    result_code = stk_cb.get('ResultCode')
+    result_code_raw = stk_cb.get('ResultCode')
+    try:
+        result_code = int(result_code_raw)
+    except (TypeError, ValueError):
+        result_code = result_code_raw
     meta_items = stk_cb.get('CallbackMetadata', {}).get('Item', []) if isinstance(stk_cb.get('CallbackMetadata', {}), dict) else []
     meta = {item.get('Name'): item.get('Value') for item in meta_items if isinstance(item, dict)}
     receipt = meta.get('MpesaReceiptNumber') or meta.get('M-PESAReceiptNumber')
@@ -2446,6 +2484,12 @@ def coop_mpesa_callback(request):
     logger.info("Co-op STK callback received", extra={'checkout_request_id': checkout_id, 'result_code': result_code})
 
     if result_code == 0 and invoice and amount:
+        # Avoid duplicates on callback retries
+        try:
+            if receipt and Payment.objects.filter(reference=str(receipt)).exists():
+                return JsonResponse({'ResultCode': 0, 'ResultDesc': 'Accepted'})
+        except Exception:
+            pass
         pay = Payment.objects.create(
             invoice=invoice,
             amount=float(amount),
@@ -2463,6 +2507,11 @@ def coop_mpesa_callback(request):
             invoice.status = 'unpaid'
         invoice.save(update_fields=['status'])
 
+        try:
+            notify_payment_received(invoice, pay)
+        except Exception:
+            pass
+
     elif result_code == 0 and amount and not invoice:
         # Balance payments initiated from portal: reconcile by CheckoutRequestID then account_ref.
         allocated = False
@@ -2470,7 +2519,7 @@ def coop_mpesa_callback(request):
         ip = None
         try:
             if checkout_id:
-                ip = IncomingPayment.objects.filter(source='mpesa', external_id=str(checkout_id)).select_related('matched_student').first()
+                ip = IncomingPayment.objects.filter(source__in=('coop', 'mpesa'), external_id=str(checkout_id)).select_related('matched_student').first()
                 if ip and ip.matched_student:
                     stu = ip.matched_student
         except Exception:
@@ -2520,7 +2569,7 @@ def coop_mpesa_callback(request):
                 try:
                     if not IncomingPayment.objects.filter(reference=str(receipt)).exists():
                         IncomingPayment.objects.create(
-                            source='mpesa',
+                            source='coop',
                             external_id=str(checkout_id or ''),
                             amount=float(remaining),
                             currency='KES',
@@ -2551,7 +2600,7 @@ def coop_mpesa_callback(request):
             try:
                 if not IncomingPayment.objects.filter(reference=str(receipt)).exists():
                     IncomingPayment.objects.create(
-                        source='mpesa',
+                        source='coop',
                         external_id=str(checkout_id or ''),
                         amount=float(amount),
                         currency='KES',
@@ -2576,8 +2625,12 @@ class MpesaConfigViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         qs = super().get_queryset()
+        user = getattr(self.request, 'user', None)
+        if user and getattr(user, 'is_superuser', False):
+            # Superuser can see all payment methods
+            return qs
         # Scope to the admin/finance user's school
-        school = getattr(getattr(self.request, 'user', None), 'school', None)
+        school = getattr(user, 'school', None) if user else None
         if school:
             qs = qs.filter(school=school)
         else:
@@ -2585,9 +2638,34 @@ class MpesaConfigViewSet(viewsets.ModelViewSet):
             qs = qs.none()
         return qs
 
+    def get_permissions(self):
+        # Allow superuser access even without school
+        return [permissions.IsAuthenticated()]
+
     def perform_create(self, serializer):
-        school = getattr(getattr(self.request, 'user', None), 'school', None)
-        serializer.save(school=school)
+        user = getattr(self.request, 'user', None)
+        if user and getattr(user, 'is_superuser', False):
+            # Superuser must specify school
+            school = serializer.validated_data.get('school')
+            if not school:
+                raise serializers.ValidationError('School is required for superuser')
+            serializer.save()
+        else:
+            school = getattr(user, 'school', None) if user else None
+            serializer.save(school=school)
+
+    def perform_update(self, serializer):
+        user = getattr(self.request, 'user', None)
+        if user and getattr(user, 'is_superuser', False):
+            # Superuser can update any
+            serializer.save()
+        else:
+            # Regular users can only update their school's methods
+            instance = serializer.instance
+            school = getattr(user, 'school', None) if user else None
+            if school and instance.school != school:
+                raise serializers.ValidationError('Cannot update payment method for another school')
+            serializer.save()
 
 
 class ExpenseCategoryViewSet(viewsets.ModelViewSet):

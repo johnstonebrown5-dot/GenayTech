@@ -115,6 +115,7 @@ class Payment(models.Model):
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     METHOD_CHOICES = (
         ('mpesa', 'M-Pesa'),
+        ('coop', 'Co-op Lipa na M-Pesa'),
         ('bank', 'Bank'),
         ('cash', 'Cash'),
         ('cheque', 'Cheque'),
@@ -137,6 +138,7 @@ class PaymentMethod(models.Model):
     """
     METHOD_CHOICES = (
         ('mpesa', 'M-Pesa'),
+        ('coop', 'Co-op Lipa na M-Pesa'),
         ('bank', 'Bank'),
         ('cash', 'Cash'),
         ('cheque', 'Cheque'),

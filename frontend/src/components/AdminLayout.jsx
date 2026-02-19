@@ -408,7 +408,7 @@ export default function AdminLayout({ children }){
           className={`fixed z-40 left-0 bottom-0 bg-gradient-to-b from-blue-600 via-blue-700 to-blue-900 border-r border-blue-500/30 transition-all duration-200 ${sidebarBase} hidden md:flex flex-col shadow-2xl`}
           style={{ top: broadcastBanner ? 'calc(4rem + env(safe-area-inset-top) + 40px)' : 'calc(4rem + env(safe-area-inset-top))' }}
         >
-          <nav className="p-2 space-y-1 overflow-y-auto">
+          <nav className="flex-1 min-h-0 p-2 space-y-1 [@media(max-height:720px)]:space-y-0.5 overflow-hidden">
             {navItems.map(i => {
               const active = pathname === i.to
               return (
@@ -416,10 +416,10 @@ export default function AdminLayout({ children }){
                   className={`${active
                     ? 'bg-white/20 text-white shadow-lg border border-white/30'
                     : 'hover:bg-white/10 text-blue-100 hover:text-white'
-                  } flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-300 group`}
+                  } flex items-center gap-3 px-3 py-2.5 [@media(max-height:720px)]:px-2.5 [@media(max-height:720px)]:py-2 [@media(max-height:640px)]:py-1.5 rounded-lg transition-all duration-300 group`}
                   title={i.label}
                 >
-                  <span className="text-lg w-5 text-center">{i.icon}</span>
+                  <span className="text-lg [@media(max-height:720px)]:text-base w-5 text-center">{i.icon}</span>
                   {isOpen && (
                     <span className="relative inline-flex items-center gap-2 text-sm font-medium truncate transition-all duration-300 group-hover:translate-x-1">
                       {i.label}
@@ -434,7 +434,7 @@ export default function AdminLayout({ children }){
               )
             })}
           </nav>
-          <div className="mt-auto p-3 text-xs text-blue-200/80">
+          <div className="mt-auto p-3 text-xs text-blue-200/80 [@media(max-height:720px)]:hidden">
             {isOpen && (
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>

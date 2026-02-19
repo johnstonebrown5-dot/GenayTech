@@ -19,7 +19,7 @@ export default function AdminStudentPayments(){
   const [stkStatus, setStkStatus] = useState('idle') // idle | initiating | sent | polling | fetching | success | failed
   const [payForm, setPayForm] = useState({ invoice: '', amount: '', method: 'mpesa', reference: '', phone: '', attachment: null })
   const [verifyReceipt, setVerifyReceipt] = useState('')
-  // Always use real STK (Co-op)
+  const stkProvider = String(import.meta.env.VITE_STK_PROVIDER || 'daraja').toLowerCase()
   const [payError, setPayError] = useState('')
   const [enabledMethods, setEnabledMethods] = useState(['cash','mpesa','bank','cheque'])
 
@@ -119,6 +119,13 @@ export default function AdminStudentPayments(){
     try { return new Intl.NumberFormat('en-KE', { style:'currency', currency:'KES' }).format(Number(n||0)) } catch { return `Ksh. ${n}` }
   }
 
+  function normalizePhone(v){
+    let p = String(v || '').trim()
+    if (p.startsWith('+')) p = p.slice(1)
+    if (p.startsWith('0') && p.length === 10) p = '254' + p.slice(1)
+    return p
+  }
+
   async function submitPayment(e){
     e.preventDefault()
     setPayError('')
@@ -165,25 +172,35 @@ export default function AdminStudentPayments(){
     const amountNum = parseFloat(payForm.amount)
     if (!(amountNum > 0)) { setPayError('Enter a valid amount greater than 0'); return }
     if (!payForm.phone) { setPayError('Phone number required for STK'); return }
+    if (!payForm.invoice) { setPayError('Please select an invoice'); return }
     try{
       setPaying(true)
       setStkStatus('initiating')
+      const phone = normalizePhone(payForm.phone)
       // baseline count before push
       const before = await api.get(`/finance/payments/?invoice__student=${id}`)
       const beforeList = Array.isArray(before.data) ? before.data : (before.data?.results || [])
       const baselineCount = beforeList.length
 
-      const { data } = await api.post(
-        `/finance/invoices/pay-balance-stk/`,
-        {
-          phone: payForm.phone,
-          amount: amountNum,
-          student_id: id,
-          simulate: false
-        },
-        { timeout: 60000 }
-      )
-      const checkoutId = data?.daraja?.CheckoutRequestID || data?.daraja?.checkoutRequestID || ''
+      let data = null
+      if (stkProvider === 'coop') {
+        const res = await api.post(
+          `/finance/invoices/${payForm.invoice}/coop_stk/`,
+          { phone, amount: amountNum, simulate: false },
+          { timeout: 60000 }
+        )
+        data = res?.data
+      } else {
+        const res = await api.post(
+          `/finance/invoices/${payForm.invoice}/stk_push/`,
+          { phone, amount: amountNum, simulate: false },
+          { timeout: 60000 }
+        )
+        data = res?.data
+      }
+
+      const payload = data?.coop || data?.daraja || data || {}
+      const checkoutId = payload?.CheckoutRequestID || payload?.checkoutRequestID || ''
       // Mark as sent
       setStkStatus('sent')
       // Begin polling for payment creation
@@ -195,7 +212,8 @@ export default function AdminStudentPayments(){
         // 1) Prefer checking callback reconciliation via IncomingPayment (CheckoutRequestID)
         if (checkoutId) {
           try {
-            const ipRes = await api.get(`/finance/incoming-payments/`, { params: { source: 'mpesa', external_id: checkoutId } })
+            const src = stkProvider === 'coop' ? 'coop' : 'mpesa'
+            const ipRes = await api.get(`/finance/incoming-payments/`, { params: { source: src, external_id: checkoutId } })
             const ipList = Array.isArray(ipRes.data) ? ipRes.data : (ipRes.data?.results || [])
             const ip = ipList?.[0]
             const st = String(ip?.status || '').toLowerCase()
@@ -207,10 +225,10 @@ export default function AdminStudentPayments(){
             // ignore; fallback to payments polling
           }
         }
-        const poll = await api.get(`/finance/payments/?invoice__student=${id}`)
+        const poll = await api.get(`/finance/payments/?invoice=${payForm.invoice}`)
         const pollList = Array.isArray(poll.data) ? poll.data : (poll.data?.results || [])
         const countNow = pollList.length
-        if (countNow > baselineCount) {
+        if (countNow > 0 && beforeList.filter(p=>String(p.invoice)===String(payForm.invoice)).length < countNow) {
           found = true
           break
         }
@@ -252,6 +270,7 @@ export default function AdminStudentPayments(){
               setPayError('')
               const phone = String(student?.guardian_id || student?.phone || '').trim()
               setPayForm({ invoice: '', amount: '', method: 'mpesa', reference: '', phone, attachment: null })
+              setStkStatus('idle')
               setShowPay(true)
             }} className="inline-flex items-center gap-2 px-3 py-2 rounded bg-green-600 text-white hover:bg-green-700">
               <span>➕</span>
@@ -310,6 +329,15 @@ export default function AdminStudentPayments(){
             {/* Payment mode selection removed: default to M-Pesa STK via Co-op */}
             <div>
               <div>
+                <label className="block text-sm text-gray-600 mb-1">Invoice</label>
+                <select className="border p-2 rounded w-full" value={payForm.invoice} onChange={e=>setPayForm({ ...payForm, invoice: e.target.value })}>
+                  <option value="">Select invoice</option>
+                  {(Array.isArray(invoices)?invoices:[]).map(inv => (
+                    <option key={inv.id} value={inv.id}>{`#${inv.id} • ${money(inv.amount)} • ${String(inv.status||'').toUpperCase()}`}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="mt-3">
                 <label className="block text-sm text-gray-600 mb-1">Amount</label>
                 <input type="number" min="0" step="0.01" className="border p-2 rounded w-full" value={payForm.amount} onChange={e=>setPayForm({ ...payForm, amount: e.target.value })} required />
               </div>

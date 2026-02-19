@@ -108,6 +108,7 @@ import PublicReceipt from './pages/PublicReceipt'
 import OneTimeLicenseDetails from './pages/OneTimeLicenseDetails'
 import PerStudentMonthlyDetails from './pages/PerStudentMonthlyDetails'
 import SuperAdminSystemConfig from './pages/SuperAdminSystemConfig'
+import SuperAdminPaymentMethods from './pages/SuperAdminPaymentMethods'
 import NotFound from './pages/NotFound'
 import Unauthorized from './pages/Unauthorized'
 import ReAuth from './pages/ReAuth'
@@ -356,6 +357,7 @@ export default function App() {
               <Route path="admins" element={<SuperAdminAdmins/>} />
               <Route path="maintenance" element={<SuperAdminMaintenance/>} />
               <Route path="system-config" element={<SuperAdminSystemConfig/>} />
+              <Route path="payment-methods" element={<SuperAdminPaymentMethods/>} />
               <Route path="profile" element={<SuperAdminProfile/>} />
             </Route>
             <Route path="/admin" element={<ProtectedRoute roles={["admin"]}><AdminLayout><Outlet/></AdminLayout></ProtectedRoute>}>

@@ -21,6 +21,18 @@ from email.mime.image import MIMEImage
 logger = logging.getLogger(__name__)
 
 
+def _wrap_greeting_block(*, school_name: str, recipient_name: str | None, body: str) -> str:
+    sn = str(school_name or '').strip()
+    rn = str(recipient_name or '').strip()
+    b = str(body or '').strip()
+    if rn:
+        hello = f"Hello {rn}"
+    else:
+        hello = "Hello"
+    lines = [f"From {sn}" if sn else "From", hello, "", b, "", "Thankyou."]
+    return "\n".join(lines).strip() + "\n"
+
+
 def _get_school_integration_settings(school_id: int | None):
     if not school_id:
         return None
@@ -146,6 +158,17 @@ def _append_contact_to_text(text_message: str, ctx: dict) -> str:
         if parts:
             msg += " • ".join(parts) + "\n"
     return msg
+
+
+def _resolve_person_name(*candidates) -> str | None:
+    for c in candidates:
+        try:
+            s = str(c or '').strip()
+        except Exception:
+            s = ''
+        if s:
+            return s
+    return None
 
 
 def log_delivery(*, school_id: int | None, channel: str, recipient: str, ok: bool, message: str = '', context: str = '', error: str = '') -> None:
@@ -308,7 +331,8 @@ def _send_sms_via_textwave_rest(*, base_url: str, api_key: str, phone: str, mess
                         for user in superusers:
                             Notification.objects.create(user=user, message=msg, type='in_app')
                             if user.email:
-                                send_email_safe("SMS Balance Low", msg, user.email, school_id=school_id)
+                                rn = _resolve_person_name(getattr(user, 'first_name', None), getattr(user, 'username', None))
+                                send_email_safe("SMS Balance Low", msg, user.email, school_id=school_id, recipient_name=rn)
                         # Set cache flag for 12 hours (43200 seconds)
                         cache.set(cache_key, True, 43200)
                 except Exception as e:
@@ -333,7 +357,7 @@ def _send_sms_via_textwave_rest(*, base_url: str, api_key: str, phone: str, mess
         return False
 
 
-def send_sms(phone: str, message: str, school_id: int | None = None, max_len: int | None = None) -> bool:
+def send_sms(phone: str, message: str, school_id: int | None = None, max_len: int | None = None, recipient_name: str | None = None) -> bool:
     """
     Send SMS via configured provider. Returns True if accepted for delivery.
     """
@@ -346,13 +370,13 @@ def send_sms(phone: str, message: str, school_id: int | None = None, max_len: in
 
     integ = _get_school_integration_settings(school_id)
 
-    # Prepend school name to message if school_id provided
+    # Prepend school name + greeting block if school_id provided
     if school_id:
         try:
             from accounts.models import School
             school = School.objects.get(pk=school_id)
             school_name = getattr(school, 'name', 'School')
-            message = f"From : {school_name}\n\n{message}\nTHANKYOU"
+            message = _wrap_greeting_block(school_name=school_name, recipient_name=recipient_name, body=message)
         except Exception:
             pass
 
@@ -483,7 +507,7 @@ def _resolve_smtp_config(*, school_id: int | None):
     }
 
 
-def send_email_safe(subject: str, message: str, recipient: str, reply_to: list[str] | None = None, from_name: str | None = None, school_id: int | None = None) -> bool:
+def send_email_safe(subject: str, message: str, recipient: str, reply_to: list[str] | None = None, from_name: str | None = None, school_id: int | None = None, recipient_name: str | None = None) -> bool:
     if not recipient:
         return False
     # In local/dev, allow skipping real SMTP to avoid timeouts
@@ -514,7 +538,8 @@ def send_email_safe(subject: str, message: str, recipient: str, reply_to: list[s
         from_email = base_from
 
     ctx = _resolve_school_email_context(school_id)
-    text_message = _append_contact_to_text(message or '', ctx)
+    wrapped_text = _wrap_greeting_block(school_name=str(ctx.get('school_name') or ''), recipient_name=recipient_name, body=message or '')
+    text_message = _append_contact_to_text(wrapped_text, ctx)
 
     def _build_email(connection=None):
         email = EmailMultiAlternatives(subject or 'Notification', text_message or '', from_email, [recipient], connection=connection)
@@ -526,7 +551,7 @@ def send_email_safe(subject: str, message: str, recipient: str, reply_to: list[s
         logo_meta = _try_attach_logo(email, school_id=school_id)
         wrapped_html = render_to_string(
             'email_text_wrapper.html',
-            {**ctx, 'subject': subject or 'Notification', 'text_message': message or '', 'logo_cid': logo_meta.get('logo_cid') or ''},
+            {**ctx, 'subject': subject or 'Notification', 'text_message': wrapped_text, 'logo_cid': logo_meta.get('logo_cid') or ''},
         )
         if wrapped_html:
             email.attach_alternative(wrapped_html, 'text/html')
@@ -836,7 +861,8 @@ def process_arrears_campaign(campaign_id: int):
                 if phone:
                     ok = False
                     try:
-                        ok = send_sms(phone, msg, school_id=getattr(campaign, 'school_id', None))
+                        rn = _resolve_person_name(getattr(stu, 'guardian_name', None), getattr(stu, 'name', None))
+                        ok = send_sms(phone, msg, school_id=getattr(campaign, 'school_id', None), recipient_name=rn)
                     except Exception:
                         logger.exception("send_sms crashed for %s", phone)
                         ok = False
@@ -864,7 +890,8 @@ def process_arrears_campaign(campaign_id: int):
                 if recipient:
                     ok = False
                     try:
-                        ok = send_email_safe(campaign.email_subject or 'School Fees Arrears', msg, recipient, school_id=getattr(campaign, 'school_id', None))
+                        rn = _resolve_person_name(getattr(stu, 'name', None), getattr(getattr(stu, 'user', None), 'first_name', None), getattr(getattr(stu, 'user', None), 'username', None))
+                        ok = send_email_safe(campaign.email_subject or 'School Fees Arrears', msg, recipient, school_id=getattr(campaign, 'school_id', None), recipient_name=rn)
                     except Exception:
                         logger.exception("send_email_safe crashed for %s", recipient)
                         ok = False
@@ -974,7 +1001,8 @@ def process_message_delivery(message_id: int):
             if phone and send_sms_enabled:
                 ok_sms = False
                 try:
-                    ok_sms = send_sms(phone, msg.body, school_id=getattr(msg, 'school_id', None))
+                    rn = _resolve_person_name(getattr(u, 'first_name', None), getattr(u, 'username', None), getattr(stu, 'name', None) if stu is not None else None)
+                    ok_sms = send_sms(phone, msg.body, school_id=getattr(msg, 'school_id', None), recipient_name=rn)
                     if ok_sms:
                         sent_sms += 1
                 except Exception:
@@ -999,7 +1027,8 @@ def process_message_delivery(message_id: int):
                 ok_email = False
                 err_txt = ''
                 try:
-                    ok_email = send_email_safe(subject, msg.body, email, school_id=getattr(msg, 'school_id', None))
+                    rn = _resolve_person_name(getattr(u, 'first_name', None), getattr(u, 'username', None), getattr(stu, 'name', None) if stu is not None else None)
+                    ok_email = send_email_safe(subject, msg.body, email, school_id=getattr(msg, 'school_id', None), recipient_name=rn)
                     if ok_email:
                         sent_email += 1
                 except Exception as e:
@@ -1087,7 +1116,8 @@ def deliver_message_collect(message_id: int) -> dict:
             if phone and send_sms_enabled:
                 ok_sms = False
                 try:
-                    ok_sms = send_sms(phone, msg.body, school_id=getattr(msg, 'school_id', None))
+                    rn = _resolve_person_name(getattr(u, 'first_name', None), getattr(u, 'username', None), getattr(stu, 'name', None) if stu is not None else None)
+                    ok_sms = send_sms(phone, msg.body, school_id=getattr(msg, 'school_id', None), recipient_name=rn)
                 except Exception:
                     logger.exception("Failed to SMS user %s", getattr(u, 'id', ''))
                     ok_sms = False
@@ -1112,7 +1142,8 @@ def deliver_message_collect(message_id: int) -> dict:
                 ok_email = False
                 err_txt = ''
                 try:
-                    ok_email = send_email_safe(subject, msg.body, email, school_id=getattr(msg, 'school_id', None))
+                    rn = _resolve_person_name(getattr(u, 'first_name', None), getattr(u, 'username', None), getattr(stu, 'name', None) if stu is not None else None)
+                    ok_email = send_email_safe(subject, msg.body, email, school_id=getattr(msg, 'school_id', None), recipient_name=rn)
                 except Exception as e:
                     err_txt = str(e)
                     logger.exception("Failed to email user %s", getattr(u, 'id', ''))
@@ -1260,7 +1291,8 @@ def notify_enrollment(student) -> bool:
         phone = getattr(student, 'guardian_id', None)
         if phone:
             try:
-                ok = send_sms(phone, body, school_id=school_id)
+                rn = _resolve_person_name(getattr(student, 'guardian_name', None), getattr(student, 'name', None))
+                ok = send_sms(phone, body, school_id=school_id, recipient_name=rn)
             except Exception:
                 ok = False
             try:
@@ -1280,7 +1312,8 @@ def notify_enrollment(student) -> bool:
         if recipient:
             try:
                 subj = f"Enrollment Confirmation{(' - ' + getattr(school,'name','')) if school else ''}"
-                ok = send_email_safe(subj, body, recipient, school_id=school_id)
+                rn = _resolve_person_name(getattr(student, 'name', None), getattr(getattr(student, 'user', None), 'first_name', None), getattr(getattr(student, 'user', None), 'username', None))
+                ok = send_email_safe(subj, body, recipient, school_id=school_id, recipient_name=rn)
             except Exception:
                 ok = False
             try:
@@ -1366,7 +1399,8 @@ def notify_payment_received(invoice, payment) -> bool:
             phone = getattr(student, 'guardian_id', None)
             if phone:
                 try:
-                    send_sms(phone, body, school_id=school_id)
+                    rn = _resolve_person_name(getattr(student, 'guardian_name', None), getattr(student, 'name', None))
+                    send_sms(phone, body, school_id=school_id, recipient_name=rn)
                 except Exception:
                     pass
 
@@ -1375,7 +1409,8 @@ def notify_payment_received(invoice, payment) -> bool:
             if recipient:
                 try:
                     subj = f"Fee payment received - Invoice {invoice.id}"
-                    send_email_safe(subj, body, recipient, school_id=school_id)
+                    rn = _resolve_person_name(getattr(student, 'name', None), getattr(getattr(student, 'user', None), 'first_name', None), getattr(getattr(student, 'user', None), 'username', None))
+                    send_email_safe(subj, body, recipient, school_id=school_id, recipient_name=rn)
                 except Exception:
                     pass
         return True

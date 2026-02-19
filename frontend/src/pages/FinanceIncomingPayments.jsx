@@ -14,9 +14,19 @@ export default function FinanceIncomingPayments(){
   const [tab, setTab] = useState('pending')
   const [q, setQ] = useState('')
 
+  const [fetchingCoop, setFetchingCoop] = useState(false)
+  const [coopAccount, setCoopAccount] = useState('')
+  const [coopDateFrom, setCoopDateFrom] = useState('')
+  const [coopDateTo, setCoopDateTo] = useState('')
+  const [coopAutoMatch, setCoopAutoMatch] = useState(true)
+
   const [uploading, setUploading] = useState(false)
   const [autoMatchOnImport, setAutoMatchOnImport] = useState(true)
   const [autoMatching, setAutoMatching] = useState(false)
+  const [autoReconciling, setAutoReconciling] = useState(false)
+
+  const [showCoopFetch, setShowCoopFetch] = useState(false)
+  const [openDetailsId, setOpenDetailsId] = useState(null)
 
   const [reconcilingId, setReconcilingId] = useState(null)
   const [reconcileAdmission, setReconcileAdmission] = useState('')
@@ -105,6 +115,44 @@ export default function FinanceIncomingPayments(){
     }finally{ setAutoMatching(false) }
   }
 
+  async function runAutoReconcile(){
+    setAutoReconciling(true)
+    try{
+      await api.post('/finance/incoming-payments/auto_reconcile/', {
+        limit: 500,
+        min_confidence: 0.95,
+        method: 'bank',
+      })
+      await load()
+    }catch(err){
+      alert(err?.response?.data?.detail || err?.message || 'Auto-reconcile failed')
+    }finally{ setAutoReconciling(false) }
+  }
+
+  async function fetchFromCoop(){
+    const acct = String(coopAccount || '').trim()
+    const dfrom = String(coopDateFrom || '').trim()
+    const dto = String(coopDateTo || '').trim()
+    if (!acct || !dfrom || !dto){
+      alert('Account number, date from and date to are required')
+      return
+    }
+    setFetchingCoop(true)
+    try{
+      await api.post('/finance/incoming-payments/fetch_coop/', {
+        account_number: acct,
+        date_from: dfrom,
+        date_to: dto,
+        auto_match: coopAutoMatch,
+      })
+      await load()
+    }catch(err){
+      alert(err?.response?.data?.detail || err?.message || 'Fetch from Co-op failed')
+    }finally{
+      setFetchingCoop(false)
+    }
+  }
+
   function openReconcile(item){
     setReconcilingId(item?.id)
     setReconcileAdmission('')
@@ -151,19 +199,11 @@ export default function FinanceIncomingPayments(){
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold text-gray-900">Bank</h1>
-          <p className="text-sm text-gray-500">Bank/M-Pesa receipts not initiated on the website. Auto-match by admission number, then reconcile to invoices.</p>
+          <p className="text-sm text-gray-500">Upload a statement, match deposits to students, then reconcile to invoices.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
           <input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search ref, narration, account ref, student" className="px-3 py-2 border rounded-lg w-full sm:w-80 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-gray-900/20"/>
           <button onClick={printList} className="px-3 py-2 bg-gray-900 text-white rounded-lg text-sm shadow-sm hover:bg-gray-800">Print</button>
-          <label className={`px-3 py-2 rounded-lg text-sm border bg-white cursor-pointer ${uploading? 'opacity-60 pointer-events-none' : ''}`}>
-            {uploading? 'Importing...' : 'Import CSV'}
-            <input type="file" accept=".csv" className="hidden" onChange={importCsv} />
-          </label>
-          <label className="text-xs text-gray-600 flex items-center gap-1">
-            <input type="checkbox" checked={autoMatchOnImport} onChange={e=>setAutoMatchOnImport(e.target.checked)} /> Auto-match
-          </label>
-          <button onClick={runAutoMatch} disabled={autoMatching} className={`px-3 py-2 rounded-lg text-sm ${autoMatching? 'bg-blue-400 text-white' : 'bg-blue-600 text-white hover:bg-blue-700'} shadow-sm`}>{autoMatching? 'Matching...' : 'Auto-Match'}</button>
         </div>
       </div>
 
@@ -177,50 +217,126 @@ export default function FinanceIncomingPayments(){
         <div className="px-3 py-2 rounded-lg border bg-white shadow-sm">Rows: <span className="font-semibold">{filtered.length}</span></div>
       </div>
 
-      <div className="bg-white rounded-xl border shadow-md overflow-hidden" ref={printRef}>
-        <div className="overflow-auto">
-          <table className="w-full">
-            <thead className="sticky top-0 z-10">
-              <tr className="text-left bg-gray-50/95 backdrop-blur text-gray-700 text-sm">
-                <th className="px-4 py-2">Date</th>
-                <th className="px-4 py-2">Source</th>
-                <th className="px-4 py-2">Amount</th>
-                <th className="px-4 py-2">Currency</th>
-                <th className="px-4 py-2">Reference</th>
-                <th className="px-4 py-2">Account Ref</th>
-                <th className="px-4 py-2">Narration</th>
-                <th className="px-4 py-2">Matched Student</th>
-                <th className="px-4 py-2">Status</th>
-                <th className="px-4 py-2 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="text-sm">
-              {loading && (
-                <tr><td className="px-4 py-6 text-center text-gray-500" colSpan={10}>Loading...</td></tr>
-              )}
-              {!loading && filtered.length===0 && (
-                <tr><td className="px-4 py-6 text-center text-gray-500" colSpan={10}>No records</td></tr>
-              )}
-              {filtered.map(item => (
-                <tr key={item.id} className="border-t hover:bg-gray-50">
-                  <td className="px-4 py-2">{(item.value_date || item.created_at || '').toString().slice(0,19).replace('T',' ')}</td>
-                  <td className="px-4 py-2">{(item.source||'').toString().toUpperCase()}</td>
-                  <td className="px-4 py-2 tabular-nums">{Number(item.amount||0).toLocaleString()}</td>
-                  <td className="px-4 py-2">{item.currency || 'KES'}</td>
-                  <td className="px-4 py-2 font-mono text-xs">{item.reference || '-'}</td>
-                  <td className="px-4 py-2 font-mono text-xs">{item.account_ref || '-'}</td>
-                  <td className="px-4 py-2">{item.narration || '-'}</td>
-                  <td className="px-4 py-2">{item.matched_student || item.matched_student_name || item?.matched_student?.name || '-'}</td>
-                  <td className="px-4 py-2"><span className={statusBadge(item.status)}>{(item.status||'').toString().toUpperCase()}</span></td>
-                  <td className="px-4 py-2 text-right">
-                    {(item.status==='pending' || item.status==='matched') && (
-                      <button onClick={()=>openReconcile(item)} className="px-2 py-1 rounded border bg-white text-gray-800 hover:bg-gray-50">Reconcile</button>
-                    )}
-                  </td>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
+        <div className="lg:col-span-1 space-y-4">
+          <div className="bg-white rounded-xl border shadow-md p-4 space-y-3">
+            <div>
+              <div className="text-sm font-semibold text-gray-900">Step 1: Get the statement</div>
+              <div className="text-xs text-gray-500">Upload a CSV export from your bank, or fetch from Co-op (if enabled).</div>
+            </div>
+            <div className="space-y-2">
+              <label className={`w-full px-3 py-2 rounded-lg text-sm border bg-white cursor-pointer block text-center ${uploading? 'opacity-60 pointer-events-none' : ''}`}>
+                {uploading? 'Importing...' : 'Upload statement (CSV)'}
+                <input type="file" accept=".csv" className="hidden" onChange={importCsv} />
+              </label>
+              <label className="text-xs text-gray-600 flex items-center gap-1">
+                <input type="checkbox" checked={autoMatchOnImport} onChange={e=>setAutoMatchOnImport(e.target.checked)} /> Match after upload
+              </label>
+            </div>
+            <button type="button" onClick={()=>setShowCoopFetch(v=>!v)} className="text-xs text-sky-700 hover:text-sky-800 underline text-left">
+              {showCoopFetch ? 'Hide Co-op fetch' : 'Fetch from Co-op (advanced)'}
+            </button>
+            {showCoopFetch && (
+              <div className="pt-2 border-t space-y-2">
+                <div className="text-xs text-gray-600">Co-op fetch imports transactions into the same list as CSV uploads.</div>
+                <div>
+                  <label className="block text-[11px] text-gray-600 mb-1">Account number</label>
+                  <input value={coopAccount} onChange={e=>setCoopAccount(e.target.value)} placeholder="e.g. 001234567890" className="w-full px-3 py-2 border rounded text-sm" />
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[11px] text-gray-600 mb-1">Date from</label>
+                    <input type="date" value={coopDateFrom} onChange={e=>setCoopDateFrom(e.target.value)} className="w-full px-3 py-2 border rounded text-sm" />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] text-gray-600 mb-1">Date to</label>
+                    <input type="date" value={coopDateTo} onChange={e=>setCoopDateTo(e.target.value)} className="w-full px-3 py-2 border rounded text-sm" />
+                  </div>
+                </div>
+                <label className="text-xs text-gray-600 flex items-center gap-1">
+                  <input type="checkbox" checked={coopAutoMatch} onChange={e=>setCoopAutoMatch(e.target.checked)} /> Match after fetch
+                </label>
+                <button onClick={fetchFromCoop} disabled={fetchingCoop} className={`w-full px-3 py-2 rounded-lg text-sm text-white ${fetchingCoop? 'bg-gray-400' : 'bg-sky-600 hover:bg-sky-700'} shadow-sm`}>
+                  {fetchingCoop ? 'Fetching...' : 'Fetch now'}
+                </button>
+              </div>
+            )}
+          </div>
+
+          <div className="bg-white rounded-xl border shadow-md p-4 space-y-3">
+            <div>
+              <div className="text-sm font-semibold text-gray-900">Step 2: Match deposits</div>
+              <div className="text-xs text-gray-500">This tries to find a student using the reference/narration (e.g. admission number).</div>
+            </div>
+            <button onClick={runAutoMatch} disabled={autoMatching} className={`w-full px-3 py-2 rounded-lg text-sm text-white ${autoMatching? 'bg-blue-400' : 'bg-blue-600 hover:bg-blue-700'} shadow-sm`}>
+              {autoMatching? 'Matching...' : 'Match now'}
+            </button>
+          </div>
+
+          <div className="bg-white rounded-xl border shadow-md p-4 space-y-3">
+            <div>
+              <div className="text-sm font-semibold text-gray-900">Step 3: Reconcile to invoices</div>
+              <div className="text-xs text-gray-500">Allocates matched deposits to unpaid invoices automatically.</div>
+            </div>
+            <button onClick={runAutoReconcile} disabled={autoReconciling} className={`w-full px-3 py-2 rounded-lg text-sm text-white ${autoReconciling? 'bg-emerald-400' : 'bg-emerald-600 hover:bg-emerald-700'} shadow-sm`}>
+              {autoReconciling? 'Reconciling...' : 'Reconcile now'}
+            </button>
+          </div>
+        </div>
+
+        <div className="lg:col-span-2 bg-white rounded-xl border shadow-md overflow-hidden" ref={printRef}>
+          <div className="overflow-auto">
+            <table className="w-full">
+              <thead className="sticky top-0 z-10">
+                <tr className="text-left bg-gray-50/95 backdrop-blur text-gray-700 text-sm">
+                  <th className="px-4 py-2">Date</th>
+                  <th className="px-4 py-2">Amount</th>
+                  <th className="px-4 py-2">Reference</th>
+                  <th className="px-4 py-2">Student</th>
+                  <th className="px-4 py-2">Status</th>
+                  <th className="px-4 py-2 text-right">Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="text-sm">
+                {loading && (
+                  <tr><td className="px-4 py-6 text-center text-gray-500" colSpan={6}>Loading...</td></tr>
+                )}
+                {!loading && filtered.length===0 && (
+                  <tr><td className="px-4 py-6 text-center text-gray-500" colSpan={6}>No records</td></tr>
+                )}
+                {filtered.map(item => (
+                  <React.Fragment key={item.id}>
+                    <tr className="border-t hover:bg-gray-50">
+                      <td className="px-4 py-2">{(item.value_date || item.created_at || '').toString().slice(0,19).replace('T',' ')}</td>
+                      <td className="px-4 py-2 tabular-nums">{Number(item.amount||0).toLocaleString()} {item.currency || 'KES'}</td>
+                      <td className="px-4 py-2 font-mono text-xs">{item.reference || '-'}</td>
+                      <td className="px-4 py-2">{item.matched_student || item.matched_student_name || item?.matched_student?.name || '-'}</td>
+                      <td className="px-4 py-2"><span className={statusBadge(item.status)}>{(item.status||'').toString().toUpperCase()}</span></td>
+                      <td className="px-4 py-2 text-right space-x-2">
+                        <button onClick={()=>setOpenDetailsId(openDetailsId===item.id ? null : item.id)} className="px-2 py-1 rounded border bg-white text-gray-800 hover:bg-gray-50">
+                          {openDetailsId===item.id ? 'Hide' : 'Details'}
+                        </button>
+                        {(item.status==='pending' || item.status==='matched') && (
+                          <button onClick={()=>openReconcile(item)} className="px-2 py-1 rounded border bg-white text-gray-800 hover:bg-gray-50">Reconcile</button>
+                        )}
+                      </td>
+                    </tr>
+                    {openDetailsId===item.id && (
+                      <tr className="bg-gray-50/50 border-t">
+                        <td className="px-4 py-3 text-xs text-gray-700" colSpan={6}>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            <div><span className="font-semibold">Source:</span> {(item.source||'').toString().toUpperCase() || '-'}</div>
+                            <div><span className="font-semibold">Account Ref:</span> <span className="font-mono">{item.account_ref || '-'}</span></div>
+                            <div className="sm:col-span-2"><span className="font-semibold">Narration:</span> {item.narration || '-'}</div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
 

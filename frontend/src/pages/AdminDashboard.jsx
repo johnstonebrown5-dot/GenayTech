@@ -351,7 +351,7 @@ export default function AdminDashboard(){
 
   return (
     <React.Fragment>
-      <div className="space-y-6">
+      <div className="p-3 sm:p-4 md:p-6 lg:p-8 w-full space-y-6 md:space-y-8 [@media(max-height:800px)]:space-y-4 [@media(max-height:800px)]:p-4 [@media(max-height:720px)]:space-y-3 [@media(max-height:720px)]:p-3">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Dashboard</h1>

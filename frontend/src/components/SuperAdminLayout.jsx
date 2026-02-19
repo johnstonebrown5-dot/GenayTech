@@ -13,6 +13,7 @@ const navItems = [
   { to: '/superadmin/admins', label: 'Admins', icon: '🧑‍💼' },
   { to: '/superadmin/maintenance', label: 'Maintenance', icon: '🛠️' },
   { to: '/superadmin/system-config', label: 'System Domain', icon: '🌐' },
+  { to: '/superadmin/payment-methods', label: 'Payment Methods', icon: '💳' },
   { to: '/superadmin/profile', label: 'My Profile', icon: '👤' },
 ]
 

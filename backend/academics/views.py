@@ -581,7 +581,8 @@ class ClassViewSet(viewsets.ModelViewSet):
         if phone and send_sms_enabled:
             ok_sms = False
             try:
-                ok_sms = send_sms(phone, body, school_id=school_id)
+                rn = str(getattr(stu, 'guardian_name', None) or '').strip() or str(getattr(stu, 'name', None) or '').strip() or None
+                ok_sms = send_sms(phone, body, school_id=school_id, recipient_name=rn)
             except Exception:
                 ok_sms = False
             sms_ok = bool(ok_sms)
@@ -604,7 +605,8 @@ class ClassViewSet(viewsets.ModelViewSet):
                 sender_name = getattr(user, 'username', None) or 'Teacher'
                 class_name = getattr(klass, 'name', '') or getattr(klass, 'grade_level', '') or 'Class'
                 subj = f"Message from {sender_name} - {class_name}"
-                ok_email = send_email_safe(subj, body, recipient_email, school_id=school_id)
+                rn = str(getattr(stu, 'name', None) or '').strip() or None
+                ok_email = send_email_safe(subj, body, recipient_email, school_id=school_id, recipient_name=rn)
             except Exception:
                 ok_email = False
             email_ok = bool(ok_email)
@@ -1038,7 +1040,8 @@ class ClassViewSet(viewsets.ModelViewSet):
             if not phone:
                 return Response({'detail': 'No guardian phone on record'}, status=status.HTTP_400_BAD_REQUEST)
             try:
-                ok = send_sms(phone, body, school_id=school_id)
+                rn = str(getattr(stu, 'guardian_name', None) or '').strip() or str(getattr(stu, 'name', None) or '').strip() or None
+                ok = send_sms(phone, body, school_id=school_id, recipient_name=rn)
             except Exception:
                 ok = False
             try:
@@ -1058,7 +1061,8 @@ class ClassViewSet(viewsets.ModelViewSet):
                 return Response({'detail': 'No email on record'}, status=status.HTTP_400_BAD_REQUEST)
             try:
                 subj = f"Fees balance update - {class_name}"
-                ok = send_email_safe(subj, body, email, school_id=school_id)
+                rn = str(getattr(stu, 'name', None) or '').strip() or str(getattr(getattr(stu, 'user', None), 'first_name', None) or '').strip() or str(getattr(getattr(stu, 'user', None), 'username', None) or '').strip() or None
+                ok = send_email_safe(subj, body, email, school_id=school_id, recipient_name=rn)
             except Exception:
                 ok = False
             try:
@@ -1445,7 +1449,8 @@ class ClassViewSet(viewsets.ModelViewSet):
             if phone and channel in ('sms', 'both'):
                 ok_sms = False
                 try:
-                    ok_sms = send_sms(phone, msg, school_id=school_id, max_len=150)
+                    rn = str(getattr(stu, 'guardian_name', None) or '').strip() or str(getattr(stu, 'name', None) or '').strip() or None
+                    ok_sms = send_sms(phone, msg, school_id=school_id, max_len=150, recipient_name=rn)
                 except Exception:
                     ok_sms = False
                 try:
@@ -1468,7 +1473,8 @@ class ClassViewSet(viewsets.ModelViewSet):
                 if email:
                     ok_email = False
                     try:
-                        ok_email = send_email_safe(exam_name, msg, email, school_id=school_id)
+                        rn = str(getattr(stu, 'name', None) or '').strip() or str(getattr(getattr(stu, 'user', None), 'first_name', None) or '').strip() or str(getattr(getattr(stu, 'user', None), 'username', None) or '').strip() or None
+                        ok_email = send_email_safe(exam_name, msg, email, school_id=school_id, recipient_name=rn)
                     except Exception:
                         ok_email = False
                     try:
@@ -3359,7 +3365,8 @@ class ExamViewSet(viewsets.ModelViewSet):
                                     school_id=getattr(getattr(exam_local, 'klass', None), 'school_id', None),
                                 )
                             else:
-                                send_email_safe(f"{exam_local.name} Results", body, recipient, school_id=getattr(getattr(exam_local, 'klass', None), 'school_id', None))
+                                rn = str(getattr(s, 'name', None) or '').strip() or None
+                                send_email_safe(f"{exam_local.name} Results", body, recipient, school_id=getattr(getattr(exam_local, 'klass', None), 'school_id', None), recipient_name=rn)
                     except Exception:
                         pass
 

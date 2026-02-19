@@ -123,34 +123,25 @@ class MessageSerializer(serializers.ModelSerializer):
         if reply_to and getattr(user, 'school_id', None) and reply_to.school_id != user.school_id:
             raise serializers.ValidationError({'reply_to': 'Reply must be within your school'})
 
-        # Role-based send permissions
         role = getattr(user, 'role', None)
         allowed = False
-        if role == 'admin':
-            allowed = True
-        elif role == 'teacher':
-            # Teacher can message admin only (role or specific users who are admins)
-            if audience == Message.Audience.ROLE and recipient_role == 'admin':
-                allowed = True
-            elif audience == Message.Audience.USERS and recipient_ids:
-                # Will be re-checked on create
-                allowed = True
-        elif role == 'finance':
-            # Finance can message admin, teachers, and students
-            if audience == Message.Audience.ROLE and recipient_role in ('admin','teacher','student'):
-                allowed = True
-            elif audience == Message.Audience.USERS and recipient_ids:
-                allowed = True
-        elif role == 'student':
-            # Students can message admin and finance
-            if audience == Message.Audience.ROLE and recipient_role in ('admin','finance'):
-                allowed = True
-            elif audience == Message.Audience.USERS and recipient_ids:
-                allowed = True
 
-        # Prevent non-admins from broadcasting to all
-        if audience == Message.Audience.ALL:
+        # Admin-only: broadcast and category (role) messaging
+        if audience in (Message.Audience.ALL, Message.Audience.ROLE):
             allowed = (role == 'admin')
+        elif audience == Message.Audience.USERS:
+            if role == 'admin':
+                allowed = True
+            elif role == 'teacher':
+                # Teacher can message admin only (role or specific users who are admins)
+                if recipient_ids:
+                    allowed = True
+            elif role == 'finance':
+                if recipient_ids:
+                    allowed = True
+            elif role == 'student':
+                if recipient_ids:
+                    allowed = True
 
         if not allowed:
             raise serializers.ValidationError({'audience': 'Not allowed for your role'})
@@ -187,8 +178,14 @@ class MessageSerializer(serializers.ModelSerializer):
             reply_to = validated_data.get('reply_to')
             recipient_ids = self._normalize_recipient_ids(self.initial_data.get('recipient_ids', []))
 
-            send_sms = self.initial_data.get('send_sms', True)
-            send_email = self.initial_data.get('send_email', True)
+            # For admins, force delivery to True. For others, default to True.
+            role = getattr(user, 'role', None)
+            if role == 'admin':
+                send_sms = True
+                send_email = True
+            else:
+                send_sms = self.initial_data.get('send_sms', True)
+                send_email = self.initial_data.get('send_email', True)
 
             if getattr(user, 'role', None) == 'student':
                 if audience == Message.Audience.ROLE and recipient_role in ('finance', 'teacher'):
@@ -251,6 +248,16 @@ class MessageSerializer(serializers.ModelSerializer):
                 try:
                     msg.system_tag = 'Alert'
                     msg.is_broadcast = True
+                    msg.save(update_fields=['system_tag', 'is_broadcast'])
+                except Exception:
+                    pass
+
+            if audience == Message.Audience.ROLE:
+                try:
+                    # Ensure category messages show in the System feed
+                    tag = str(recipient_role or 'Notice').strip()
+                    msg.system_tag = (tag[:30] if tag else 'Notice')
+                    msg.is_broadcast = False
                     msg.save(update_fields=['system_tag', 'is_broadcast'])
                 except Exception:
                     pass

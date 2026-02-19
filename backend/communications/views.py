@@ -421,9 +421,9 @@ class MessageViewSet(viewsets.ModelViewSet):
         msg = serializer.save()
         # Queue async delivery to email/SMS
         should_queue = bool(getattr(settings, 'MESSAGES_QUEUE_DELIVERY', True))
-        # Role-based messages should always be forwarded via SMS/Email (in addition to in-app).
+        # Admin-authored messages or Role-based messages should always be forwarded via SMS/Email.
         try:
-            if getattr(msg, 'audience', None) == Message.Audience.ROLE:
+            if getattr(msg.sender, 'role', None) == 'admin' or getattr(msg, 'audience', None) == Message.Audience.ROLE:
                 should_queue = True
         except Exception:
             pass
