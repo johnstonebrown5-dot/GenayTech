@@ -47,7 +47,7 @@ class StageGradingBandSerializer(serializers.ModelSerializer):
 class TeacherUserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ['id','username','first_name','last_name','email','role','is_active']
+        fields = ['id','username','first_name','last_name','email','phone','role','is_active']
 
 class TeacherDutySerializer(serializers.ModelSerializer):
     teacher_detail = TeacherUserSerializer(source='teacher', read_only=True)
