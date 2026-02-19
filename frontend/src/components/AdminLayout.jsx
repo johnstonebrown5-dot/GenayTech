@@ -19,6 +19,7 @@ const navItems = [
   { to: '/admin/events', label: 'Events', icon: '📅' },
   { to: '/admin/timetable', label: 'Timetable', icon: '📆' },
   { to: '/admin/messages', label: 'Messages', icon: '✉️' },
+  { to: '/admin/communication-logs', label: 'Comm Logs', icon: '📱' },
   { to: '/admin/website', label: 'Website', icon: '🌐' },
 ]
 

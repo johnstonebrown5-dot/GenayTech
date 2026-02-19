@@ -73,6 +73,7 @@ import AdminAcademicCalendar from './pages/AdminAcademicCalendar'
 import AdminSubjects from './pages/AdminSubjects'
 import AdminSubjectProfile from './pages/AdminSubjectProfile'
 import AdminWebsite from './pages/AdminWebsite'
+import AdminCommunicationLogs from './pages/AdminCommunicationLogs'
 import AdminGrading from './pages/AdminGrading'
 import ReportIssue from './pages/ReportIssue'
 import TopProgress from './components/TopProgress'
@@ -385,6 +386,7 @@ export default function App() {
               <Route path="reports" element={<AdminReports/>} />
               <Route path="duties" element={<AdminDuties/>} />
               <Route path="school" element={<AdminSchool/>} />
+              <Route path="communication-logs" element={<AdminCommunicationLogs/>} />
               <Route path="users" element={<AdminUsers/>} />
               <Route path="events" element={<AdminEvents/>} />
               <Route path="calendar" element={<AdminAcademicCalendar/>} />

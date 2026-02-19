@@ -407,6 +407,7 @@ export default function FloatingDeliveryLog(){
             <option value="email">Email</option>
           </select>
           <button onClick={()=>{ setRetryStart(null); setRetryIds([]); load() }} className="h-7 text-xs px-2.5 rounded-lg bg-gray-100 hover:bg-gray-200 shadow-sm">Refresh</button>
+          <button onClick={()=>{ setOpen(false); navigate('/admin/communication-logs') }} className="h-7 text-xs px-2.5 rounded-lg border bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100">Open Logs Page</button>
           <button onClick={()=>{ setOpen(false); setRetryStart(null); setRetryIds([]) }} className="h-7 ml-1 text-xs px-2 rounded-lg bg-white border border-gray-300 hover:bg-gray-50">Close</button>
         </div>
         <div className="px-3 pt-1 pb-2 border-b border-gray-100">

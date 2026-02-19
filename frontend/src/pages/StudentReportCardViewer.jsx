@@ -912,7 +912,7 @@ export default function StudentReportCardViewer({ embedded=false, hideControls=f
           <div
             ref={flowRef}
             className="relative overflow-hidden rounded-xl border border-gray-300 bg-white shadow-lg print:shadow-none report-card-print-area"
-            style={autoFlow ? { transform: `scale(${flowScale})`, transformOrigin: 'top center', width: autoFlow ? `${(1 / flowScale) * 100}%` : undefined } : undefined}
+            style={autoFlow ? { overflowX: 'hidden' } : undefined}
           >
             {autoFlow && <style>{`@media print{ .report-card-autoflow{ transform:none !important; width:auto !important; } }`}</style>}
 

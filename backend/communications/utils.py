@@ -171,18 +171,23 @@ def _resolve_person_name(*candidates) -> str | None:
     return None
 
 
-def log_delivery(*, school_id: int | None, channel: str, recipient: str, ok: bool, message: str = '', context: str = '', error: str = '') -> None:
+def log_delivery(*, school_id: int | None, channel: str, recipient: str, ok: bool, message: str = '', context: str = '', error: str = '', status: str = None) -> None:
     """Persist a lightweight delivery log. Never raises."""
     try:
         # Local import to avoid circulars
         from .models import DeliveryLog
-        snippet = (message or '')[:300]
+        snippet = (message or '')
         err = (str(error or '')[:1000]) if error is not None else ''
+        
+        if status is None:
+            status = DeliveryLog.Status.SENT if ok else DeliveryLog.Status.FAILED
+
         DeliveryLog.objects.create(
             school_id=school_id,
             channel=channel,
             recipient=str(recipient)[:255],
             ok=bool(ok),
+            status=status,
             message_snippet=snippet,
             error=err,
             context=(context or '')[:100],
@@ -962,7 +967,9 @@ def process_message_delivery(message_id: int):
     """
     from .models import Message, MessageRecipient
     from academics.models import Student
+    from django.utils import timezone
     try:
+        fatal_error = None
         msg = Message.objects.select_related('sender', 'school').get(pk=message_id)
         sender_id = getattr(msg, 'sender_id', None)
         send_sms_enabled = bool(getattr(msg, 'send_sms', True))
@@ -1049,13 +1056,54 @@ def process_message_delivery(message_id: int):
                         pass
         logger.info("Message %s delivery complete: email=%s sms=%s", message_id, sent_email, sent_sms)
     except Exception:
+        fatal_error = "delivery_crashed"
         logger.exception("Message delivery %s failed", message_id)
+    finally:
+        # Mark durable job as completed/failed so the job runner doesn't re-send endlessly.
+        try:
+            from .models import DeliveryJob
+            if fatal_error:
+                DeliveryJob.objects.filter(message_id=message_id).update(
+                    status=DeliveryJob.Status.FAILED,
+                    locked_at=None,
+                    next_run_at=timezone.now(),
+                    last_error=str(fatal_error)[:2000],
+                    updated_at=timezone.now(),
+                )
+            else:
+                DeliveryJob.objects.filter(message_id=message_id).update(
+                    status=DeliveryJob.Status.COMPLETED,
+                    locked_at=None,
+                    next_run_at=None,
+                    last_error='',
+                    updated_at=timezone.now(),
+                )
+        except Exception:
+            pass
 
 
 def queue_message_delivery(message_id: int):
     """Spawn a daemon thread to process message delivery asynchronously."""
-    t = threading.Thread(target=process_message_delivery, args=(message_id,), daemon=True)
-    t.start()
+    try:
+        # Persist a durable job so delivery can be retried by a worker even after process restarts.
+        from django.utils import timezone
+        from .models import DeliveryJob
+        DeliveryJob.objects.get_or_create(
+            message_id=message_id,
+            defaults={'status': DeliveryJob.Status.PENDING, 'next_run_at': timezone.now()},
+        )
+    except Exception:
+        logger.exception("Failed to enqueue DeliveryJob for message %s", message_id)
+    try:
+        t = threading.Thread(target=process_message_delivery, args=(message_id,), daemon=True)
+        t.start()
+        return
+    except Exception:
+        logger.exception("Failed to start delivery thread for message %s; falling back to synchronous delivery", message_id)
+    try:
+        process_message_delivery(message_id)
+    except Exception:
+        logger.exception("Synchronous delivery fallback failed for message %s", message_id)
 
 
 def deliver_message_collect(message_id: int) -> dict:

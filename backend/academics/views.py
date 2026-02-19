@@ -1241,278 +1241,300 @@ class ClassViewSet(viewsets.ModelViewSet):
             if not exam:
                 return Response({'detail': 'No exams found for this class'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Build per-student totals and averages. Use the same filtering rules as the exam summary
-        # so we do not miss historical results where the student may have moved classes.
-        results = (
-            ExamResult.objects
-            .filter(exam=exam, student__is_active=True)
-            .filter(subject__is_examinable=True)
-            .select_related('student', 'subject')
-        )
-        if not results.exists():
-            return Response({'detail': 'No results captured for this exam'}, status=status.HTTP_400_BAD_REQUEST)
+        # Run the heavy build + SMS/Email sending work in the background so this endpoint
+        # never times out for large classes or slow SMS providers.
+        klass_id = getattr(klass, 'id', None)
+        exam_pk = getattr(exam, 'id', None)
 
-        per_student = {}
-        for r in results:
-            s = r.student
-            entry = per_student.setdefault(s.id, {
-                'student': s,
-                # aggregate per subject: { code: {marks_sum, denom_sum} }
-                'subject_aggs': {},
-            })
+        def _run_share_results_background(*, klass_id: int, exam_id: int, channel: str, school_id: int | None):
             try:
-                sub_code = getattr(r.subject, 'code', None) or getattr(r.subject, 'name', None) or ''
-            except Exception:
-                sub_code = ''
-            if not sub_code:
-                continue
-            # Determine denominator for this result
-            try:
-                marks_val = float(r.marks)
-            except Exception:
-                marks_val = 0.0
-            denom_val = None
-            try:
-                if r.out_of is not None:
-                    dv = float(r.out_of)
-                    denom_val = dv if dv > 0 else None
-            except Exception:
-                denom_val = None
-            if denom_val is None:
+                # Local imports to avoid circular issues at import time
+                import logging
+                from django.db import connection
+                _log = logging.getLogger(__name__)
+
                 try:
-                    comp_max = float(getattr(getattr(r, 'component', None), 'max_marks', 0) or 0)
-                    denom_val = comp_max if comp_max > 0 else None
-                except Exception:
-                    denom_val = None
-            # Fallback: skip if we cannot infer a denominator (cannot compute percentage)
-            if denom_val is None or denom_val <= 0:
-                continue
-            agg = entry['subject_aggs'].setdefault(sub_code, {'marks_sum': 0.0, 'denom_sum': 0.0})
-            agg['marks_sum'] += marks_val
-            agg['denom_sum'] += denom_val
-
-        # Compute per-student subject percentages and totals; sort by total desc for positions (class-level)
-        ordered = []
-        for sid, data in per_student.items():
-            subj_pct_ints = {}
-            total_pct = 0.0
-            count = 0
-            for code, agg in (data.get('subject_aggs') or {}).items():
-                ms = float(agg.get('marks_sum') or 0.0)
-                ds = float(agg.get('denom_sum') or 0.0)
-                if ds > 0:
-                    pct = (ms / ds) * 100.0
-                    subj_pct_ints[code] = int(round(pct))
-                    total_pct += pct
-                    count += 1
-            avg_pct = (total_pct / count) if count else 0.0
-            data['subject_pct_ints'] = subj_pct_ints
-            ordered.append({
-                'student': data['student'],
-                'total': round(total_pct),  # whole-number total of percentages
-                'average': round(avg_pct, 2),
-            })
-        ordered.sort(key=lambda x: x['total'], reverse=True)
-        # Assign positions (simple ranking by total, ties share same position)
-        last_total = None
-        position = 0
-        for idx, row in enumerate(ordered):
-            if last_total is None or row['total'] < last_total:
-                position = idx + 1
-                last_total = row['total']
-            row['position'] = position
-
-        # Compute grade-level positions across all classes for the same exam cohort
-        grade_positions = {}
-        try:
-            grade_tag = getattr(klass, 'grade_level', None) or getattr(exam, 'grade_level_tag', None)
-            school_id = getattr(klass, 'school_id', None)
-            # Identify exams forming the same cohort (same grade level, term, year, and name) within the school
-            cohort_exams = Exam.objects.filter(
-                klass__school_id=school_id,
-                grade_level_tag=grade_tag,
-                year=getattr(exam, 'year', None),
-                term=getattr(exam, 'term', None),
-                name=getattr(exam, 'name', None),
-            ).only('id')
-            if cohort_exams.exists():
-                cohort_results = (
-                    ExamResult.objects
-                    .filter(exam__in=cohort_exams, student__is_active=True, subject__is_examinable=True)
-                    .select_related('student')
-                )
-                per_student_grade = {}
-                for r in cohort_results:
-                    s = r.student
-                    e = per_student_grade.setdefault(s.id, {'student': s, 'total': 0.0, 'count': 0})
-                    e['total'] += float(r.marks)
-                    e['count'] += 1
-                ordered_grade = []
-                for sid, data in per_student_grade.items():
-                    cnt = data['count'] or 1
-                    ordered_grade.append({'student': data['student'], 'total': round(data['total'], 2), 'avg': round(data['total']/cnt, 2)})
-                ordered_grade.sort(key=lambda x: x['total'], reverse=True)
-                last = None
-                pos = 0
-                for idx, row in enumerate(ordered_grade):
-                    if last is None or row['total'] < last:
-                        pos = idx + 1
-                        last = row['total']
-                    grade_positions[getattr(row['student'], 'id', None)] = {'position': pos, 'out_of': len(ordered_grade)}
-        except Exception:
-            grade_positions = {}
-
-        # Prepare optional chat sender for in-app/email/SMS via unified Messages system
-        sender_id = resolve_default_sender_id(school_id) if school_id else None
-        recipient_user_ids = []
-
-        # Resolve class/grade and class teacher info for richer messages
-        grade_label = getattr(klass, 'grade_level', '') or ''
-        class_name = getattr(klass, 'name', '') or grade_label
-        teacher_obj = getattr(klass, 'teacher', None)
-        teacher_name = ''
-        teacher_phone = ''
-        try:
-            if teacher_obj:
-                first = getattr(teacher_obj, 'first_name', '') or ''
-                last = getattr(teacher_obj, 'last_name', '') or ''
-                teacher_name = (first + ' ' + last).strip() or getattr(teacher_obj, 'username', '') or ''
-                # Prefer TeacherProfile.phone, fallback to user.phone
-                from .models import TeacherProfile as TP
-                prof_phone = (
-                    TP.objects.filter(user=teacher_obj).values_list('phone', flat=True).first()
-                    if TP is not None else None
-                )
-                teacher_phone = prof_phone or getattr(teacher_obj, 'phone', '') or ''
-        except Exception:
-            teacher_name = teacher_name or ''
-            teacher_phone = teacher_phone or ''
-
-        # Send SMS / email per student
-        exam_name = getattr(exam, 'name', 'Exam')
-        sent_sms = 0
-        sent_email = 0
-        for row in ordered:
-            stu = row['student']
-            total = row['total']
-            pos = row['position']
-            name = getattr(stu, 'name', '') or getattr(stu, 'admission_no', '') or f"Student {stu.id}"
-            adm = getattr(stu, 'admission_no', '') or ''
-            # Subject performance summary like: MATH 80, ENG 75, SCI 78
-            subj_marks = per_student.get(stu.id, {}).get('subject_pct_ints', {})
-            try:
-                items = sorted(subj_marks.items(), key=lambda kv: kv[0])
-            except Exception:
-                items = list(subj_marks.items())
-            subj_parts = []
-            for code, mark in items:
-                try:
-                    mark_val = int(round(float(mark)))
-                except Exception:
-                    mark_val = 0
-                subj_parts.append(f"{code} {mark_val}")
-            subjects_str = ', '.join(subj_parts)
-
-            # Build tailored message including student, class, grade, subjects and class teacher
-            base = f"{exam_name}: {name}"
-            if adm:
-                base += f" (ADM {adm})"
-            if grade_label or class_name:
-                base += f" - {grade_label or class_name}"
-                if class_name and class_name != grade_label:
-                    base += f" {class_name}"
-            # Positions
-            cls_total = len(ordered)
-            grade_pos = grade_positions.get(getattr(stu, 'id', None)) or {}
-            pos_grade = grade_pos.get('position')
-            out_grade = grade_pos.get('out_of')
-            pos_text = f"Class Pos {pos}/{cls_total}"
-            if pos_grade and out_grade:
-                pos_text += f"; Grade Pos {pos_grade}/{out_grade}"
-            summary = f" Total {int(round(total))}, {pos_text}."
-            subjects_clause = f" Subjects: {subjects_str}." if subjects_str else ''
-            teacher_clause = ''
-            if teacher_name:
-                teacher_clause = f" Class teacher: {teacher_name}"
-                if teacher_phone:
-                    teacher_clause += f" ({teacher_phone})."
-                else:
-                    teacher_clause += '.'
-            msg = base + summary + subjects_clause + ' ' + teacher_clause
-
-            # Queue in-app + student-targeted email/SMS via Messages if the student has a linked user
-            if sender_id and getattr(stu, 'user_id', None):
-                recipient_user_ids.append(stu.user_id)
-
-            # SMS to guardian
-            phone = getattr(stu, 'guardian_id', None)
-            if phone and channel in ('sms', 'both'):
-                ok_sms = False
-                try:
-                    rn = str(getattr(stu, 'guardian_name', None) or '').strip() or str(getattr(stu, 'name', None) or '').strip() or None
-                    ok_sms = send_sms(phone, msg, school_id=school_id, max_len=150, recipient_name=rn)
-                except Exception:
-                    ok_sms = False
-                try:
-                    log_delivery(
-                        school_id=school_id,
-                        channel='sms',
-                        recipient=str(phone),
-                        ok=bool(ok_sms),
-                        message=msg,
-                        context=f"results:exam:{exam.id};student:{stu.id}",
-                    )
+                    # Ensure a clean DB connection in a new thread
+                    connection.close()
                 except Exception:
                     pass
-                if ok_sms:
-                    sent_sms += 1
 
-            # Email
-            if channel == 'both':
-                email = getattr(stu, 'email', None) or getattr(getattr(stu, 'user', None), 'email', None)
-                if email:
-                    ok_email = False
+                try:
+                    klass_local = Class.objects.select_related('school', 'teacher').get(id=int(klass_id))
+                    exam_local = Exam.objects.get(id=int(exam_id), klass=klass_local)
+                except Exception as e:
+                    _log.exception('share_results background failed to resolve class/exam: %s', e)
+                    return
+
+                # Build per-student totals and averages. Use the same filtering rules as the exam summary
+                # so we do not miss historical results where the student may have moved classes.
+                results = (
+                    ExamResult.objects
+                    .filter(exam=exam_local, student__is_active=True)
+                    .filter(subject__is_examinable=True)
+                    .select_related('student', 'subject')
+                )
+                if not results.exists():
+                    return
+
+                per_student = {}
+                for r in results:
+                    s = r.student
+                    entry = per_student.setdefault(s.id, {
+                        'student': s,
+                        # aggregate per subject: { code: {marks_sum, denom_sum} }
+                        'subject_aggs': {},
+                    })
                     try:
-                        rn = str(getattr(stu, 'name', None) or '').strip() or str(getattr(getattr(stu, 'user', None), 'first_name', None) or '').strip() or str(getattr(getattr(stu, 'user', None), 'username', None) or '').strip() or None
-                        ok_email = send_email_safe(exam_name, msg, email, school_id=school_id, recipient_name=rn)
+                        sub_code = getattr(r.subject, 'code', None) or getattr(r.subject, 'name', None) or ''
                     except Exception:
-                        ok_email = False
+                        sub_code = ''
+                    if not sub_code:
+                        continue
+                    # Determine denominator for this result
                     try:
-                        log_delivery(
+                        marks_val = float(r.marks)
+                    except Exception:
+                        marks_val = 0.0
+                    denom_val = None
+                    try:
+                        if r.out_of is not None:
+                            dv = float(r.out_of)
+                            denom_val = dv if dv > 0 else None
+                    except Exception:
+                        denom_val = None
+                    if denom_val is None:
+                        try:
+                            comp_max = float(getattr(getattr(r, 'component', None), 'max_marks', 0) or 0)
+                            denom_val = comp_max if comp_max > 0 else None
+                        except Exception:
+                            denom_val = None
+                    # Fallback: skip if we cannot infer a denominator (cannot compute percentage)
+                    if denom_val is None or denom_val <= 0:
+                        continue
+                    agg = entry['subject_aggs'].setdefault(sub_code, {'marks_sum': 0.0, 'denom_sum': 0.0})
+                    agg['marks_sum'] += marks_val
+                    agg['denom_sum'] += denom_val
+
+                # Compute per-student subject percentages and totals; sort by total desc for positions (class-level)
+                ordered = []
+                for sid, data in per_student.items():
+                    subj_pct_ints = {}
+                    total_pct = 0.0
+                    count = 0
+                    for code, agg in (data.get('subject_aggs') or {}).items():
+                        ms = float(agg.get('marks_sum') or 0.0)
+                        ds = float(agg.get('denom_sum') or 0.0)
+                        if ds > 0:
+                            pct = (ms / ds) * 100.0
+                            subj_pct_ints[code] = int(round(pct))
+                            total_pct += pct
+                            count += 1
+                    avg_pct = (total_pct / count) if count else 0.0
+                    data['subject_pct_ints'] = subj_pct_ints
+                    ordered.append({
+                        'student': data['student'],
+                        'total': round(total_pct),  # whole-number total of percentages
+                        'average': round(avg_pct, 2),
+                    })
+                ordered.sort(key=lambda x: x['total'], reverse=True)
+                # Assign positions (simple ranking by total, ties share same position)
+                last_total = None
+                position = 0
+                for idx, row in enumerate(ordered):
+                    if last_total is None or row['total'] < last_total:
+                        position = idx + 1
+                        last_total = row['total']
+                    row['position'] = position
+
+                # Compute grade-level positions across all classes for the same exam cohort
+                grade_positions = {}
+                try:
+                    grade_tag = getattr(klass_local, 'grade_level', None) or getattr(exam_local, 'grade_level_tag', None)
+                    school_id2 = getattr(klass_local, 'school_id', None)
+                    cohort_exams = Exam.objects.filter(
+                        klass__school_id=school_id2,
+                        grade_level_tag=grade_tag,
+                        year=getattr(exam_local, 'year', None),
+                        term=getattr(exam_local, 'term', None),
+                        name=getattr(exam_local, 'name', None),
+                    ).only('id')
+                    if cohort_exams.exists():
+                        cohort_results = (
+                            ExamResult.objects
+                            .filter(exam__in=cohort_exams, student__is_active=True, subject__is_examinable=True)
+                            .select_related('student')
+                        )
+                        per_student_grade = {}
+                        for r in cohort_results:
+                            s = r.student
+                            e = per_student_grade.setdefault(s.id, {'student': s, 'total': 0.0, 'count': 0})
+                            e['total'] += float(r.marks)
+                            e['count'] += 1
+                        ordered_grade = []
+                        for sid, data in per_student_grade.items():
+                            cnt = data['count'] or 1
+                            ordered_grade.append({'student': data['student'], 'total': round(data['total'], 2), 'avg': round(data['total']/cnt, 2)})
+                        ordered_grade.sort(key=lambda x: x['total'], reverse=True)
+                        last = None
+                        pos = 0
+                        for idx, row in enumerate(ordered_grade):
+                            if last is None or row['total'] < last:
+                                pos = idx + 1
+                                last = row['total']
+                            grade_positions[getattr(row['student'], 'id', None)] = {'position': pos, 'out_of': len(ordered_grade)}
+                except Exception:
+                    grade_positions = {}
+
+                # Prepare optional chat sender for in-app/email/SMS via unified Messages system
+                sender_id = resolve_default_sender_id(school_id) if school_id else None
+                recipient_user_ids = []
+
+                # Resolve class/grade and class teacher info for richer messages
+                grade_label = getattr(klass_local, 'grade_level', '') or ''
+                class_name = getattr(klass_local, 'name', '') or grade_label
+                teacher_obj = getattr(klass_local, 'teacher', None)
+                teacher_name = ''
+                teacher_phone = ''
+                try:
+                    if teacher_obj:
+                        first = getattr(teacher_obj, 'first_name', '') or ''
+                        last = getattr(teacher_obj, 'last_name', '') or ''
+                        teacher_name = (first + ' ' + last).strip() or getattr(teacher_obj, 'username', '') or ''
+                        teacher_phone = getattr(teacher_obj, 'phone', '') or ''
+                except Exception:
+                    teacher_name = teacher_name or ''
+                    teacher_phone = teacher_phone or ''
+
+                # Send SMS / email per student
+                exam_name = getattr(exam_local, 'name', 'Exam')
+                for row in ordered:
+                    stu = row['student']
+                    total = row['total']
+                    pos = row['position']
+                    name = getattr(stu, 'name', '') or getattr(stu, 'admission_no', '') or f"Student {stu.id}"
+                    adm = getattr(stu, 'admission_no', '') or ''
+                    subj_marks = per_student.get(stu.id, {}).get('subject_pct_ints', {})
+                    try:
+                        items = sorted(subj_marks.items(), key=lambda kv: kv[0])
+                    except Exception:
+                        items = list(subj_marks.items())
+                    subj_parts = []
+                    for code, mark in items:
+                        try:
+                            mark_val = int(round(float(mark)))
+                        except Exception:
+                            mark_val = 0
+                        subj_parts.append(f"{code} {mark_val}")
+                    subjects_str = ', '.join(subj_parts)
+
+                    base = f"{exam_name}: {name}"
+                    if adm:
+                        base += f" (ADM {adm})"
+                    if grade_label or class_name:
+                        base += f" - {grade_label or class_name}"
+                        if class_name and class_name != grade_label:
+                            base += f" {class_name}"
+                    cls_total = len(ordered)
+                    grade_pos = grade_positions.get(getattr(stu, 'id', None)) or {}
+                    pos_grade = grade_pos.get('position')
+                    out_grade = grade_pos.get('out_of')
+                    pos_text = f"Class Pos {pos}/{cls_total}"
+                    if pos_grade and out_grade:
+                        pos_text += f"; Grade Pos {pos_grade}/{out_grade}"
+                    summary = f" Total {int(round(total))}, {pos_text}."
+                    subjects_clause = f" Subjects: {subjects_str}." if subjects_str else ''
+                    teacher_clause = ''
+                    if teacher_name:
+                        teacher_clause = f" Class teacher: {teacher_name}"
+                        if teacher_phone:
+                            teacher_clause += f" ({teacher_phone})."
+                        else:
+                            teacher_clause += '.'
+                    msg = base + summary + subjects_clause + ' ' + teacher_clause
+
+                    if sender_id and getattr(stu, 'user_id', None):
+                        recipient_user_ids.append(stu.user_id)
+
+                    phone = getattr(stu, 'guardian_id', None)
+                    if phone and channel in ('sms', 'both'):
+                        ok_sms = False
+                        try:
+                            rn = str(getattr(stu, 'guardian_name', None) or '').strip() or str(getattr(stu, 'name', None) or '').strip() or None
+                            ok_sms = send_sms(phone, msg, school_id=school_id, max_len=150, recipient_name=rn)
+                        except Exception:
+                            ok_sms = False
+                        try:
+                            log_delivery(
+                                school_id=school_id,
+                                channel='sms',
+                                recipient=str(phone),
+                                ok=bool(ok_sms),
+                                message=msg,
+                                context=f"results:exam:{exam_local.id};student:{stu.id}",
+                            )
+                        except Exception:
+                            pass
+
+                    if channel == 'both':
+                        email = getattr(stu, 'email', None) or getattr(getattr(stu, 'user', None), 'email', None)
+                        if email:
+                            ok_email = False
+                            try:
+                                rn = str(getattr(stu, 'name', None) or '').strip() or str(getattr(getattr(stu, 'user', None), 'first_name', None) or '').strip() or str(getattr(getattr(stu, 'user', None), 'username', None) or '').strip() or None
+                                ok_email = send_email_safe(exam_name, msg, email, school_id=school_id, recipient_name=rn)
+                            except Exception:
+                                ok_email = False
+                            try:
+                                log_delivery(
+                                    school_id=school_id,
+                                    channel='email',
+                                    recipient=str(email),
+                                    ok=bool(ok_email),
+                                    message=msg,
+                                    context=f"results:exam:{exam_local.id};student:{stu.id}",
+                                )
+                            except Exception:
+                                pass
+
+                if sender_id and recipient_user_ids:
+                    try:
+                        body = f"{exam_name} results are available for your class {klass_local.name}. Please check your portal or SMS for details."
+                        create_messages_for_users(
                             school_id=school_id,
-                            channel='email',
-                            recipient=str(email),
-                            ok=bool(ok_email),
-                            message=msg,
-                            context=f"results:exam:{exam.id};student:{stu.id}",
+                            sender_id=sender_id,
+                            body=body,
+                            recipient_user_ids=list(set(recipient_user_ids)),
+                            system_tag='exam_results',
                         )
                     except Exception:
                         pass
-                    if ok_email:
-                        sent_email += 1
-
-        # Mirror to chat/messages so students also see this in-app and via the generic delivery pipeline
-        if sender_id and recipient_user_ids:
-            try:
-                # One shared body per exam; this will create a Message per user and queue email/SMS using user.phone/email
-                body = f"{exam_name} results are available for your class {klass.name}. Please check your portal or SMS for details."
-                create_messages_for_users(
-                    school_id=school_id,
-                    sender_id=sender_id,
-                    body=body,
-                    recipient_user_ids=list(set(recipient_user_ids)),
-                    system_tag='exam_results',
-                )
             except Exception:
-                pass
+                logger.exception('share_results background crashed')
 
-        return Response({
-            'detail': 'results_notifications_queued',
-            'exam_id': exam.id,
-            'students': len(ordered),
-            'sms_sent_attempts': sent_sms,
-            'email_sent_attempts': sent_email,
-        })
+        try:
+            import threading
+            t = threading.Thread(
+                target=_run_share_results_background,
+                kwargs={'klass_id': int(klass_id), 'exam_id': int(exam_pk), 'channel': channel, 'school_id': school_id},
+                daemon=True,
+            )
+            t.start()
+        except Exception:
+            logger.exception('Failed to start share_results background thread')
+            return Response({'detail': 'Failed to queue results. Please try again.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        return Response(
+            {
+                'detail': 'results_notifications_queued',
+                'exam_id': exam_pk,
+                'class_id': klass_id,
+                'students': 0,
+                'sms_sent_attempts': 0,
+                'email_sent_attempts': 0,
+            },
+            status=status.HTTP_202_ACCEPTED,
+        )
 
     @action(detail=True, methods=['get'], permission_classes=[IsTeacherOrAdmin], url_path='results-status')
     def results_status(self, request, pk=None):

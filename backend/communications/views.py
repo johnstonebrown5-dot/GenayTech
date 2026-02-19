@@ -168,11 +168,31 @@ class DeliveryLogViewSet(viewsets.ReadOnlyModelViewSet):
             qs = qs.filter(school_id=user.school_id)
         else:
             qs = qs.none()
+            
+        # Exclude verification logs (OTP, password reset, etc.)
+        qs = qs.exclude(context__contains='type:verification')
+        
         # Optional channel filter
         ch = self.request.query_params.get('channel')
         if ch in ('sms','email'):
             qs = qs.filter(channel=ch)
+            
+        # Optional status filter
+        st = self.request.query_params.get('status')
+        if st in [c[0] for c in DeliveryLog.Status.choices]:
+            qs = qs.filter(status=st)
+            
         return qs.order_by('-created_at','id')
+
+    @action(detail=False, methods=['get'])
+    def pending_count(self, request):
+        """Return counts of queued/pending logs."""
+        qs = self.get_queryset().filter(status__in=[DeliveryLog.Status.QUEUED, DeliveryLog.Status.PENDING])
+        return Response({
+            'total': qs.count(),
+            'sms': qs.filter(channel='sms').count(),
+            'email': qs.filter(channel='email').count(),
+        })
 
     @action(detail=False, methods=['get'])
     def recent(self, request):
@@ -235,19 +255,28 @@ class DeliveryLogViewSet(viewsets.ReadOnlyModelViewSet):
             results.append({"id": rec.id, "ok": bool(ok), "channel": rec.channel, "recipient": rec.recipient})
         return Response({"results": results})
 
-    @action(detail=False, methods=["post"], url_path="reset")
-    def reset(self, request):
-        """Delete all DeliveryLog rows for the current user's school.
-        This effectively resets the dashboard counters to 0.
-        """
+    @action(detail=False, methods=["post"], url_path="bulk-delete")
+    def bulk_delete(self, request):
+        """Delete multiple DeliveryLog records. Body: {ids: [<int>, ...]}"""
         user = request.user
         school_id = getattr(user, 'school_id', None)
         if not school_id:
             return Response({"detail": "No school"}, status=status.HTTP_400_BAD_REQUEST)
-        try:
-            deleted_count, _ = DeliveryLog.objects.filter(school_id=school_id).delete()
-        except Exception:
-            return Response({"detail": "Reset failed"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        ids = request.data.get('ids', [])
+        if not isinstance(ids, list):
+            ids = [ids]
+        # Coerce to ints safely
+        cleaned = []
+        for x in ids:
+            try:
+                cleaned.append(int(x))
+            except Exception:
+                continue
+        if not cleaned:
+            return Response({"detail": "No valid ids"}, status=status.HTTP_400_BAD_REQUEST)
+
+        deleted_count, _ = DeliveryLog.objects.filter(id__in=cleaned, school_id=school_id).delete()
         return Response({"deleted": deleted_count})
 
 
@@ -431,7 +460,7 @@ class MessageViewSet(viewsets.ModelViewSet):
             try:
                 queue_message_delivery(msg.id)
             except Exception:
-                pass
+                logger.exception('Failed to queue delivery for message %s', getattr(msg, 'id', None))
 
     @action(detail=True, methods=['post'], url_path='send-now')
     def send_now(self, request, pk=None):

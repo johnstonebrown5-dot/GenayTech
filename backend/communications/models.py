@@ -15,19 +15,27 @@ class DeliveryLog(models.Model):
         SMS = 'sms', 'SMS'
         EMAIL = 'email', 'Email'
 
+    class Status(models.TextChoices):
+        SENT = 'sent', 'Sent'
+        FAILED = 'failed', 'Failed'
+        QUEUED = 'queued', 'Queued'
+        PENDING = 'pending', 'Pending'
+
     school = models.ForeignKey('accounts.School', null=True, blank=True, on_delete=models.SET_NULL, related_name='delivery_logs')
     channel = models.CharField(max_length=10, choices=Channel.choices)
     recipient = models.CharField(max_length=255)
     ok = models.BooleanField(default=False)
-    message_snippet = models.CharField(max_length=300, blank=True, default='')
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    message_snippet = models.TextField(blank=True, default='')
     error = models.TextField(blank=True, default='')
-    context = models.CharField(max_length=100, blank=True, default='', help_text='e.g., message:123, campaign:45')
+    context = models.CharField(max_length=100, blank=True, default='', help_text='e.g., message:123, campaign:45, type:verification')
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         indexes = [
             models.Index(fields=['created_at']),
             models.Index(fields=['channel', 'created_at']),
+            models.Index(fields=['status']),
         ]
         ordering = ['-created_at', 'id']
 
@@ -195,4 +203,32 @@ class MessageRecipient(models.Model):
         indexes = [
             models.Index(fields=['user', 'read']),
         ]
+
+
+class DeliveryJob(models.Model):
+    class Status(models.TextChoices):
+        PENDING = 'pending', 'Pending'
+        RUNNING = 'running', 'Running'
+        COMPLETED = 'completed', 'Completed'
+        FAILED = 'failed', 'Failed'
+
+    message = models.OneToOneField(Message, on_delete=models.CASCADE, related_name='delivery_job')
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING, db_index=True)
+    attempts = models.PositiveIntegerField(default=0)
+    max_attempts = models.PositiveIntegerField(default=10)
+    next_run_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    locked_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    last_error = models.TextField(blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['status', 'next_run_at']),
+            models.Index(fields=['message', 'status']),
+        ]
+        ordering = ['-created_at', 'id']
+
+    def __str__(self):
+        return f"DeliveryJob #{self.id} msg={getattr(self.message, 'id', None)} {self.status}"
 
