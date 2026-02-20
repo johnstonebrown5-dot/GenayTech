@@ -471,15 +471,22 @@ export default function StudentReportCardViewer({ embedded=false, hideControls=f
   }, [effectiveExamId, queryExamId, studentId])
 
   const letterFromBands = (score, bands) => {
-    const n = Number(score)
-    if (!Number.isFinite(n)) return '-'
+    const raw = Number(score)
+    if (!Number.isFinite(raw)) return '-'
+    const n = Math.max(0, Math.min(100, Math.round(raw)))
     const arr = Array.isArray(bands) ? [...bands] : []
     arr.sort((a,b)=> Number(b.min ?? -Infinity) - Number(a.min ?? -Infinity))
+    let lowest = null
+    let highest = null
     for (const b of arr){
       const min = Number.isFinite(Number(b.min)) ? Number(b.min) : -Infinity
       const max = Number.isFinite(Number(b.max)) ? Number(b.max) : Infinity
+      if (!lowest || min < lowest.min) lowest = { min, grade: String(b.grade||'-') }
+      if (!highest || min > highest.min) highest = { min, grade: String(b.grade||'-') }
       if (n >= min && n <= max) return String(b.grade||'-')
     }
+    if (highest && n >= highest.min) return highest.grade
+    if (lowest) return lowest.grade
     if (n >= 80) return 'A'
     if (n >= 70) return 'B'
     if (n >= 60) return 'C'

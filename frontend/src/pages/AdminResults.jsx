@@ -593,17 +593,41 @@ export default function AdminResults(){
   }, [compareSummaries, exams, classes, selectedExam])
 
   // Convert numeric score to letter grade using admin-defined bands (fallback to defaults)
-  const letterFromBands = (score, bands) => {
+  const normalizeScore = (score) => {
     const n = Number(score)
-    if (!Number.isFinite(n)) return '-'
+    if (!Number.isFinite(n)) return null
+    // Round because band boundaries are integers and UI shows rounded marks
+    const r = Math.round(n)
+    // Clamp defensively
+    return Math.max(0, Math.min(100, r))
+  }
+
+  const letterFromBands = (score, bands) => {
+    const n = normalizeScore(score)
+    if (n === null) return '-'
     const arr = Array.isArray(bands) ? [...bands] : []
-    // Consistent with report cards: higher min first
-    arr.sort((a,b)=> Number(b.min ?? -Infinity) - Number(a.min ?? -Infinity))
+    // Sort high-to-low by min (then order) so top grade matches first
+    arr.sort((a,b)=> {
+      const amin = Number.isFinite(Number(a?.min)) ? Number(a.min) : -Infinity
+      const bmin = Number.isFinite(Number(b?.min)) ? Number(b.min) : -Infinity
+      if (bmin !== amin) return bmin - amin
+      return Number(a?.order ?? 0) - Number(b?.order ?? 0)
+    })
+
+    let lowest = null
+    let highest = null
     for (const b of arr){
-      const min = Number.isFinite(Number(b.min)) ? Number(b.min) : -Infinity
-      const max = Number.isFinite(Number(b.max)) ? Number(b.max) : Infinity
-      if (n >= min && n <= max) return String(b.grade || '-')
+      const min = Number.isFinite(Number(b?.min)) ? Number(b.min) : -Infinity
+      const max = Number.isFinite(Number(b?.max)) ? Number(b.max) : Infinity
+      if (!lowest || min < lowest.min) lowest = { min, grade: String(b?.grade || '-') }
+      if (!highest || min > highest.min) highest = { min, grade: String(b?.grade || '-') }
+      if (n >= min && n <= max) return String(b?.grade || '-')
     }
+
+    // If there are gaps/misaligned boundaries, still map consistently to the nearest band
+    if (highest && n >= highest.min) return highest.grade
+    if (lowest) return lowest.grade
+
     if (n >= 80) return 'A'
     if (n >= 70) return 'B'
     if (n >= 60) return 'C'

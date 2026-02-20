@@ -2280,7 +2280,11 @@ class ExamViewSet(viewsets.ModelViewSet):
             (subj_qs_ex if use_examinable_only else exam.klass.subjects.all()).values('id', 'code', 'name')
         )
         # Aggregate results; when no subjects are flagged examinable, do not filter them out
-        base_res = ExamResult.objects.filter(exam=exam, student__is_active=True)
+        base_res = ExamResult.objects.filter(
+            exam=exam,
+            student__is_active=True,
+            student__klass=getattr(exam, 'klass', None),
+        )
         if use_examinable_only:
             base_res = base_res.filter(subject__is_examinable=True)
         res = base_res.select_related('student', 'subject', 'component')
@@ -2759,16 +2763,42 @@ class ExamViewSet(viewsets.ModelViewSet):
                 n = float(pct)
             except (TypeError, ValueError):
                 return '-'
+            # Normalize: UI bands are integers and user expects inclusive boundaries
+            try:
+                n = float(int(round(n)))
+            except Exception:
+                pass
+            try:
+                if n < 0:
+                    n = 0.0
+                if n > 100:
+                    n = 100.0
+            except Exception:
+                pass
             try:
                 if stage_bands:
+                    lowest = None
+                    highest = None
                     for b in stage_bands:
                         try:
                             bmin = float(b.get('min')) if b.get('min') is not None else float('-inf')
                             bmax = float(b.get('max')) if b.get('max') is not None else float('inf')
+                            if lowest is None or bmin < lowest[0]:
+                                lowest = (bmin, str(b.get('grade') or '-'))
+                            if highest is None or bmin > highest[0]:
+                                highest = (bmin, str(b.get('grade') or '-'))
                             if n >= bmin and n <= bmax:
                                 return str(b.get('grade') or '-')
                         except Exception:
                             continue
+                    # If there are gaps between bands, still map consistently
+                    try:
+                        if highest and n >= highest[0]:
+                            return highest[1]
+                        if lowest:
+                            return lowest[1]
+                    except Exception:
+                        pass
             except Exception:
                 pass
             # Fallback default scale

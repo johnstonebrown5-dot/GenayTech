@@ -432,17 +432,30 @@ function TeacherResultsLegacy(){
   const classNameById = (id) => classes.find(c=>String(c.id)===String(id))?.name || id
 
   // Convert numeric score to letter grade using admin-defined bands (fallback to defaults)
-  const letterFromBands = (score, bands) => {
+  const normalizeScore = (score) => {
     const n = Number(score)
-    if (!Number.isFinite(n)) return '-'
+    if (!Number.isFinite(n)) return null
+    const r = Math.round(n)
+    return Math.max(0, Math.min(100, r))
+  }
+
+  const letterFromBands = (score, bands) => {
+    const n = normalizeScore(score)
+    if (n === null) return '-'
     const arr = Array.isArray(bands) ? [...bands] : []
     arr.sort((a,b)=> (a.order??0) - (b.order??0))
+    let lowest = null
+    let highest = null
     for (const b of arr){
       const min = Number(b.min), max = Number(b.max)
+      if (!lowest || (Number.isFinite(min) && min < lowest.min)) lowest = { min, grade: String(b.grade || '-') }
+      if (!highest || (Number.isFinite(min) && min > highest.min)) highest = { min, grade: String(b.grade || '-') }
       if (Number.isFinite(min) && Number.isFinite(max)){
         if (n >= min && n <= max) return String(b.grade || '-')
       }
     }
+    if (highest && n >= highest.min) return highest.grade
+    if (lowest) return lowest.grade
     if (n >= 80) return 'A'
     if (n >= 70) return 'B'
     if (n >= 60) return 'C'
