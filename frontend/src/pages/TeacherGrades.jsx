@@ -33,6 +33,7 @@ export default function TeacherGrades(){
   const saveTimersRef = useRef({}) // { student_id: timeoutId }
   const saveTimersAllRef = useRef({}) // { `${compId}:${studentId}`: timeoutId }
   const examsCacheRef = useRef({})
+  const missingComponentWarnedRef = useRef(false)
   const [examsLoading, setExamsLoading] = useState(false)
   const [studentsLoading, setStudentsLoading] = useState(false)
   const [examsReloadKey, setExamsReloadKey] = useState(0)
@@ -863,6 +864,7 @@ export default function TeacherGrades(){
         }
         setMarksAll(emptyMarksAll)
         setInvalidAll(emptyInvalidAll)
+        missingComponentWarnedRef.current = false
       }catch{
         setComponents([])
         setSelectedComponentId('')
@@ -870,6 +872,7 @@ export default function TeacherGrades(){
         setOutOfPerComp({})
         setMarksAll({})
         setInvalidAll({})
+        missingComponentWarnedRef.current = false
       }
     })()
     return ()=>{ alive = false }
@@ -886,6 +889,7 @@ export default function TeacherGrades(){
     const saved = loadOutOfPrefs()
     const val = (saved && saved[comp.id] != null) ? Number(saved[comp.id]) : (comp.max_marks != null ? Number(comp.max_marks) : (Number(examMeta.total_marks)||100))
     setOutOf(String(val))
+    missingComponentWarnedRef.current = false
   }, [selectedComponentId, examMeta.total_marks])
 
   // Persist per-component Out Of whenever user edits values in All mode
@@ -997,10 +1001,22 @@ export default function TeacherGrades(){
         try{
           const examId = Number(selectedExamId)
           const subjectId = Number(selectedSubject)
+          const subjectHasComponents = Array.isArray(components) && components.length > 0
           const componentId = selectedComponentId ? Number(selectedComponentId) : undefined
+          if (subjectHasComponents && !componentId){
+            if (!missingComponentWarnedRef.current){
+              missingComponentWarnedRef.current = true
+              showError('Select Paper', 'This subject has papers/components. Please select a Paper before saving marks.', 5000)
+            }
+            return
+          }
           const out = outOf ? Number(outOf) : undefined
           const base = (inputAs === 'percent') ? percentToMarks(raw, out || examMeta.total_marks || 100) : String(raw)
-          const num = Math.round(Number(base))
+          const total = Number(out || examMeta.total_marks || 100)
+          const n0 = Math.round(Number(base))
+          const num = Number.isFinite(n0)
+            ? Math.max(0, Math.min(Number.isFinite(total) && total > 0 ? total : 100, n0))
+            : NaN
           if (!examId || !subjectId || Number.isNaN(num)) return
           const item = { exam: examId, subject: subjectId, student: studentId, marks: num }
           if (componentId) item.component = componentId
@@ -1095,6 +1111,14 @@ export default function TeacherGrades(){
     setError('')
     setMessage('')
     try{
+      // Clear any pending auto-save timers so we don't race bulk submit
+      try{
+        Object.values(saveTimersRef.current || {}).forEach(t => { try{ clearTimeout(t) }catch{} })
+        saveTimersRef.current = {}
+        Object.values(saveTimersAllRef.current || {}).forEach(t => { try{ clearTimeout(t) }catch{} })
+        saveTimersAllRef.current = {}
+      }catch{}
+
       // Block submit if any invalid values exist
       if (entryMode === 'single'){
         const anyBad = Object.values(invalid || {}).some(Boolean)
@@ -1110,13 +1134,22 @@ export default function TeacherGrades(){
       const subjectId = Number(selectedSubject)
       let payload = []
       if (entryMode === 'single'){
+        const subjectHasComponents = Array.isArray(components) && components.length > 0
+        if (subjectHasComponents && !selectedComponentId){
+          throw new Error('This subject has papers/components. Please select a Paper before saving.')
+        }
         const componentId = selectedComponentId ? Number(selectedComponentId) : undefined
         const out = outOf ? Number(outOf) : undefined
+        const total = Number(out || examMeta.total_marks || 100)
         payload = students
           .map(s => ({ student: s.id, value: parseFloat(marks[s.id]) }))
           .filter(x => !isNaN(x.value))
           .map(x => {
-            const item = { exam: examId, subject: subjectId, student: x.student, marks: Math.round(x.value) }
+            const n0 = Math.round(Number(x.value))
+            const clamped = Number.isFinite(n0)
+              ? Math.max(0, Math.min(Number.isFinite(total) && total > 0 ? total : 100, n0))
+              : n0
+            const item = { exam: examId, subject: subjectId, student: x.student, marks: clamped }
             if (componentId) item.component = componentId
             if (out) item.out_of = out
             return item
@@ -1238,6 +1271,8 @@ export default function TeacherGrades(){
     const list = Array.isArray(students) ? students : []
     if (!classOk || !subjectOk || !examOk || list.length === 0) return false
     if (entryMode === 'single'){
+      const subjectHasComponents = Array.isArray(components) && components.length > 0
+      if (subjectHasComponents && !selectedComponentId) return false
       const anyValue = list.some(s => !isNaN(parseFloat(marks[s.id])))
       const hasInvalid = Object.values(invalid).some(Boolean)
       return anyValue && !hasInvalid
