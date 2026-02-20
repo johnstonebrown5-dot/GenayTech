@@ -2438,13 +2438,27 @@ class ExamViewSet(viewsets.ModelViewSet):
         except Exception:
             return Response({'detail': 'student query parameter is required'}, status=400)
 
-        # Class position using local summary
+        # Class position: out of total active students in the class.
+        # Students with no results in this exam are treated as total=0 for ranking.
         summary = self._build_summary(exam)
-        class_list = summary.get('students', [])
+        results_list = summary.get('students', [])
+        totals_by_id = {int(s.get('id')): float(s.get('total') or 0.0) for s in results_list if s.get('id') is not None}
+        try:
+            roster_ids = list(Student.objects.filter(klass=exam.klass, is_active=True).values_list('id', flat=True))
+        except Exception:
+            roster_ids = list(totals_by_id.keys())
+        scored = [(int(sid), float(totals_by_id.get(int(sid), 0.0))) for sid in roster_ids]
+        scored.sort(key=lambda x: x[1], reverse=True)
+        class_size = len(scored)
         class_pos = None
-        for st in class_list:
-            if str(st.get('id')) == str(student_id):
-                class_pos = st.get('position')
+        last_total = None
+        position = 0
+        for idx, (sid, sc) in enumerate(scored, start=1):
+            if last_total is None or sc < last_total:
+                position = idx
+                last_total = sc
+            if int(sid) == int(student_id):
+                class_pos = position
                 break
 
         # Grade cohort: same school, same grade_level, same (name, year, term)
@@ -2487,7 +2501,7 @@ class ExamViewSet(viewsets.ModelViewSet):
                 break
 
         return Response({
-            'class': {'position': class_pos, 'size': len(class_list)},
+            'class': {'position': class_pos, 'size': class_size},
             'grade': {'position': grade_pos, 'size': len(ordered)},
             'exam': {'id': exam.id, 'name': exam.name, 'year': exam.year, 'term': exam.term},
         })

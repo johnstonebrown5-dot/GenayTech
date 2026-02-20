@@ -18,6 +18,9 @@ export default function AdminClassPrintReportCards({ classIdProp = null, embedde
   const [school, setSchool] = useState(null)
   const [logoFailed, setLogoFailed] = useState(false)
   const [layout, setLayout] = useState('cards') // cards | summary
+  const [studentSearch, setStudentSearch] = useState('')
+  const [selectedStudentId, setSelectedStudentId] = useState('')
+  const [printOnlyStudentId, setPrintOnlyStudentId] = useState(null)
   const [admissions, setAdmissions] = useState(new Map()) // Map(studentId -> admission_no)
   const [classRankMapApi, setClassRankMapApi] = useState(new Map()) // Map(studentId -> { position, size })
   const [gradeRankMapApi, setGradeRankMapApi] = useState(new Map()) // Map(studentId -> { position, size })
@@ -108,6 +111,13 @@ export default function AdminClassPrintReportCards({ classIdProp = null, embedde
     }
   }, [recentExam, embedded])
 
+  // Reset student filter when exam changes
+  useEffect(()=>{
+    setStudentSearch('')
+    setSelectedStudentId('')
+    setPrintOnlyStudentId(null)
+  }, [recentExam?.id])
+
   // When we have an exam and students, fetch rank data from backend per student
   useEffect(()=>{
     let active = true
@@ -177,6 +187,42 @@ export default function AdminClassPrintReportCards({ classIdProp = null, embedde
   const handlePrint = () => {
     try { window.print() } catch(_) {}
   }
+
+  const handlePrintSelected = () => {
+    if (!selectedStudentId) return
+    setPrintOnlyStudentId(String(selectedStudentId))
+    setTimeout(() => {
+      try { window.print() } catch(_) {}
+      setTimeout(() => { setPrintOnlyStudentId(null) }, 250)
+    }, 50)
+  }
+
+  const clearStudentFilter = () => {
+    setStudentSearch('')
+    setSelectedStudentId('')
+    setPrintOnlyStudentId(null)
+  }
+
+  const filteredStudents = useMemo(() => {
+    const arr = Array.isArray(summary?.students) ? summary.students : []
+    const q = String(studentSearch || '').trim().toLowerCase()
+    let out = !q ? arr : arr.filter(s => String(s?.name || '').toLowerCase().includes(q))
+    if (selectedStudentId) out = out.filter(s => String(s?.id) === String(selectedStudentId))
+    return out
+  }, [summary?.students, studentSearch, selectedStudentId])
+
+  const studentsToRender = useMemo(() => {
+    const arr = Array.isArray(summary?.students) ? summary.students : []
+    if (printOnlyStudentId) return arr.filter(s => String(s?.id) === String(printOnlyStudentId))
+    return filteredStudents
+  }, [summary?.students, filteredStudents, printOnlyStudentId])
+
+  const studentSuggestions = useMemo(() => {
+    const arr = Array.isArray(summary?.students) ? summary.students : []
+    const q = String(studentSearch || '').trim().toLowerCase()
+    const filtered = !q ? arr : arr.filter(s => String(s?.name || '').toLowerCase().includes(q))
+    return filtered.slice(0, 12)
+  }, [summary?.students, studentSearch])
 
   const title = useMemo(()=>{
     return `${klass?.name || 'Class'} — ${recentExam?.name || 'Exam'} Results`
@@ -301,9 +347,31 @@ export default function AdminClassPrintReportCards({ classIdProp = null, embedde
                 <button type="button" onClick={()=>setLayout('summary')} className={`px-2 py-1 text-sm ${layout==='summary'?'bg-gray-800 text-white':'bg-white'}`}>List</button>
               </div>
             </div>
+            <div className="flex items-center gap-2">
+              <input
+                value={studentSearch}
+                onChange={(e)=>{ setStudentSearch(e.target.value); if (selectedStudentId) setSelectedStudentId('') }}
+                placeholder="Search student"
+                className="px-2 py-1.5 border rounded bg-white text-sm w-44"
+              />
+              <select
+                value={selectedStudentId}
+                onChange={(e)=> setSelectedStudentId(e.target.value)}
+                className="px-2 py-1.5 border rounded bg-white text-sm w-44"
+                disabled={!studentSuggestions.length}
+                title="Select a student"
+              >
+                <option value="">Select…</option>
+                {studentSuggestions.map(s => (
+                  <option key={s.id} value={String(s.id)}>{s.name}</option>
+                ))}
+              </select>
+              <button type="button" onClick={clearStudentFilter} className="px-2 py-1.5 rounded border text-sm bg-white hover:bg-gray-50">Clear</button>
+            </div>
             <div className="flex items-center gap-2 w-full sm:w-auto">
               {!embedded && (<Link to={backTo} className="flex-1 sm:flex-none text-center px-3 py-1.5 rounded border hover:bg-gray-50 text-sm">Back</Link>)}
-              <button onClick={handlePrint} className="flex-1 sm:flex-none px-3 py-1.5 rounded bg-indigo-600 text-white hover:bg-indigo-700 text-sm">Print</button>
+              <button onClick={handlePrint} className="flex-1 sm:flex-none px-3 py-1.5 rounded bg-indigo-600 text-white hover:bg-indigo-700 text-sm">Print All</button>
+              <button onClick={handlePrintSelected} disabled={!selectedStudentId} className={`flex-1 sm:flex-none px-3 py-1.5 rounded text-sm ${selectedStudentId ? 'bg-gray-900 text-white hover:bg-black' : 'bg-gray-200 text-gray-500 cursor-not-allowed'}`}>Print Selected</button>
             </div>
           </div>
         </div>
@@ -342,10 +410,10 @@ export default function AdminClassPrintReportCards({ classIdProp = null, embedde
                         </tr>
                       </thead>
                       <tbody>
-                        {summary.students.length === 0 ? (
+                        {studentsToRender.length === 0 ? (
                           <tr><td className="px-2 py-3 text-sm text-gray-500" colSpan={(summary.subjects?.length||0)+3}>No results captured for this exam yet.</td></tr>
                         ) : (
-                          summary.students.map(st => (
+                          studentsToRender.map(st => (
                             <tr key={st.id} className="hover:bg-gray-50">
                               <td className="border px-2 py-1 sticky left-0 bg-white">{st.name}</td>
                               {summary.subjects.map(s => (
@@ -367,10 +435,10 @@ export default function AdminClassPrintReportCards({ classIdProp = null, embedde
             ) : (
               <div className="space-y-8">
                 {/* One report card per student */}
-                {summary.students.length === 0 ? (
+                {studentsToRender.length === 0 ? (
                   <div className="bg-white rounded border p-4 text-sm text-gray-600">No results captured for this exam yet.</div>
                 ) : (
-                  summary.students.map((st, idx) => (
+                  studentsToRender.map((st, idx) => (
                     <div key={st.id || idx} className="report-card relative overflow-hidden rounded-xl border border-gray-300 bg-white shadow-lg">
                       {/* Watermark background: school logo */}
                       {(() => {
@@ -464,11 +532,23 @@ export default function AdminClassPrintReportCards({ classIdProp = null, embedde
                         <div className="px-6 mt-4 grid grid-cols-2 gap-4 text-sm">
                           <div className="border rounded p-2 bg-gray-50">
                             <div className="text-center">Class Position</div>
-                            <div className="text-center font-semibold">{classRankMapApi.get(st.id)?.position || rankMap.get(st.id) || '-'}</div>
+                            <div className="text-center font-semibold">{(() => {
+                              const d = classRankMapApi.get(st.id)
+                              if (d?.position && d?.size) return `${d.position}/${d.size}`
+                              const fallbackPos = rankMap.get(st.id)
+                              const fallbackSize = Array.isArray(summary?.students) ? summary.students.length : null
+                              if (fallbackPos && fallbackSize) return `${fallbackPos}/${fallbackSize}`
+                              return fallbackPos || '-'
+                            })()}</div>
                           </div>
                           <div className="border rounded p-2 bg-gray-50">
                             <div className="text-center">Grade Position</div>
-                            <div className="text-center font-semibold">{gradeRankMapApi.get(st.id)?.position || '-'}</div>
+                            <div className="text-center font-semibold">{(() => {
+                              const d = gradeRankMapApi.get(st.id)
+                              if (d?.position && d?.size) return `${d.position}/${d.size}`
+                              if (d?.position && d?.out_of) return `${d.position}/${d.out_of}`
+                              return d?.position || '-'
+                            })()}</div>
                           </div>
                         </div>
 

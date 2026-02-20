@@ -997,7 +997,11 @@ export default function StudentReportCardViewer({ embedded=false, hideControls=f
                     <div className="text-right">
                       <div className="text-[11px] uppercase tracking-wider text-gray-500">Position</div>
                       <div className="text-base font-semibold text-gray-900">
-                        {loading ? '-' : currentRank?.class?.position ? `${currentRank.class.position}/${currentRank.class.size || '-'}` : '-'}
+                        {loading ? '-' : (
+                          currentRank?.class?.position
+                            ? `Class ${currentRank.class.position}/${currentRank.class.size || '-'} · Grade ${currentRank?.grade?.position ?? '-'}/${currentRank?.grade?.size ?? '-'}`
+                            : '-'
+                        )}
                       </div>
                     </div>
                   </div>
