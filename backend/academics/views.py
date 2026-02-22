@@ -4611,7 +4611,7 @@ class StudentViewSet(viewsets.ModelViewSet):
         if act in ('my', 'my_update'):
             return [permissions.IsAuthenticated()]
         # Allow the specialized teacher_update action for class teachers (enforced inside the action)
-        if act in ('teacher_update',):
+        if act in ('teacher_update', 'teacher_reset_password'):
             return [IsTeacherOrAdmin()]
         if act in ('list', 'retrieve') or self.request.method in permissions.SAFE_METHODS:
             # Broaden to any authenticated to avoid role mismatches breaking list in deploy
@@ -4754,7 +4754,7 @@ class StudentViewSet(viewsets.ModelViewSet):
     def teacher_update(self, request, pk=None):
         """Allow the class teacher to update limited student fields.
         Restrictions:
-        - Cannot change admission_no, name, or klass (prevents moves/removals).
+        - Cannot change klass (prevents moves/removals).
         - Requester must be the class teacher of this student.
         Admin/staff may still use normal update endpoints.
         """
@@ -4774,10 +4774,10 @@ class StudentViewSet(viewsets.ModelViewSet):
         # Build data allowing only specific fields
         incoming = dict(getattr(request, 'data', {}) or {})
         # Blocked keys regardless
-        blocked = {'admission_no', 'name', 'klass'}
+        blocked = {'klass'}
         # Allowed editable keys for teachers
         allowed = {
-            'dob','gender','upi_number','guardian_id','guardian_name','guardian_passport_no','birth_certificate_no',
+            'admission_no','name','dob','gender','upi_number','guardian_id','guardian_name','guardian_passport_no','birth_certificate_no',
             'phone','email','address','photo','boarding_status','is_active'
         }
         # Remove any blocked or non-allowed keys when not admin
@@ -4786,6 +4786,33 @@ class StudentViewSet(viewsets.ModelViewSet):
         else:
             # Admins can use this action too, but still respect blocked keys
             cleaned = {k: v for k, v in incoming.items() if k not in blocked}
+
+        # Admission number updates: validate uniqueness and update linked username
+        admission_new = None
+        try:
+            if 'admission_no' in cleaned:
+                admission_new = str(cleaned.get('admission_no') or '').strip()
+                if not admission_new:
+                    return Response({'admission_no': 'This field may not be blank.'}, status=status.HTTP_400_BAD_REQUEST)
+                # Unique among students
+                if Student.objects.filter(admission_no=admission_new).exclude(pk=student.pk).exists():
+                    return Response({'admission_no': 'A student with this admission number already exists'}, status=status.HTTP_400_BAD_REQUEST)
+                # Unique among users (avoid colliding with staff/admin accounts)
+                try:
+                    from django.contrib.auth import get_user_model
+                    User = get_user_model()
+                    qs = User.objects.filter(username=admission_new)
+                    if getattr(student, 'user_id', None):
+                        qs = qs.exclude(pk=student.user_id)
+                    existing_user = qs.first()
+                    if existing_user is not None:
+                        # Never allow collision with any other user account
+                        return Response({'admission_no': 'This admission number is already taken as a username.'}, status=status.HTTP_400_BAD_REQUEST)
+                except Exception:
+                    pass
+        except Exception:
+            # fall back to serializer errors
+            admission_new = None
 
         # If nothing to update
         if not cleaned:
@@ -4799,8 +4826,158 @@ class StudentViewSet(viewsets.ModelViewSet):
 
         serializer = self.get_serializer(student, data=cleaned, partial=True)
         serializer.is_valid(raise_exception=True)
-        serializer.save()
+        from django.db import transaction
+        with transaction.atomic():
+            serializer.save()
+            # Admission number must be the username for student accounts
+            if admission_new is not None:
+                try:
+                    from django.contrib.auth import get_user_model
+                    from django.utils.crypto import get_random_string
+                    User = get_user_model()
+
+                    # Resolve school for user creation (best effort)
+                    school = None
+                    try:
+                        school = getattr(getattr(student, 'klass', None), 'school', None) or getattr(student, 'school', None)
+                    except Exception:
+                        school = None
+
+                    u = None
+                    if getattr(student, 'user_id', None):
+                        u = User.objects.filter(pk=student.user_id).first()
+
+                    # If no linked user, create one and link it
+                    if u is None:
+                        nm = str(getattr(student, 'name', '') or '').strip()
+                        first_name = ''
+                        last_name = ''
+                        if nm:
+                            parts = nm.split()
+                            first_name = parts[0]
+                            last_name = ' '.join(parts[1:])
+                        u = User.objects.create_user(
+                            username=admission_new,
+                            password=get_random_string(12),
+                            role='student',
+                            first_name=first_name,
+                            last_name=last_name,
+                            school=school,
+                        )
+                        student.user = u
+                        student.save(update_fields=['user'])
+
+                    # Sync username to admission_no for student users
+                    if u is not None and getattr(u, 'role', None) == 'student':
+                        if str(getattr(u, 'username', '') or '') != admission_new:
+                            # Collision should have been blocked above; re-check defensively
+                            if User.objects.filter(username=admission_new).exclude(pk=u.pk).exists():
+                                raise ValidationError({'admission_no': 'This admission number is already taken as a username.'})
+                            u.username = admission_new
+                        # Best-effort: sync user names from student name
+                        nm = str(getattr(student, 'name', '') or '').strip()
+                        if nm:
+                            parts = nm.split()
+                            u.first_name = parts[0]
+                            u.last_name = ' '.join(parts[1:])
+                        u.save(update_fields=['username','first_name','last_name'])
+                except ValidationError as ve:
+                    raise
+                except Exception:
+                    pass
         return Response(serializer.data)
+
+    @action(detail=True, methods=['post'], permission_classes=[IsTeacherOrAdmin], url_path='teacher-reset-password')
+    def teacher_reset_password(self, request, pk=None):
+        """Allow the class teacher to reset a student's login password.
+        Policy:
+        - If guardian phone exists, set password to guardian phone.
+        - Else, set password to a random 8-digit code.
+        Returns the new password in the response (intended to be shown once in UI).
+        """
+        student = self.get_object()
+        user = getattr(request, 'user', None)
+        is_admin = bool(user and (getattr(user, 'role', None) == 'admin' or user.is_staff or user.is_superuser))
+
+        if not is_admin:
+            if getattr(user, 'role', None) != 'teacher':
+                return Response({'detail': 'Not allowed'}, status=status.HTTP_403_FORBIDDEN)
+            klass_id = getattr(getattr(student, 'klass', None), 'id', None)
+            teacher_id = getattr(getattr(student, 'klass', None), 'teacher_id', None)
+            if not (klass_id and teacher_id == getattr(user, 'id', None)):
+                return Response({'detail': 'Only the class teacher can reset this student password'}, status=status.HTTP_403_FORBIDDEN)
+
+        try:
+            from django.contrib.auth import get_user_model
+            from django.db import transaction
+            from django.utils.crypto import get_random_string
+            User = get_user_model()
+
+            def _sanitize_phone(raw):
+                try:
+                    s = ''.join([c for c in str(raw or '').strip() if c.isdigit()])
+                except Exception:
+                    s = ''
+                # Keep last 12 digits to avoid absurdly long values
+                if len(s) > 12:
+                    s = s[-12:]
+                return s
+
+            guardian_phone = _sanitize_phone(getattr(student, 'guardian_id', None))
+            new_password = guardian_phone if guardian_phone else ''.join([c for c in get_random_string(8) if c.isdigit()])
+            if not new_password or len(new_password) < 4:
+                # fallback: random digits
+                new_password = ''.join([str(i % 10) for i in range(8)])
+
+            with transaction.atomic():
+                # Ensure student has a linked user
+                u = getattr(student, 'user', None)
+                if u is None:
+                    adm = str(getattr(student, 'admission_no', '') or '').strip()
+                    if not adm:
+                        return Response({'detail': 'Student has no admission number to create a username'}, status=400)
+                    # If the admission number username is taken, fail (invariant)
+                    if User.objects.filter(username=adm).exists():
+                        return Response({'detail': 'Cannot create student account: username already taken'}, status=400)
+                    # Resolve school best-effort
+                    school = getattr(getattr(student, 'klass', None), 'school', None) or getattr(student, 'school', None)
+                    nm = str(getattr(student, 'name', '') or '').strip()
+                    first_name = ''
+                    last_name = ''
+                    if nm:
+                        parts = nm.split()
+                        first_name = parts[0]
+                        last_name = ' '.join(parts[1:])
+                    u = User.objects.create_user(
+                        username=adm,
+                        password=get_random_string(12),
+                        role='student',
+                        first_name=first_name,
+                        last_name=last_name,
+                        school=school,
+                    )
+                    student.user = u
+                    student.save(update_fields=['user'])
+
+                # Only allow resetting password for student accounts
+                if getattr(u, 'role', None) != 'student':
+                    return Response({'detail': 'Linked user is not a student account'}, status=400)
+
+                # Enforce username invariant (best-effort)
+                try:
+                    adm = str(getattr(student, 'admission_no', '') or '').strip()
+                    if adm and str(getattr(u, 'username', '') or '') != adm:
+                        if not User.objects.filter(username=adm).exclude(pk=u.pk).exists():
+                            u.username = adm
+                except Exception:
+                    pass
+
+                u.set_password(str(new_password))
+                u.save()
+
+            return Response({'detail': 'Password reset', 'password': str(new_password)})
+        except Exception as e:
+            return Response({'detail': 'Failed to reset password', 'error': str(e)}, status=500)
     @action(detail=True, methods=['get'], permission_classes=[permissions.IsAuthenticated], url_path='history')
     def history(self, request, pk=None):
         """Return student's academic and finance history in one payload.

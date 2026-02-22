@@ -228,6 +228,8 @@ function EditStudentsPanel({ classId }){
 
 function StudentEditForm({ student, onSaved }){
   const [form, setForm] = useState({
+    admission_no: student?.admission_no || '',
+    name: student?.name || '',
     dob: student?.dob || '',
     gender: student?.gender || '',
     guardian_id: student?.guardian_id || '',
@@ -239,6 +241,9 @@ function StudentEditForm({ student, onSaved }){
   })
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState('')
+  const [resetting, setResetting] = useState(false)
+  const [resetPassword, setResetPassword] = useState('')
+  const [resetError, setResetError] = useState('')
 
   const set = (k,v)=> setForm(prev => ({ ...prev, [k]: v }))
 
@@ -253,8 +258,26 @@ function StudentEditForm({ student, onSaved }){
     finally{ setSaving(false) }
   }
 
+  const doResetPassword = async () => {
+    setResetting(true)
+    setResetError('')
+    setResetPassword('')
+    try{
+      const { data } = await api.post(`/academics/students/${student.id}/teacher-reset-password/`)
+      const pwd = data?.password
+      if (!pwd) throw new Error('No password returned')
+      setResetPassword(String(pwd))
+    }catch(err){
+      setResetError(err?.response?.data?.detail || err?.message || 'Reset failed')
+    }finally{
+      setResetting(false)
+    }
+  }
+
   return (
     <form onSubmit={submit} className="grid grid-cols-1 md:grid-cols-3 gap-3">
+      <Text label="Admission No" value={form.admission_no||''} onChange={v=>set('admission_no', v)} />
+      <Text label="Full Name" value={form.name||''} onChange={v=>set('name', v)} />
       <Text label="Date of Birth" type="date" value={form.dob||''} onChange={v=>set('dob', v)} />
       <Select label="Gender" value={form.gender||''} onChange={v=>set('gender', v)} options={[{value:'male',label:'Male'},{value:'female',label:'Female'}]} />
       <Text label="Guardian Phone" value={form.guardian_id||''} onChange={v=>set('guardian_id', v)} />
@@ -265,7 +288,34 @@ function StudentEditForm({ student, onSaved }){
       <Select label="Active" value={String(form.is_active)} onChange={v=>set('is_active', v==='true')} options={[{value:'true',label:'Active'},{value:'false',label:'Inactive'}]} />
       <div className="md:col-span-3 flex items-center gap-2">
         <button type="submit" disabled={saving} className="px-3 py-1.5 rounded bg-blue-600 text-white">{saving? 'Saving...' : 'Save'}</button>
-        {msg && <div className="text-sm text-slate-600">{msg}</div>}
+        {msg && <span className="text-sm text-slate-700">{msg}</span>}
+      </div>
+
+      <div className="md:col-span-3 border-t border-slate-200 pt-3 mt-2">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+          <button type="button" onClick={doResetPassword} disabled={resetting} className="px-3 py-1.5 rounded border bg-white hover:bg-slate-50 text-slate-800">
+            {resetting ? 'Resetting...' : 'Reset Password'}
+          </button>
+          {resetError && <span className="text-sm text-red-700">{String(resetError)}</span>}
+          {resetPassword && (
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-slate-700">New password:</span>
+              <span className="font-mono text-sm bg-slate-100 border border-slate-200 px-2 py-1 rounded">{resetPassword}</span>
+              <button
+                type="button"
+                className="text-xs px-2 py-1 rounded border bg-white hover:bg-slate-50"
+                onClick={() => {
+                  try{ navigator?.clipboard?.writeText?.(resetPassword) }catch{}
+                }}
+              >
+                Copy
+              </button>
+            </div>
+          )}
+        </div>
+        <div className="text-xs text-slate-500 mt-1">
+          Password resets to Guardian Phone if available; otherwise a random code.
+        </div>
       </div>
     </form>
   )

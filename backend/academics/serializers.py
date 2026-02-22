@@ -101,6 +101,62 @@ class StudentSerializer(serializers.ModelSerializer):
             'is_graduated','graduation_year','boarding_status','is_active'
         ]
 
+    def update(self, instance, validated_data):
+        # Global invariant: admission number is the username for student accounts
+        new_adm = None
+        if 'admission_no' in validated_data:
+            new_adm = (validated_data.get('admission_no') or '').strip()
+            if not new_adm:
+                raise serializers.ValidationError({'admission_no': 'This field may not be blank.'})
+
+        # Perform update + username sync atomically
+        with transaction.atomic():
+            obj = super().update(instance, validated_data)
+
+            if new_adm is not None:
+                # Ensure a student user exists
+                u = getattr(obj, 'user', None)
+                if u is None:
+                    # Create user account for this student
+                    nm = (getattr(obj, 'name', '') or '').strip()
+                    first_name = ''
+                    last_name = ''
+                    if nm:
+                        parts = nm.split()
+                        first_name = parts[0]
+                        last_name = ' '.join(parts[1:])
+                    # Resolve school (best effort)
+                    school = getattr(getattr(obj, 'klass', None), 'school', None) or getattr(obj, 'school', None)
+                    # Enforce username uniqueness
+                    if User.objects.filter(username=new_adm).exists():
+                        raise serializers.ValidationError({'admission_no': 'This admission number is already taken as a username.'})
+                    u = User.objects.create_user(
+                        username=new_adm,
+                        password=get_random_string(12),
+                        role='student',
+                        first_name=first_name,
+                        last_name=last_name,
+                        school=school,
+                    )
+                    obj.user = u
+                    obj.save(update_fields=['user'])
+                else:
+                    # Only enforce for student user accounts
+                    if getattr(u, 'role', None) == 'student':
+                        if str(getattr(u, 'username', '') or '') != new_adm:
+                            if User.objects.filter(username=new_adm).exclude(pk=u.pk).exists():
+                                raise serializers.ValidationError({'admission_no': 'This admission number is already taken as a username.'})
+                            u.username = new_adm
+                        # Best-effort: sync names
+                        nm = (getattr(obj, 'name', '') or '').strip()
+                        if nm:
+                            parts = nm.split()
+                            u.first_name = parts[0]
+                            u.last_name = ' '.join(parts[1:])
+                        u.save(update_fields=['username','first_name','last_name'])
+
+        return obj
+
     def create(self, validated_data):
         request = self.context.get('request') if isinstance(self.context, dict) else None
 
