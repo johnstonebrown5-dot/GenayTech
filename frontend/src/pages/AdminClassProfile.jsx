@@ -5,6 +5,158 @@ import api from '../api'
 import AdminClassPrintReportCards from './AdminClassPrintReportCards'
 import { useNotification } from '../components/NotificationContext'
 
+function AdminStudentInlineEdit({ student, onSaved, showSuccess, showError }){
+  const [form, setForm] = useState({
+    admission_no: student?.admission_no || '',
+    name: student?.name || '',
+    gender: student?.gender || '',
+    guardian_id: student?.guardian_id || '',
+    guardian_name: student?.guardian_name || '',
+  })
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState('')
+
+  const [resetting, setResetting] = useState(false)
+  const [resetPassword, setResetPassword] = useState('')
+  const [resetError, setResetError] = useState('')
+
+  useEffect(() => {
+    setForm({
+      admission_no: student?.admission_no || '',
+      name: student?.name || '',
+      gender: student?.gender || '',
+      guardian_id: student?.guardian_id || '',
+      guardian_name: student?.guardian_name || '',
+    })
+    setSaveError('')
+    setResetPassword('')
+    setResetError('')
+  }, [student?.id])
+
+  const setK = (k, v) => setForm(prev => ({ ...prev, [k]: v }))
+
+  const doSave = async () => {
+    try {
+      setSaving(true)
+      setSaveError('')
+      const payload = {
+        admission_no: String(form.admission_no || '').trim(),
+        name: String(form.name || '').trim(),
+        gender: String(form.gender || '').trim(),
+        guardian_id: String(form.guardian_id || '').trim(),
+        guardian_name: String(form.guardian_name || '').trim(),
+      }
+      await api.patch(`/academics/students/${student.id}/`, payload)
+      if (typeof onSaved === 'function') await onSaved()
+      showSuccess?.('Student Updated', 'Student details saved successfully.')
+    } catch (e) {
+      const data = e?.response?.data
+      let msg = data?.detail || ''
+      if (!msg && data && typeof data === 'object') {
+        const firstKey = Object.keys(data)[0]
+        const val = data[firstKey]
+        if (Array.isArray(val)) msg = val.join(', ')
+        else if (typeof val === 'string') msg = val
+      }
+      const finalMsg = msg || e?.message || 'Failed to save student'
+      setSaveError(finalMsg)
+      showError?.('Update Failed', finalMsg)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const doResetPassword = async () => {
+    setResetting(true)
+    setResetError('')
+    setResetPassword('')
+    try {
+      const { data } = await api.post(`/academics/students/${student.id}/teacher-reset-password/`)
+      const pwd = data?.password
+      if (!pwd) throw new Error('No password returned')
+      setResetPassword(String(pwd))
+      showSuccess?.('Password Reset', 'A new password was generated successfully.')
+    } catch (err) {
+      const msg = err?.response?.data?.detail || err?.message || 'Reset failed'
+      setResetError(msg)
+      showError?.('Reset Failed', msg)
+    } finally {
+      setResetting(false)
+    }
+  }
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+      <div>
+        <div className="text-xs text-gray-500 mb-1">Admission No</div>
+        <input value={form.admission_no} onChange={e => setK('admission_no', e.target.value)} className="w-full border rounded px-3 py-2" />
+      </div>
+      <div>
+        <div className="text-xs text-gray-500 mb-1">Name</div>
+        <input value={form.name} onChange={e => setK('name', e.target.value)} className="w-full border rounded px-3 py-2" />
+      </div>
+      <div>
+        <div className="text-xs text-gray-500 mb-1">Gender</div>
+        <select value={form.gender || ''} onChange={e => setK('gender', e.target.value)} className="w-full border rounded px-3 py-2">
+          <option value="">Select</option>
+          <option value="Male">Male</option>
+          <option value="Female">Female</option>
+        </select>
+      </div>
+
+      <div>
+        <div className="text-xs text-gray-500 mb-1">Guardian Phone</div>
+        <input value={form.guardian_id} onChange={e => setK('guardian_id', e.target.value)} className="w-full border rounded px-3 py-2" />
+      </div>
+      <div>
+        <div className="text-xs text-gray-500 mb-1">Guardian Name</div>
+        <input value={form.guardian_name} onChange={e => setK('guardian_name', e.target.value)} className="w-full border rounded px-3 py-2" />
+      </div>
+
+      <div className="md:col-span-3 flex flex-col gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            disabled={saving}
+            onClick={doSave}
+            className="px-3 py-1.5 rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60"
+          >
+            {saving ? 'Saving...' : 'Save Changes'}
+          </button>
+
+          <button
+            type="button"
+            onClick={doResetPassword}
+            disabled={resetting}
+            className="px-3 py-1.5 rounded border bg-white hover:bg-gray-50 text-gray-800 disabled:opacity-60"
+          >
+            {resetting ? 'Resetting...' : 'Reset Password'}
+          </button>
+
+          {saveError && <span className="text-sm text-red-700">{String(saveError)}</span>}
+          {resetError && <span className="text-sm text-red-700">{String(resetError)}</span>}
+        </div>
+
+        {resetPassword && (
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-gray-700">New password:</span>
+            <span className="font-mono text-sm bg-white border border-gray-200 px-2 py-1 rounded">{resetPassword}</span>
+            <button
+              type="button"
+              className="text-xs px-2 py-1 rounded border bg-white hover:bg-gray-50"
+              onClick={() => {
+                try { navigator?.clipboard?.writeText?.(resetPassword) } catch {}
+              }}
+            >
+              Copy
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export default function AdminClassProfile(){
   const { id } = useParams()
   const navigate = useNavigate()
@@ -16,6 +168,9 @@ export default function AdminClassProfile(){
   const [searchParams, setSearchParams] = useSearchParams()
   const [students, setStudents] = useState([])
   const [loadingStudents, setLoadingStudents] = useState(false)
+  const [expandedStudentId, setExpandedStudentId] = useState(null)
+  const [studentSortField, setStudentSortField] = useState('date_added') // date_added | admission_no | name | age
+  const [studentSortDir, setStudentSortDir] = useState('asc') // asc | desc
   const [exams, setExams] = useState([])
   const [recentExam, setRecentExam] = useState(null)
   const [recentSummary, setRecentSummary] = useState({ subjects: [], students: [] })
@@ -302,8 +457,91 @@ export default function AdminClassProfile(){
   }, [assignForm.subject, subjects, teachers, allTeachers, subjectTeachers, teacherUsers])
   const classStudents = useMemo(() => {
     const cid = String(id)
-    return students.filter(s => String(s.klass) === cid || String(s.klass_detail?.id || '') === cid)
-  }, [students, id])
+    const list = students.filter(s => String(s.klass) === cid || String(s.klass_detail?.id || '') === cid)
+
+    const parseDateMs = (v) => {
+      try {
+        if (!v) return null
+        const t = Date.parse(String(v))
+        return Number.isFinite(t) ? t : null
+      } catch {
+        return null
+      }
+    }
+
+    const computeAgeYears = (dob) => {
+      try {
+        if (!dob) return null
+        const d = new Date(String(dob))
+        if (Number.isNaN(d.getTime())) return null
+        const now = new Date()
+        let age = now.getFullYear() - d.getFullYear()
+        const m = now.getMonth() - d.getMonth()
+        if (m < 0 || (m === 0 && now.getDate() < d.getDate())) age -= 1
+        return Number.isFinite(age) ? age : null
+      } catch {
+        return null
+      }
+    }
+
+    const dir = studentSortDir === 'desc' ? -1 : 1
+    const getKey = (s) => {
+      if (studentSortField === 'admission_no') return String(s?.admission_no || '').toLowerCase()
+      if (studentSortField === 'name') return String(s?.name || '').toLowerCase()
+      if (studentSortField === 'age') {
+        const a = computeAgeYears(s?.dob)
+        return a === null ? null : a
+      }
+      // date_added: best-effort (Student model may not expose created_at)
+      const ms = parseDateMs(s?.created_at) ?? parseDateMs(s?.created) ?? parseDateMs(s?.date_added)
+      if (ms !== null) return ms
+      const n = Number(s?.id)
+      return Number.isFinite(n) ? n : 0
+    }
+
+    const sorted = [...list].sort((a, b) => {
+      const ka = getKey(a)
+      const kb = getKey(b)
+
+      const aNull = ka === null || typeof ka === 'undefined' || ka === ''
+      const bNull = kb === null || typeof kb === 'undefined' || kb === ''
+      if (aNull && bNull) return 0
+      if (aNull) return 1
+      if (bNull) return -1
+
+      if (typeof ka === 'number' && typeof kb === 'number') {
+        if (ka === kb) return 0
+        return ka < kb ? -1 * dir : 1 * dir
+      }
+
+      const sa = String(ka)
+      const sb = String(kb)
+      const c = sa.localeCompare(sb)
+      if (c !== 0) return c * dir
+      // stable-ish tie-breaker
+      const ida = Number(a?.id)
+      const idb = Number(b?.id)
+      if (Number.isFinite(ida) && Number.isFinite(idb) && ida !== idb) return ida < idb ? -1 : 1
+      return 0
+    })
+
+    return sorted
+  }, [students, id, studentSortField, studentSortDir])
+
+  const displayAgeYears = (dob) => {
+    try {
+      if (!dob) return ''
+      const d = new Date(String(dob))
+      if (Number.isNaN(d.getTime())) return ''
+      const now = new Date()
+      let age = now.getFullYear() - d.getFullYear()
+      const m = now.getMonth() - d.getMonth()
+      if (m < 0 || (m === 0 && now.getDate() < d.getDate())) age -= 1
+      return Number.isFinite(age) && age >= 0 ? String(age) : ''
+    } catch {
+      return ''
+    }
+  }
   const handleDownloadCsv = () => {
     const rows = [
       ['Admission No','Name','Guardian Phone']
@@ -1404,6 +1642,30 @@ export default function AdminClassProfile(){
                         <button onClick={handleDownloadCsv} className="px-3 py-1.5 rounded bg-emerald-600 text-white hover:bg-emerald-700">Download CSV</button>
                       </div>
                     </div>
+
+                    <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                      <div className="text-xs text-gray-500">Sort students</div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <select
+                          value={studentSortField}
+                          onChange={e => setStudentSortField(e.target.value)}
+                          className="border rounded px-2 py-1 text-sm bg-white"
+                        >
+                          <option value="date_added">Date Added</option>
+                          <option value="admission_no">Admission Number</option>
+                          <option value="name">Name</option>
+                          <option value="age">Age</option>
+                        </select>
+                        <button
+                          type="button"
+                          onClick={() => setStudentSortDir(prev => prev === 'asc' ? 'desc' : 'asc')}
+                          className="px-2.5 py-1 rounded border bg-white hover:bg-gray-50 text-sm"
+                        >
+                          {studentSortDir === 'asc' ? 'Ascending' : 'Descending'}
+                        </button>
+                      </div>
+                    </div>
+
                     {loadingStudents ? (
                       <div className="text-sm text-gray-500">Loading students...</div>
                     ) : classStudents.length === 0 ? (
@@ -1415,22 +1677,54 @@ export default function AdminClassProfile(){
                             <tr>
                               <th className="px-3 py-2 text-left whitespace-nowrap">Admission No</th>
                               <th className="px-3 py-2 text-left whitespace-nowrap">Name</th>
+                              <th className="px-3 py-2 text-left whitespace-nowrap">Age</th>
+                              <th className="px-3 py-2 text-left whitespace-nowrap">Gender</th>
                               <th className="px-3 py-2 text-left whitespace-nowrap">Guardian Phone</th>
                               <th className="px-3 py-2 text-right"></th>
                             </tr>
                           </thead>
                           <tbody>
                             {classStudents.map((s, idx) => (
-                              <tr key={s.id} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                                <td className="px-3 py-2 font-mono text-xs border-t">{s.admission_no}</td>
-                                <td className="px-3 py-2 border-t">
-                                  <Link to={`/admin/students/${s.id}`} className="text-blue-700 hover:underline">{s.name}</Link>
-                                </td>
-                                <td className="px-3 py-2 border-t">{s.guardian_id || 'N/A'}</td>
-                                <td className="px-3 py-2 text-right border-t">
-                                  <Link to={`/admin/students/${s.id}`} className="inline-flex items-center px-2 py-1 rounded border text-xs hover:bg-white">View</Link>
-                                </td>
-                              </tr>
+                              <React.Fragment key={s.id}>
+                                <tr className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                                  <td className="px-3 py-2 font-mono text-xs border-t">{s.admission_no}</td>
+                                  <td className="px-3 py-2 border-t">
+                                    <Link to={`/admin/students/${s.id}`} className="text-blue-700 hover:underline">{s.name}</Link>
+                                  </td>
+                                  <td className="px-3 py-2 border-t">{displayAgeYears(s.dob) || 'N/A'}</td>
+                                  <td className="px-3 py-2 border-t">{s.gender || 'N/A'}</td>
+                                  <td className="px-3 py-2 border-t">{s.guardian_id || 'N/A'}</td>
+                                  <td className="px-3 py-2 text-right border-t">
+                                    <div className="inline-flex items-center gap-2">
+                                      <button
+                                        type="button"
+                                        onClick={() => setExpandedStudentId(String(expandedStudentId) === String(s.id) ? null : s.id)}
+                                        className="inline-flex items-center px-2 py-1 rounded border text-xs bg-white hover:bg-gray-50"
+                                      >
+                                        {String(expandedStudentId) === String(s.id) ? 'Hide' : 'Edit'}
+                                      </button>
+                                      <Link to={`/admin/students/${s.id}`} className="inline-flex items-center px-2 py-1 rounded border text-xs bg-white hover:bg-gray-50">View</Link>
+                                    </div>
+                                  </td>
+                                </tr>
+                                {String(expandedStudentId) === String(s.id) && (
+                                  <tr>
+                                    <td colSpan="6" className="px-3 py-3 border-t bg-gray-50">
+                                      <AdminStudentInlineEdit
+                                        student={s}
+                                        onSaved={async () => {
+                                          try {
+                                            const res = await api.get(`/academics/classes/${id}/students/`)
+                                            setStudents(Array.isArray(res.data) ? res.data : [])
+                                          } catch {}
+                                        }}
+                                        showSuccess={showSuccess}
+                                        showError={showError}
+                                      />
+                                    </td>
+                                  </tr>
+                                )}
+                              </React.Fragment>
                             ))}
                           </tbody>
                         </table>

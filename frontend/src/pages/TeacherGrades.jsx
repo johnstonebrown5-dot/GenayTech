@@ -476,24 +476,93 @@ export default function TeacherGrades(){
       const t = saveTimersAllRef.current[key]
       if (t) clearTimeout(t)
       saveTimersAllRef.current[key] = setTimeout(async () => {
-        try{
-          const examId = Number(selectedExamId)
-          const subjectId = Number(selectedSubject)
-          const out = outOfPerComp?.[compId] ? Number(outOfPerComp[compId]) : undefined
-          const base = (inputAs === 'percent') ? percentToMarks(raw, out || examMeta.total_marks || 100) : String(raw)
-          const num = Math.round(Number(base))
-          if (!examId || !subjectId || Number.isNaN(num)) return
-          const item = { exam: examId, subject: subjectId, student: studentId, component: Number(compId), marks: num }
-          if (out) item.out_of = out
-          await saveResults([item])
-        }catch(e){
-          let msg = e?.response?.data?.detail
-          if (!msg && e?.response?.data){
-            try{ msg = JSON.stringify(e.response.data) }catch{}
-          }
-          showError('Auto-save failed', msg || 'Could not save mark', 4000)
-        }
+        await saveAllMarkNow(compId, studentId, raw)
       }, 600)
+    }
+  }
+
+  const saveSingleMarkNow = async (studentId, raw) => {
+    try{
+      const examId = Number(selectedExamId)
+      const subjectId = Number(selectedSubject)
+      const subjectHasComponents = Array.isArray(components) && components.length > 0
+      const componentId = selectedComponentId ? Number(selectedComponentId) : undefined
+      if (subjectHasComponents && !componentId){
+        if (!missingComponentWarnedRef.current){
+          missingComponentWarnedRef.current = true
+          showError('Select Paper', 'This subject has papers/components. Please select a Paper before saving marks.', 5000)
+        }
+        return
+      }
+      const out = outOf ? Number(outOf) : undefined
+      const base = (inputAs === 'percent') ? percentToMarks(raw, out || examMeta.total_marks || 100) : String(raw)
+      const total = Number(out || examMeta.total_marks || 100)
+      const n0 = Math.round(Number(base))
+      const num = Number.isFinite(n0)
+        ? Math.max(0, Math.min(Number.isFinite(total) && total > 0 ? total : 100, n0))
+        : NaN
+      if (!examId || !subjectId || Number.isNaN(num)) return
+      const item = { exam: examId, subject: subjectId, student: studentId, marks: num }
+      if (componentId) item.component = componentId
+      if (out) item.out_of = out
+      await saveResults([item])
+    }catch(e){
+      let msg = e?.response?.data?.detail
+      if (!msg && e?.response?.data){
+        try{ msg = JSON.stringify(e.response.data) }catch{}
+      }
+      showError('Auto-save failed', msg || 'Could not save mark', 4000)
+    }
+  }
+
+  const flushSingleSave = (studentId) => {
+    try{
+      const t = saveTimersRef.current?.[studentId]
+      if (t) clearTimeout(t)
+      saveTimersRef.current[studentId] = null
+    }catch{}
+    try{
+      const raw = (inputAs === 'percent') ? marksToPercent(marks?.[studentId], outOf) : (marks?.[studentId] ?? '')
+      if (raw !== '' && !invalid?.[studentId]) saveSingleMarkNow(studentId, raw)
+    }catch{}
+  }
+
+  const flushAllSave = (compId, studentId) => {
+    const key = `${compId}:${studentId}`
+    try{
+      const t = saveTimersAllRef.current?.[key]
+      if (t) clearTimeout(t)
+      saveTimersAllRef.current[key] = null
+    }catch{}
+    try{
+      const raw = (inputAs === 'percent')
+        ? marksToPercent((marksAll?.[compId]?.[studentId]), outOfPerComp?.[compId])
+        : ((marksAll?.[compId]?.[studentId]) ?? '')
+      if (raw !== '' && !(invalidAll?.[compId]?.[studentId])) saveAllMarkNow(compId, studentId, raw)
+    }catch{}
+  }
+
+  const saveAllMarkNow = async (compId, studentId, raw) => {
+    try{
+      const examId = Number(selectedExamId)
+      const subjectId = Number(selectedSubject)
+      const out = outOfPerComp?.[compId] ? Number(outOfPerComp[compId]) : undefined
+      const base = (inputAs === 'percent') ? percentToMarks(raw, out || examMeta.total_marks || 100) : String(raw)
+      const total = Number(out || examMeta.total_marks || 100)
+      const n0 = Math.round(Number(base))
+      const num = Number.isFinite(n0)
+        ? Math.max(0, Math.min(Number.isFinite(total) && total > 0 ? total : 100, n0))
+        : NaN
+      if (!examId || !subjectId || Number.isNaN(num)) return
+      const item = { exam: examId, subject: subjectId, student: studentId, component: Number(compId), marks: num }
+      if (out) item.out_of = out
+      await saveResults([item])
+    }catch(e){
+      let msg = e?.response?.data?.detail
+      if (!msg && e?.response?.data){
+        try{ msg = JSON.stringify(e.response.data) }catch{}
+      }
+      showError('Auto-save failed', msg || 'Could not save mark', 4000)
     }
   }
 
@@ -998,37 +1067,7 @@ export default function TeacherGrades(){
       const t = saveTimersRef.current[studentId]
       if (t) clearTimeout(t)
       saveTimersRef.current[studentId] = setTimeout(async () => {
-        try{
-          const examId = Number(selectedExamId)
-          const subjectId = Number(selectedSubject)
-          const subjectHasComponents = Array.isArray(components) && components.length > 0
-          const componentId = selectedComponentId ? Number(selectedComponentId) : undefined
-          if (subjectHasComponents && !componentId){
-            if (!missingComponentWarnedRef.current){
-              missingComponentWarnedRef.current = true
-              showError('Select Paper', 'This subject has papers/components. Please select a Paper before saving marks.', 5000)
-            }
-            return
-          }
-          const out = outOf ? Number(outOf) : undefined
-          const base = (inputAs === 'percent') ? percentToMarks(raw, out || examMeta.total_marks || 100) : String(raw)
-          const total = Number(out || examMeta.total_marks || 100)
-          const n0 = Math.round(Number(base))
-          const num = Number.isFinite(n0)
-            ? Math.max(0, Math.min(Number.isFinite(total) && total > 0 ? total : 100, n0))
-            : NaN
-          if (!examId || !subjectId || Number.isNaN(num)) return
-          const item = { exam: examId, subject: subjectId, student: studentId, marks: num }
-          if (componentId) item.component = componentId
-          if (out) item.out_of = out
-          await saveResults([item])
-        }catch(e){
-          let msg = e?.response?.data?.detail
-          if (!msg && e?.response?.data){
-            try{ msg = JSON.stringify(e.response.data) }catch{}
-          }
-          showError('Auto-save failed', msg || 'Could not save mark', 4000)
-        }
+        await saveSingleMarkNow(studentId, raw)
       }, 600)
     }
   }
@@ -1090,13 +1129,44 @@ export default function TeacherGrades(){
       // Only overlay same entry mode
       if (data.entryMode === 'single'){
         if (data.marks && typeof data.marks === 'object'){
-          setMarks(prev => ({ ...prev, ...data.marks }))
+          setMarks(prev => {
+            const next = { ...(prev || {}) }
+            for (const [k, v] of Object.entries(data.marks || {})){
+              const draftVal = (v == null) ? '' : String(v)
+              const hasDraft = draftVal !== ''
+              const currVal = next[k]
+              const hasCurr = currVal != null && String(currVal) !== ''
+              // Never overwrite a non-empty server prefills with an empty draft
+              if (hasDraft || !hasCurr){
+                next[k] = draftVal
+              }
+            }
+            return next
+          })
         }
         if (data.outOf) setOutOf(String(data.outOf))
         if (data.inputAs) setInputAs(data.inputAs)
       } else {
         if (data.marksAll && typeof data.marksAll === 'object'){
-          setMarksAll(prev => ({ ...prev, ...data.marksAll }))
+          setMarksAll(prev => {
+            const next = { ...(prev || {}) }
+            for (const [compId, compMap] of Object.entries(data.marksAll || {})){
+              const draftCol = (compMap && typeof compMap === 'object') ? compMap : {}
+              const currCol = (next[compId] && typeof next[compId] === 'object') ? next[compId] : {}
+              const merged = { ...currCol }
+              for (const [sid, v] of Object.entries(draftCol)){
+                const draftVal = (v == null) ? '' : String(v)
+                const hasDraft = draftVal !== ''
+                const currVal = merged[sid]
+                const hasCurr = currVal != null && String(currVal) !== ''
+                if (hasDraft || !hasCurr){
+                  merged[sid] = draftVal
+                }
+              }
+              next[compId] = merged
+            }
+            return next
+          })
         }
         if (data.outOfPerComp && typeof data.outOfPerComp === 'object'){
           setOutOfPerComp(prev => ({ ...prev, ...data.outOfPerComp }))
@@ -1856,6 +1926,13 @@ export default function TeacherGrades(){
                             className={`border px-2 py-1 rounded w-20 text-right focus:ring-2 focus:ring-indigo-200 ${(invalidAll[c.id]?.[st.id]) ? 'border-red-500 bg-red-50' : ''}`}
                             value={inputAs==='percent' ? marksToPercent((marksAll[c.id]?.[st.id]), outOfPerComp[c.id]) : ((marksAll[c.id]?.[st.id]) || '')}
                             onChange={e=>handleMarkChangeAll(c.id, st.id, e.target.value)}
+                            onBlur={()=>flushAllSave(c.id, st.id)}
+                            onKeyDown={(e)=>{
+                              if (e.key === 'Enter'){
+                                try{ e.currentTarget?.blur?.() }catch{}
+                                flushAllSave(c.id, st.id)
+                              }
+                            }}
                           />
                         </td>
                       ))}
@@ -1885,6 +1962,13 @@ export default function TeacherGrades(){
                       className={`border px-2 py-1.5 rounded-lg w-24 text-right focus:ring-2 focus:ring-indigo-200 ${invalid[st.id] ? 'border-red-500 bg-red-50' : ''}`}
                       value={inputAs==='percent' ? marksToPercent(marks[st.id], outOf) : (marks[st.id] || '')}
                       onChange={e=>handleMarkChange(st.id, e.target.value)}
+                      onBlur={()=>flushSingleSave(st.id)}
+                      onKeyDown={(e)=>{
+                        if (e.key === 'Enter'){
+                          try{ e.currentTarget?.blur?.() }catch{}
+                          flushSingleSave(st.id)
+                        }
+                      }}
                     />
                     <span className="text-xs text-gray-500 w-14 text-right">{inputAs==='percent' ? '%' : toPercent(marks[st.id], outOf)}</span>
                   </div>
@@ -1929,6 +2013,13 @@ export default function TeacherGrades(){
                           className={`border p-2 rounded w-28 text-right focus:ring-2 focus:ring-indigo-200 ${invalid[st.id] ? 'border-red-500 bg-red-50' : ''}`}
                           value={inputAs==='percent' ? marksToPercent(marks[st.id], outOf) : (marks[st.id] || '')}
                           onChange={e=>handleMarkChange(st.id, e.target.value)}
+                          onBlur={()=>flushSingleSave(st.id)}
+                          onKeyDown={(e)=>{
+                            if (e.key === 'Enter'){
+                              try{ e.currentTarget?.blur?.() }catch{}
+                              flushSingleSave(st.id)
+                            }
+                          }}
                         />
                         <span className="text-xs text-gray-500 w-16 text-right">{inputAs==='percent' ? '%' : toPercent(marks[st.id], outOf)}</span>
                       </div>
@@ -1946,6 +2037,13 @@ export default function TeacherGrades(){
                             className={`border p-2 rounded w-24 text-right focus:ring-2 focus:ring-indigo-200 ${(invalidAll[c.id]?.[st.id]) ? 'border-red-500 bg-red-50' : ''}`}
                             value={inputAs==='percent' ? marksToPercent((marksAll[c.id]?.[st.id]), outOfPerComp[c.id]) : ((marksAll[c.id]?.[st.id]) || '')}
                             onChange={e=>handleMarkChangeAll(c.id, st.id, e.target.value)}
+                            onBlur={()=>flushAllSave(c.id, st.id)}
+                            onKeyDown={(e)=>{
+                              if (e.key === 'Enter'){
+                                try{ e.currentTarget?.blur?.() }catch{}
+                                flushAllSave(c.id, st.id)
+                              }
+                            }}
                           />
                           <span className="text-xs text-gray-500 w-16 text-right">{inputAs==='percent' ? '%' : toPercent((marksAll[c.id]?.[st.id]) || '', outOfPerComp[c.id])}</span>
                         </div>
