@@ -2506,6 +2506,91 @@ class ExamViewSet(viewsets.ModelViewSet):
             'exam': {'id': exam.id, 'name': exam.name, 'year': exam.year, 'term': exam.term},
         })
 
+    @action(detail=True, methods=['get'], permission_classes=[permissions.IsAuthenticated], url_path='ranks')
+    def ranks(self, request, pk=None):
+        """Return positions for all students in the exam's class and grade cohort.
+
+        This avoids N+1 calls to /rank which recomputes the entire summary for each student.
+
+        Response:
+        {
+          "class": { "<studentId>": {"position": <int|null>, "size": <int>} },
+          "grade": { "<studentId>": {"position": <int|null>, "size": <int>} }
+        }
+        """
+        exam = self.get_object()
+
+        # Class positions (compute summary once, then apply ranking over full active roster)
+        summary = self._build_summary(exam)
+        results_list = summary.get('students', [])
+        totals_by_id = {int(s.get('id')): float(s.get('total') or 0.0) for s in results_list if s.get('id') is not None}
+        try:
+            roster_ids = list(Student.objects.filter(klass=exam.klass, is_active=True).values_list('id', flat=True))
+        except Exception:
+            roster_ids = list(totals_by_id.keys())
+
+        scored = [(int(sid), float(totals_by_id.get(int(sid), 0.0))) for sid in roster_ids]
+        scored.sort(key=lambda x: x[1], reverse=True)
+        class_size = len(scored)
+
+        class_map = {}
+        last_total = None
+        position = 0
+        for idx, (sid, sc) in enumerate(scored, start=1):
+            if last_total is None or sc < last_total:
+                position = idx
+                last_total = sc
+            class_map[str(int(sid))] = { 'position': position, 'size': class_size }
+
+        # Grade positions (compute once for cohort)
+        grade_map = {}
+        try:
+            exam_name = getattr(exam, 'name', None)
+            exam_year = getattr(exam, 'year', None)
+            exam_term = getattr(exam, 'term', None)
+            klass = getattr(exam, 'klass', None)
+            school_id = getattr(getattr(klass, 'school', None), 'id', None) if klass else None
+            grade_tag = getattr(klass, 'grade_level', None) or getattr(exam, 'grade_level_tag', None)
+
+            if exam_name and exam_year and exam_term and school_id and grade_tag:
+                cohort_exams = Exam.objects.filter(
+                    klass__school_id=school_id,
+                    klass__grade_level=grade_tag,
+                    name=exam_name,
+                    year=exam_year,
+                    term=exam_term,
+                )
+
+                # Match /rank semantics: use percentage-based totals from _build_summary
+                totals = {}
+                for ex in cohort_exams:
+                    try:
+                        summary_ex = self._build_summary(ex)
+                        for st in summary_ex.get('students', []):
+                            sid = st.get('id')
+                            if sid is None:
+                                continue
+                            totals[int(sid)] = float(st.get('total') or 0.0)
+                    except Exception:
+                        continue
+
+                ordered = sorted(((sid, sc) for sid, sc in totals.items()), key=lambda x: x[1], reverse=True)
+                grade_size = len(ordered)
+                last_total = None
+                pos = 0
+                for idx, (sid, sc) in enumerate(ordered, start=1):
+                    if last_total is None or sc < last_total:
+                        pos = idx
+                        last_total = sc
+                    grade_map[str(int(sid))] = { 'position': pos, 'size': grade_size }
+        except Exception:
+            grade_map = {}
+
+        return Response({
+            'class': class_map,
+            'grade': grade_map,
+        })
+
     @action(detail=False, methods=['get'], permission_classes=[IsTeacherOrAdmin], url_path='compare')
     def compare_exams(self, request):
         """Compare two exams' analytics for the same class/grade.

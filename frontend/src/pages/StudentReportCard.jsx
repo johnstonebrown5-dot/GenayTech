@@ -133,9 +133,15 @@ export default function StudentReportCard(){
       const next = {}
       for (const ex of termExams){
         try{
-          const { data } = await api.get(`/academics/exams/${ex.id}/rank`, { params: { student: student.id } })
+          const { data } = await api.get(`/academics/exams/${ex.id}/ranks/`)
           if (!active) return
-          next[ex.id] = data
+          const sid = String(student.id)
+          const cls = (data?.class && typeof data.class === 'object') ? data.class[sid] : null
+          const grd = (data?.grade && typeof data.grade === 'object') ? data.grade[sid] : null
+          next[ex.id] = {
+            class: cls ? { position: cls.position, size: cls.size } : undefined,
+            grade: grd ? { position: grd.position, size: grd.size } : undefined,
+          }
         }catch(_){ /* ignore */ }
       }
       if (active) setRanks(next)

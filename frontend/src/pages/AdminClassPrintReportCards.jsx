@@ -118,27 +118,33 @@ export default function AdminClassPrintReportCards({ classIdProp = null, embedde
     setPrintOnlyStudentId(null)
   }, [recentExam?.id])
 
-  // When we have an exam and students, fetch rank data from backend per student
+  // When we have an exam and students, fetch rank data in bulk (avoid N+1 calls)
   useEffect(()=>{
     let active = true
     ;(async ()=>{
       if (!recentExam?.id || !Array.isArray(summary.students) || summary.students.length===0) return
-      const entries = await Promise.allSettled(summary.students.map(async (st)=>{
-        const { data } = await api.get(`/academics/exams/${recentExam.id}/rank`, { params: { student: st.id } })
-        return { id: st.id, data }
-      }))
-      if (!active) return
-      const classMap = new Map()
-      const gradeMap = new Map()
-      for (const r of entries){
-        if (r.status === 'fulfilled' && r.value?.id){
-          const d = r.value.data || {}
-          if (d.class){ classMap.set(r.value.id, { position: d.class.position, size: d.class.size }) }
-          if (d.grade){ gradeMap.set(r.value.id, { position: d.grade.position, size: d.grade.size }) }
+      try{
+        const { data } = await api.get(`/academics/exams/${recentExam.id}/ranks/`)
+        if (!active) return
+        const classRows = data?.class && typeof data.class === 'object' ? data.class : {}
+        const gradeRows = data?.grade && typeof data.grade === 'object' ? data.grade : {}
+        const classMap = new Map()
+        const gradeMap = new Map()
+        for (const st of summary.students){
+          const sid = st?.id
+          if (sid == null) continue
+          const c = classRows[String(sid)]
+          const g = gradeRows[String(sid)]
+          if (c && typeof c === 'object') classMap.set(sid, { position: c.position, size: c.size })
+          if (g && typeof g === 'object') gradeMap.set(sid, { position: g.position, size: g.size })
         }
+        setClassRankMapApi(classMap)
+        setGradeRankMapApi(gradeMap)
+      }catch{
+        if (!active) return
+        setClassRankMapApi(new Map())
+        setGradeRankMapApi(new Map())
       }
-      setClassRankMapApi(classMap)
-      setGradeRankMapApi(gradeMap)
     })()
     return ()=>{ active = false }
   }, [recentExam?.id, summary.students])
