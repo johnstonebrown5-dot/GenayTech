@@ -36,6 +36,7 @@ export default function TeacherGrades(){
   const missingComponentWarnedRef = useRef(false)
   const [examsLoading, setExamsLoading] = useState(false)
   const [studentsLoading, setStudentsLoading] = useState(false)
+  const [marksLoading, setMarksLoading] = useState(false)
   const [examsReloadKey, setExamsReloadKey] = useState(0)
   const [marksReloadKey, setMarksReloadKey] = useState(0)
 
@@ -741,10 +742,11 @@ export default function TeacherGrades(){
     const examId = Number(selectedExamId)
     const subjectId = Number(selectedSubject)
     const compId = Number(selectedComponentId)
-    if (!examId || !subjectId || students.length === 0) return
+    if (!examId || !subjectId || students.length === 0) { setMarksLoading(false); return }
     let alive = true
     ;(async ()=>{
       try{
+        setMarksLoading(true)
         // handle possible pagination or array response
         const fetchAll = async (url) => {
           let out = []
@@ -895,6 +897,7 @@ export default function TeacherGrades(){
         }
         try { console.debug('TeacherGrades prefill', { examId, subjectId, compId, countSingle: entryMode==='single' ? undefined : null }) } catch {}
       }catch(e){ /* silent prefill failure */ }
+      finally { if (alive) setMarksLoading(false) }
     })()
     return ()=>{ alive = false }
   }, [selectedExamId, selectedSubject, selectedComponentId, students, entryMode, components, marksReloadKey])
@@ -1814,6 +1817,16 @@ export default function TeacherGrades(){
 
         {studentsLoading && (
           <div className="mb-3 p-2 rounded-lg border bg-white shadow-sm text-sm text-gray-600 animate-pulse">Loading students…</div>
+        )}
+
+        {marksLoading && (
+          <div className="mb-3 rounded-lg border border-indigo-200 bg-indigo-50/40 shadow-sm p-3">
+            <div className="flex items-center gap-3">
+              <div className="w-5 h-5 rounded-full border-2 border-indigo-300 border-t-indigo-700 animate-spin" />
+              <div className="text-sm font-medium text-indigo-900">Loading saved marks…</div>
+            </div>
+            <div className="mt-2 h-2 w-2/3 rounded bg-indigo-100 animate-pulse" />
+          </div>
         )}
 
         {/* Search Bar */}

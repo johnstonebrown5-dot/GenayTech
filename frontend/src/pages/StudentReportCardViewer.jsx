@@ -922,6 +922,11 @@ export default function StudentReportCardViewer({ embedded=false, hideControls=f
             style={autoFlow ? { overflowX: 'hidden' } : undefined}
           >
             {autoFlow && <style>{`@media print{ .report-card-autoflow{ transform:none !important; width:auto !important; } }`}</style>}
+            <style>{`
+              @media print{
+                html, body{ -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+              }
+            `}</style>
 
             <div
               className={autoFlow ? 'report-card-autoflow' : ''}
@@ -935,9 +940,9 @@ export default function StudentReportCardViewer({ embedded=false, hideControls=f
                       backgroundImage: `url(${raw})`,
                       backgroundRepeat: 'no-repeat',
                       backgroundPosition: 'center',
-                      backgroundSize: '65%',
-                      opacity: 0.07,
-                      filter: 'grayscale(100%)',
+                      backgroundSize: '72%',
+                      opacity: 0.13,
+                      filter: 'grayscale(100%) contrast(110%)',
                     }
                   : { background: 'linear-gradient(180deg,#f8fafc,rgba(248,250,252,0.7))' }
                 return <div className="absolute inset-0 pointer-events-none" style={bgStyle}></div>

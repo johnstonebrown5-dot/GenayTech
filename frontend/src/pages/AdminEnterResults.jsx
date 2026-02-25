@@ -21,7 +21,7 @@ export default function AdminEnterResults({ readOnly }){
   const [results, setResults] = useState([]) // rows: {student, subject, component|null, marks}
   const [invalid, setInvalid] = useState({}) // { 'studentId-subjectId': true }
   const [componentsMap, setComponentsMap] = useState({}) // { subjectId: [components] }
-  const [uploadOpen, setUploadOpen] = useState(true)
+  const [uploadOpen, setUploadOpen] = useState(false)
   const [studentSearch, setStudentSearch] = useState('')
   const [appliedStudentSearch, setAppliedStudentSearch] = useState('')
   const [subjectOrder, setSubjectOrder] = useState([])
@@ -769,19 +769,19 @@ export default function AdminEnterResults({ readOnly }){
       <div className="space-y-4">
         {/* Header + Toolbar */}
         <div className="flex items-center justify-between gap-3 flex-wrap">
-          <h1 className="text-xl sm:text-2xl font-bold text-gray-900">{title}</h1>
+          <h1 className="text-lg sm:text-2xl font-bold text-gray-900 leading-snug break-words">{title}</h1>
         </div>
         {error && (
           <div className="bg-red-50 text-red-700 border border-red-200 rounded-lg px-3 py-2 text-sm">
             {error}
           </div>
         )}
-        <div className="sticky top-0 z-10 bg-white/90 backdrop-blur supports-[backdrop-filter]:bg-white/70 rounded-lg border border-gray-200 px-3 py-2 flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-2 min-w-0 w-full sm:w-auto">
-            <label className="text-xs text-gray-600">Subject</label>
-            <div className="relative flex-1 sm:flex-none">
+        <div className="sticky top-0 z-10 bg-white/90 backdrop-blur supports-[backdrop-filter]:bg-white/70 rounded-lg border border-gray-200 px-3 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-2 min-w-0 w-full sm:w-auto">
+            <label className="text-[11px] sm:text-xs text-gray-600">Subject</label>
+            <div className="relative w-full sm:w-auto sm:flex-none">
               <select
-                className="border pl-2 pr-8 py-2 rounded-lg text-base sm:text-sm appearance-none w-full sm:w-auto sm:min-w-[240px]"
+                className="border pl-2 pr-8 py-2 rounded-lg text-sm appearance-none w-full sm:w-auto sm:min-w-[240px]"
                 value={selectedSubject}
                 onChange={e=>setSelectedSubject(e.target.value)}
               >
@@ -792,10 +792,10 @@ export default function AdminEnterResults({ readOnly }){
             </div>
             <span className="hidden sm:inline text-xs text-gray-500">Total {Number(exam?.total_marks||100)}</span>
           </div>
-          <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
-            <div className="flex items-center gap-2 w-full sm:w-auto">
+          <div className="w-full sm:w-auto">
+            <div className="flex items-center gap-2 w-full">
               <input
-                className="border px-2 py-2 rounded-lg text-sm w-full sm:w-56"
+                className="border px-3 py-2 rounded-lg text-sm w-full"
                 value={studentSearch}
                 onChange={(e)=>setStudentSearch(e.target.value)}
                 onKeyDown={(e)=>{
@@ -806,15 +806,17 @@ export default function AdminEnterResults({ readOnly }){
               />
               <button
                 type="button"
-                className="px-3 py-2 rounded-lg border text-sm bg-white"
+                className="px-3 py-2 rounded-lg border text-sm bg-white whitespace-nowrap"
                 onClick={()=>setAppliedStudentSearch(String(studentSearch || '').trim())}
               >Search</button>
             </div>
-            <button
-              type="button"
-              className="px-3 py-2 rounded-lg border text-sm bg-white"
-              onClick={()=>setReorderOpen(v=>!v)}
-            >Reorder</button>
+
+            <div className="mt-2 grid grid-cols-2 sm:flex sm:items-center sm:justify-end gap-2">
+              <button
+                type="button"
+                className="px-3 py-2 rounded-lg border text-sm bg-white"
+                onClick={()=>setReorderOpen(v=>!v)}
+              >Reorder</button>
             {isReadOnly && (
               <label className="text-xs text-gray-600 flex items-center gap-2">
                 <span>Class</span>
@@ -835,10 +837,11 @@ export default function AdminEnterResults({ readOnly }){
                 </select>
               </label>
             )}
-            <button className="px-3 py-1.5 rounded-lg border text-sm" onClick={()=>navigate(-1)}>Back</button>
-            <button disabled={saving || isReadOnly} onClick={save} className={`px-3.5 py-1.5 rounded-lg text-sm text-white ${status==='saved' ? 'bg-green-600' : 'bg-blue-600'} disabled:opacity-60`}>
-              {isReadOnly ? 'Read-only' : (saving? 'Saving...' : status==='saved' ? 'Saved' : 'Save Results')}
-            </button>
+              <button className="px-3 py-2 rounded-lg border text-sm bg-white" onClick={()=>navigate(-1)}>Back</button>
+              <button disabled={saving || isReadOnly} onClick={save} className={`px-3 py-2 rounded-lg text-sm text-white ${status==='saved' ? 'bg-green-600' : 'bg-blue-600'} disabled:opacity-60 col-span-2 sm:col-auto`}>
+                {isReadOnly ? 'Read-only' : (saving? 'Saving...' : status==='saved' ? 'Saved' : 'Save Results')}
+              </button>
+            </div>
           </div>
         </div>
         {reorderOpen && (
@@ -985,7 +988,19 @@ export default function AdminEnterResults({ readOnly }){
             )}
           </div>
         )}
-        {loading && <div>Loading...</div>}
+        {loading && (
+          <div className="rounded-xl border border-gray-200 bg-white shadow-card p-6">
+            <div className="flex items-center gap-3">
+              <div className="w-5 h-5 rounded-full border-2 border-gray-300 border-t-indigo-600 animate-spin" />
+              <div className="text-sm font-medium text-gray-700">Loading marks…</div>
+            </div>
+            <div className="mt-4 grid gap-2">
+              <div className="h-3 w-2/3 rounded bg-gray-100 animate-pulse" />
+              <div className="h-3 w-1/2 rounded bg-gray-100 animate-pulse" />
+              <div className="h-3 w-3/4 rounded bg-gray-100 animate-pulse" />
+            </div>
+          </div>
+        )}
         {!loading && (
           <div className="bg-white rounded-xl shadow-card border border-gray-200 p-3 overflow-auto max-h-[70vh] md:max-h-[75vh]">
             <div className="text-xs text-gray-500 mb-2">Legend: <span className="px-1 rounded bg-rose-50 border border-rose-200">Missing/0</span> • <span className="px-1 rounded border border-red-300">Out of range</span></div>

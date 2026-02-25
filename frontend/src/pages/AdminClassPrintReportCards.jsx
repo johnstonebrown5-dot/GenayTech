@@ -320,6 +320,7 @@ export default function AdminClassPrintReportCards({ classIdProp = null, embedde
       <style>{`
         @page { size: A4 portrait; margin: 10mm; }
         @media print {
+          html, body { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
           /* Hide everything except the report cards area */
           body * { visibility: hidden !important; }
           .print-root, .print-root * { visibility: visible !important; }
@@ -450,15 +451,23 @@ export default function AdminClassPrintReportCards({ classIdProp = null, embedde
                       {(() => {
                         const raw = (school?.logo_url || school?.logo || '')
                         const has = !!raw
-                        const bgStyle = has ? {
-                          backgroundImage: `url(${raw})`,
-                          backgroundRepeat: 'no-repeat',
-                          backgroundPosition: 'center',
-                          backgroundSize: '65%',
-                          opacity: 0.07,
-                          filter: 'grayscale(100%)',
-                        } : { background: 'linear-gradient(180deg,#f8fafc,rgba(248,250,252,0.7))' }
-                        return <div className="absolute inset-0 pointer-events-none" style={bgStyle}></div>
+                        if (has){
+                          return (
+                            <img
+                              src={raw}
+                              alt=""
+                              className="absolute left-1/2 top-1/2 pointer-events-none"
+                              style={{
+                                transform: 'translate(-50%, -50%)',
+                                width: '72%',
+                                height: 'auto',
+                                opacity: 0.13,
+                                filter: 'grayscale(100%)',
+                              }}
+                            />
+                          )
+                        }
+                        return <div className="absolute inset-0 pointer-events-none" style={{ background: 'linear-gradient(180deg,#f8fafc,rgba(248,250,252,0.7))' }}></div>
                       })()}
                       <div className="relative m-3 sm:m-4 md:m-6 border-2 border-gray-700 rounded-lg">
                         <div className="h-1.5 bg-gradient-to-r from-indigo-500 via-sky-500 to-violet-500 rounded-t-md"></div>
