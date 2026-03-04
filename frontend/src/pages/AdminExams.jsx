@@ -11,6 +11,17 @@ export default function AdminExams(){
   const [students, setStudents] = useState([])
   const [modalSubjects, setModalSubjects] = useState([]) // subjects for selected exam/class
 
+  const [loading, setLoading] = useState(false)
+
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const [confirmTitle, setConfirmTitle] = useState('Confirm')
+  const [confirmMessage, setConfirmMessage] = useState('')
+  const [confirmIntentText, setConfirmIntentText] = useState('')
+  const [confirmButtonText, setConfirmButtonText] = useState('Confirm')
+  const [confirmButtonClass, setConfirmButtonClass] = useState('bg-gray-900 hover:bg-black')
+  const [confirmBusy, setConfirmBusy] = useState(false)
+  const [confirmHandler, setConfirmHandler] = useState(null)
+
   const [showCreateExam, setShowCreateExam] = useState(false)
   const [showEnterResults, setShowEnterResults] = useState(false)
   const [examForm, setExamForm] = useState({ name:'Mid Term', year:new Date().getFullYear(), term:1, grades:[], classes:[], mode:'grade', date:new Date().toISOString().slice(0,10), total_marks:100 })
@@ -21,6 +32,7 @@ export default function AdminExams(){
   const [showResults, setShowResults] = useState(false)
   const [resultsSummary, setResultsSummary] = useState({ subjects: [], students: [] })
   const [publishingId, setPublishingId] = useState(null)
+  const [unpublishingId, setUnpublishingId] = useState(null)
   const [banner, setBanner] = useState('')
   const [currentTerm, setCurrentTerm] = useState(null)
   // Bulk selection
@@ -57,23 +69,62 @@ export default function AdminExams(){
   const [showFilters, setShowFilters] = useState(false)
   const [sortBy, setSortBy] = useState('latest') // latest|oldest|published_first|unpublished_first
 
+  const openConfirm = ({ title, message, intentText, confirmText, confirmClass, onConfirm }) => {
+    setConfirmTitle(title || 'Confirm')
+    setConfirmMessage(message || '')
+    setConfirmIntentText(intentText || '')
+    setConfirmButtonText(confirmText || 'Confirm')
+    setConfirmButtonClass(confirmClass || 'bg-gray-900 hover:bg-black')
+    setConfirmBusy(false)
+    setConfirmHandler(() => onConfirm)
+    setConfirmOpen(true)
+  }
+
+  const closeConfirm = () => {
+    if (confirmBusy) return
+    setConfirmOpen(false)
+    setConfirmHandler(null)
+    setConfirmMessage('')
+    setConfirmIntentText('')
+  }
+
+  const runConfirm = async () => {
+    if (!confirmHandler) return
+    try{
+      setConfirmBusy(true)
+      await confirmHandler()
+      setConfirmOpen(false)
+      setConfirmHandler(null)
+    }finally{
+      setConfirmBusy(false)
+    }
+  }
+
   const bulkPublishExams = async () => {
     const ids = Array.from(selected)
     if (ids.length===0) return
-    if (!window.confirm(`Publish results for ${ids.length} selected exam(s)?`)) return
-    try{
-      setBulkPublishing(true)
-      const results = await Promise.allSettled(ids.map(id => api.post(`/academics/exams/${id}/publish/`)))
-      const ok = results.filter(r=>r.status==='fulfilled').length
-      const fail = results.length - ok
-      setBanner(`Published ${ok} exam(s)${fail? `, ${fail} failed`:''}`)
-    }catch(err){
-      setBanner(err?.response?.data?.detail || 'Bulk publish failed')
-    }finally{
-      setBulkPublishing(false)
-      setSelected(new Set())
-      load()
-    }
+    openConfirm({
+      title: 'Publish results',
+      message: `You are about to publish results for ${ids.length} selected exam(s).`,
+      intentText: 'Please review your selection. Once published, students may immediately view results.',
+      confirmText: 'Publish',
+      confirmClass: 'bg-purple-600 hover:bg-purple-700',
+      onConfirm: async () => {
+        try{
+          setBulkPublishing(true)
+          const results = await Promise.allSettled(ids.map(id => api.post(`/academics/exams/${id}/publish/`)))
+          const ok = results.filter(r=>r.status==='fulfilled').length
+          const fail = results.length - ok
+          setBanner(`Published ${ok} exam(s)${fail? `, ${fail} failed`:''}`)
+        }catch(err){
+          setBanner(err?.response?.data?.detail || 'Bulk publish failed')
+        }finally{
+          setBulkPublishing(false)
+          setSelected(new Set())
+          load()
+        }
+      }
+    })
   }
 
   // Open modal showing all classes/grades that share the same exam name
@@ -107,26 +158,55 @@ export default function AdminExams(){
     }
   }
 
+  const unpublishExam = async (exam) => {
+    if (!exam) return
+    openConfirm({
+      title: 'Unpublish exam',
+      message: `Unpublish “${exam.name}”?`,
+      intentText: 'Students will no longer see this exam/results once unpublished.',
+      confirmText: 'Unpublish',
+      confirmClass: 'bg-orange-600 hover:bg-orange-700',
+      onConfirm: async () => {
+        try{
+          setUnpublishingId(exam.id)
+          setBanner('')
+          await api.post(`/academics/exams/${exam.id}/unpublish/`)
+          setBanner(`Unpublished ${exam.name}.`)
+          load()
+        }catch(err){
+          setBanner(err?.response?.data?.detail || 'Failed to unpublish exam')
+        }finally{
+          setUnpublishingId(null)
+        }
+      }
+    })
+  }
+
   const load = async () => {
-    const [ex, cl, sbj, term] = await Promise.all([
-      api.get('/academics/exams/', { params: { include_history: true } }),
-      api.get('/academics/classes/'),
-      api.get('/academics/subjects/'),
-      api.get('/academics/terms/current/').catch(()=>({ data: null })),
-    ])
-    const exArr = Array.isArray(ex.data) ? ex.data : (Array.isArray(ex.data?.results) ? ex.data.results : [])
-    const clArr = Array.isArray(cl.data) ? cl.data : (Array.isArray(cl.data?.results) ? cl.data.results : [])
-    const sbjArr = Array.isArray(sbj.data) ? sbj.data : (Array.isArray(sbj.data?.results) ? sbj.data.results : [])
-    setExams(exArr)
-    setClasses(clArr)
-    setSubjects(sbjArr)
-    setCurrentTerm(term?.data || null)
-    // Set defaults for modal: current term and today's date
-    setExamForm(prev => ({
-      ...prev,
-      term: term?.data?.number || prev.term,
-      date: prev.date || new Date().toISOString().slice(0,10),
-    }))
+    try{
+      setLoading(true)
+      const [ex, cl, sbj, term] = await Promise.all([
+        api.get('/academics/exams/', { params: { include_history: true } }),
+        api.get('/academics/classes/'),
+        api.get('/academics/subjects/'),
+        api.get('/academics/terms/current/').catch(()=>({ data: null })),
+      ])
+      const exArr = Array.isArray(ex.data) ? ex.data : (Array.isArray(ex.data?.results) ? ex.data.results : [])
+      const clArr = Array.isArray(cl.data) ? cl.data : (Array.isArray(cl.data?.results) ? cl.data.results : [])
+      const sbjArr = Array.isArray(sbj.data) ? sbj.data : (Array.isArray(sbj.data?.results) ? sbj.data.results : [])
+      setExams(exArr)
+      setClasses(clArr)
+      setSubjects(sbjArr)
+      setCurrentTerm(term?.data || null)
+      // Set defaults for modal: current term and today's date
+      setExamForm(prev => ({
+        ...prev,
+        term: term?.data?.number || prev.term,
+        date: prev.date || new Date().toISOString().slice(0,10),
+      }))
+    }finally{
+      setLoading(false)
+    }
   }
   useEffect(()=>{ load() }, [])
 
@@ -169,6 +249,9 @@ export default function AdminExams(){
     return String(b.date || '').localeCompare(String(a.date || ''))
   })
 
+  const publishedCount = (Array.isArray(exams) ? exams : []).filter(e=>!!e.published).length
+  const draftCount = (Array.isArray(exams) ? exams : []).filter(e=>!e.published).length
+
   // Selection helpers
   const allFilteredIds = filteredExams.map(e=>e.id)
   const allSelected = allFilteredIds.length>0 && allFilteredIds.every(id=>selected.has(id))
@@ -193,20 +276,28 @@ export default function AdminExams(){
   const bulkDeleteExams = async () => {
     const ids = Array.from(selected)
     if (ids.length===0) return
-    if (!window.confirm(`Delete ${ids.length} selected exam(s)? This cannot be undone.`)) return
-    try{
-      setBulkDeleting(true)
-      const results = await Promise.allSettled(ids.map(id => api.delete(`/academics/exams/${id}/`)))
-      const ok = results.filter(r=>r.status==='fulfilled').length
-      const fail = results.length - ok
-      setBanner(`Deleted ${ok} exam(s)${fail? `, ${fail} failed`:''}`)
-    }catch(err){
-      setBanner(err?.response?.data?.detail || 'Bulk delete failed')
-    }finally{
-      setBulkDeleting(false)
-      setSelected(new Set())
-      load()
-    }
+    openConfirm({
+      title: 'Delete exams',
+      message: `Delete ${ids.length} selected exam(s)?`,
+      intentText: 'This action cannot be undone. Exams and associated results may be lost.',
+      confirmText: 'Delete',
+      confirmClass: 'bg-red-600 hover:bg-red-700',
+      onConfirm: async () => {
+        try{
+          setBulkDeleting(true)
+          const results = await Promise.allSettled(ids.map(id => api.delete(`/academics/exams/${id}/`)))
+          const ok = results.filter(r=>r.status==='fulfilled').length
+          const fail = results.length - ok
+          setBanner(`Deleted ${ok} exam(s)${fail? `, ${fail} failed`:''}`)
+        }catch(err){
+          setBanner(err?.response?.data?.detail || 'Bulk delete failed')
+        }finally{
+          setBulkDeleting(false)
+          setSelected(new Set())
+          load()
+        }
+      }
+    })
   }
 
   const openResults = async (exam) => {
@@ -281,16 +372,24 @@ export default function AdminExams(){
 
   const deleteExam = async (exam) => {
     if (!exam) return
-    try{
-      if (!window.confirm('Delete this exam? This cannot be undone.')) return
-      setDeletingId(exam.id)
-      await api.delete(`/academics/exams/${exam.id}/`)
-      setDeletingId(null)
-      load()
-    }catch(err){
-      setDeletingId(null)
-      setBanner(err?.response?.data?.detail || 'Failed to delete exam')
-    }
+    openConfirm({
+      title: 'Delete exam',
+      message: `Delete “${exam.name}”?`,
+      intentText: 'This cannot be undone. Ensure you exported/verified results if needed.',
+      confirmText: 'Delete',
+      confirmClass: 'bg-red-600 hover:bg-red-700',
+      onConfirm: async () => {
+        try{
+          setDeletingId(exam.id)
+          await api.delete(`/academics/exams/${exam.id}/`)
+          setDeletingId(null)
+          load()
+        }catch(err){
+          setDeletingId(null)
+          setBanner(err?.response?.data?.detail || 'Failed to delete exam')
+        }
+      }
+    })
   }
 
   const viewResults = async (exam) => {
@@ -366,7 +465,15 @@ export default function AdminExams(){
   return (
     <React.Fragment>
       <div className="space-y-6">
-        <h1 className="text-2xl sm:text-3xl font-bold">Exams</h1>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Exams</h1>
+            <div className="text-sm text-gray-600 mt-0.5">Published: {publishedCount} · Draft: {draftCount}</div>
+          </div>
+          {loading && (
+            <div className="text-xs text-gray-500">Loading…</div>
+          )}
+        </div>
 
         <div className="bg-white rounded-xl shadow-card border border-gray-200 p-4 flex flex-wrap items-center justify-between gap-3">
           <div className="font-medium text-gray-800">Manage Exams</div>
@@ -463,11 +570,13 @@ export default function AdminExams(){
               <button onClick={()=>{setSearch('');setFilterGrade('');setFilterClass('');setFilterStatus('all')}} className="w-full border px-3 py-2 rounded">Clear</button>
             </div>
           </div>
-          <div className="flex items-center justify-between mb-2">
-            <div className="text-sm text-gray-600">Selected: {selected.size}</div>
+          <div className="sticky top-0 z-10 -mx-4 px-4 py-2 mb-3 bg-white/95 backdrop-blur border-b border-gray-100 flex items-center justify-between gap-3">
+            <div className="text-sm text-gray-700">
+              <span className="font-medium">Selected</span>: {selected.size}
+            </div>
             <div className="flex items-center gap-2">
-              <button onClick={bulkPublishExams} disabled={selected.size===0 || bulkPublishing} className={`px-3 py-2 rounded ${selected.size===0? 'border text-gray-400' : 'bg-purple-600 text-white'}`}>{bulkPublishing? 'Publishing...' : 'Publish Selected'}</button>
-              <button onClick={bulkDeleteExams} disabled={selected.size===0 || bulkDeleting} className={`px-3 py-2 rounded ${selected.size===0? 'border text-gray-400' : 'bg-red-600 text-white'}`}>{bulkDeleting? 'Deleting...' : 'Delete Selected'}</button>
+              <button onClick={bulkPublishExams} disabled={selected.size===0 || bulkPublishing} className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium ${selected.size===0? 'border text-gray-400' : 'bg-purple-600 text-white hover:bg-purple-700'}`}>{bulkPublishing? 'Publishing...' : 'Publish selected'}</button>
+              <button onClick={bulkDeleteExams} disabled={selected.size===0 || bulkDeleting} className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium ${selected.size===0? 'border text-gray-400' : 'bg-red-600 text-white hover:bg-red-700'}`}>{bulkDeleting? 'Deleting...' : 'Delete selected'}</button>
             </div>
           </div>
 
@@ -477,7 +586,7 @@ export default function AdminExams(){
               const klassName = classes.find(c=>c.id===e.klass)?.name || e.klass
               const gradeLevel = classes.find(c=>c.id===e.klass)?.grade_level || ''
               return (
-                <div key={e.id} className="p-3 rounded-xl border border-gray-200 flex items-center justify-between gap-3">
+                <div key={e.id} className="p-3 rounded-xl border border-gray-200 bg-white hover:shadow-sm transition-shadow flex items-center justify-between gap-3">
                   <div className="min-w-0">
                     <button onClick={()=>openByName(e.name)} className="font-medium text-blue-700 hover:underline" title="Show all classes for this exam name">{e.name}</button>
                     <div className="text-xs text-gray-500 truncate">{klassName} • {e.year} • T{e.term} • {e.date}</div>
@@ -495,21 +604,37 @@ export default function AdminExams(){
             })}
           </div>
 
+          {!loading && sortedExams.length===0 && (
+            <div className="py-10 text-center text-sm text-gray-600">
+              No exams match your filters.
+            </div>
+          )}
+
           {/* Desktop table */}
-          <div className="hidden md:block overflow-x-auto rounded-lg border border-gray-100">
+          <div className="hidden md:block overflow-x-auto rounded-xl border border-gray-100">
             <table className="w-full text-left text-sm">
-              <thead className="bg-gray-50">
+              <thead className="bg-gray-50 sticky top-12 z-10">
                 <tr>
                   <th className="px-3 py-2 w-10"><input type="checkbox" checked={allSelected} onChange={toggleSelectAll} aria-label="Select all" /></th>
-                  <th className="px-3 py-2">Name</th><th className="px-3 py-2">Year</th><th className="px-3 py-2">Term</th><th className="px-3 py-2">Class</th><th className="px-3 py-2">Date</th><th className="px-3 py-2">Total</th><th className="px-3 py-2">Status</th><th className="px-3 py-2"></th>
+                  <th className="px-3 py-2">Exam</th>
+                  <th className="px-3 py-2">Year</th>
+                  <th className="px-3 py-2">Term</th>
+                  <th className="px-3 py-2">Class</th>
+                  <th className="px-3 py-2">Date</th>
+                  <th className="px-3 py-2">Total</th>
+                  <th className="px-3 py-2">Status</th>
+                  <th className="px-3 py-2 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {sortedExams.map(e => (
-                  <tr key={e.id} className="border-t">
+                  <tr key={e.id} className="border-t odd:bg-white even:bg-gray-50/40 hover:bg-blue-50/30 transition-colors">
                     <td className="px-3 py-2"><input type="checkbox" checked={selected.has(e.id)} onChange={()=>toggleSelect(e.id)} aria-label={`Select exam ${e.name}`} /></td>
                     <td className="px-3 py-2">
-                      <button onClick={()=>openByName(e.name)} className="text-blue-700 hover:underline" title="Show all classes for this exam name">{e.name}</button>
+                      <div className="flex flex-col">
+                        <button onClick={()=>openByName(e.name)} className="text-blue-700 hover:underline text-left font-medium" title="Show all classes for this exam name">{e.name}</button>
+                        <div className="text-xs text-gray-500">ID #{e.id}</div>
+                      </div>
                     </td>
                     <td className="px-3 py-2">{e.year}</td>
                     <td className="px-3 py-2">T{e.term}</td>
@@ -518,13 +643,31 @@ export default function AdminExams(){
                     <td className="px-3 py-2">{e.total_marks}</td>
                     <td className="px-3 py-2">{e.published ? (<span className="px-2 py-0.5 rounded-full text-xs bg-emerald-100 text-emerald-700">Published</span>) : (<span className="px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-600">Draft</span>)}</td>
                     <td className="px-3 py-2">
-                      <div className="flex gap-3">
-                        <button onClick={()=>openEdit(e)} className="text-gray-700">Edit</button>
-                        <button onClick={()=>navigate(`/admin/exams/${e.id}/enter`)} className="text-blue-600">Enter Results</button>
-                        <button onClick={()=>navigate(`/admin/results?exam=${e.id}&grade=${encodeURIComponent(classes.find(c=>c.id===e.klass)?.grade_level || '')}`)} className="text-indigo-700">Results Page</button>
-                        <button onClick={()=>navigate(`/admin/results?exam=${e.id}&grade=${encodeURIComponent(classes.find(c=>c.id===e.klass)?.grade_level || '')}`)} className="text-green-700">View Results</button>
-                        <button onClick={()=>publishExam(e)} disabled={!!e.published || publishingId===e.id} className={`text-purple-700 ${e.published? 'opacity-50 cursor-not-allowed':''}`}>{publishingId===e.id ? 'Publishing...' : (e.published ? 'Published' : 'Publish')}</button>
-                        <button onClick={()=>deleteExam(e)} disabled={deletingId===e.id} className={`text-red-700 ${deletingId===e.id? 'opacity-50':''}`}>{deletingId===e.id? 'Deleting...' : 'Delete'}</button>
+                      <div className="flex items-center justify-end gap-1 flex-wrap">
+                        <button onClick={()=>navigate(`/admin/exams/${e.id}/enter`)} className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-blue-700 hover:bg-blue-50" title="Enter results">
+                          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M12 20h9"/><path strokeLinecap="round" strokeLinejoin="round" d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>
+                          <span className="text-xs font-medium">Enter</span>
+                        </button>
+                        <button onClick={()=>navigate(`/admin/results?exam=${e.id}&grade=${encodeURIComponent(classes.find(c=>c.id===e.klass)?.grade_level || '')}`)} className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-indigo-700 hover:bg-indigo-50" title="Open results page">
+                          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M4 19V5a2 2 0 012-2h9l5 5v11a2 2 0 01-2 2H6a2 2 0 01-2-2z"/><path strokeLinecap="round" strokeLinejoin="round" d="M9 9h6M9 13h6M9 17h4"/></svg>
+                          <span className="text-xs font-medium">Results</span>
+                        </button>
+                        <button onClick={()=>publishExam(e)} disabled={!!e.published || publishingId===e.id} className={`inline-flex items-center gap-1 px-2 py-1 rounded-md ${e.published? 'text-gray-400' : 'text-purple-700 hover:bg-purple-50'}`} title="Publish results">
+                          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M12 5v14"/><path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14"/></svg>
+                          <span className="text-xs font-medium">{publishingId===e.id ? 'Publishing…' : (e.published ? 'Published' : 'Publish')}</span>
+                        </button>
+                        <button onClick={()=>unpublishExam(e)} disabled={!e.published || unpublishingId===e.id} className={`inline-flex items-center gap-1 px-2 py-1 rounded-md ${!e.published? 'text-gray-400' : 'text-orange-700 hover:bg-orange-50'}`} title="Unpublish results">
+                          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M10 14l2-2 2 2m-2-2v6"/><path strokeLinecap="round" strokeLinejoin="round" d="M20 12a8 8 0 10-16 0"/></svg>
+                          <span className="text-xs font-medium">{unpublishingId===e.id ? 'Unpublishing…' : 'Unpublish'}</span>
+                        </button>
+                        <button onClick={()=>openEdit(e)} className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-gray-700 hover:bg-gray-100" title="Edit exam">
+                          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M12 20h9"/><path strokeLinecap="round" strokeLinejoin="round" d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>
+                          <span className="text-xs font-medium">Edit</span>
+                        </button>
+                        <button onClick={()=>deleteExam(e)} disabled={deletingId===e.id} className={`inline-flex items-center gap-1 px-2 py-1 rounded-md ${deletingId===e.id? 'text-gray-400' : 'text-red-700 hover:bg-red-50'}`} title="Delete exam">
+                          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M6 7h12"/><path strokeLinecap="round" strokeLinejoin="round" d="M9 7V5a1 1 0 011-1h4a1 1 0 011 1v2"/><path strokeLinecap="round" strokeLinejoin="round" d="M10 11v6M14 11v6"/><path strokeLinecap="round" strokeLinejoin="round" d="M8 7l1 14h6l1-14"/></svg>
+                          <span className="text-xs font-medium">{deletingId===e.id ? 'Deleting…' : 'Delete'}</span>
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -587,6 +730,23 @@ export default function AdminExams(){
             <button className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded shadow">Create</button>
           </div>
         </form>
+      </Modal>
+
+      <Modal open={confirmOpen} onClose={closeConfirm} title={confirmTitle} size="sm">
+        <div className="space-y-3">
+          {confirmMessage && (
+            <div className="text-sm text-gray-800">{confirmMessage}</div>
+          )}
+          {confirmIntentText && (
+            <div className="text-sm text-red-700 bg-red-50 border border-red-200 px-3 py-2 rounded">
+              {confirmIntentText}
+            </div>
+          )}
+          <div className="flex justify-end gap-2 pt-1">
+            <button type="button" onClick={closeConfirm} disabled={confirmBusy} className={`px-4 py-2 rounded border bg-white ${confirmBusy? 'opacity-60 cursor-not-allowed':''}`}>Cancel</button>
+            <button type="button" onClick={runConfirm} disabled={confirmBusy} className={`px-4 py-2 rounded text-white ${confirmButtonClass} ${confirmBusy? 'opacity-60 cursor-not-allowed':''}`}>{confirmBusy ? 'Please wait…' : confirmButtonText}</button>
+          </div>
+        </div>
       </Modal>
 
       {/* Edit Exam Modal */}
@@ -774,6 +934,7 @@ export default function AdminExams(){
                           <button onClick={()=>viewResults({ id: item.id })} className="text-green-700">View Results</button>
                           <button onClick={()=>navigate(`/admin/results?exam=${item.id}&grade=${encodeURIComponent(item.grade_level_tag || item.klass?.grade_level || '')}`)} className="text-indigo-700">Results Page</button>
                           <button onClick={()=>publishExam({ id: item.id, name: groupedName, published: item.published })} disabled={!!item.published} className={`text-purple-700 ${item.published? 'opacity-50 cursor-not-allowed':''}`}>{item.published ? 'Published' : 'Publish'}</button>
+                          <button onClick={()=>unpublishExam({ id: item.id, name: groupedName, published: item.published })} disabled={!item.published} className={`text-orange-700 ${!item.published? 'opacity-50 cursor-not-allowed':''}`}>Unpublish</button>
                         </div>
                       </td>
                     </tr>

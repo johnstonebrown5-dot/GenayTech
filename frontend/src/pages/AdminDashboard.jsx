@@ -351,10 +351,10 @@ export default function AdminDashboard(){
 
   return (
     <React.Fragment>
-      <div className="p-3 sm:p-4 md:p-6 lg:p-8 w-full space-y-6 md:space-y-8 [@media(max-height:800px)]:space-y-4 [@media(max-height:800px)]:p-4 [@media(max-height:720px)]:space-y-3 [@media(max-height:720px)]:p-3">
+      <div className="p-3 sm:p-4 md:p-6 lg:p-8 w-full space-y-6 md:space-y-8 [@media(max-height:800px)]:space-y-4 [@media(max-height:800px)]:p-4 [@media(max-height:720px)]:space-y-3 [@media(max-height:720px)]:p-3" style={{ fontSize: '60%' }}>
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Dashboard</h1>
+            <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Dashboard</h1>
             <p className="text-gray-600 mt-1">Welcome back! Here's what's happening with your school.</p>
           </div>
         </div>
@@ -402,11 +402,11 @@ export default function AdminDashboard(){
             </div>
 
             {/* Quick Actions */}
-            <div className="relative overflow-hidden rounded-2xl shadow-elevated p-5 text-white bg-gradient-to-r from-brand-600 via-indigo-600 to-fuchsia-600">
+            <div className="relative overflow-hidden rounded-2xl shadow-elevated p-5 text-white bg-gradient-to-r from-blue-700 via-blue-600 to-sky-500">
               {/* subtle top-right glow */}
               <div className="pointer-events-none absolute -top-8 right-0 w-40 h-40 rounded-full bg-white/20 blur-2 opacity-20" />
               <div className="flex items-center justify-between mb-3">
-                <h2 className="text-lg font-semibold tracking-tight">Quick Actions</h2>
+                <h2 className="text-base font-semibold tracking-tight">Quick Actions</h2>
                 <span className="text-xs/5 bg-white/15 border border-white/20 px-2 py-1 rounded-full hidden sm:inline">Fast shortcuts</span>
               </div>
               {/* On very small screens, allow horizontal scrolling for easier access */}
@@ -465,7 +465,7 @@ export default function AdminDashboard(){
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <div className="bg-white rounded-2xl shadow-card border border-gray-200 p-6">
                 <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-lg font-semibold text-gray-900">Finance Overview</h2>
+                  <h2 className="text-base font-semibold text-gray-900">Finance Overview</h2>
                   <div className="flex items-center gap-2">
                     <span className={`text-[11px] px-2 py-0.5 rounded-full border ${
                       (stats?.trends?.feesCollected ?? 0) > 0
@@ -555,20 +555,26 @@ export default function AdminDashboard(){
               </div>
 
               <div className="bg-white rounded-2xl shadow-card border border-gray-200 p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-base sm:text-lg font-semibold text-gray-900">Events Calendar</h2>
-                  <div className="flex items-center gap-1.5 sm:gap-2">
-                    <div className="hidden sm:block text-sm text-gray-600 mr-2">
+                <div className="flex items-start sm:items-center justify-between gap-3 mb-4">
+                  <div>
+                    <h2 className="text-base sm:text-lg font-semibold text-gray-900 leading-tight">Events Calendar</h2>
+                    <div className="text-xs text-gray-500 mt-0.5">
                       {currentMonth.toLocaleString(undefined,{ month:'long', year:'numeric' })}
                     </div>
-                    <button onClick={()=>setViewMonth(prev=>{ const d=new Date(prev); d.setMonth(d.getMonth()-1); return d })} className="p-2 sm:p-2.5 rounded-full border border-gray-200 hover:bg-gray-50" aria-label="Previous month">‹</button>
-                    <button onClick={()=>setViewMonth(prev=>{ const d=new Date(prev); d.setMonth(d.getMonth()+1); return d })} className="p-2 sm:p-2.5 rounded-full border border-gray-200 hover:bg-gray-50" aria-label="Next month">›</button>
-                    <button onClick={()=>setViewMonth(new Date())} className="px-2 py-1 text-[10px] sm:text-xs rounded-full border border-gray-200 hover:bg-gray-50">Today</button>
-                    <div className="sm:hidden inline-flex items-center gap-1 border border-gray-200 rounded-full p-0.5">
+                  </div>
+                  <div className="flex items-center gap-1.5 sm:gap-2">
+                    <div className="hidden sm:inline-flex items-center gap-1 border border-gray-200 bg-gray-50 rounded-full p-0.5">
+                      <button onClick={()=>setViewMonth(prev=>{ const d=new Date(prev); d.setMonth(d.getMonth()-1); return d })} className="h-8 w-8 inline-flex items-center justify-center rounded-full hover:bg-white text-gray-700" aria-label="Previous month">‹</button>
+                      <button onClick={()=>setViewMonth(prev=>{ const d=new Date(prev); d.setMonth(d.getMonth()+1); return d })} className="h-8 w-8 inline-flex items-center justify-center rounded-full hover:bg-white text-gray-700" aria-label="Next month">›</button>
+                    </div>
+                    <button onClick={()=>setViewMonth(prev=>{ const d=new Date(prev); d.setMonth(d.getMonth()-1); return d })} className="sm:hidden p-2 rounded-full border border-gray-200 hover:bg-gray-50" aria-label="Previous month">‹</button>
+                    <button onClick={()=>setViewMonth(prev=>{ const d=new Date(prev); d.setMonth(d.getMonth()+1); return d })} className="sm:hidden p-2 rounded-full border border-gray-200 hover:bg-gray-50" aria-label="Next month">›</button>
+                    <button onClick={()=>setViewMonth(new Date())} className="px-2.5 py-1.5 text-[10px] sm:text-xs rounded-full border border-gray-200 bg-white hover:bg-gray-50">Today</button>
+                    <div className="sm:hidden inline-flex items-center gap-1 border border-gray-200 bg-gray-50 rounded-full p-0.5">
                       <button onClick={()=>setCalendarMode('calendar')} className={`${calendarMode==='calendar' ? 'bg-gray-900 text-white' : 'bg-white text-gray-700'} px-2 py-0.5 rounded-full text-[10px]`}>Cal</button>
                       <button onClick={()=>setCalendarMode('list')} className={`${calendarMode==='list' ? 'bg-gray-900 text-white' : 'bg-white text-gray-700'} px-2 py-0.5 rounded-full text-[10px]`}>List</button>
                     </div>
-                    <button onClick={() => navigate('/admin/events')} className="hidden sm:inline text-blue-600 hover:text-blue-700 text-sm font-medium">View All →</button>
+                    <button onClick={() => navigate('/admin/events')} className="hidden sm:inline-flex items-center text-blue-600 hover:text-blue-700 text-sm font-medium">View All →</button>
                   </div>
                 </div>
 
@@ -590,7 +596,7 @@ export default function AdminDashboard(){
                           <button
                             key={key}
                             onClick={()=> setSelectedTags(prev=>{ const n=new Set(prev); if (n.has(key)) n.delete(key); else n.add(key); return n })}
-                            className={`px-2 py-0.5 rounded-full border text-[11px] ${active ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'}`}
+                            className={`px-2.5 py-1 rounded-full border text-[11px] transition-colors ${active ? 'bg-gray-900 text-white border-gray-900 shadow-sm' : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'}`}
                           >{label}</button>
                         )
                       })}
@@ -602,7 +608,8 @@ export default function AdminDashboard(){
                       <div className="grid grid-cols-7 text-[10px] sm:text-[11px] font-semibold text-gray-500 mb-2">
                         {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d=> <div key={d} className="px-0.5 sm:px-1 py-0.5 sm:py-1 text-center tracking-wide">{d}</div>)}
                       </div>
-                      <div className="grid grid-cols-7 gap-1">
+                      <div className="rounded-2xl border border-gray-200 bg-gray-50/60 p-2">
+                        <div className="grid grid-cols-7 gap-2">
                         {monthDays.map((d,i)=>{
                           const key = localKey(d)
                           const inMonth = d.getMonth()===currentMonth.getMonth()
@@ -611,12 +618,18 @@ export default function AdminDashboard(){
                           const color = dayEvents.length>0 ? colorForEvent(dayEvents[0]) : null
                           const holidayName = kenyaHolidaysMap.get(key)
                           const weekend = isWeekend(d)
-                          let tileBg = inMonth ? 'bg-white' : 'bg-gray-50'
-                          if (weekend && inMonth) tileBg = 'bg-indigo-50'
-                          if (color && dayEvents.length>0) tileBg = color.chip.split(' ').find(c=>c.startsWith('bg-')) || tileBg
-                          if (holidayName) tileBg = 'bg-yellow-50'
+                          let tileBg = inMonth ? 'bg-white' : 'bg-gray-100/60'
+                          if (weekend && inMonth) tileBg = 'bg-indigo-50/60'
+                          if (holidayName) tileBg = 'bg-yellow-50/70'
+                          const ring = isToday ? 'ring-2 ring-brand-500 ring-offset-2 ring-offset-gray-50/60' : ''
+                          const baseBorder = holidayName ? 'border-yellow-300' : (inMonth ? 'border-gray-200' : 'border-gray-200/70')
                           return (
-                            <button type="button" onClick={() => handleDayClick(key, dayEvents, d)} key={i} className={`text-left relative rounded-xl min-h-[56px] sm:min-h-[68px] p-1.5 sm:p-2 text-[10px] sm:text-xs border ${holidayName? 'border-yellow-300' : (inMonth? 'border-gray-200':'border-gray-200/70')} ${tileBg} hover:border-brand-300 transition-all group`}>
+                            <button
+                              type="button"
+                              onClick={() => handleDayClick(key, dayEvents, d)}
+                              key={i}
+                              className={`text-left relative rounded-2xl min-h-[62px] sm:min-h-[78px] p-2 text-[10px] sm:text-xs border ${baseBorder} ${tileBg} hover:border-brand-300 hover:shadow-sm transition-all group focus:outline-none focus:ring-2 focus:ring-brand-400 ${ring}`}
+                            >
                               <div className="flex items-center justify-between">
                                 <div className={`${inMonth? 'text-gray-800':'text-gray-400'} text-[10px] sm:text-[11px] font-semibold`}>{d.getDate()}</div>
                                 <div className="flex items-center gap-1">
@@ -629,15 +642,26 @@ export default function AdminDashboard(){
                                   <span className="text-brand-600 font-bold text-lg">+</span>
                                 </div>
                               )}
-                              <div className="mt-1 flex flex-wrap gap-1">
+                              <div className="mt-1 space-y-1">
                                 {dayEvents.slice(0,2).map(ev => {
                                   const c = colorForEvent(ev)
+                                  const bar = (c.dot || 'bg-blue-500')
                                   return (
-                                  <span key={ev.id} className={`px-1.5 py-0.5 rounded-full text-[9px] sm:text-[10px] border truncate max-w-full ${c.chip}`} title={ev.title}>
-                                    {ev.title}
-                                  </span>)
+                                    <div
+                                      key={ev.id}
+                                      title={ev.title}
+                                      className={`flex items-center gap-1.5 px-1.5 py-1 rounded-lg border shadow-sm ${c.chip.replace(/text-[^\s]+/g,'').trim()} bg-white`}
+                                    >
+                                      <span className={`w-1.5 h-4 rounded-full ${bar}`} />
+                                      <span className="min-w-0 truncate text-[10px] sm:text-[11px] font-semibold text-gray-900">{ev.title}</span>
+                                    </div>
+                                  )
                                 })}
-                                {dayEvents.length>2 && <span className="text-[9px] sm:text-[10px] text-gray-500">+{dayEvents.length-2} more</span>}
+                                {dayEvents.length>2 && (
+                                  <div className="text-[9px] sm:text-[10px] font-medium text-gray-700">
+                                    +{dayEvents.length-2} more
+                                  </div>
+                                )}
                               </div>
                               {dayEvents.length>0 && (
                                 <div className="absolute bottom-1 right-2 inline-flex items-center gap-1 text-[9px] sm:text-[10px] text-gray-500">
@@ -648,6 +672,7 @@ export default function AdminDashboard(){
                             </button>
                           )
                         })}
+                        </div>
                       </div>
                     </>
                   ) : (

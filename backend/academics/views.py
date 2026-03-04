@@ -1952,15 +1952,16 @@ class ExamViewSet(viewsets.ModelViewSet):
             qs = qs.filter(is_deleted=False)
         except Exception:
             pass
-        school = getattr(getattr(self.request, 'user', None), 'school', None)
-        # Admins can see all; others are scoped to their school
-        if school and not self._is_admin(self.request):
+        user = getattr(self.request, 'user', None)
+        school = getattr(user, 'school', None)
+        # Always scope to the user's school unless they are a superuser.
+        # This prevents cross-school data leakage in list/detail views.
+        if school and not getattr(user, 'is_superuser', False):
             qs = qs.filter(klass__school=school)
 
         # If requester is a teacher, restrict to classes they teach (class teacher or subject teacher).
         # However, for detail actions like summary/rank/report_card_pdf/compare_subjects, allow access to
         # published exams from the same school to avoid 404 before the per-action permission checks.
-        user = getattr(self.request, 'user', None)
         if user and getattr(user, 'role', None) == 'teacher' and not (user.is_staff or user.is_superuser):
             try:
                 action = getattr(self, 'action', None)
@@ -3554,6 +3555,16 @@ class ExamViewSet(viewsets.ModelViewSet):
         t.start()
 
         return Response({'detail': 'Published', 'published_at': exam.published_at})
+
+    @action(detail=True, methods=['post'], permission_classes=[IsAdmin], url_path='unpublish')
+    def unpublish(self, request, pk=None):
+        exam = self.get_object()
+        if not getattr(exam, 'published', False):
+            return Response({'detail': 'Already unpublished', 'published_at': getattr(exam, 'published_at', None)}, status=200)
+        exam.published = False
+        exam.published_at = None
+        exam.save(update_fields=['published', 'published_at'])
+        return Response({'detail': 'Unpublished', 'published': False, 'published_at': None}, status=200)
 
     @action(detail=True, methods=['get'], permission_classes=[permissions.IsAuthenticated], url_path='summary-pdf')
     def summary_pdf(self, request, pk=None):
@@ -5159,6 +5170,8 @@ class StudentViewSet(viewsets.ModelViewSet):
             ay_label_filter = qp.get('academic_year') or qp.get('academic_year_label')
             include_subjects = str(qp.get('include_subjects', 'false')).lower() in ('1','true','yes','on')
 
+            exams = []
+
             res_q = (
                 ExamResult.objects
                 .filter(student=student)
@@ -5178,19 +5191,29 @@ class StudentViewSet(viewsets.ModelViewSet):
                     pass
             if ay_label_filter not in (None, ''):
                 try:
-                    ssid = getattr(getattr(student, 'klass', None), 'school_id', None) or getattr(student, 'school_id', None)
-                    ay_obj = AcademicYear.objects.filter(school_id=ssid, label=ay_label_filter).first()
-                    if ay_obj:
-                        res_q = res_q.filter(exam__date__gte=getattr(ay_obj, 'start_date', None), exam__date__lte=getattr(ay_obj, 'end_date', None))
+                    ay_label = str(ay_label_filter).strip()
+                    if ay_label:
+                        ay = AcademicYear.objects.filter(label=ay_label).first()
+                        if ay:
+                            res_q = res_q.filter(exam__date__gte=ay.start_date, exam__date__lte=ay.end_date)
                 except Exception:
                     pass
+
             exam_rows = (
                 res_q
-                .values('exam_id', 'exam__name', 'exam__year', 'exam__term', 'exam__total_marks', 'exam__klass__name', 'exam__date')
-                .annotate(total=Sum('marks'), subjects=Sum(1))
-                .order_by('exam__year', 'exam__term', 'exam_id')
+                .values(
+                    'exam_id',
+                    'exam__name',
+                    'exam__year',
+                    'exam__term',
+                    'exam__klass__name',
+                    'exam__total_marks',
+                    'exam__date',
+                )
+                .annotate(total=Sum('marks'), subjects=Count('subject_id', distinct=True))
+                .order_by('-exam__date', '-exam_id')
             )
-            exams = []
+
             for r in exam_rows:
                 total = float(r.get('total') or 0)
                 subj_count = int(r.get('subjects') or 0)
