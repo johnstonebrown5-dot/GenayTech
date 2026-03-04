@@ -72,6 +72,7 @@ export default function SuperAdminSchools(){
     trial_expires_at: '',
     feature_flags_text: '{}',
     homepage_text: '{}',
+    enable_fee_reset: false,
   })
 
   const [domainsOpen, setDomainsOpen] = useState(false)
@@ -138,6 +139,7 @@ export default function SuperAdminSchools(){
       trial_expires_at: s?.trial_expires_at ? String(s.trial_expires_at).slice(0, 19) : '',
       feature_flags_text: jsonStringifySafe(s?.feature_flags || {}),
       homepage_text: jsonStringifySafe(s?.homepage || {}),
+      enable_fee_reset: !!s?.enable_fee_reset,
     })
     setEditOpen(true)
   }
@@ -288,6 +290,7 @@ export default function SuperAdminSchools(){
         trial_expires_at: editForm.trial_expires_at || null,
         feature_flags: ff,
         homepage: hp,
+        enable_fee_reset: !!editForm.enable_fee_reset,
       })
       setEditOpen(false)
       setEditSchool(null)
@@ -481,6 +484,28 @@ The data is not deleted completely until you purge it from the Recycle Bin.`)
           <div>
             <label className="text-sm font-medium text-gray-700">Code</label>
             <input value={editForm.code} onChange={(e)=>setEditForm(f=>({ ...f, code: e.target.value }))} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2" />
+          </div>
+          <div className="md:col-span-2">
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+              <div className="flex items-start gap-3">
+                <input
+                  id="enable_fee_reset"
+                  type="checkbox"
+                  checked={!!editForm.enable_fee_reset}
+                  onChange={(e)=>setEditForm(f=>({ ...f, enable_fee_reset: e.target.checked }))}
+                  className="mt-1"
+                />
+                <div>
+                  <label htmlFor="enable_fee_reset" className="text-sm font-semibold text-amber-900">
+                    Enable “Reset Fees Data” button for this school
+                  </label>
+                  <div className="text-xs text-amber-800 mt-1">
+                    This exposes a highly destructive action that clears invoices, payments, and receipts for this school.
+                    Keep this OFF unless you really need it.
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
           <div>
             <label className="text-sm font-medium text-gray-700">Trial</label>

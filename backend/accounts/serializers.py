@@ -11,7 +11,7 @@ class SchoolSerializer(serializers.ModelSerializer):
         model = School
         fields = [
             "id","name","code","is_active","address","motto","aim","logo","logo_url","social_links","homepage",
-            "is_trial","trial_expires_at","trial_student_limit","feature_flags",
+            "is_trial","trial_expires_at","trial_student_limit","feature_flags","enable_fee_reset",
         ]
 
     def get_logo_url(self, obj):

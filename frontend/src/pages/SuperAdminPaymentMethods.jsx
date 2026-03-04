@@ -19,14 +19,10 @@ export default function SuperAdminPaymentMethods() {
   async function fetchInitialData() {
     try {
       setLoading(true)
-      const [schRes, pmRes, mcRes] = await Promise.all([
-        api.get('/schools/'),
-        api.get('/finance/payment-methods/'),
-        api.get('/finance/mpesa-configs/')
-      ])
-      setSchools(schRes.data.results || schRes.data || [])
-      setPaymentMethods(pmRes.data.results || pmRes.data || [])
-      setMpesaConfigs(mcRes.data.results || mcRes.data || [])
+      const schRes = await api.get('/auth/superadmin/schools/')
+      setSchools(schRes.data?.results || [])
+      setPaymentMethods([])
+      setMpesaConfigs([])
     } catch (err) {
       setError('Failed to fetch data')
     } finally {
@@ -34,17 +30,53 @@ export default function SuperAdminPaymentMethods() {
     }
   }
 
+  useEffect(() => {
+    if (!selectedSchool) {
+      setPaymentMethods([])
+      setMpesaConfigs([])
+      return
+    }
+    ;(async () => {
+      try {
+        setError('')
+        setLoading(true)
+        const [pmRes, mcRes] = await Promise.all([
+          api.get(`/auth/superadmin/schools/${selectedSchool}/payment-methods/`),
+          api.get(`/auth/superadmin/schools/${selectedSchool}/mpesa-config/`),
+        ])
+        const pm = pmRes.data?.results || []
+        setPaymentMethods(pm.map(x => ({ ...x, school: Number(selectedSchool) })))
+        const cfg = mcRes.data || {}
+        setMpesaConfigs(cfg && cfg.school_id ? [cfg] : [])
+      } catch (err) {
+        setError('Failed to fetch data')
+      } finally {
+        setLoading(false)
+      }
+    })()
+  }, [selectedSchool])
+
   async function saveConfig(e) {
     e.preventDefault()
     try {
-      if (editingConfig.id) {
-        await api.patch(`/finance/mpesa-configs/${editingConfig.id}/`, editingConfig)
-      } else {
-        await api.post('/finance/mpesa-configs/', editingConfig)
+      const schoolId = editingConfig?.school || editingConfig?.school_id
+      if (!schoolId) {
+        setError('Missing school id for configuration')
+        return
       }
+      await api.patch(`/auth/superadmin/schools/${schoolId}/mpesa-config/`, editingConfig)
       setSuccess('Configuration saved successfully')
       setEditingConfig(null)
-      fetchInitialData()
+      if (String(selectedSchool) === String(schoolId)) {
+        const [pmRes, mcRes] = await Promise.all([
+          api.get(`/auth/superadmin/schools/${schoolId}/payment-methods/`),
+          api.get(`/auth/superadmin/schools/${schoolId}/mpesa-config/`),
+        ])
+        const pm = pmRes.data?.results || []
+        setPaymentMethods(pm.map(x => ({ ...x, school: Number(schoolId) })))
+        const cfg = mcRes.data || {}
+        setMpesaConfigs(cfg && cfg.school_id ? [cfg] : [])
+      }
       setTimeout(() => setSuccess(''), 3000)
     } catch (err) {
       setError('Failed to save configuration')
@@ -54,7 +86,8 @@ export default function SuperAdminPaymentMethods() {
   async function toggleMethod(method) {
     try {
       const updated = { ...method, enabled: !method.enabled }
-      await api.patch(`/finance/payment-methods/${method.id}/`, { enabled: updated.enabled })
+      const schoolId = method?.school || selectedSchool
+      await api.patch(`/auth/superadmin/schools/${schoolId}/payment-methods/`, { methods: { [method.key]: updated.enabled } })
       setPaymentMethods(prev => prev.map(m => m.id === method.id ? updated : m))
       setSuccess(`Method ${method.key} ${updated.enabled ? 'enabled' : 'disabled'}`)
       setTimeout(() => setSuccess(''), 3000)
@@ -73,10 +106,9 @@ export default function SuperAdminPaymentMethods() {
       // We can trigger a GET with school filter to invoke that logic if needed, 
       // or implement a bulk create here.
       setLoading(true)
-      await api.get(`/finance/payment-methods/?school=${selectedSchool}`)
-      // Re-fetch all
-      const res = await api.get('/finance/payment-methods/')
-      setPaymentMethods(res.data.results || res.data || [])
+      const res = await api.get(`/auth/superadmin/schools/${selectedSchool}/payment-methods/`)
+      const pm = res.data?.results || []
+      setPaymentMethods(pm.map(x => ({ ...x, school: Number(selectedSchool) })))
       setSuccess('Methods seeded/refreshed for school')
     } catch (err) {
       setError('Seeding failed')

@@ -1,4 +1,5 @@
 from rest_framework import viewsets, permissions
+from rest_framework.decorators import api_view, permission_classes, parser_classes
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
@@ -9,6 +10,8 @@ from django.utils import timezone
 from rest_framework.parsers import MultiPartParser, JSONParser, FormParser
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
+from django.core.cache import cache
+import secrets
 import json
 import os
 import logging
@@ -21,6 +24,297 @@ from .coop_stk import CoopStkClient
 from .coop_api import CoopApiClient
 from .models import Invoice, Payment, FeeCategory, ClassFee, MpesaConfig, ExpenseCategory, Expense, PocketMoneyWallet, PocketMoneyTransaction, PaymentMethod, IncomingPayment, StudentFee, StaffPayroll, StaffPayslip
 from .serializers import InvoiceSerializer, PaymentSerializer, FeeCategorySerializer, ClassFeeSerializer, MpesaConfigSerializer, ExpenseCategorySerializer, ExpenseSerializer, PocketMoneyWalletSerializer, PocketMoneyTransactionSerializer, PaymentMethodSerializer, IncomingPaymentSerializer, StudentFeeSerializer, StaffPayrollSerializer, StaffPayslipSerializer
+
+
+def _require_superuser(request):
+    if not getattr(getattr(request, 'user', None), 'is_superuser', False):
+        return Response({'detail': 'Not allowed'}, status=403)
+    return None
+
+
+def _require_finance_or_admin(request):
+    user = getattr(request, 'user', None)
+    if not (user and getattr(user, 'is_authenticated', False)):
+        return Response({'detail': 'Not allowed'}, status=403)
+    if getattr(user, 'role', None) in ('admin', 'finance') or bool(getattr(user, 'is_staff', False)) or bool(getattr(user, 'is_superuser', False)):
+        return None
+    return Response({'detail': 'Not allowed'}, status=403)
+
+
+@csrf_exempt
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+@parser_classes([JSONParser])
+def superadmin_reset_fees(request):
+    denied = _require_finance_or_admin(request)
+    if denied is not None:
+        return denied
+
+    data = request.data or {}
+    school_id = data.get('school_id') or data.get('school')
+    if not school_id:
+        return Response({'detail': 'school_id is required'}, status=400)
+    try:
+        school_id = int(school_id)
+    except Exception:
+        return Response({'detail': 'Invalid school_id'}, status=400)
+
+    try:
+        from accounts.models import School
+    except Exception:
+        return Response({'detail': 'School model not available'}, status=500)
+
+    school = School.objects.filter(id=school_id).first()
+    if not school:
+        return Response({'detail': 'School not found'}, status=404)
+
+    if not bool(getattr(school, 'enable_fee_reset', False)):
+        return Response({'detail': 'Fee reset is disabled for this school'}, status=403)
+
+    dry_run = str(data.get('dry_run') or '').lower() in ('1', 'true', 'yes')
+    confirm_phrase = str(data.get('confirm_phrase') or '').strip()
+    expected = f"RESET FEES {school_id}"
+
+    inv_qs = Invoice.objects.filter(student__klass__school_id=school_id)
+    pay_qs = Payment.objects.filter(invoice__student__klass__school_id=school_id)
+    inc_qs = IncomingPayment.objects.filter(matched_student__klass__school_id=school_id)
+
+    # Summary (counts and totals) for safe confirmation
+    try:
+        inv_count = int(inv_qs.count())
+        pay_count = int(pay_qs.count())
+        inc_count = int(inc_qs.count())
+        inv_total = float(inv_qs.aggregate(s=Sum('amount'))['s'] or 0)
+        pay_total = float(pay_qs.aggregate(s=Sum('amount'))['s'] or 0)
+        inc_total = float(inc_qs.aggregate(s=Sum('amount'))['s'] or 0)
+    except Exception:
+        inv_count = pay_count = inc_count = 0
+        inv_total = pay_total = inc_total = 0.0
+
+    summary = {
+        'school_id': school_id,
+        'school_name': getattr(school, 'name', None),
+        'expected_confirm_phrase': expected,
+        'will_delete': {
+            'invoices': inv_count,
+            'payments': pay_count,
+            'incoming_payments': inc_count,
+        },
+        'totals': {
+            'invoices_amount': inv_total,
+            'payments_amount': pay_total,
+            'incoming_payments_amount': inc_total,
+        }
+    }
+
+    if dry_run:
+        return Response({'dry_run': True, **summary})
+
+    if confirm_phrase != expected:
+        return Response({'detail': 'Invalid confirm_phrase', **summary}, status=400)
+
+    from django.db import transaction
+    with transaction.atomic():
+        # Delete dependent rows first (payments), then invoices.
+        deleted_pay = pay_qs.delete()[0]
+        deleted_inc = inc_qs.delete()[0]
+        deleted_inv = inv_qs.delete()[0]
+
+    return Response({
+        'detail': 'Fee data reset completed',
+        **summary,
+        'deleted': {
+            'payments': int(deleted_pay),
+            'incoming_payments': int(deleted_inc),
+            'invoices': int(deleted_inv),
+        }
+    })
+
+
+@csrf_exempt
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+@parser_classes([JSONParser])
+def superadmin_reset_fees_otp_request(request):
+    denied = _require_finance_or_admin(request)
+    if denied is not None:
+        return denied
+
+    data = request.data or {}
+    school_id = data.get('school_id') or data.get('school')
+    if not school_id:
+        return Response({'detail': 'school_id is required'}, status=400)
+    try:
+        school_id = int(school_id)
+    except Exception:
+        return Response({'detail': 'Invalid school_id'}, status=400)
+
+    from accounts.models import School
+    school = School.objects.filter(id=school_id).first()
+    if not school:
+        return Response({'detail': 'School not found'}, status=404)
+    if not bool(getattr(school, 'enable_fee_reset', False)):
+        return Response({'detail': 'Fee reset is disabled for this school'}, status=403)
+
+    # Rate limit per user+school
+    ip = request.META.get('HTTP_X_FORWARDED_FOR', '').split(',')[0].strip() or request.META.get('REMOTE_ADDR', '')
+    rate_key = f"fee_reset_otp_req:{getattr(request.user,'id',None)}:{school_id}:{ip}"
+    attempts = cache.get(rate_key, 0)
+    if attempts and int(attempts) >= 5:
+        return Response({'detail': 'Too many OTP requests. Try again later.'}, status=429)
+    cache.set(rate_key, int(attempts) + 1, 60 * 60)
+
+    admin_email = (getattr(request.user, 'email', '') or '').strip().lower()
+    if not admin_email:
+        return Response({'detail': 'Your account has no email. Add an email to receive OTP.'}, status=400)
+
+    code_int = secrets.randbelow(900000) + 100000
+    code = f"{code_int:06d}"
+    expires_in = 15 * 60
+    cache_key = f"fee_reset_otp:{getattr(request.user,'id',None)}:{school_id}"
+    cache.set(
+        cache_key,
+        {
+            'code': code,
+            'expires_at': int(timezone.now().timestamp()) + expires_in,
+            'attempts': 0,
+        },
+        expires_in,
+    )
+
+    # Email OTP
+    try:
+        from communications.utils import send_email_safe
+        send_email_safe(
+            subject='Genay Technologies fee reset verification code',
+            message=(
+                "Use this 6-digit verification code to confirm resetting fee balances and deleting fee transactions:\n\n"
+                f"{code}\n\n"
+                f"School: {getattr(school,'name','') } (ID {school_id})\n\n"
+                "This code expires in 15 minutes. If you did not request this, you can ignore this email."
+            ),
+            recipient=admin_email,
+            school_id=school_id,
+            recipient_name=(getattr(request.user, 'first_name', '') or None),
+        )
+    except Exception:
+        pass
+
+    return Response({
+        'detail': 'OTP sent',
+        'expires_in_seconds': expires_in,
+        'school_id': school_id,
+    })
+
+
+@csrf_exempt
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+@parser_classes([JSONParser])
+def superadmin_reset_fees_otp_confirm(request):
+    denied = _require_finance_or_admin(request)
+    if denied is not None:
+        return denied
+
+    data = request.data or {}
+    school_id = data.get('school_id') or data.get('school')
+    code = str(data.get('code') or '').strip()
+    confirm_phrase = str(data.get('confirm_phrase') or '').strip()
+    if not school_id:
+        return Response({'detail': 'school_id is required'}, status=400)
+    try:
+        school_id = int(school_id)
+    except Exception:
+        return Response({'detail': 'Invalid school_id'}, status=400)
+    if not code:
+        return Response({'detail': 'code is required'}, status=400)
+
+    from accounts.models import School
+    school = School.objects.filter(id=school_id).first()
+    if not school:
+        return Response({'detail': 'School not found'}, status=404)
+    if not bool(getattr(school, 'enable_fee_reset', False)):
+        return Response({'detail': 'Fee reset is disabled for this school'}, status=403)
+
+    expected_phrase = f"RESET FEES {school_id}"
+    if confirm_phrase != expected_phrase:
+        return Response({'detail': 'Invalid confirm_phrase', 'expected_confirm_phrase': expected_phrase}, status=400)
+
+    cache_key = f"fee_reset_otp:{getattr(request.user,'id',None)}:{school_id}"
+    rec = cache.get(cache_key)
+    if not rec:
+        return Response({'detail': 'OTP expired or not requested'}, status=400)
+
+    try:
+        expires_at = int(rec.get('expires_at') or 0)
+        attempts = int(rec.get('attempts') or 0)
+        saved = str(rec.get('code') or '').strip()
+    except Exception:
+        cache.delete(cache_key)
+        return Response({'detail': 'OTP invalid. Request a new one.'}, status=400)
+
+    if int(timezone.now().timestamp()) >= expires_at:
+        cache.delete(cache_key)
+        return Response({'detail': 'OTP expired. Request a new one.'}, status=400)
+    if attempts >= 5:
+        cache.delete(cache_key)
+        return Response({'detail': 'Too many attempts. Request a new OTP.'}, status=400)
+    if code != saved:
+        rec['attempts'] = attempts + 1
+        ttl = max(30, expires_at - int(timezone.now().timestamp()))
+        cache.set(cache_key, rec, ttl)
+        return Response({'detail': 'Invalid OTP'}, status=400)
+
+    # OTP validated: consume it
+    cache.delete(cache_key)
+
+    inv_qs = Invoice.objects.filter(student__klass__school_id=school_id)
+    pay_qs = Payment.objects.filter(invoice__student__klass__school_id=school_id)
+    inc_qs = IncomingPayment.objects.filter(matched_student__klass__school_id=school_id)
+    try:
+        inv_count = int(inv_qs.count())
+        pay_count = int(pay_qs.count())
+        inc_count = int(inc_qs.count())
+        inv_total = float(inv_qs.aggregate(s=Sum('amount'))['s'] or 0)
+        pay_total = float(pay_qs.aggregate(s=Sum('amount'))['s'] or 0)
+        inc_total = float(inc_qs.aggregate(s=Sum('amount'))['s'] or 0)
+    except Exception:
+        inv_count = pay_count = inc_count = 0
+        inv_total = pay_total = inc_total = 0.0
+
+    summary = {
+        'school_id': school_id,
+        'school_name': getattr(school, 'name', None),
+        'expected_confirm_phrase': expected_phrase,
+        'will_delete': {
+            'invoices': inv_count,
+            'payments': pay_count,
+            'incoming_payments': inc_count,
+        },
+        'totals': {
+            'invoices_amount': inv_total,
+            'payments_amount': pay_total,
+            'incoming_payments_amount': inc_total,
+        }
+    }
+
+    from django.db import transaction
+    with transaction.atomic():
+        deleted_pay = pay_qs.delete()[0]
+        deleted_inc = inc_qs.delete()[0]
+        deleted_inv = inv_qs.delete()[0]
+
+    return Response({
+        'detail': 'Fee data reset completed',
+        **summary,
+        'deleted': {
+            'payments': int(deleted_pay),
+            'incoming_payments': int(deleted_inc),
+            'invoices': int(deleted_inv),
+        }
+    })
+
+
 def _log_payment_health_event(*, school_id: int | None, method: str, ok: bool, context: str = '') -> None:
     try:
         from accounts.models import SystemHealthEvent

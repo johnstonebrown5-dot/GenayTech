@@ -1,6 +1,6 @@
 from rest_framework.routers import DefaultRouter
 from django.urls import path
-from .views import InvoiceViewSet, PaymentViewSet, FeeCategoryViewSet, ClassFeeViewSet, mpesa_callback, coop_mpesa_callback, MpesaConfigViewSet, ExpenseCategoryViewSet, ExpenseViewSet, PocketMoneyWalletViewSet, PocketMoneyTransactionViewSet, PaymentMethodViewSet, IncomingPaymentViewSet, StudentFeeViewSet, StaffPayrollViewSet, StaffPayslipViewSet
+from .views import InvoiceViewSet, PaymentViewSet, FeeCategoryViewSet, ClassFeeViewSet, mpesa_callback, coop_mpesa_callback, MpesaConfigViewSet, ExpenseCategoryViewSet, ExpenseViewSet, PocketMoneyWalletViewSet, PocketMoneyTransactionViewSet, PaymentMethodViewSet, IncomingPaymentViewSet, StudentFeeViewSet, StaffPayrollViewSet, StaffPayslipViewSet, superadmin_reset_fees, superadmin_reset_fees_otp_request, superadmin_reset_fees_otp_confirm
 
 router = DefaultRouter()
 router.trailing_slash = '/?'
@@ -24,6 +24,10 @@ urlpatterns = [
     path('mpesa/callback/', mpesa_callback, name='mpesa-callback'),
     # Public callback URL for Co-op STK push
     path('coop/mpesa/callback/', coop_mpesa_callback, name='coop-mpesa-callback'),
+    # Superadmin-only destructive action (feature-flag gated per school)
+    path('superadmin/reset-fees/', superadmin_reset_fees, name='superadmin-reset-fees'),
+    path('superadmin/reset-fees/otp/request/', superadmin_reset_fees_otp_request, name='superadmin-reset-fees-otp-request'),
+    path('superadmin/reset-fees/otp/confirm/', superadmin_reset_fees_otp_confirm, name='superadmin-reset-fees-otp-confirm'),
 ]
 
 # Include router-generated endpoints

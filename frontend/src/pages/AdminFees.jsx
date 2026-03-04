@@ -16,16 +16,25 @@ export default function AdminFees({ embed=false, initialTab='categories' }){
   const [reportForm, setReportForm] = useState({ kind:'payments', format:'graph', scope:'all', classId:'', grade:'' })
   const [reportClasses, setReportClasses] = useState([])
   const [reportLoading, setReportLoading] = useState(false)
+  const [school, setSchool] = useState(null)
+  const [resetOpen, setResetOpen] = useState(false)
+  const [resetBusy, setResetBusy] = useState(false)
+  const [resetPhrase, setResetPhrase] = useState('')
+  const [resetPreview, setResetPreview] = useState(null)
+  const [resetOtp, setResetOtp] = useState('')
+  const [otpSent, setOtpSent] = useState(false)
   useEffect(()=>{
     let mounted = true
     async function loadSchool(){
       try{
         setLoadingGallery(true)
         const { data } = await api.get('/auth/school/me/')
+        if (mounted) setSchool(data || null)
         const items = Array.isArray(data?.homepage?.gallery?.items) ? data.homepage.gallery.items : []
         if (mounted) setGallery(items.filter(it=>it && it.url))
       }catch{
         if (mounted) setGallery([])
+        if (mounted) setSchool(null)
       }finally{
         if (mounted) setLoadingGallery(false)
       }
@@ -33,6 +42,67 @@ export default function AdminFees({ embed=false, initialTab='categories' }){
     loadSchool()
     return ()=>{ mounted = false }
   }, [])
+
+  const expectedResetPhrase = useMemo(() => {
+    const id = school?.id
+    return id ? `RESET FEES ${id}` : 'RESET FEES'
+  }, [school?.id])
+
+  const openReset = async () => {
+    setResetOpen(true)
+    setResetPhrase('')
+    setResetOtp('')
+    setOtpSent(false)
+    setResetPreview(null)
+    if (!school?.id) return
+    try {
+      setResetBusy(true)
+      const { data } = await api.post('/finance/superadmin/reset-fees/', { school_id: school.id, dry_run: true })
+      setResetPreview(data || null)
+    } catch (e) {
+      setResetPreview(null)
+    } finally {
+      setResetBusy(false)
+    }
+  }
+
+  const requestResetOtp = async () => {
+    if (!school?.id) return
+    try {
+      setResetBusy(true)
+      await api.post('/finance/superadmin/reset-fees/otp/request/', { school_id: school.id })
+      setOtpSent(true)
+      showSuccess?.('OTP Sent', 'A verification code has been sent to the superadmin email.')
+    } catch (e) {
+      showError?.('OTP Request Failed', e?.response?.data?.detail || e?.message || 'Failed')
+    } finally {
+      setResetBusy(false)
+    }
+  }
+
+  const runReset = async () => {
+    if (!school?.id) return
+    const phrase = (resetPhrase || '').trim()
+    if (phrase !== expectedResetPhrase) {
+      showError?.('Confirmation phrase incorrect', `Type exactly: ${expectedResetPhrase}`)
+      return
+    }
+    const code = (resetOtp || '').trim()
+    if (!code) {
+      showError?.('OTP required', 'Request an OTP and enter the 6-digit code to continue.')
+      return
+    }
+    try {
+      setResetBusy(true)
+      await api.post('/finance/superadmin/reset-fees/otp/confirm/', { school_id: school.id, confirm_phrase: phrase, code })
+      showSuccess?.('Fees data reset', 'Invoices, payments and receipts have been cleared for this school.')
+      setResetOpen(false)
+    } catch (e) {
+      showError?.('Reset failed', e?.response?.data?.detail || e?.message || 'Failed')
+    } finally {
+      setResetBusy(false)
+    }
+  }
   useEffect(()=>{
     if (showReport) {
       let mounted = true
@@ -103,6 +173,14 @@ export default function AdminFees({ embed=false, initialTab='categories' }){
                     <span>Generate Report</span>
                   </button>
                 </div>
+                {school?.enable_fee_reset ? (
+                  <div>
+                    <button onClick={openReset} className="ml-2 inline-flex items-center gap-2 px-3 py-2 rounded-md bg-rose-600 text-white text-sm shadow-sm hover:bg-rose-700">
+                      <span>🧨</span>
+                      <span>Reset Fees Data</span>
+                    </button>
+                  </div>
+                ) : null}
               </div>
             </div>
             {(loadingGallery && gallery.length===0) ? (
@@ -240,6 +318,78 @@ export default function AdminFees({ embed=false, initialTab='categories' }){
               <button type="submit" className="px-4 py-2 rounded bg-indigo-600 text-white">Generate</button>
             </div>
           </form>
+        </Modal>
+      )}
+
+      {resetOpen && (
+        <Modal open={resetOpen} onClose={()=>{ if (!resetBusy) setResetOpen(false) }} title="Reset Fees Data" size="md">
+          <div className="space-y-4">
+            <div className="text-sm text-gray-700">
+              This will permanently clear the following for <span className="font-semibold">{school?.name || 'this school'}</span>:
+              <div className="mt-2 text-sm text-red-700 bg-red-50 border border-red-200 px-3 py-2 rounded">
+                Invoices, payment receipts, and payment transactions will be deleted. This cannot be undone.
+              </div>
+            </div>
+
+            <div className="rounded-lg border bg-white p-3">
+              <div className="text-xs font-semibold text-gray-700">Preview</div>
+              {resetPreview ? (
+                <div className="mt-2 text-xs text-gray-700 space-y-1">
+                  <div>Invoices: <span className="font-semibold">{resetPreview?.will_delete?.invoices ?? 0}</span> (KES {Number(resetPreview?.totals?.invoices_amount ?? 0).toLocaleString()})</div>
+                  <div>Payments: <span className="font-semibold">{resetPreview?.will_delete?.payments ?? 0}</span> (KES {Number(resetPreview?.totals?.payments_amount ?? 0).toLocaleString()})</div>
+                  <div>Incoming payments: <span className="font-semibold">{resetPreview?.will_delete?.incoming_payments ?? 0}</span> (KES {Number(resetPreview?.totals?.incoming_payments_amount ?? 0).toLocaleString()})</div>
+                </div>
+              ) : (
+                <div className="mt-2 text-xs text-gray-500">{resetBusy ? 'Loading preview…' : 'Preview unavailable.'}</div>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Type this to confirm</label>
+              <div className="mt-1 text-xs text-gray-500">{expectedResetPhrase}</div>
+              <input
+                value={resetPhrase}
+                onChange={e=>setResetPhrase(e.target.value)}
+                className="mt-2 w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+                placeholder={expectedResetPhrase}
+                disabled={resetBusy}
+              />
+            </div>
+
+            <div className="rounded-lg border bg-white p-3">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-xs font-semibold text-gray-700">OTP Verification</div>
+                  <div className="text-[11px] text-gray-500 mt-0.5">An OTP will be sent to the superadmin email.</div>
+                </div>
+                <button
+                  type="button"
+                  onClick={requestResetOtp}
+                  disabled={resetBusy}
+                  className="px-3 py-1.5 rounded border bg-white hover:bg-gray-50 text-xs disabled:opacity-50"
+                >
+                  {otpSent ? 'Resend OTP' : 'Request OTP'}
+                </button>
+              </div>
+              <div className="mt-3">
+                <label className="block text-sm font-medium text-gray-700">Enter OTP</label>
+                <input
+                  value={resetOtp}
+                  onChange={e=>setResetOtp(e.target.value)}
+                  className="mt-2 w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+                  placeholder="6-digit code"
+                  disabled={resetBusy}
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={()=>setResetOpen(false)} disabled={resetBusy} className="px-4 py-2 rounded border bg-white hover:bg-gray-50 disabled:opacity-50">Cancel</button>
+              <button type="button" onClick={runReset} disabled={resetBusy || (resetPhrase||'').trim() !== expectedResetPhrase || !(resetOtp||'').trim()} className="px-4 py-2 rounded bg-rose-600 text-white hover:bg-rose-700 disabled:opacity-50">
+                {resetBusy ? 'Resetting…' : 'Reset Now'}
+              </button>
+            </div>
+          </div>
         </Modal>
       )}
     </React.Fragment>

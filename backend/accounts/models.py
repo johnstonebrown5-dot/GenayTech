@@ -20,6 +20,8 @@ class School(models.Model):
     trial_expires_at = models.DateTimeField(null=True, blank=True)
     trial_student_limit = models.IntegerField(default=100)
     feature_flags = models.JSONField(default=dict, blank=True)  # e.g., {"pos": false, "sms": false}
+    # Highly destructive admin actions (disabled/hidden by default)
+    enable_fee_reset = models.BooleanField(default=False, db_index=True)
 
     def __str__(self):
         return self.name

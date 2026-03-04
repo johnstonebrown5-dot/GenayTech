@@ -2114,6 +2114,7 @@ def superadmin_schools(request):
                 'trial_expires_at': s.trial_expires_at,
                 'trial_student_limit': s.trial_student_limit,
                 'feature_flags': s.feature_flags,
+                'enable_fee_reset': bool(getattr(s, 'enable_fee_reset', False)),
                 'domains': domains,
                 'primary_domain': primary,
             })
@@ -2163,6 +2164,7 @@ def superadmin_schools(request):
                 is_trial=is_trial,
                 trial_student_limit=trial_student_limit,
                 feature_flags=feature_flags,
+                enable_fee_reset=bool(data.get('enable_fee_reset')) if data.get('enable_fee_reset') is not None else False,
             )
             if normalized_domain or getattr(settings, 'TENANT_BASE_DOMAIN', None):
                 _create_primary_domain_for_school(school, normalized_domain)
@@ -2710,6 +2712,7 @@ def superadmin_school_detail(request, id: int):
             'trial_expires_at': school.trial_expires_at,
             'trial_student_limit': school.trial_student_limit,
             'feature_flags': school.feature_flags,
+            'enable_fee_reset': bool(getattr(school, 'enable_fee_reset', False)),
             'domains': domains,
         })
 
@@ -2737,6 +2740,12 @@ def superadmin_school_detail(request, id: int):
         if field in data and isinstance(data.get(field), dict):
             setattr(school, field, data.get(field))
             update_fields.append(field)
+    if 'enable_fee_reset' in data and data.get('enable_fee_reset') is not None:
+        try:
+            school.enable_fee_reset = bool(data.get('enable_fee_reset'))
+            update_fields.append('enable_fee_reset')
+        except Exception:
+            return Response({"detail": "Invalid enable_fee_reset"}, status=400)
     if 'is_active' in data and data.get('is_active') is not None:
         school.is_active = bool(data.get('is_active'))
         update_fields.append('is_active')
