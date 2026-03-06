@@ -21,6 +21,7 @@ import { useNotification } from '../components/NotificationContext';
 const AdminCommunicationLogs = () => {
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState({
     channel: '',
     status: '',
@@ -33,8 +34,9 @@ const AdminCommunicationLogs = () => {
   const { addNotification } = useNotification();
   const [polling, setPolling] = useState(false);
 
-  const fetchLogs = async () => {
-    setLoading(true);
+  const fetchLogs = async ({ background = false } = {}) => {
+    if (background) setRefreshing(true);
+    else setLoading(true);
     try {
       const params = {
         page_size: 10000, // Fetch all records
@@ -63,7 +65,8 @@ const AdminCommunicationLogs = () => {
       addNotification('Failed to load communication logs', 'error');
       return [];
     } finally {
-      setLoading(false);
+      if (background) setRefreshing(false);
+      else setLoading(false);
     }
   };
 
@@ -72,7 +75,7 @@ const AdminCommunicationLogs = () => {
     setPolling(true);
     try {
       for (let i = 0; i < attempts; i++) {
-        const latest = await fetchLogs();
+        const latest = await fetchLogs({ background: true });
         const stillSending = (latest || []).some(l => l && (l.status === 'queued' || l.status === 'pending'));
         if (!stillSending) break;
         await new Promise(r => setTimeout(r, delayMs));
@@ -91,7 +94,7 @@ const AdminCommunicationLogs = () => {
       pollUntilSettled();
     } catch (err) {
       addNotification('Retry failed to start', 'error');
-      fetchLogs();
+      fetchLogs({ background: true });
     }
   };
 
@@ -207,11 +210,11 @@ const AdminCommunicationLogs = () => {
             </span>
           </div>
           <button 
-            onClick={() => fetchLogs()}
+            onClick={() => fetchLogs({ background: true })}
             className="p-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
             title="Refresh logs"
           >
-            <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`w-5 h-5 ${(loading || refreshing || polling) ? 'animate-spin' : ''}`} />
           </button>
         </div>
       </div>
@@ -305,7 +308,7 @@ const AdminCommunicationLogs = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {loading ? (
+              {(loading && logs.length === 0) ? (
                 Array.from({ length: 5 }).map((_, i) => (
                   <tr key={i} className="animate-pulse">
                     <td colSpan="7" className="px-4 py-4 h-12 bg-slate-50/50"></td>

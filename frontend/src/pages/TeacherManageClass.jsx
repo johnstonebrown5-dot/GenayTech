@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import api from '../api'
 import { useAuth } from '../auth'
 import AdminClassPrintReportCards from './AdminClassPrintReportCards'
@@ -12,6 +12,7 @@ export default function TeacherManageClass(){
   const initialTab = (search?.get('tab') || 'add')
   const initialInnerView = (search?.get('view') || '')
   const [tab, setTab] = useState(initialTab) // info | add | edit | fees
+  const nav = useNavigate()
 
   useEffect(() => {
     let mounted = true
@@ -59,6 +60,7 @@ export default function TeacherManageClass(){
         <TabButton active={tab==='message'} onClick={()=>setTab('message')}>Message Students</TabButton>
         <TabButton active={tab==='fees'} onClick={()=>setTab('fees')}>Send Fees Notifications</TabButton>
         <TabButton active={tab==='reportcards'} onClick={()=>setTab('reportcards')}>Report Cards</TabButton>
+        <TabButton active={tab==='classlogs'} onClick={()=>nav(`/teacher/class-logs?classId=${encodeURIComponent(String(myClass.id))}`)}>Class Logs</TabButton>
       </div>
       <div className="w-full">
         {tab === 'info' && <ClassInfoPanel classId={myClass.id} initialInnerTab={initialInnerView} />}
@@ -288,12 +290,16 @@ function StudentEditForm({ student, onSaved }){
       <Select label="Active" value={String(form.is_active)} onChange={v=>set('is_active', v==='true')} options={[{value:'true',label:'Active'},{value:'false',label:'Inactive'}]} />
       <div className="md:col-span-3 flex items-center gap-2">
         <button type="submit" disabled={saving} className="px-3 py-1.5 rounded bg-blue-600 text-white">{saving? 'Saving...' : 'Save'}</button>
-        {msg && <span className="text-sm text-slate-700">{msg}</span>}
       </div>
 
       <div className="md:col-span-3 border-t border-slate-200 pt-3 mt-2">
         <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-          <button type="button" onClick={doResetPassword} disabled={resetting} className="px-3 py-1.5 rounded border bg-white hover:bg-slate-50 text-slate-800">
+          <button
+            type="button"
+            onClick={doResetPassword}
+            disabled={resetting}
+            className="px-3 py-1.5 rounded border bg-white hover:bg-slate-50 text-slate-800"
+          >
             {resetting ? 'Resetting...' : 'Reset Password'}
           </button>
           {resetError && <span className="text-sm text-red-700">{String(resetError)}</span>}
@@ -621,38 +627,29 @@ function MessageStudentsPanel({ classId }){
               <tbody className="bg-white divide-y divide-gray-100">
                 {sortedLogs.length === 0 ? (
                   <tr><td colSpan="8" className="px-4 py-8 text-center text-gray-500">No logs found</td></tr>
-                ) : sortedLogs.map(it => {
-                  const when = it?.created_at ? new Date(it.created_at).toLocaleString() : '-'
-                  const ok = Boolean(it?.ok)
-                  const statusText = (String(it?.channel || '') === 'in_app') ? 'OK' : (ok ? 'OK' : 'FAILED')
-                  const id = String(it?.id || '')
-                  const isDl = id.startsWith('dl:')
-                  const ch = String(it?.channel || '')
-                  const canSelect = isDl && (ch === 'sms' || ch === 'email') && (it?.ok === false)
-                  return (
-                    <tr key={it.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => { if (canSelect) toggleOne(id) }}>
-                      <td className="px-4 py-2">
-                        <input
-                          type="checkbox"
-                          disabled={!canSelect}
-                          checked={canSelect && selected.has(id)}
-                          onChange={(e)=> { e.stopPropagation(); toggleOne(id) }}
-                        />
-                      </td>
-                      <td className="px-4 py-2 text-xs text-slate-600 whitespace-nowrap">{when}</td>
-                      <td className="px-4 py-2 text-sm text-slate-700 capitalize">{String(it?.category || '-')}</td>
-                      <td className="px-4 py-2 text-sm text-slate-700">{String(it?.channel || '-')}</td>
-                      <td className="px-4 py-2 text-sm">
-                        <span className={`${statusText==='OK'? 'text-emerald-700 bg-emerald-50 border-emerald-200' : 'text-red-700 bg-red-50 border-red-200'} text-xs px-2 py-1 rounded border`}>{statusText}</span>
-                      </td>
-                      <td className="px-4 py-2 text-xs text-slate-600">{String(it?.recipient || 'students')}</td>
-                      <td className="px-4 py-2 text-sm text-slate-800 max-w-[520px]">
-                        <div className="line-clamp-2">{String(it?.message || '')}</div>
-                      </td>
-                      <td className="px-4 py-2 text-xs text-slate-600">{String(it?.sender || '-')}</td>
-                    </tr>
-                  )
-                })}
+                ) : sortedLogs.map(it => (
+                  <tr key={it.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => { if (canSelect) toggleOne(id) }}>
+                    <td className="px-4 py-2">
+                      <input
+                        type="checkbox"
+                        disabled={!canSelect}
+                        checked={canSelect && selected.has(id)}
+                        onChange={(e)=> { e.stopPropagation(); toggleOne(id) }}
+                      />
+                    </td>
+                    <td className="px-4 py-2 text-xs text-slate-600 whitespace-nowrap">{when}</td>
+                    <td className="px-4 py-2 text-sm text-slate-700 capitalize">{String(it?.category || '-')}</td>
+                    <td className="px-4 py-2 text-sm text-slate-700">{String(it?.channel || '-')}</td>
+                    <td className="px-4 py-2 text-sm">
+                      <span className={`${statusText==='OK'? 'text-emerald-700 bg-emerald-50 border-emerald-200' : 'text-red-700 bg-red-50 border-red-200'} text-xs px-2 py-1 rounded border`}>{statusText}</span>
+                    </td>
+                    <td className="px-4 py-2 text-xs text-slate-600">{String(it?.recipient || 'students')}</td>
+                    <td className="px-4 py-2 text-sm text-slate-800 max-w-[520px]">
+                      <div className="line-clamp-2">{String(it?.message || '')}</div>
+                    </td>
+                    <td className="px-4 py-2 text-xs text-slate-600">{String(it?.sender || '-')}</td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>

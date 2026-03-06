@@ -665,6 +665,9 @@ class ClassViewSet(viewsets.ModelViewSet):
                 .select_related('sender')
                 .order_by('-created_at', '-id')
             )
+            if not is_admin:
+                # Class teacher view should only show messages they authored
+                msg_qs = msg_qs.filter(sender_id=getattr(user, 'id', None))
             msg_ids = []
             for m in msg_qs[:limit]:
                 try:
@@ -699,6 +702,12 @@ class ClassViewSet(viewsets.ModelViewSet):
                 .only('id', 'channel', 'recipient', 'ok', 'message_snippet', 'context', 'created_at')
                 .order_by('-created_at', '-id')
             )
+            if not is_admin:
+                # Only include logs created by this teacher's send action
+                try:
+                    dl_qs = dl_qs.filter(context__contains=f"user:{getattr(user, 'id', None)};")
+                except Exception:
+                    pass
             for rec in dl_qs[:limit]:
                 ctx = str(getattr(rec, 'context', '') or '')
                 category = 'fees' if ctx.startswith('fees:') else ('class' if ctx.startswith('classmsg:') else 'other')
@@ -729,6 +738,11 @@ class ClassViewSet(viewsets.ModelViewSet):
                     .only('id', 'channel', 'recipient', 'ok', 'message_snippet', 'context', 'created_at')
                     .order_by('-created_at', '-id')
                 )
+                if not is_admin:
+                    try:
+                        dl2 = dl2.filter(context__contains=f"user:{getattr(user, 'id', None)};")
+                    except Exception:
+                        pass
                 for rec in dl2[:limit]:
                     ctx = str(getattr(rec, 'context', '') or '')
                     category = 'class'
@@ -749,6 +763,136 @@ class ClassViewSet(viewsets.ModelViewSet):
 
         items.sort(key=lambda x: (x.get('created_at') is not None, x.get('created_at')), reverse=True)
         return Response({'class_id': klass.id, 'items': items[:limit]})
+
+    @action(detail=True, methods=['get'], permission_classes=[IsTeacherOrAdmin], url_path='class-logs')
+    def class_logs(self, request, pk=None):
+        """Class teacher view: show latest delivery/message logs for this class.
+        Teachers see a maximum of 25 logs. Admins can request up to 200.
+        """
+        klass = self.get_object()
+        user = getattr(request, 'user', None)
+        is_admin = bool(user and (getattr(user, 'role', None) == 'admin' or user.is_staff or user.is_superuser))
+        if not is_admin:
+            if not (getattr(user, 'role', None) == 'teacher' and getattr(klass, 'teacher_id', None) == getattr(user, 'id', None)):
+                return Response({'detail': 'Only the class teacher can view logs for this class'}, status=status.HTTP_403_FORBIDDEN)
+
+        try:
+            limit_param = request.query_params.get('limit')
+            limit = int(limit_param) if (limit_param and str(limit_param).isdigit()) else (200 if is_admin else 25)
+            limit = max(1, min(limit, 200 if is_admin else 25))
+        except Exception:
+            limit = 200 if is_admin else 25
+
+        school_id = getattr(getattr(klass, 'school', None), 'id', None)
+        if not school_id:
+            return Response({'class_id': klass.id, 'items': []})
+
+        items = []
+        msg_ids = []
+
+        try:
+            msg_qs = (
+                Message.objects
+                .filter(
+                    school_id=school_id,
+                    system_tag__in=[f"class_broadcast:class:{klass.id}", f"fees_notice:class:{klass.id}"],
+                )
+                .select_related('sender')
+                .order_by('-created_at', '-id')
+            )
+            for m in msg_qs[:limit]:
+                try:
+                    msg_ids.append(int(getattr(m, 'id', 0) or 0))
+                except Exception:
+                    pass
+                tag = str(getattr(m, 'system_tag', '') or '')
+                category = 'class' if tag.startswith('class_broadcast:') else ('fees' if tag.startswith('fees_notice:') else 'other')
+                items.append({
+                    'id': f"inapp:{m.id}",
+                    'category': category,
+                    'channel': 'in_app',
+                    'ok': True,
+                    'recipient': 'students',
+                    'message': (getattr(m, 'body', '') or ''),
+                    'created_at': getattr(m, 'created_at', None),
+                    'sender': getattr(getattr(m, 'sender', None), 'username', None),
+                })
+        except Exception:
+            pass
+
+        try:
+            dl_qs = (
+                DeliveryLog.objects
+                .filter(school_id=school_id)
+                .filter(
+                    Q(context__contains=f"classmsg:class:{klass.id};") |
+                    Q(context__contains=f"fees:class:{klass.id};")
+                )
+                .only('id', 'channel', 'recipient', 'ok', 'status', 'message_snippet', 'context', 'created_at', 'error')
+                .order_by('-created_at', '-id')
+            )
+            for rec in dl_qs[:limit]:
+                ctx = str(getattr(rec, 'context', '') or '')
+                category = 'fees' if ctx.startswith('fees:') else ('class' if ctx.startswith('classmsg:') else 'other')
+                items.append({
+                    'id': f"dl:{rec.id}",
+                    'category': category,
+                    'channel': getattr(rec, 'channel', None),
+                    'ok': bool(getattr(rec, 'ok', False)),
+                    'status': getattr(rec, 'status', None),
+                    'recipient': getattr(rec, 'recipient', None),
+                    'message': getattr(rec, 'message_snippet', None),
+                    'created_at': getattr(rec, 'created_at', None),
+                    'sender': None,
+                    'error': getattr(rec, 'error', None),
+                })
+        except Exception:
+            pass
+
+        try:
+            if msg_ids:
+                q = Q()
+                for mid in msg_ids:
+                    q |= Q(context__contains=f"message:{mid};")
+                dl2 = (
+                    DeliveryLog.objects
+                    .filter(school_id=school_id)
+                    .filter(q)
+                    .only('id', 'channel', 'recipient', 'ok', 'status', 'message_snippet', 'context', 'created_at', 'error')
+                    .order_by('-created_at', '-id')
+                )
+                for rec in dl2[:limit]:
+                    ctx = str(getattr(rec, 'context', '') or '')
+                    category = 'fees' if ctx.startswith('fees:') else 'class'
+                    items.append({
+                        'id': f"dl:{rec.id}",
+                        'category': category,
+                        'channel': getattr(rec, 'channel', None),
+                        'ok': bool(getattr(rec, 'ok', False)),
+                        'status': getattr(rec, 'status', None),
+                        'recipient': getattr(rec, 'recipient', None),
+                        'message': getattr(rec, 'message_snippet', None),
+                        'created_at': getattr(rec, 'created_at', None),
+                        'sender': None,
+                        'error': getattr(rec, 'error', None),
+                    })
+        except Exception:
+            pass
+
+        def _to_time(x):
+            try:
+                dt = x.get('created_at', None)
+                return dt.timestamp() if dt else 0
+            except Exception:
+                return 0
+
+        try:
+            items.sort(key=_to_time, reverse=True)
+        except Exception:
+            pass
+
+        items = items[:limit]
+        return Response({'class_id': klass.id, 'items': items, 'limit': limit})
 
     @action(detail=True, methods=['post'], permission_classes=[IsTeacherOrAdmin], url_path='retry-delivery-logs')
     def retry_delivery_logs(self, request, pk=None):

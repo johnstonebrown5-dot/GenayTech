@@ -23,6 +23,7 @@ import TeacherPreviewResults from './pages/TeacherPreviewResults'
 import TeacherAnalytics from './pages/TeacherAnalytics'
 import TeacherProfile from './pages/TeacherProfile'
 import TeacherManageClass from './pages/TeacherManageClass'
+import TeacherClassLogs from './pages/TeacherClassLogs'
 import TeacherLayout from './components/TeacherLayout'
 import StudentDashboard from './pages/StudentDashboard'
 import StudentReportCard from './pages/StudentReportCard'
@@ -399,7 +400,7 @@ export default function App() {
               <Route path="timetable/teacher" element={<TeacherTimetableView/>} />
             </Route>
             <Route path="/featured/:slug" element={<FeaturedPost/>} />
-            <Route path="/teacher" element={<ProtectedRoute roles={["teacher","admin"]}><TeacherLayout><Outlet/></TeacherLayout></ProtectedRoute>}>
+            <Route path="teacher" element={<ProtectedRoute roles={["teacher","admin"]}><TeacherLayout><Outlet/></TeacherLayout></ProtectedRoute>}>
               <Route index element={<TeacherDashboard/>} />
               <Route path="messages" element={<Messages/>} />
               <Route path="classes" element={<TeacherClasses/>} />
@@ -413,6 +414,7 @@ export default function App() {
               <Route path="analytics" element={<TeacherAnalytics/>} />
               <Route path="profile" element={<TeacherProfile/>} />
               <Route path="manage-class" element={<TeacherManageClass/>} />
+              <Route path="class-logs" element={<TeacherClassLogs/>} />
               <Route path="students/:id" element={<AdminStudentDashboard/>} />
               <Route path="timetable" element={<TeacherTimetable/>} />
               <Route path="block-timetable" element={<TeacherBlockTimetable/>} />
