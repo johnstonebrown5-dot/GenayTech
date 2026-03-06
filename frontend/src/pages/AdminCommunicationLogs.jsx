@@ -31,6 +31,7 @@ const AdminCommunicationLogs = () => {
   const [pendingCounts, setPendingCounts] = useState({ total: 0, sms: 0, email: 0 });
   const [selectedIds, setSelectedIds] = useState(new Set());
   const { addNotification } = useNotification();
+  const [polling, setPolling] = useState(false);
 
   const fetchLogs = async () => {
     setLoading(true);
@@ -55,17 +56,48 @@ const AdminCommunicationLogs = () => {
       // Fetch pending counts
       const countsRes = await api.get('/communications/delivery-logs/pending_count/');
       setPendingCounts(countsRes.data);
+
+      return res.data.results || res.data || [];
     } catch (err) {
       console.error('Failed to fetch logs:', err);
       addNotification('Failed to load communication logs', 'error');
+      return [];
     } finally {
       setLoading(false);
     }
   };
 
+  const pollUntilSettled = async ({ attempts = 10, delayMs = 1500 } = {}) => {
+    if (polling) return;
+    setPolling(true);
+    try {
+      for (let i = 0; i < attempts; i++) {
+        const latest = await fetchLogs();
+        const stillSending = (latest || []).some(l => l && (l.status === 'queued' || l.status === 'pending'));
+        if (!stillSending) break;
+        await new Promise(r => setTimeout(r, delayMs));
+      }
+    } finally {
+      setPolling(false);
+    }
+  };
+
+  const handleRetry = async (id) => {
+    // Optimistic UI: mark as queued/sending immediately
+    setLogs(prev => (prev || []).map(l => (l.id === id ? { ...l, status: 'queued', error: '' } : l)));
+    try {
+      await api.post('/communications/delivery-logs/retry/', { id });
+      addNotification('Retry started', 'success');
+      pollUntilSettled();
+    } catch (err) {
+      addNotification('Retry failed to start', 'error');
+      fetchLogs();
+    }
+  };
+
   useEffect(() => {
     fetchLogs();
-  }, [page, filter.channel, filter.status]);
+  }, [page, filter.channel, filter.status, filter.search]);
 
   const handleSelectAll = (checked) => {
     if (checked) {
@@ -146,6 +178,11 @@ const AdminCommunicationLogs = () => {
       default:
         return <AlertCircle className="w-4 h-4 text-slate-400" />;
     }
+  };
+
+  const getStatusLabel = (status) => {
+    if (status === 'queued' || status === 'pending') return 'sending';
+    return status || '';
   };
 
   const getChannelIcon = (channel) => {
@@ -313,7 +350,7 @@ const AdminCommunicationLogs = () => {
                           log.status === 'failed' ? 'text-red-600' : 
                           'text-amber-600'
                         }`}>
-                          {log.status}
+                          {getStatusLabel(log.status)}
                         </span>
                       </div>
                       {log.error && (

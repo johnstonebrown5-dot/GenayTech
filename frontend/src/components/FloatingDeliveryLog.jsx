@@ -40,6 +40,13 @@ export default function FloatingDeliveryLog(){
   // Compact mode (small screens)
   const [isCompact, setIsCompact] = useState(false)
 
+  const statusLabel = (it) => {
+    const st = String(it?.status || '').toLowerCase()
+    if (st === 'queued' || st === 'pending') return 'Sending'
+    if (st) return st
+    return it?.ok ? 'Sent' : (it?.ok === false ? 'Failed' : '')
+  }
+
   const panelRef = useRef(null)
   const dragRef = useRef({ dragging: false, offsetX: 0, offsetY: 0 })
   const [panelXY, setPanelXY] = useState({ left: 0, top: 0 })
@@ -511,10 +518,21 @@ export default function FloatingDeliveryLog(){
                     onClick={async () => {
                       try { window.event?.stopPropagation?.() } catch {}
                       setRetryingMap(prev => ({ ...prev, [it.id]: true }))
+                      // Optimistic: mark as queued immediately
+                      setItems(prev => (prev || []).map(x => x?.id === it.id ? ({ ...x, status: 'queued', ok: false, error: '' }) : x))
                       // Per-item retry mode
                       setRetryStart(new Date().toISOString())
                       setRetryIds(prev => Array.from(new Set([...(prev||[]), it.id])))
-                      try { await api.post('/communications/delivery-logs/retry/', { id: it.id }); await load() } catch (e) { setError('Retry failed') } finally { setRetryingMap(prev => ({ ...prev, [it.id]: false })) }
+                      try {
+                        await api.post('/communications/delivery-logs/retry/', { id: it.id })
+                        await load()
+                        setTimeout(() => load(), 1500)
+                        setTimeout(() => load(), 3000)
+                      } catch (e) {
+                        setError('Retry failed')
+                      } finally {
+                        setRetryingMap(prev => ({ ...prev, [it.id]: false }))
+                      }
                     }}
                     onMouseDown={(e)=>e.stopPropagation()}
                     onClickCapture={(e)=>e.stopPropagation()}
@@ -544,6 +562,9 @@ export default function FloatingDeliveryLog(){
             <div className="flex flex-wrap gap-2">
               <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${previewItem.channel === 'sms' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-indigo-50 text-indigo-700 border border-indigo-200'}`}>{String(previewItem.channel || '').toUpperCase()}</span>
               <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${previewItem.ok ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>{previewItem.ok ? 'OK' : 'FAILED'}</span>
+              {previewItem?.status && (
+                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200">{statusLabel(previewItem)}</span>
+              )}
               <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-50 text-gray-700 border border-gray-200">{previewItem.created_at ? new Date(previewItem.created_at).toLocaleString() : ''}</span>
             </div>
             {!previewItem.ok && previewItem.error && (
