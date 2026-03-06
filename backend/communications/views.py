@@ -22,6 +22,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.core.files.storage import default_storage
 from django.core.files.base import ContentFile
 import os, time
+ 
 
 
 class PublicAlertBannerView(APIView):
@@ -233,27 +234,60 @@ class DeliveryLogViewSet(viewsets.ReadOnlyModelViewSet):
         if not cleaned:
             return Response({"detail": "No valid ids"}, status=status.HTTP_400_BAD_REQUEST)
 
-        logs = DeliveryLog.objects.filter(id__in=cleaned, school_id=school_id)
+        logs = list(DeliveryLog.objects.filter(id__in=cleaned, school_id=school_id))
         results = []
-        for rec in logs:
-            ok = False
-            err_txt = ''
+
+        def _do_retry(rec_id: int):
             try:
-                if rec.channel == 'sms':
-                    ok = send_sms(rec.recipient, rec.message_snippet or '', school_id=getattr(rec, 'school_id', None) or school_id)
-                elif rec.channel == 'email':
-                    subj = "Delivery retry"
-                    ok = send_email_safe(subj, rec.message_snippet or '', rec.recipient, school_id=getattr(rec, 'school_id', None) or school_id)
-            except Exception as e:
-                err_txt = str(e)
+                rec = DeliveryLog.objects.filter(id=rec_id, school_id=school_id).first()
+                if not rec:
+                    return
+
                 ok = False
+                err_txt = ''
+                try:
+                    if rec.channel == 'sms':
+                        ok = send_sms(rec.recipient, rec.message_snippet or '', school_id=getattr(rec, 'school_id', None) or school_id)
+                    elif rec.channel == 'email':
+                        subj = "Delivery retry"
+                        ok = send_email_safe(subj, rec.message_snippet or '', rec.recipient, school_id=getattr(rec, 'school_id', None) or school_id)
+                except Exception as e:
+                    err_txt = str(e)
+                    ok = False
+
+                try:
+                    rec.ok = bool(ok)
+                    rec.status = DeliveryLog.Status.SENT if ok else DeliveryLog.Status.FAILED
+                    rec.error = '' if ok else (err_txt or rec.error or '')
+                    rec.save(update_fields=['ok', 'status', 'error'])
+                except Exception:
+                    pass
+
+                try:
+                    ctx = (f"retry_of:{rec.id};" + (rec.context or ''))[:100]
+                    log_delivery(school_id=rec.school_id, channel=rec.channel, recipient=rec.recipient, ok=bool(ok), message=rec.message_snippet or '', context=ctx, error=err_txt)
+                except Exception:
+                    pass
+            except Exception:
+                return
+
+        for rec in logs:
             try:
-                ctx = (f"retry_of:{rec.id};" + (rec.context or ''))[:100]
-                log_delivery(school_id=rec.school_id, channel=rec.channel, recipient=rec.recipient, ok=bool(ok), message=rec.message_snippet or '', context=ctx, error=err_txt)
+                # Mark as queued immediately so UI can show "sending" state
+                rec.status = DeliveryLog.Status.QUEUED
+                rec.ok = False
+                rec.error = ''
+                rec.save(update_fields=['status', 'ok', 'error'])
             except Exception:
                 pass
-            results.append({"id": rec.id, "ok": bool(ok), "channel": rec.channel, "recipient": rec.recipient})
-        return Response({"results": results})
+            try:
+                t = threading.Thread(target=_do_retry, args=(rec.id,), daemon=True)
+                t.start()
+            except Exception:
+                pass
+            results.append({"id": rec.id, "status": "queued", "channel": rec.channel, "recipient": rec.recipient})
+
+        return Response({"results": results}, status=status.HTTP_202_ACCEPTED)
 
     @action(detail=False, methods=["post"], url_path="bulk-delete")
     def bulk_delete(self, request):
