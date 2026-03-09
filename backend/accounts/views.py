@@ -1,10 +1,11 @@
-from rest_framework.decorators import api_view, permission_classes, parser_classes
+from rest_framework.decorators import api_view, permission_classes, parser_classes, throttle_classes
 from rest_framework.parsers import JSONParser, FormParser, MultiPartParser
 import json
 from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
 from edutrack.pagination import CustomPageNumberPagination
 from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.throttling import ScopedRateThrottle
 from django.contrib.auth import get_user_model
 from .serializers import UserSerializer, SchoolSerializer, NonTeachingStaffSerializer
 from .permissions import IsAdminOrStaff
@@ -138,6 +139,8 @@ def _log_system_health_event(*, school_id: int | None, component: str, ok: bool,
 
 
 class TokenObtainPairViewWithLogging(TokenObtainPairView):
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'login'
     class Serializer(TokenObtainPairSerializer):
         def validate(self, attrs):
             data = super().validate(attrs)
@@ -878,7 +881,9 @@ def change_password(request):
 @api_view(["POST"])
 @permission_classes([AllowAny])
 @parser_classes([JSONParser])
+@throttle_classes([ScopedRateThrottle])
 def password_reset_request(request):
+    request.throttle_scope = 'password_reset'
     """Public endpoint: request a 6-digit password reset code to be sent to the user's email.
     Body: { email }
     Always returns 200 to avoid leaking which emails exist.
@@ -942,7 +947,9 @@ def password_reset_request(request):
 @api_view(["POST"])
 @permission_classes([AllowAny])
 @parser_classes([JSONParser])
+@throttle_classes([ScopedRateThrottle])
 def password_reset_verify(request):
+    request.throttle_scope = 'password_reset'
     """Public endpoint: verify a 6-digit code without changing the password.
     Body: { email, code }
     Used by the frontend to decide whether to show the new password modal.
@@ -987,7 +994,9 @@ def password_reset_verify(request):
 @api_view(["POST"])
 @permission_classes([AllowAny])
 @parser_classes([JSONParser])
+@throttle_classes([ScopedRateThrottle])
 def password_reset_confirm(request):
+    request.throttle_scope = 'password_reset'
     """Public endpoint: verify a 6-digit code and set a new password.
     Body: { email, code, new_password }
     """
@@ -1260,7 +1269,9 @@ def non_teaching_staff_detail(request, id: int):
 
 @api_view(["GET"])
 @permission_classes([AllowAny])
+@throttle_classes([ScopedRateThrottle])
 def school_teachers_public(request):
+    request.throttle_scope = 'public'
     """Public list of teachers for a school. Optional ?code=<school_code>.
     Returns a minimal list of teacher profiles (id, name, email, avatar_url, role).
     """
@@ -1270,8 +1281,6 @@ def school_teachers_public(request):
         qs = qs.filter(school__code=code)
     else:
         school = getattr(request, 'school', None)
-        if not school:
-            school = School.objects.filter(id=1).first() or School.objects.order_by('id').first()
         if school:
             qs = qs.filter(school_id=school.id)
         else:
@@ -1292,11 +1301,8 @@ def school_teachers_public(request):
         except Exception:
             is_class_teacher = False
         data.append({
-            'id': u.id,
             'first_name': u.first_name,
             'last_name': u.last_name,
-            'email': u.email,
-            'role': u.role,
             'avatar_url': avatar_url,
             'is_class_teacher': is_class_teacher,
         })
@@ -1304,7 +1310,7 @@ def school_teachers_public(request):
 
 
 @api_view(["GET"])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def teacher_public_detail(request, id: int):
     """Public teacher detail by ID with minimal profile and classes taught.
     """
@@ -1312,6 +1318,14 @@ def teacher_public_detail(request, id: int):
         u = User.objects.select_related('school').get(id=id, role='teacher')
     except User.DoesNotExist:
         return Response({"detail": "Not found"}, status=404)
+
+    # Scope non-staff users to their own school
+    req_user = getattr(request, 'user', None)
+    if not (getattr(req_user, 'is_staff', False) or getattr(req_user, 'is_superuser', False)):
+        req_school_id = getattr(getattr(req_user, 'school', None), 'id', None)
+        if req_school_id is None or getattr(u, 'school_id', None) != req_school_id:
+            return Response({"detail": "Not found"}, status=404)
+
     try:
         avatar_url = ''
         if getattr(u, 'profile_picture', None):
@@ -1344,7 +1358,9 @@ def teacher_public_detail(request, id: int):
 
 @api_view(["GET"])
 @permission_classes([AllowAny])
+@throttle_classes([ScopedRateThrottle])
 def site_context(request):
+    request.throttle_scope = 'public'
     """Return whether the current request host resolves to a school.
 
     Optional query params:
@@ -1430,7 +1446,9 @@ def _clear_all_alert_broadcasts() -> None:
 
 @api_view(["GET"])
 @permission_classes([AllowAny])
+@throttle_classes([ScopedRateThrottle])
 def maintenance_notice(request):
+    request.throttle_scope = 'public'
     notice = _get_or_create_maintenance_notice()
     return Response({
         'enabled': bool(getattr(notice, 'enabled', False)),
@@ -1451,7 +1469,9 @@ def _get_or_create_system_config():
 
 @api_view(["GET"])
 @permission_classes([AllowAny])
+@throttle_classes([ScopedRateThrottle])
 def system_config_public(request):
+    request.throttle_scope = 'public'
     cfg = _get_or_create_system_config()
     default_domain = ''
     try:
@@ -1531,7 +1551,9 @@ def superadmin_system_config(request):
 
 @api_view(["GET"])
 @permission_classes([AllowAny])
+@throttle_classes([ScopedRateThrottle])
 def school_public(request):
+    request.throttle_scope = 'public'
     """Public read-only school info for the landing page.
     Optional query params:
       - code: school.code to select a specific school
@@ -1656,7 +1678,9 @@ def _handle_demo_request(request):
 @api_view(["POST"])
 @permission_classes([AllowAny])
 @parser_classes([JSONParser])
+@throttle_classes([ScopedRateThrottle])
 def request_demo(request):
+    request.throttle_scope = 'public'
     return _handle_demo_request(request)
 
 
@@ -1664,7 +1688,9 @@ def request_demo(request):
 @api_view(["POST"])
 @permission_classes([AllowAny])
 @parser_classes([JSONParser])
+@throttle_classes([ScopedRateThrottle])
 def trial_signup(request):
+    request.throttle_scope = 'public'
     return _handle_demo_request(request)
 
 

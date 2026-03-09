@@ -206,6 +206,18 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': (
         'rest_framework.permissions.IsAuthenticated',
     ),
+    'DEFAULT_THROTTLE_CLASSES': (
+        'rest_framework.throttling.AnonRateThrottle',
+        'rest_framework.throttling.UserRateThrottle',
+        'rest_framework.throttling.ScopedRateThrottle',
+    ),
+    'DEFAULT_THROTTLE_RATES': {
+        'anon': os.getenv('DRF_THROTTLE_ANON', '60/min'),
+        'user': os.getenv('DRF_THROTTLE_USER', '600/min'),
+        'login': os.getenv('DRF_THROTTLE_LOGIN', '10/min'),
+        'password_reset': os.getenv('DRF_THROTTLE_PASSWORD_RESET', '5/min'),
+        'public': os.getenv('DRF_THROTTLE_PUBLIC', '30/min'),
+    },
     'DEFAULT_FILTER_BACKENDS': (
         'django_filters.rest_framework.DjangoFilterBackend',
     ),
@@ -280,7 +292,7 @@ else:
     if not os.getenv('USE_S3', 'False') == 'True':
         STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
-CORS_ALLOW_ALL_ORIGINS = os.getenv('CORS_ALLOW_ALL_ORIGINS', 'True') == 'True'
+CORS_ALLOW_ALL_ORIGINS = (os.getenv('CORS_ALLOW_ALL_ORIGINS', 'True') == 'True') if DEBUG else (os.getenv('CORS_ALLOW_ALL_ORIGINS', 'False') == 'True')
 CORS_ALLOWED_ORIGINS = [o for o in os.getenv('CORS_ALLOWED_ORIGINS', '').split(',') if o]
 
 # Allow frontend to send host hint for multi-tenant resolution
@@ -294,6 +306,12 @@ if not CORS_ALLOW_ALL_ORIGINS:
         CORS_ALLOWED_ORIGINS.append(NGROK_ORIGIN)
     if NGROK_ORIGIN_HTTP and NGROK_ORIGIN_HTTP not in CORS_ALLOWED_ORIGINS:
         CORS_ALLOWED_ORIGINS.append(NGROK_ORIGIN_HTTP)
+
+CSRF_COOKIE_SECURE = not DEBUG
+SESSION_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SAMESITE = os.getenv('CSRF_COOKIE_SAMESITE', 'Lax')
+SESSION_COOKIE_SAMESITE = os.getenv('SESSION_COOKIE_SAMESITE', 'Lax')
+CSRF_COOKIE_HTTPONLY = not DEBUG
 
 # Email configuration (use environment variables; defaults are Gmail-friendly)
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
