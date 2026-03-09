@@ -157,7 +157,7 @@ export default function SuperAdminDashboard(){
             <div className="mt-3 text-2xl md:text-3xl font-extrabold tracking-tight text-gray-900">System overview</div>
             <div className="mt-1 text-sm text-gray-600">Quick glance across tenant health, storage and performance.</div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-col sm:flex-row items-center gap-2">
             <Link to="/superadmin/analysis" className="px-4 py-2 rounded-2xl border border-gray-200 bg-white text-sm hover:bg-gray-50">System Analysis</Link>
             <Link to="/superadmin/schools" className="px-4 py-2 rounded-2xl bg-indigo-600 text-white text-sm hover:bg-indigo-700 shadow-sm">Manage Schools</Link>
           </div>

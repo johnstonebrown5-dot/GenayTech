@@ -93,7 +93,7 @@ export default function SuperAdminLayout({ children }){
   }
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen w-full bg-slate-50">
       <div className="md:hidden sticky top-0 z-40 flex items-center justify-between px-4 py-3 bg-white/90 backdrop-blur border-b border-slate-200 pt-[env(safe-area-inset-top)]">
         <button onClick={() => setIsMobileOpen(v => !v)} className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 hover:bg-slate-50">Menu</button>
         <div className="flex items-center gap-2">
@@ -103,7 +103,7 @@ export default function SuperAdminLayout({ children }){
         <button onClick={() => { logout(); navigate('/login') }} className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 hover:bg-slate-50">Logout</button>
       </div>
 
-      <div className="flex">
+      <div className="flex w-full min-w-0">
         <aside className={`bg-white/90 backdrop-blur border-r border-slate-200 h-[100dvh] sticky top-0 hidden md:flex flex-col ${isOpen ? 'w-72' : 'w-24'} transition-all duration-200`}
         >
           <div className="flex items-center justify-between px-4 py-4 border-b border-slate-200">
@@ -167,7 +167,7 @@ export default function SuperAdminLayout({ children }){
           </div>
         )}
 
-        <main className="flex-1 p-4 sm:p-5 md:p-8">
+        <main className="flex-1 w-full min-w-0 p-4 sm:p-5 md:p-8">
           {children}
         </main>
       </div>

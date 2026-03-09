@@ -114,18 +114,18 @@ This cannot be undone.`)
 
   return (
     <div>
-      <div className="flex items-center justify-between gap-3 flex-wrap">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold text-gray-900">Recycle Bin</h1>
           <div className="mt-1 text-sm text-gray-600">Deleted items are kept here until you restore them or permanently delete them.</div>
         </div>
-        <div className="flex items-center gap-2">
-          <button onClick={fetchItems} className="px-3 py-2 rounded-lg border bg-white hover:bg-gray-50 text-sm">Refresh</button>
-          <button onClick={clearAll} className="px-3 py-2 rounded-lg border border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 text-sm">Clear Recycle Bin</button>
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+          <button onClick={fetchItems} className="px-3 py-2 rounded-lg border bg-white hover:bg-gray-50 text-sm w-full sm:w-auto">Refresh</button>
+          <button onClick={clearAll} className="px-3 py-2 rounded-lg border border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 text-sm w-full sm:w-auto">Clear Recycle Bin</button>
         </div>
       </div>
 
-      <div className="mt-4 flex flex-wrap items-center gap-2">
+      <div className="mt-4 flex flex-col sm:flex-row sm:flex-wrap items-start sm:items-center gap-2">
         <button onClick={() => setTab('schools')} className={`px-3 py-2 rounded-xl text-sm font-semibold border ${tab==='schools' ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'}`}>Schools</button>
         <button onClick={() => setTab('exams')} className={`px-3 py-2 rounded-xl text-sm font-semibold border ${tab==='exams' ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'}`}>Exams</button>
         <button onClick={() => setTab('academic-years')} className={`px-3 py-2 rounded-xl text-sm font-semibold border ${tab==='academic-years' ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'}`}>Academic Years</button>
@@ -136,8 +136,8 @@ This cannot be undone.`)
         <div className="mt-4 rounded-lg border border-rose-200 bg-rose-50 text-rose-700 px-3 py-2 text-sm">{error}</div>
       )}
 
-      <div className="mt-4 flex items-center gap-3">
-        <input value={q} onChange={(e)=>setQ(e.target.value)} placeholder="Search by name, code, domain or deleted-by" className="w-full md:w-96 rounded-lg border border-gray-300 px-3 py-2" />
+      <div className="mt-4 flex flex-col sm:flex-row sm:items-center gap-3">
+        <input value={q} onChange={(e)=>setQ(e.target.value)} placeholder="Search by name, code, domain or deleted-by" className="w-full sm:flex-1 md:w-96 rounded-lg border border-gray-300 px-3 py-2" />
       </div>
 
       <div className="mt-4 rounded-2xl bg-white border overflow-hidden">
@@ -169,7 +169,7 @@ This cannot be undone.`)
                     <td className="px-4 py-3 text-gray-700">{fmtDt(s.deleted_at)}</td>
                     <td className="px-4 py-3 text-gray-700">{s.deleted_by || '—'}</td>
                     <td className="px-4 py-3">
-                      <div className="flex items-center justify-end gap-2">
+                      <div className="flex flex-wrap items-center justify-end gap-2">
                         <button onClick={() => restore(s)} className="px-3 py-1.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">Restore</button>
                         <button onClick={() => purge(s)} className="px-3 py-1.5 rounded-lg border border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100">Purge</button>
                       </div>
@@ -207,7 +207,7 @@ This cannot be undone.`)
                     <td className="px-4 py-3 text-gray-700">{String(e.date || '').slice(0,10) || '—'}</td>
                     <td className="px-4 py-3 text-gray-700">{fmtDt(e.deleted_at)}</td>
                     <td className="px-4 py-3">
-                      <div className="flex items-center justify-end gap-2">
+                      <div className="flex flex-wrap items-center justify-end gap-2">
                         <button onClick={() => restore(e)} className="px-3 py-1.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">Restore</button>
                         <button onClick={() => purge(e)} className="px-3 py-1.5 rounded-lg border border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100">Purge</button>
                       </div>
@@ -243,7 +243,7 @@ This cannot be undone.`)
                     <td className="px-4 py-3 text-gray-700">{String(ay.end_date || '').slice(0,10) || '—'}</td>
                     <td className="px-4 py-3 text-gray-700">{fmtDt(ay.deleted_at)}</td>
                     <td className="px-4 py-3">
-                      <div className="flex items-center justify-end gap-2">
+                      <div className="flex flex-wrap items-center justify-end gap-2">
                         <button onClick={() => restore(ay)} className="px-3 py-1.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">Restore</button>
                         <button onClick={() => purge(ay)} className="px-3 py-1.5 rounded-lg border border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100">Purge</button>
                       </div>
@@ -281,7 +281,7 @@ This cannot be undone.`)
                     <td className="px-4 py-3 text-gray-700">{String(t.end_date || '').slice(0,10) || '—'}</td>
                     <td className="px-4 py-3 text-gray-700">{fmtDt(t.deleted_at)}</td>
                     <td className="px-4 py-3">
-                      <div className="flex items-center justify-end gap-2">
+                      <div className="flex flex-wrap items-center justify-end gap-2">
                         <button onClick={() => restore(t)} className="px-3 py-1.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">Restore</button>
                         <button onClick={() => purge(t)} className="px-3 py-1.5 rounded-lg border border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100">Purge</button>
                       </div>

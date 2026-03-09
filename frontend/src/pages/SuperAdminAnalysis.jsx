@@ -7,6 +7,16 @@ ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Le
 
 function clamp(n, a, b){ return Math.max(a, Math.min(b, n)) }
 
+function truncateLabel(v, max){
+  try{
+    const s = String(v ?? '')
+    if (!max || s.length <= max) return s
+    return s.slice(0, Math.max(0, max - 1)) + '…'
+  }catch{
+    return ''
+  }
+}
+
 function fmtGb(n){
   const v = Number(n || 0)
   if (!Number.isFinite(v)) return '0 GB'
@@ -37,6 +47,15 @@ export default function SuperAdminAnalysis(){
   const [q, setQ] = useState('')
   const [sort, setSort] = useState({ key: 'health_score', dir: 'desc' })
   const [filter, setFilter] = useState('all')
+
+  const isMobile = useMemo(() => {
+    try{
+      if (typeof window === 'undefined') return false
+      return window.matchMedia('(max-width: 640px)').matches
+    }catch{
+      return false
+    }
+  }, [])
 
   const fetchData = async () => {
     setLoading(true)
@@ -108,8 +127,8 @@ export default function SuperAdminAnalysis(){
   const topForCharts = useMemo(() => {
     const arr = [...schoolsSorted]
     arr.sort((a,b)=>(Number(b?.storage?.estimated_db_gb||0)-Number(a?.storage?.estimated_db_gb||0)))
-    return arr.slice(0, 12)
-  }, [schoolsSorted])
+    return arr.slice(0, isMobile ? 8 : 12)
+  }, [schoolsSorted, isMobile])
 
   const chartLabels = useMemo(() => topForCharts.map(s => s?.code || s?.name || String(s?.id)), [topForCharts])
 
@@ -263,7 +282,7 @@ export default function SuperAdminAnalysis(){
             <div className="font-semibold text-gray-900">Top schools by data volume</div>
             <div className="text-xs text-gray-600">Health score</div>
           </div>
-          <div className="mt-3 h-64">
+          <div className="mt-3 h-56 sm:h-64">
             <Bar
               data={healthScoreBar}
               options={{
@@ -271,8 +290,29 @@ export default function SuperAdminAnalysis(){
                 maintainAspectRatio: false,
                 plugins: { legend: { display: false } },
                 scales: {
-                  y: { beginAtZero: true, max: 100, ticks: { color: '#6b7280', font: { size: 10 } } },
-                  x: { ticks: { color: '#6b7280', font: { size: 10 } } },
+                  y: {
+                    beginAtZero: true,
+                    max: 100,
+                    ticks: { color: '#6b7280', font: { size: isMobile ? 9 : 10 }, maxTicksLimit: isMobile ? 5 : 8 },
+                  },
+                  x: {
+                    ticks: {
+                      color: '#6b7280',
+                      font: { size: isMobile ? 9 : 10 },
+                      maxRotation: 0,
+                      minRotation: 0,
+                      autoSkip: true,
+                      maxTicksLimit: isMobile ? 4 : 12,
+                      callback: function(value){
+                        try{
+                          const label = this.getLabelForValue(value)
+                          return truncateLabel(label, isMobile ? 6 : 10)
+                        }catch{
+                          return ''
+                        }
+                      },
+                    },
+                  },
                 },
               }}
             />
@@ -298,7 +338,7 @@ export default function SuperAdminAnalysis(){
 
         <div className="rounded-3xl bg-white border border-gray-200 p-4 shadow-sm lg:col-span-3">
           <div className="font-semibold text-gray-900">Estimated DB size per school (GB)</div>
-          <div className="mt-3 h-64">
+          <div className="mt-3 h-56 sm:h-64">
             <Bar
               data={storageGbBar}
               options={{
@@ -306,8 +346,28 @@ export default function SuperAdminAnalysis(){
                 maintainAspectRatio: false,
                 plugins: { legend: { display: false } },
                 scales: {
-                  y: { beginAtZero: true, ticks: { color: '#6b7280', font: { size: 10 } } },
-                  x: { ticks: { color: '#6b7280', font: { size: 10 } } },
+                  y: {
+                    beginAtZero: true,
+                    ticks: { color: '#6b7280', font: { size: isMobile ? 9 : 10 }, maxTicksLimit: isMobile ? 5 : 8 },
+                  },
+                  x: {
+                    ticks: {
+                      color: '#6b7280',
+                      font: { size: isMobile ? 9 : 10 },
+                      maxRotation: 0,
+                      minRotation: 0,
+                      autoSkip: true,
+                      maxTicksLimit: isMobile ? 4 : 12,
+                      callback: function(value){
+                        try{
+                          const label = this.getLabelForValue(value)
+                          return truncateLabel(label, isMobile ? 6 : 10)
+                        }catch{
+                          return ''
+                        }
+                      },
+                    },
+                  },
                 },
               }}
             />

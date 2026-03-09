@@ -88,90 +88,118 @@ export default function SuperAdminAdmins(){
   }
 
   return (
-    <div>
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Manage School Admins</h1>
-          <div className="mt-1 text-sm text-gray-600">Create or assign School Admins to schools. Superuser only.</div>
-        </div>
-        <div className="flex items-center gap-2">
-          <button className="px-3 py-2 rounded-lg border bg-white hover:bg-gray-50 text-sm" onClick={load}>Refresh</button>
+    <div className="space-y-5">
+      <div className="rounded-3xl border border-gray-200 bg-gradient-to-br from-indigo-50 via-white to-purple-50 p-4 md:p-5 shadow-sm">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+          <div>
+            <div className="inline-flex items-center gap-2 rounded-full border border-indigo-200 bg-white/70 px-3 py-1 text-xs font-semibold text-indigo-700">
+              <span className="h-2 w-2 rounded-full bg-indigo-600" />
+              Admin Management
+            </div>
+            <div className="mt-3 text-2xl md:text-3xl font-extrabold tracking-tight text-gray-900">Manage School Admins</div>
+            <div className="mt-1 text-sm text-gray-600">Create or assign School Admins to schools. Superuser only.</div>
+          </div>
+          <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+            <button
+              className={`px-4 py-2 rounded-2xl border border-gray-200 text-sm font-semibold shadow-sm ${loading ? 'bg-gray-100 text-gray-400' : 'bg-white text-gray-700 hover:bg-gray-50'}`}
+              onClick={load}
+              disabled={loading}
+            >
+              {loading ? 'Refreshing…' : 'Refresh'}
+            </button>
+          </div>
         </div>
       </div>
 
       {error && (
-        <div className="mt-4 rounded-lg border border-rose-200 bg-rose-50 text-rose-700 px-3 py-2 text-sm">{error}</div>
+        <div className="rounded-2xl border border-rose-200 bg-rose-50 text-rose-700 px-3 py-2 text-sm">{error}</div>
       )}
       {success && (
-        <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 px-3 py-2 text-sm">{success}</div>
+        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 text-emerald-700 px-3 py-2 text-sm">{success}</div>
       )}
 
       <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Create Admin */}
-        <form onSubmit={onCreate} className="rounded-2xl bg-white border p-4">
-          <div className="text-lg font-semibold text-gray-900">Create School Admin</div>
-          <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+        <form onSubmit={onCreate} className="rounded-3xl bg-white border border-gray-200 p-4 shadow-sm">
+          <div className="flex items-start justify-between gap-3">
             <div>
-              <div className="text-sm text-gray-700 mb-1">Username</div>
-              <input value={cUsername} onChange={(e)=>setCUsername(e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2" required />
+              <div className="text-lg font-semibold text-gray-900">Create School Admin</div>
+              <div className="mt-1 text-xs text-gray-600">Creates a new user and assigns them as Admin for the selected school.</div>
             </div>
-            <div>
-              <div className="text-sm text-gray-700 mb-1">Password (optional)</div>
-              <input value={cPassword} onChange={(e)=>setCPassword(e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2" type="password" placeholder="Auto-generate if empty" />
-            </div>
-            <div>
-              <div className="text-sm text-gray-700 mb-1">First Name</div>
-              <input value={cFirst} onChange={(e)=>setCFirst(e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2" />
-            </div>
-            <div>
-              <div className="text-sm text-gray-700 mb-1">Last Name</div>
-              <input value={cLast} onChange={(e)=>setCLast(e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2" />
-            </div>
-            <div>
-              <div className="text-sm text-gray-700 mb-1">Email</div>
-              <input value={cEmail} onChange={(e)=>setCEmail(e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2" type="email" />
-            </div>
-            <div>
-              <div className="text-sm text-gray-700 mb-1">Phone</div>
-              <input value={cPhone} onChange={(e)=>setCPhone(e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2" />
-            </div>
-            <div className="md:col-span-2">
-              <div className="text-sm text-gray-700 mb-1">School</div>
-              <select value={cSchool} onChange={(e)=>setCSchool(e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2" required>
+          </div>
+
+          <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+            <label className="grid gap-1">
+              <span className="text-xs font-semibold text-gray-700">Username</span>
+              <input value={cUsername} onChange={(e)=>setCUsername(e.target.value)} className="w-full rounded-2xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-200" required />
+            </label>
+            <label className="grid gap-1">
+              <span className="text-xs font-semibold text-gray-700">Password (optional)</span>
+              <input value={cPassword} onChange={(e)=>setCPassword(e.target.value)} className="w-full rounded-2xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-200" type="password" placeholder="Auto-generate if empty" />
+            </label>
+            <label className="grid gap-1">
+              <span className="text-xs font-semibold text-gray-700">First Name</span>
+              <input value={cFirst} onChange={(e)=>setCFirst(e.target.value)} className="w-full rounded-2xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-200" />
+            </label>
+            <label className="grid gap-1">
+              <span className="text-xs font-semibold text-gray-700">Last Name</span>
+              <input value={cLast} onChange={(e)=>setCLast(e.target.value)} className="w-full rounded-2xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-200" />
+            </label>
+            <label className="grid gap-1">
+              <span className="text-xs font-semibold text-gray-700">Email</span>
+              <input value={cEmail} onChange={(e)=>setCEmail(e.target.value)} className="w-full rounded-2xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-200" type="email" />
+            </label>
+            <label className="grid gap-1">
+              <span className="text-xs font-semibold text-gray-700">Phone</span>
+              <input value={cPhone} onChange={(e)=>setCPhone(e.target.value)} className="w-full rounded-2xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-200" />
+            </label>
+
+            <label className="grid gap-1 md:col-span-2">
+              <span className="text-xs font-semibold text-gray-700">School</span>
+              <select value={cSchool} onChange={(e)=>setCSchool(e.target.value)} className="w-full rounded-2xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-200" required>
                 <option value="">Select school…</option>
                 {(Array.isArray(schools)?schools:[]).map(s => (
                   <option key={s.id} value={s.id}>{s.name} {s.code ? `(${s.code})` : ''}</option>
                 ))}
               </select>
-            </div>
+            </label>
           </div>
-          <div className="mt-4">
-            <button disabled={creating} className="px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50">{creating ? 'Creating…' : 'Create Admin'}</button>
+
+          <div className="mt-4 flex justify-end">
+            <button disabled={creating} className={`px-5 py-2.5 rounded-2xl text-sm font-semibold shadow-sm ${creating ? 'bg-gray-200 text-gray-500' : 'bg-indigo-600 text-white hover:bg-indigo-700'} disabled:cursor-not-allowed`}>{creating ? 'Creating…' : 'Create Admin'}</button>
           </div>
         </form>
 
         {/* Assign Admin */}
-        <form onSubmit={onAssign} className="rounded-2xl bg-white border p-4">
-          <div className="text-lg font-semibold text-gray-900">Assign Existing User as Admin</div>
-          <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+        <form onSubmit={onAssign} className="rounded-3xl bg-white border border-gray-200 p-4 shadow-sm">
+          <div className="flex items-start justify-between gap-3">
             <div>
-              <div className="text-sm text-gray-700 mb-1">User ID</div>
-              <input value={aUserId} onChange={(e)=>setAUserId(e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2" placeholder="Enter existing user ID" />
+              <div className="text-lg font-semibold text-gray-900">Assign Existing User as Admin</div>
+              <div className="mt-1 text-xs text-gray-600">Use this when the user already exists and you want to link them to a school as Admin.</div>
             </div>
-            <div className="md:col-span-2">
-              <div className="text-sm text-gray-700 mb-1">School</div>
-              <select value={aSchool} onChange={(e)=>setASchool(e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2">
+          </div>
+
+          <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+            <label className="grid gap-1">
+              <span className="text-xs font-semibold text-gray-700">User ID</span>
+              <input value={aUserId} onChange={(e)=>setAUserId(e.target.value)} className="w-full rounded-2xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-200" placeholder="Enter existing user ID" />
+            </label>
+            <label className="grid gap-1 md:col-span-2">
+              <span className="text-xs font-semibold text-gray-700">School</span>
+              <select value={aSchool} onChange={(e)=>setASchool(e.target.value)} className="w-full rounded-2xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-200">
                 <option value="">Select school…</option>
                 {(Array.isArray(schools)?schools:[]).map(s => (
                   <option key={s.id} value={s.id}>{s.name} {s.code ? `(${s.code})` : ''}</option>
                 ))}
               </select>
-            </div>
+            </label>
           </div>
-          <div className="mt-4">
-            <button disabled={assigning} className="px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50">{assigning ? 'Assigning…' : 'Assign Admin'}</button>
-          </div>
+
           <div className="mt-2 text-xs text-gray-500">Tip: You can find a user's ID from the Users page or API.</div>
+
+          <div className="mt-4 flex justify-end">
+            <button disabled={assigning} className={`px-5 py-2.5 rounded-2xl text-sm font-semibold shadow-sm ${assigning ? 'bg-gray-200 text-gray-500' : 'bg-indigo-600 text-white hover:bg-indigo-700'} disabled:cursor-not-allowed`}>{assigning ? 'Assigning…' : 'Assign Admin'}</button>
+          </div>
         </form>
       </div>
     </div>

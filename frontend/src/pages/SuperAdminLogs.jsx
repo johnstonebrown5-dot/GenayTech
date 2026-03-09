@@ -94,7 +94,7 @@ export default function SuperAdminLogs(){
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-col sm:flex-row sm:flex-wrap items-start sm:items-center gap-2">
         <button
           onClick={() => setTab('delivery')}
           className={`px-3 py-2 rounded-xl text-sm font-semibold border ${tab === 'delivery' ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'}`}
@@ -107,7 +107,7 @@ export default function SuperAdminLogs(){
         >
           System Health
         </button>
-        <div className="ml-auto text-sm text-gray-600">{title}</div>
+        <div className="sm:ml-auto text-sm text-gray-600">{title}</div>
       </div>
 
       {error && (
