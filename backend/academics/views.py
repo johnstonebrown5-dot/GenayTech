@@ -825,8 +825,10 @@ class ClassViewSet(viewsets.ModelViewSet):
                 DeliveryLog.objects
                 .filter(school_id=school_id)
                 .filter(
-                    Q(context__contains=f"classmsg:class:{klass.id};") |
-                    Q(context__contains=f"fees:class:{klass.id};")
+                    Q(context__icontains=f"classmsg:class:{klass.id}") |
+                    Q(context__icontains=f"fees:class:{klass.id}") |
+                    Q(context__icontains=f"class: {klass.id}") |
+                    Q(context__icontains=f"class:{klass.id}")
                 )
                 .only('id', 'channel', 'recipient', 'ok', 'status', 'message_snippet', 'context', 'created_at', 'error')
                 .order_by('-created_at', '-id')
@@ -1234,7 +1236,16 @@ class ClassViewSet(viewsets.ModelViewSet):
         qs = self.get_queryset()
         user = request.user
         if getattr(user, 'role', None) == 'teacher' and not (user.is_staff or user.is_superuser):
-            qs = qs.filter(Q(teacher=user) | Q(subject_teachers__teacher=user)).distinct()
+            klass_id = None
+            try:
+                prof = TeacherProfile.objects.filter(user=user).only('klass_id').first()
+                klass_id = getattr(prof, 'klass_id', None)
+            except Exception:
+                klass_id = None
+            q = Q(teacher=user) | Q(subject_teachers__teacher=user)
+            if klass_id:
+                q = q | Q(id=klass_id)
+            qs = qs.filter(q).distinct()
         ser = self.get_serializer(qs, many=True)
         return Response(ser.data)
 

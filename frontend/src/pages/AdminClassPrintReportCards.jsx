@@ -11,6 +11,7 @@ export default function AdminClassPrintReportCards({ classIdProp = null, embedde
   const [klass, setKlass] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [reloadNonce, setReloadNonce] = useState(0)
   const [recentExam, setRecentExam] = useState(null)
   const [summary, setSummary] = useState({ subjects: [], students: [] })
   const [loadingSummary, setLoadingSummary] = useState(false)
@@ -28,39 +29,57 @@ export default function AdminClassPrintReportCards({ classIdProp = null, embedde
   const [globalBands, setGlobalBands] = useState(null) // bands[] to use for overall grade mapping (stage defaults)
   const [stageBands, setStageBands] = useState(null) // stage-wide default bands
 
+  const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms))
+
+  const withRetry = async (fn, { attempts = 3, baseDelayMs = 350 } = {}) => {
+    let lastErr = null
+    for (let i = 0; i < attempts; i++){
+      try{
+        return await fn(i)
+      }catch(e){
+        lastErr = e
+        const delay = baseDelayMs * Math.pow(2, i)
+        await sleep(delay)
+      }
+    }
+    throw lastErr
+  }
+
   useEffect(()=>{
     let active = true
     ;(async ()=>{
       setLoading(true)
       setError('')
       try{
-        const { data } = await api.get(`/academics/classes/${id}/`)
+        const klassRes = await withRetry(() => api.get(`/academics/classes/${id}/`), { attempts: 4, baseDelayMs: 300 })
         if (!active) return
-        setKlass(data)
-        // Load stage-wide grading bands for this class
+        const klassData = klassRes?.data
+        setKlass(klassData)
+
         try{
-          let stg = data?.stage
+          let stg = klassData?.stage
           if (!stg){
-            // Infer from grade_level if stage is not set yet
-            const num = (()=>{ try{ const m = String(data?.grade_level||'').match(/(\d{1,2})/); return m? Number(m[1]) : NaN }catch{return NaN} })()
+            const num = (()=>{ try{ const m = String(klassData?.grade_level||'').match(/(\d{1,2})/); return m? Number(m[1]) : NaN }catch{return NaN} })()
             if (Number.isFinite(num)) stg = (num>=1 && num<=6) ? 'primary' : ((num>=7 && num<=9) ? 'junior' : null)
           }
           if (stg){
-            const sb = await api.get('/academics/stage_grading/', { params: { stage: stg, _ : Date.now() } })
+            const sb = await withRetry(() => api.get('/academics/stage_grading/', { params: { stage: stg, _ : Date.now() } }), { attempts: 3, baseDelayMs: 250 })
             const list = Array.isArray(sb.data) ? sb.data : (Array.isArray(sb.data?.results) ? sb.data.results : [])
-            setStageBands(list)
-            setGlobalBands(list)
+            if (active){
+              setStageBands(list)
+              setGlobalBands(list)
+            }
           } else {
-            setStageBands(null)
+            if (active) setStageBands(null)
           }
-        }catch{ setStageBands(null) }
-        // fetch school for header/logo
+        }catch{ if (active) setStageBands(null) }
+
         try{
           const sch = await api.get('/auth/school/info/')
           if (active) setSchool(sch.data)
         }catch{}
-        // fetch exams for class, pick latest
-        const ex = await api.get('/academics/exams/', { params: { include_history: true } })
+
+        const ex = await withRetry(() => api.get('/academics/exams/', { params: { include_history: true } }), { attempts: 4, baseDelayMs: 300 })
         if (!active) return
         const list = Array.isArray(ex.data) ? ex.data : (Array.isArray(ex.data?.results) ? ex.data.results : [])
         const cid = Number(id)
@@ -73,14 +92,13 @@ export default function AdminClassPrintReportCards({ classIdProp = null, embedde
             if (db !== da) return db - da
             return (b.id||0) - (a.id||0)
           })
-          // If URL has exam param, prefer it
           const qExam = Number(searchParams.get('exam'))
           const chosen = forClass.find(e=>Number(e.id)===qExam) || forClass[0]
           setRecentExam(chosen)
         } else {
           setRecentExam(null)
         }
-        // fetch students to map admission numbers
+
         try{
           const st = await api.get('/academics/students/', { params: { klass: id } })
           if (active){
@@ -98,7 +116,7 @@ export default function AdminClassPrintReportCards({ classIdProp = null, embedde
       }
     })()
     return ()=>{ active = false }
-  }, [id])
+  }, [id, reloadNonce])
 
   // Keep URL in sync when exam changes
   useEffect(()=>{
@@ -155,7 +173,7 @@ export default function AdminClassPrintReportCards({ classIdProp = null, embedde
       if (!recentExam?.id) { setSummary({ subjects: [], students: [] }); return }
       setLoadingSummary(true)
       try{
-        const { data } = await api.get(`/academics/exams/${recentExam.id}/summary/`)
+        const { data } = await withRetry(() => api.get(`/academics/exams/${recentExam.id}/summary/`), { attempts: 4, baseDelayMs: 300 })
         if (!active) return
         setSummary(data)
         // Fetch grading bands per subject for dynamic grade mapping (subject overrides). Fallback to stage bands for missing subjects.
@@ -188,7 +206,7 @@ export default function AdminClassPrintReportCards({ classIdProp = null, embedde
       }
     })()
     return ()=>{ active = false }
-  }, [recentExam])
+  }, [recentExam, reloadNonce])
 
   const handlePrint = () => {
     try { window.print() } catch(_) {}
@@ -332,7 +350,7 @@ export default function AdminClassPrintReportCards({ classIdProp = null, embedde
           .report-card:last-child { page-break-after: auto; }
         }
       `}</style>
-      <div className="print-root max-w-6xl mx-auto space-y-3">
+      <div className={`print-root ${embedded ? 'w-full max-w-none mx-0' : 'max-w-6xl mx-auto'} space-y-3`}>
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 no-print mb-4">
           <h1 className="text-lg sm:text-xl font-semibold">{title}</h1>
           <div className="flex flex-wrap items-center gap-3">
@@ -354,17 +372,17 @@ export default function AdminClassPrintReportCards({ classIdProp = null, embedde
                 <button type="button" onClick={()=>setLayout('summary')} className={`px-2 py-1 text-sm ${layout==='summary'?'bg-gray-800 text-white':'bg-white'}`}>List</button>
               </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
               <input
                 value={studentSearch}
                 onChange={(e)=>{ setStudentSearch(e.target.value); if (selectedStudentId) setSelectedStudentId('') }}
                 placeholder="Search student"
-                className="px-2 py-1.5 border rounded bg-white text-sm w-44"
+                className="px-2 py-1.5 border rounded bg-white text-sm w-full sm:w-44"
               />
               <select
                 value={selectedStudentId}
                 onChange={(e)=> setSelectedStudentId(e.target.value)}
-                className="px-2 py-1.5 border rounded bg-white text-sm w-44"
+                className="px-2 py-1.5 border rounded bg-white text-sm w-full sm:w-44"
                 disabled={!studentSuggestions.length}
                 title="Select a student"
               >
@@ -373,7 +391,7 @@ export default function AdminClassPrintReportCards({ classIdProp = null, embedde
                   <option key={s.id} value={String(s.id)}>{s.name}</option>
                 ))}
               </select>
-              <button type="button" onClick={clearStudentFilter} className="px-2 py-1.5 rounded border text-sm bg-white hover:bg-gray-50">Clear</button>
+              <button type="button" onClick={clearStudentFilter} className="px-2 py-1.5 rounded border text-sm bg-white hover:bg-gray-50 w-full sm:w-auto">Clear</button>
             </div>
             <div className="flex items-center gap-2 w-full sm:w-auto">
               {!embedded && (<Link to={backTo} className="flex-1 sm:flex-none text-center px-3 py-1.5 rounded border hover:bg-gray-50 text-sm">Back</Link>)}
@@ -383,7 +401,12 @@ export default function AdminClassPrintReportCards({ classIdProp = null, embedde
           </div>
         </div>
 
-        {error && <div className="p-3 rounded border border-red-200 bg-red-50 text-red-700">{error}</div>}
+        {error && (
+          <div className="p-3 rounded border border-red-200 bg-red-50 text-red-700 flex items-center justify-between gap-3">
+            <div className="min-w-0">{error}</div>
+            <button type="button" onClick={()=> setReloadNonce(v=>v+1)} className="shrink-0 px-3 py-1.5 rounded border border-red-200 bg-white text-sm hover:bg-red-50">Retry</button>
+          </div>
+        )}
         {loading && <div className="p-3 rounded border bg-white">Loading...</div>}
 
         {!loading && !error && (

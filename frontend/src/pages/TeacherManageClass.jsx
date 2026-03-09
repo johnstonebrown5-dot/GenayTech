@@ -29,7 +29,10 @@ export default function TeacherManageClass(){
           const candIds = [c?.teacher, c?.teacher_detail?.id, c?.teacher_detail?.user?.id].map(v=> (v==null? '' : String(v)))
           return candIds.includes(meId)
         })
-        setMyClass(mine || null)
+        // Some deployments link a teacher's class via TeacherProfile.klass rather than Class.teacher.
+        // In that case, /academics/classes/mine/ may still return the right class but without a direct
+        // teacher id match here. Prefer the explicit match, otherwise fall back to the first returned class.
+        setMyClass(mine || classes?.[0] || null)
       }catch{ if(mounted) setMyClass(null) }
       finally{ if(mounted) setClassesLoading(false) }
     })()
@@ -46,14 +49,14 @@ export default function TeacherManageClass(){
   )
 
   return (
-    <div className="px-0 md:px-0 max-w-full overflow-hidden">
-      <div className="mb-3 px-4 md:px-0 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+    <div className="max-w-full px-2 md:px-0">
+      <div className="mb-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
         <div>
           <h1 className="text-xl font-semibold text-slate-900">Manage My Class</h1>
           <div className="text-sm text-slate-600">{myClass?.name || 'Class'} · ID {myClass?.id}</div>
         </div>
       </div>
-      <div className="flex items-center gap-2 mb-4 overflow-x-auto pb-2 px-4 md:px-0 scrollbar-hide no-scrollbar" style={{ WebkitOverflowScrolling: 'touch' }}>
+      <div className="flex items-center gap-2 mb-4 overflow-x-auto pb-2 scrollbar-hide no-scrollbar -mx-2 px-2 md:mx-0 md:px-0" style={{ WebkitOverflowScrolling: 'touch' }}>
         <TabButton active={tab==='info'} onClick={()=>setTab('info')}>Class Info</TabButton>
         <TabButton active={tab==='add'} onClick={()=>setTab('add')}>Add Student</TabButton>
         <TabButton active={tab==='edit'} onClick={()=>setTab('edit')}>Edit Students</TabButton>
@@ -164,22 +167,24 @@ function EditStudentsPanel({ classId }){
     <div className="rounded-none sm:rounded-xl border-t border-b sm:border border-gray-200 bg-white p-4 shadow w-full">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-3">
         <div className="font-medium">Edit students (limited fields)</div>
-        <div className="flex items-center gap-2">
-          <div className="relative">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2 w-full sm:w-auto">
+          <div className="relative w-full sm:w-auto">
             <input
               type="text"
               placeholder="Search by name or ADM..."
               value={searchDraft}
               onChange={(e)=> setSearchDraft(e.target.value)}
-              className="pl-9 pr-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-200 w-56"
+              className="pl-9 pr-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-200 w-full sm:w-56"
             />
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
               <svg className="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-4.35-4.35m1.35-4.65a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
             </div>
           </div>
-          <button onClick={()=> setSearch(searchDraft)} className="text-sm px-3 py-1.5 rounded bg-blue-600 text-white">Search</button>
-          <button onClick={()=> { setSearch(''); setSearchDraft('') }} className="text-sm px-3 py-1.5 rounded border">Clear</button>
-          <button onClick={load} className="text-sm px-3 py-1.5 rounded border">Refresh</button>
+          <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+            <button onClick={()=> setSearch(searchDraft)} className="text-sm px-3 py-1.5 rounded bg-blue-600 text-white flex-1 sm:flex-none">Search</button>
+            <button onClick={()=> { setSearch(''); setSearchDraft('') }} className="text-sm px-3 py-1.5 rounded border flex-1 sm:flex-none">Clear</button>
+            <button onClick={load} className="text-sm px-3 py-1.5 rounded border flex-1 sm:flex-none">Refresh</button>
+          </div>
         </div>
       </div>
       {error && <div className="mb-3 text-sm text-red-700 bg-red-50 border border-red-200 rounded p-2">{String(error)}</div>}
@@ -509,12 +514,12 @@ function MessageStudentsPanel({ classId }){
             onChange={(e)=>setMessage(e.target.value)}
             required
             rows={5}
-            className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-200"
+            className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             placeholder="Type your message to all students..."
           />
         </label>
         <div className="flex items-center gap-2">
-          <button type="submit" disabled={sending} className="px-4 py-2 rounded bg-blue-600 text-white">{sending? 'Sending...' : 'Send Message'}</button>
+          <button type="submit" disabled={sending} className="px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700">{sending? 'Sending...' : 'Send Message'}</button>
         </div>
       </form>
 
@@ -525,14 +530,14 @@ function MessageStudentsPanel({ classId }){
             <button
               type="button"
               onClick={() => setShowFilters(!showFilters)}
-              className="md:hidden text-sm px-3 py-1.5 rounded border bg-white flex items-center gap-1"
+              className="md:hidden text-sm px-3 py-1.5 rounded border bg-white hover:bg-gray-50 flex items-center gap-1"
             >
               <svg className={`w-4 h-4 transition-transform ${showFilters ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
               </svg>
               {showFilters ? 'Hide Filters' : 'Show Filters'}
             </button>
-            <button type="button" onClick={loadLogs} className="text-sm px-3 py-1.5 rounded border bg-white">Refresh</button>
+            <button type="button" onClick={loadLogs} className="text-sm px-3 py-1.5 rounded border bg-white hover:bg-gray-50">Refresh</button>
           </div>
         </div>
 
@@ -575,7 +580,7 @@ function MessageStudentsPanel({ classId }){
             <button
               type="button"
               onClick={()=> { setStatusFilter('fail'); setSortMode('failed_first') }}
-              className="text-sm px-3 py-1.5 rounded border bg-white flex-1 sm:flex-none"
+              className="text-sm px-3 py-1.5 rounded border bg-white hover:bg-gray-50 flex-1 sm:flex-none"
             >
               Failed Only
             </button>
@@ -583,7 +588,7 @@ function MessageStudentsPanel({ classId }){
               type="button"
               disabled={resending || selected.size === 0}
               onClick={resendSelected}
-              className={`${(resending || selected.size === 0) ? 'opacity-50 cursor-not-allowed' : ''} text-sm px-3 py-1.5 rounded bg-blue-600 text-white flex-1 sm:flex-none`}
+              className={`${(resending || selected.size === 0) ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-700'} text-sm px-3 py-1.5 rounded bg-blue-600 text-white flex-1 sm:flex-none`}
             >
               {resending ? '...' : `Resend (${selected.size})`}
             </button>
@@ -591,9 +596,9 @@ function MessageStudentsPanel({ classId }){
           <div className="flex items-end gap-2 bg-slate-50 p-2 rounded-lg border border-slate-100 w-full sm:w-auto">
             <label className="flex-1 grid text-xs">
               <span className="text-slate-600 mb-1">Clean logs older than (days)</span>
-              <input type="number" min="1" value={deleteDays} onChange={e=>setDeleteDays(e.target.value)} className="px-2 py-1.5 border rounded w-full bg-white" />
+              <input type="number" min="1" value={deleteDays} onChange={e=>setDeleteDays(e.target.value)} className="px-2 py-1.5 border rounded w-full bg-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </label>
-            <button type="button" disabled={deleting} onClick={deleteOldLogs} className={`${deleting? 'opacity-50 cursor-not-allowed':''} text-sm px-3 py-1.5 rounded border bg-white h-[34px]`}>{deleting? '...' : 'Delete'}</button>
+            <button type="button" disabled={deleting} onClick={deleteOldLogs} className={`${deleting? 'opacity-50 cursor-not-allowed':''} text-sm px-3 py-1.5 rounded border bg-white h-[34px] hover:bg-gray-50`}>{deleting? '...' : 'Delete'}</button>
           </div>
         </div>
 
@@ -627,29 +632,36 @@ function MessageStudentsPanel({ classId }){
               <tbody className="bg-white divide-y divide-gray-100">
                 {sortedLogs.length === 0 ? (
                   <tr><td colSpan="8" className="px-4 py-8 text-center text-gray-500">No logs found</td></tr>
-                ) : sortedLogs.map(it => (
-                  <tr key={it.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => { if (canSelect) toggleOne(id) }}>
-                    <td className="px-4 py-2">
-                      <input
-                        type="checkbox"
-                        disabled={!canSelect}
-                        checked={canSelect && selected.has(id)}
-                        onChange={(e)=> { e.stopPropagation(); toggleOne(id) }}
-                      />
-                    </td>
-                    <td className="px-4 py-2 text-xs text-slate-600 whitespace-nowrap">{when}</td>
-                    <td className="px-4 py-2 text-sm text-slate-700 capitalize">{String(it?.category || '-')}</td>
-                    <td className="px-4 py-2 text-sm text-slate-700">{String(it?.channel || '-')}</td>
-                    <td className="px-4 py-2 text-sm">
-                      <span className={`${statusText==='OK'? 'text-emerald-700 bg-emerald-50 border-emerald-200' : 'text-red-700 bg-red-50 border-red-200'} text-xs px-2 py-1 rounded border`}>{statusText}</span>
-                    </td>
-                    <td className="px-4 py-2 text-xs text-slate-600">{String(it?.recipient || 'students')}</td>
-                    <td className="px-4 py-2 text-sm text-slate-800 max-w-[520px]">
-                      <div className="line-clamp-2">{String(it?.message || '')}</div>
-                    </td>
-                    <td className="px-4 py-2 text-xs text-slate-600">{String(it?.sender || '-')}</td>
-                  </tr>
-                ))}
+                ) : sortedLogs.map(it => {
+                  const id = String(it?.id || '');
+                  const canSelect = id.startsWith('dl:') && (it?.channel === 'sms' || it?.channel === 'email') && it?.ok === false;
+                  const when = it?.created_at ? new Date(it.created_at).toLocaleString() : '-';
+                  const statusText = it?.ok ? 'OK' : 'FAIL';
+                  
+                  return (
+                    <tr key={it.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => { if (canSelect) toggleOne(id) }}>
+                      <td className="px-4 py-2">
+                        <input
+                          type="checkbox"
+                          disabled={!canSelect}
+                          checked={canSelect && selected.has(id)}
+                          onChange={(e)=> { e.stopPropagation(); toggleOne(id) }}
+                        />
+                      </td>
+                      <td className="px-4 py-2 text-xs text-slate-600 whitespace-nowrap">{when}</td>
+                      <td className="px-4 py-2 text-sm text-slate-700 capitalize">{String(it?.category || '-')}</td>
+                      <td className="px-4 py-2 text-sm text-slate-700">{String(it?.channel || '-')}</td>
+                      <td className="px-4 py-2 text-sm">
+                        <span className={`${statusText==='OK'? 'text-emerald-700 bg-emerald-50 border-emerald-200' : 'text-red-700 bg-red-50 border-red-200'} text-xs px-2 py-1 rounded border`}>{statusText}</span>
+                      </td>
+                      <td className="px-4 py-2 text-xs text-slate-600">{String(it?.recipient || 'students')}</td>
+                      <td className="px-4 py-2 text-sm text-slate-800 max-w-[520px]">
+                        <div className="line-clamp-2">{String(it?.message || '')}</div>
+                      </td>
+                      <td className="px-4 py-2 text-xs text-slate-600">{String(it?.sender || '-')}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -798,7 +810,7 @@ function Text({ label, value, onChange, type='text', required }){
     <label className="grid gap-1 text-sm">
       <span className="text-slate-700">{label}{required? ' *':''}</span>
       <input type={type} value={value||''} onChange={e=>onChange(e.target.value)} required={required}
-        className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-200" />
+        className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
     </label>
   )
 }
@@ -808,7 +820,7 @@ function Select({ label, value, onChange, options=[], required }){
     <label className="grid gap-1 text-sm">
       <span className="text-slate-700">{label}{required? ' *':''}</span>
       <select value={value||''} onChange={e=>onChange(e.target.value)} required={required}
-        className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-200">
+        className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
         <option value="">-- Select --</option>
         {options.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
       </select>

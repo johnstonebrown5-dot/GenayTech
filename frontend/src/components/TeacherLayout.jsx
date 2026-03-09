@@ -536,7 +536,7 @@ export default function TeacherLayout({ children }){
         </aside>
 
         {/* Content area */}
-        <main className={`transition-all duration-200 px-0 md:px-6 pt-1 pb-6 md:pt-6 md:pb-6 ${isOpen? 'md:ml-64':'md:ml-16'}`}>
+        <main className={`transition-all duration-200 px-0 lg:px-6 pt-1 pb-6 md:pt-6 md:pb-6 ${isOpen? 'md:ml-64':'md:ml-16'}`}>
           {children}
         </main>
       </div>
