@@ -127,15 +127,15 @@ export default function SuperAdminPaymentMethods() {
   if (loading && schools.length === 0) return <div className="p-8">Loading...</div>
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
-      <div className="flex justify-between items-center mb-6">
+    <div>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
         <h1 className="text-2xl font-bold flex items-center gap-2">
           <CreditCard className="w-8 h-8 text-blue-600" />
           Global Payment Methods Configuration
         </h1>
-        <div className="flex gap-2">
-          <select 
-            className="border p-2 rounded text-sm"
+        <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+          <select
+            className="border p-2 rounded text-sm w-full sm:w-auto"
             value={selectedSchool}
             onChange={e => setSelectedSchool(e.target.value)}
           >
@@ -144,9 +144,9 @@ export default function SuperAdminPaymentMethods() {
               <option key={s.id} value={s.id}>{s.name}</option>
             ))}
           </select>
-          <button 
+          <button
             onClick={seedMethods}
-            className="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700 flex items-center gap-2"
+            className="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700 flex items-center justify-center gap-2 w-full sm:w-auto"
           >
             <Plus className="w-4 h-4" /> Seed Methods
           </button>
@@ -228,13 +228,13 @@ export default function SuperAdminPaymentMethods() {
       </div>
 
       {editingConfig && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-3 sm:p-4">
           <div className="bg-white rounded-xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
-            <div className="p-6 border-b flex justify-between items-center sticky top-0 bg-white">
-              <h2 className="text-xl font-bold text-gray-800">Configure Payment Gateway</h2>
+            <div className="p-4 sm:p-6 border-b flex justify-between items-center sticky top-0 bg-white">
+              <h2 className="text-lg sm:text-xl font-bold text-gray-800">Configure Payment Gateway</h2>
               <button onClick={() => setEditingConfig(null)} className="text-gray-400 hover:text-gray-600">✖</button>
             </div>
-            <form onSubmit={saveConfig} className="p-6 space-y-4">
+            <form onSubmit={saveConfig} className="p-4 sm:p-6 space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Business Short Code</label>
                 <input 
@@ -278,17 +278,17 @@ export default function SuperAdminPaymentMethods() {
               <p className="text-xs text-gray-500 bg-blue-50 p-2 rounded italic">
                 Note: Use these fields for both Daraja and Co-op STK configuration for this school.
               </p>
-              <div className="flex justify-end gap-3 mt-6">
+              <div className="flex flex-col sm:flex-row justify-end gap-3 mt-6">
                 <button 
                   type="button" 
                   onClick={() => setEditingConfig(null)}
-                  className="px-4 py-2 border rounded text-gray-600 hover:bg-gray-50"
+                  className="px-4 py-2 border rounded text-gray-600 hover:bg-gray-50 w-full sm:w-auto"
                 >
                   Cancel
                 </button>
                 <button 
                   type="submit"
-                  className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 font-semibold shadow-sm"
+                  className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 font-semibold shadow-sm w-full sm:w-auto"
                 >
                   Save Configuration
                 </button>

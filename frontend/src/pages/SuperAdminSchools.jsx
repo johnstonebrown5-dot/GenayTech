@@ -371,21 +371,21 @@ The data is not deleted completely until you purge it from the Recycle Bin.`)
 
   return (
     <div>
-      <div className="flex items-center justify-between gap-3 flex-wrap">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold text-gray-900">Schools</h1>
           <div className="mt-1 text-sm text-gray-600">Manage schools, domains, and school environment settings.</div>
         </div>
-        <button onClick={() => setCreateOpen(true)} className="px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm hover:bg-indigo-700">Add School</button>
+        <button onClick={() => setCreateOpen(true)} className="px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm hover:bg-indigo-700 w-full sm:w-auto">Add School</button>
       </div>
 
       {error && (
         <div className="mt-4 rounded-lg border border-rose-200 bg-rose-50 text-rose-700 px-3 py-2 text-sm">{error}</div>
       )}
 
-      <div className="mt-4 flex items-center gap-3">
-        <input value={q} onChange={(e)=>setQ(e.target.value)} placeholder="Search by name, code or domain" className="w-full md:w-96 rounded-lg border border-gray-300 px-3 py-2" />
-        <button onClick={fetchSchools} className="px-3 py-2 rounded-lg border bg-white hover:bg-gray-50 text-sm">Refresh</button>
+      <div className="mt-4 flex flex-col sm:flex-row sm:items-center gap-3">
+        <input value={q} onChange={(e)=>setQ(e.target.value)} placeholder="Search by name, code or domain" className="w-full sm:w-auto sm:flex-1 md:w-96 rounded-lg border border-gray-300 px-3 py-2" />
+        <button onClick={fetchSchools} className="px-3 py-2 rounded-lg border bg-white hover:bg-gray-50 text-sm w-full sm:w-auto">Refresh</button>
       </div>
 
       <div className="mt-4 rounded-2xl bg-white border overflow-hidden">
@@ -424,7 +424,7 @@ The data is not deleted completely until you purge it from the Recycle Bin.`)
                   <td className="px-4 py-3 text-gray-700">{s.is_trial ? 'Yes' : 'No'}</td>
                   <td className="px-4 py-3 text-gray-700">{s.trial_student_limit ?? '—'}</td>
                   <td className="px-4 py-3">
-                    <div className="flex items-center justify-end gap-2">
+                    <div className="flex flex-wrap items-center justify-end gap-2">
                       <button onClick={() => openDomains(s)} className="px-3 py-1.5 rounded-lg border bg-white hover:bg-gray-50">Domains</button>
                       <button onClick={() => openIntegrations(s)} className="px-3 py-1.5 rounded-lg border bg-white hover:bg-gray-50">Integrations</button>
                       <button onClick={() => toggleActive(s)} className="px-3 py-1.5 rounded-lg border bg-white hover:bg-gray-50">{s.is_active === false ? 'Activate' : 'Deactivate'}</button>

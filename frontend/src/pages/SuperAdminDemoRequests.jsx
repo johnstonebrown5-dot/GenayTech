@@ -78,21 +78,21 @@ export default function SuperAdminDemoRequests(){
 
   return (
     <div>
-      <div className="flex items-center justify-between gap-3 flex-wrap">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold text-gray-900">Demo Requests</h1>
           <div className="mt-1 text-sm text-gray-600">Approve or reject pending demo requests. Approval sends a verification email.</div>
         </div>
-        <button onClick={fetchItems} className="px-3 py-2 rounded-lg border bg-white hover:bg-gray-50 text-sm">Refresh</button>
+        <button onClick={fetchItems} className="px-3 py-2 rounded-lg border bg-white hover:bg-gray-50 text-sm w-full sm:w-auto">Refresh</button>
       </div>
 
       {error && (
         <div className="mt-4 rounded-lg border border-rose-200 bg-rose-50 text-rose-700 px-3 py-2 text-sm">{error}</div>
       )}
 
-      <div className="mt-4 flex flex-wrap items-center gap-3">
-        <input value={q} onChange={(e)=>setQ(e.target.value)} placeholder="Search by school, email or domain" className="w-full md:w-96 rounded-lg border border-gray-300 px-3 py-2" />
-        <select value={status} onChange={(e)=>setStatus(e.target.value)} className="rounded-lg border border-gray-300 px-3 py-2 text-sm">
+      <div className="mt-4 flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-3">
+        <input value={q} onChange={(e)=>setQ(e.target.value)} placeholder="Search by school, email or domain" className="w-full sm:flex-1 md:w-96 rounded-lg border border-gray-300 px-3 py-2" />
+        <select value={status} onChange={(e)=>setStatus(e.target.value)} className="rounded-lg border border-gray-300 px-3 py-2 text-sm w-full sm:w-auto">
           <option value="pending">pending</option>
           <option value="approved">approved</option>
           <option value="rejected">rejected</option>
@@ -128,7 +128,7 @@ export default function SuperAdminDemoRequests(){
                   <td className="px-4 py-3 text-gray-700">{r.status}</td>
                   <td className="px-4 py-3 text-gray-700">{r.created_at ? String(r.created_at).slice(0, 19).replace('T',' ') : '—'}</td>
                   <td className="px-4 py-3">
-                    <div className="flex items-center justify-end gap-2">
+                    <div className="flex flex-wrap items-center justify-end gap-2">
                       {r.status === 'pending' ? (
                         <>
                           <button onClick={() => approve(r)} className="px-3 py-1.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">Approve</button>

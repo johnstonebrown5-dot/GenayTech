@@ -28,6 +28,16 @@ export default function SuperAdminLayout({ children }){
 
   useEffect(() => { setIsMobileOpen(false) }, [pathname])
 
+  useEffect(() => {
+    try {
+      if (typeof document === 'undefined') return
+      if (isMobileOpen) document.body.style.overflow = 'hidden'
+      else document.body.style.overflow = ''
+      return () => { try { document.body.style.overflow = '' } catch {} }
+    } catch {
+    }
+  }, [isMobileOpen])
+
   useEffect(() => { setDisplayUser(user) }, [user])
 
   useEffect(() => {
@@ -84,7 +94,7 @@ export default function SuperAdminLayout({ children }){
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <div className="md:hidden sticky top-0 z-40 flex items-center justify-between px-4 py-3 bg-white/90 backdrop-blur border-b border-slate-200">
+      <div className="md:hidden sticky top-0 z-40 flex items-center justify-between px-4 py-3 bg-white/90 backdrop-blur border-b border-slate-200 pt-[env(safe-area-inset-top)]">
         <button onClick={() => setIsMobileOpen(v => !v)} className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 hover:bg-slate-50">Menu</button>
         <div className="flex items-center gap-2">
           <div className="h-8 w-8 rounded-xl bg-gradient-to-br from-indigo-600 to-violet-600" />
@@ -140,7 +150,7 @@ export default function SuperAdminLayout({ children }){
         {isMobileOpen && (
           <div className="md:hidden fixed inset-0 z-50">
             <div className="absolute inset-0 bg-black/40" onClick={() => setIsMobileOpen(false)} />
-            <div className="absolute left-0 top-0 bottom-0 w-80 bg-white border-r border-slate-200 p-3">
+            <div className="absolute left-0 top-0 bottom-0 w-[85vw] max-w-[20rem] bg-white border-r border-slate-200 p-3 pt-[env(safe-area-inset-top)]">
               <div className="flex items-center justify-between mb-3 px-1">
                 <div className="flex items-center gap-2">
                   <div className="h-8 w-8 rounded-xl bg-gradient-to-br from-indigo-600 to-violet-600" />
@@ -157,7 +167,7 @@ export default function SuperAdminLayout({ children }){
           </div>
         )}
 
-        <main className="flex-1 p-4 md:p-8">
+        <main className="flex-1 p-4 sm:p-5 md:p-8">
           {children}
         </main>
       </div>
