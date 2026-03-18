@@ -18,165 +18,166 @@ import {
   PlayCircle
 } from 'lucide-react'
 
-const steps = [
-  {
-    id: 'welcome',
-    title: 'Welcome to EDU-TRACK',
-    description: 'Let\'s get you settled into your new digital classroom. We\'ve designed this space to make your teaching life easier.',
-    icon: <GraduationCap className="w-12 h-12 text-indigo-600" />,
-    color: 'bg-indigo-50',
-    content: (
-      <div className="space-y-4">
-        <div className="p-4 bg-blue-50 rounded-xl border border-blue-100">
-          <h4 className="font-semibold text-blue-900 mb-1">Your Teaching Hub</h4>
-          <p className="text-sm text-blue-800">Everything from grading to attendance is now at your fingertips. No more paper trails.</p>
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
-            <span className="text-xs font-medium text-slate-500 uppercase tracking-wider">Fast</span>
-            <p className="text-sm font-semibold text-slate-900">Real-time sync</p>
-          </div>
-          <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
-            <span className="text-xs font-medium text-slate-500 uppercase tracking-wider">Secure</span>
-            <p className="text-sm font-semibold text-slate-900">Encrypted data</p>
-          </div>
-        </div>
-      </div>
-    )
-  },
-  {
-    id: 'video-guide',
-    title: 'Quick Video Walkthrough',
-    description: 'Watch this short step-by-step video to see how to navigate your new dashboard and perform key operations.',
-    icon: <PlayCircle className="w-12 h-12 text-red-600" />,
-    color: 'bg-red-50',
-    content: (
-      <div className="space-y-4">
-        <div className="relative aspect-video w-full rounded-2xl bg-slate-900 overflow-hidden shadow-lg ring-1 ring-slate-200 flex items-center justify-center">
-          {/* Video Placeholder - User can replace the src with their URL */}
-          <iframe 
-            className="absolute inset-0 w-full h-full"
-            src={videoUrl}
-            title="EDU-TRACK Teacher Tutorial"
-            frameBorder="0"
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-            allowFullScreen
-          ></iframe>
-          <div className="absolute inset-0 bg-slate-900/10 pointer-events-none" />
-        </div>
-        <div className="p-3 bg-amber-50 rounded-xl border border-amber-100 flex items-start gap-3">
-          <PlayCircle className="w-5 h-5 text-amber-600 mt-0.5" />
-          <p className="text-xs text-amber-800">This video covers: Attendance, Grade Entry, Results analysis, and Messaging.</p>
-        </div>
-      </div>
-    )
-  },
-  {
-    id: 'dashboard',
-    title: 'Smart Dashboard',
-    description: 'Your central command center for daily operations and quick access to your classes.',
-    icon: <LayoutDashboard className="w-12 h-12 text-blue-600" />,
-    color: 'bg-blue-50',
-    content: (
-      <div className="space-y-3">
-        <ul className="space-y-2">
-          <li className="flex items-center gap-3 p-3 bg-white rounded-xl border border-gray-100 shadow-sm">
-            <div className="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center text-emerald-600">
-              <Calendar size={18} />
-            </div>
-            <span className="text-sm font-medium">Daily Timetable & Events</span>
-          </li>
-          <li className="flex items-center gap-3 p-3 bg-white rounded-xl border border-gray-100 shadow-sm">
-            <div className="w-8 h-8 rounded-lg bg-orange-100 flex items-center justify-center text-orange-600">
-              <ClipboardList size={18} />
-            </div>
-            <span className="text-sm font-medium">Quick Tasks & Duties</span>
-          </li>
-          <li className="flex items-center gap-3 p-3 bg-white rounded-xl border border-gray-100 shadow-sm">
-            <div className="w-8 h-8 rounded-lg bg-indigo-100 flex items-center justify-center text-indigo-600">
-              <BookOpen size={18} />
-            </div>
-            <span className="text-sm font-medium">Your Assigned Classes</span>
-          </li>
-        </ul>
-      </div>
-    )
-  },
-  {
-    id: 'academics',
-    title: 'Grading & Results',
-    description: 'Effortlessly manage student performance with our streamlined academic tools.',
-    icon: <BarChart3 className="w-12 h-12 text-emerald-600" />,
-    color: 'bg-emerald-50',
-    content: (
-      <div className="space-y-4">
-        <div className="flex gap-4 p-4 bg-white rounded-2xl border border-gray-100 shadow-sm">
-          <div className="flex-1 space-y-2">
-            <div className="h-2 w-full bg-gray-100 rounded-full overflow-hidden">
-              <div className="h-full w-3/4 bg-emerald-500 rounded-full" />
-            </div>
-            <div className="h-2 w-2/3 bg-gray-100 rounded-full" />
-            <div className="h-2 w-1/2 bg-gray-100 rounded-full" />
-          </div>
-          <div className="text-right">
-            <span className="text-lg font-bold text-emerald-600">A+</span>
-          </div>
-        </div>
-        <p className="text-sm text-gray-600 italic text-center">"Automatic calculations for means, ranks, and grades."</p>
-      </div>
-    )
-  },
-  {
-    id: 'communication',
-    title: 'Seamless Communication',
-    description: 'Stay connected with colleagues, parents, and students through our integrated messaging.',
-    icon: <MessageSquare className="w-12 h-12 text-purple-600" />,
-    color: 'bg-purple-50',
-    content: (
-      <div className="relative p-4 bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-        <div className="space-y-3 relative z-10">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-indigo-500" />
-            <div className="h-3 w-32 bg-gray-100 rounded-full" />
-          </div>
-          <div className="ml-11 h-12 w-full bg-gray-50 rounded-xl" />
-          <div className="flex items-center gap-3 justify-end">
-            <div className="h-3 w-24 bg-blue-100 rounded-full" />
-            <div className="w-8 h-8 rounded-full bg-emerald-500" />
-          </div>
-        </div>
-        <div className="absolute top-0 right-0 p-2 opacity-10">
-          <MessageSquare size={80} />
-        </div>
-      </div>
-    )
-  },
-  {
-    id: 'finish',
-    title: 'Ready to Teach?',
-    description: 'You\'re all set to begin your journey. Your profile and settings can be adjusted anytime.',
-    icon: <CheckCircle2 className="w-12 h-12 text-orange-600" />,
-    color: 'bg-orange-50',
-    content: (
-      <div className="text-center space-y-6 py-4">
-        <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-emerald-100 text-emerald-600 mb-2">
-          <CheckCircle2 size={48} />
-        </div>
-        <div className="space-y-2">
-          <h4 className="font-bold text-gray-900 text-xl">Onboarding Complete!</h4>
-          <p className="text-gray-600 px-8 text-sm">Welcome aboard. Let\'s head to your dashboard and start making an impact.</p>
-        </div>
-      </div>
-    )
-  }
-]
-
 export default function TeacherOnboardingPage() {
   const navigate = useNavigate()
   const { user } = useAuth()
   const [currentStep, setCurrentStep] = useState(0)
   const [isFinishing, setIsFinishing] = useState(false)
   const [videoUrl, setVideoUrl] = useState('https://www.youtube.com/embed/dQw4w9WgXcQ')
+
+  const steps = [
+    {
+      id: 'welcome',
+      title: 'Welcome to EDU-TRACK',
+      description: 'Let\'s get you settled into your new digital classroom. We\'ve designed this space to make your teaching life easier.',
+      icon: <GraduationCap className="w-12 h-12 text-indigo-600" />,
+      color: 'bg-indigo-50',
+      content: (
+        <div className="space-y-4">
+          <div className="p-4 bg-blue-50 rounded-xl border border-blue-100">
+            <h4 className="font-semibold text-blue-900 mb-1">Your Teaching Hub</h4>
+            <p className="text-sm text-blue-800">Everything from grading to attendance is now at your fingertips. No more paper trails.</p>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
+              <span className="text-xs font-medium text-slate-500 uppercase tracking-wider">Fast</span>
+              <p className="text-sm font-semibold text-slate-900">Real-time sync</p>
+            </div>
+            <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
+              <span className="text-xs font-medium text-slate-500 uppercase tracking-wider">Secure</span>
+              <p className="text-sm font-semibold text-slate-900">Encrypted data</p>
+            </div>
+          </div>
+        </div>
+      )
+    },
+    {
+      id: 'video-guide',
+      title: 'Quick Video Walkthrough',
+      description: 'Watch this short step-by-step video to see how to navigate your new dashboard and perform key operations.',
+      icon: <PlayCircle className="w-12 h-12 text-red-600" />,
+      color: 'bg-red-50',
+      content: (
+        <div className="space-y-4">
+          <div className="relative aspect-video w-full rounded-2xl bg-slate-900 overflow-hidden shadow-lg ring-1 ring-slate-200 flex items-center justify-center">
+            {/* Video Placeholder - User can replace the src with their URL */}
+            <iframe 
+              className="absolute inset-0 w-full h-full"
+              src={videoUrl}
+              title="EDU-TRACK Teacher Tutorial"
+              frameBorder="0"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowFullScreen
+            ></iframe>
+            <div className="absolute inset-0 bg-slate-900/10 pointer-events-none" />
+          </div>
+          <div className="p-3 bg-amber-50 rounded-xl border border-amber-100 flex items-start gap-3">
+            <PlayCircle className="w-5 h-5 text-amber-600 mt-0.5" />
+            <p className="text-xs text-amber-800">This video covers: Attendance, Grade Entry, Results analysis, and Messaging.</p>
+          </div>
+        </div>
+      )
+    },
+    {
+      id: 'dashboard',
+      title: 'Smart Dashboard',
+      description: 'Your central command center for daily operations and quick access to your classes.',
+      icon: <LayoutDashboard className="w-12 h-12 text-blue-600" />,
+      color: 'bg-blue-50',
+      content: (
+        <div className="space-y-3">
+          <ul className="space-y-2">
+            <li className="flex items-center gap-3 p-3 bg-white rounded-xl border border-gray-100 shadow-sm">
+              <div className="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center text-emerald-600">
+                <Calendar size={18} />
+              </div>
+              <span className="text-sm font-medium">Daily Timetable & Events</span>
+            </li>
+            <li className="flex items-center gap-3 p-3 bg-white rounded-xl border border-gray-100 shadow-sm">
+              <div className="w-8 h-8 rounded-lg bg-orange-100 flex items-center justify-center text-orange-600">
+                <ClipboardList size={18} />
+              </div>
+              <span className="text-sm font-medium">Quick Tasks & Duties</span>
+            </li>
+            <li className="flex items-center gap-3 p-3 bg-white rounded-xl border border-gray-100 shadow-sm">
+              <div className="w-8 h-8 rounded-lg bg-indigo-100 flex items-center justify-center text-indigo-600">
+                <BookOpen size={18} />
+              </div>
+              <span className="text-sm font-medium">Your Assigned Classes</span>
+            </li>
+          </ul>
+        </div>
+      )
+    },
+    {
+      id: 'academics',
+      title: 'Grading & Results',
+      description: 'Effortlessly manage student performance with our streamlined academic tools.',
+      icon: <BarChart3 className="w-12 h-12 text-emerald-600" />,
+      color: 'bg-emerald-50',
+      content: (
+        <div className="space-y-4">
+          <div className="flex gap-4 p-4 bg-white rounded-2xl border border-gray-100 shadow-sm">
+            <div className="flex-1 space-y-2">
+              <div className="h-2 w-full bg-gray-100 rounded-full overflow-hidden">
+                <div className="h-full w-3/4 bg-emerald-500 rounded-full" />
+              </div>
+              <div className="h-2 w-2/3 bg-gray-100 rounded-full" />
+              <div className="h-2 w-1/2 bg-gray-100 rounded-full" />
+            </div>
+            <div className="text-right">
+              <span className="text-lg font-bold text-emerald-600">A+</span>
+            </div>
+          </div>
+          <p className="text-sm text-gray-600 italic text-center">"Automatic calculations for means, ranks, and grades."</p>
+        </div>
+      )
+    },
+    {
+      id: 'communication',
+      title: 'Seamless Communication',
+      description: 'Stay connected with colleagues, parents, and students through our integrated messaging.',
+      icon: <MessageSquare className="w-12 h-12 text-purple-600" />,
+      color: 'bg-purple-50',
+      content: (
+        <div className="relative p-4 bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+          <div className="space-y-3 relative z-10">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-full bg-indigo-500" />
+              <div className="h-3 w-32 bg-gray-100 rounded-full" />
+            </div>
+            <div className="ml-11 h-12 w-full bg-gray-50 rounded-xl" />
+            <div className="flex items-center gap-3 justify-end">
+              <div className="h-3 w-24 bg-blue-100 rounded-full" />
+              <div className="w-8 h-8 rounded-full bg-emerald-500" />
+            </div>
+          </div>
+          <div className="absolute top-0 right-0 p-2 opacity-10">
+            <MessageSquare size={80} />
+          </div>
+        </div>
+      )
+    },
+    {
+      id: 'finish',
+      title: 'Ready to Teach?',
+      description: 'You\'re all set to begin your journey. Your profile and settings can be adjusted anytime.',
+      icon: <CheckCircle2 className="w-12 h-12 text-orange-600" />,
+      color: 'bg-orange-50',
+      content: (
+        <div className="text-center space-y-6 py-4">
+          <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-emerald-100 text-emerald-600 mb-2">
+            <CheckCircle2 size={48} />
+          </div>
+          <div className="space-y-2">
+            <h4 className="font-bold text-gray-900 text-xl">Onboarding Complete!</h4>
+            <p className="text-gray-600 px-8 text-sm">Welcome aboard. Let\'s head to your dashboard and start making an impact.</p>
+          </div>
+        </div>
+      )
+    }
+  ]
+
 
   useEffect(() => {
     let mounted = true
