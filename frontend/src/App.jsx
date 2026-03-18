@@ -24,6 +24,7 @@ import TeacherAnalytics from './pages/TeacherAnalytics'
 import TeacherProfile from './pages/TeacherProfile'
 import TeacherManageClass from './pages/TeacherManageClass'
 import TeacherClassLogs from './pages/TeacherClassLogs'
+import TeacherOnboardingPage from './pages/TeacherOnboardingPage'
 import TeacherLayout from './components/TeacherLayout'
 import StudentDashboard from './pages/StudentDashboard'
 import StudentReportCard from './pages/StudentReportCard'
@@ -400,6 +401,7 @@ export default function App() {
               <Route path="timetable/teacher" element={<TeacherTimetableView/>} />
             </Route>
             <Route path="/featured/:slug" element={<FeaturedPost/>} />
+            <Route path="/teacher/onboarding" element={<ProtectedRoute roles={["teacher"]}><TeacherOnboardingPage /></ProtectedRoute>} />
             <Route path="teacher" element={<ProtectedRoute roles={["teacher","admin"]}><TeacherLayout><Outlet/></TeacherLayout></ProtectedRoute>}>
               <Route index element={<TeacherDashboard/>} />
               <Route path="messages" element={<Messages/>} />

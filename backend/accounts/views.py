@@ -1485,6 +1485,8 @@ def system_config_public(request):
             default_domain = ''
     return Response({
         'default_domain': default_domain or '',
+        'teacher_onboarding_video_url': getattr(cfg, 'teacher_onboarding_video_url', '') or '',
+        'teacher_onboarding_video_url_mobile': getattr(cfg, 'teacher_onboarding_video_url_mobile', '') or '',
         'updated_at': getattr(cfg, 'updated_at', None) if cfg else None,
     })
 
@@ -1541,13 +1543,18 @@ def superadmin_system_config(request):
         data = request.data or {}
         if 'default_domain' in data:
             cfg.default_domain = str(data.get('default_domain') or '')
-        cfg.save(update_fields=['default_domain', 'updated_at'])
+        if 'teacher_onboarding_video_url' in data:
+            cfg.teacher_onboarding_video_url = str(data.get('teacher_onboarding_video_url') or '')
+        if 'teacher_onboarding_video_url_mobile' in data:
+            cfg.teacher_onboarding_video_url_mobile = str(data.get('teacher_onboarding_video_url_mobile') or '')
+        cfg.save(update_fields=['default_domain', 'teacher_onboarding_video_url', 'teacher_onboarding_video_url_mobile', 'updated_at'])
 
     return Response({
         'default_domain': cfg.default_domain or '',
+        'teacher_onboarding_video_url': cfg.teacher_onboarding_video_url or '',
+        'teacher_onboarding_video_url_mobile': cfg.teacher_onboarding_video_url_mobile or '',
         'updated_at': cfg.updated_at,
     })
-
 
 @api_view(["GET"])
 @permission_classes([AllowAny])

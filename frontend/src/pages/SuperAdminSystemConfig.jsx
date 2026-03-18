@@ -5,8 +5,8 @@ export default function SuperAdminSystemConfig(){
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
-  const [server, setServer] = useState({ default_domain: '', updated_at: null })
-  const [form, setForm] = useState({ default_domain: '' })
+  const [server, setServer] = useState({ default_domain: '', teacher_onboarding_video_url: '', teacher_onboarding_video_url_mobile: '', updated_at: null })
+  const [form, setForm] = useState({ default_domain: '', teacher_onboarding_video_url: '', teacher_onboarding_video_url_mobile: '' })
 
   const canSave = useMemo(() => true, [])
 
@@ -16,8 +16,15 @@ export default function SuperAdminSystemConfig(){
     try{
       const res = await api.get('/auth/superadmin/system-config/', { _skipGlobalLoading: true })
       const data = res?.data || {}
-      setServer({ default_domain: data.default_domain || '', updated_at: data.updated_at || null })
-      setForm({ default_domain: data.default_domain || '' })
+      setServer({ 
+        default_domain: data.default_domain || '', 
+        teacher_onboarding_video_url: data.teacher_onboarding_video_url || '',
+        updated_at: data.updated_at || null 
+      })
+      setForm({ 
+        default_domain: data.default_domain || '',
+        teacher_onboarding_video_url: data.teacher_onboarding_video_url || ''
+      })
     }catch(e){
       setError(e?.response?.data?.detail || e?.message || 'Failed to load system config')
     }finally{
@@ -32,11 +39,21 @@ export default function SuperAdminSystemConfig(){
     setSaving(true)
     setError('')
     try{
-      const payload = { default_domain: form.default_domain || '' }
+      const payload = { 
+        default_domain: form.default_domain || '',
+        teacher_onboarding_video_url: form.teacher_onboarding_video_url || ''
+      }
       const res = await api.patch('/auth/superadmin/system-config/', payload)
       const data = res?.data || {}
-      setServer({ default_domain: data.default_domain || '', updated_at: data.updated_at || null })
-      setForm({ default_domain: data.default_domain || '' })
+      setServer({ 
+        default_domain: data.default_domain || '', 
+        teacher_onboarding_video_url: data.teacher_onboarding_video_url || '',
+        updated_at: data.updated_at || null 
+      })
+      setForm({ 
+        default_domain: data.default_domain || '',
+        teacher_onboarding_video_url: data.teacher_onboarding_video_url || ''
+      })
     }catch(e){
       setError(e?.response?.data?.detail || e?.message || 'Failed to save system config')
     }finally{
@@ -85,6 +102,32 @@ export default function SuperAdminSystemConfig(){
           value={form.default_domain}
           onChange={e => setForm(f => ({ ...f, default_domain: e.target.value }))}
           placeholder="your-domain.com"
+          className="mt-3 w-full rounded-2xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-200"
+        />
+      </div>
+
+      <div className="rounded-3xl bg-white border border-gray-200 p-4 shadow-sm">
+        <div className="font-semibold text-gray-900">Teacher Onboarding Video URL (Desktop)</div>
+        <div className="mt-1 text-sm text-gray-600">
+          The YouTube/Vimeo embed URL used for the teacher onboarding step-by-step guide on desktop devices.
+        </div>
+        <input
+          value={form.teacher_onboarding_video_url}
+          onChange={e => setForm(f => ({ ...f, teacher_onboarding_video_url: e.target.value }))}
+          placeholder="https://www.youtube.com/embed/..."
+          className="mt-3 w-full rounded-2xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-200"
+        />
+      </div>
+
+      <div className="rounded-3xl bg-white border border-gray-200 p-4 shadow-sm">
+        <div className="font-semibold text-gray-900">Teacher Onboarding Video URL (Mobile)</div>
+        <div className="mt-1 text-sm text-gray-600">
+          The YouTube/Vimeo embed URL used for the teacher onboarding step-by-step guide on mobile devices.
+        </div>
+        <input
+          value={form.teacher_onboarding_video_url_mobile}
+          onChange={e => setForm(f => ({ ...f, teacher_onboarding_video_url_mobile: e.target.value }))}
+          placeholder="https://www.youtube.com/embed/..."
           className="mt-3 w-full rounded-2xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-200"
         />
         <div className="mt-3 text-xs text-gray-600">

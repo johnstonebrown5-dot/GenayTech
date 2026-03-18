@@ -217,6 +217,8 @@ class MaintenanceNotice(models.Model):
 
 class SystemConfig(models.Model):
     default_domain = models.CharField(max_length=255, blank=True, default='')
+    teacher_onboarding_video_url = models.URLField(max_length=500, blank=True, default='')
+    teacher_onboarding_video_url_mobile = models.URLField(max_length=500, blank=True, default='')
     updated_at = models.DateTimeField(auto_now=True)
 
     def save(self, *args, **kwargs):

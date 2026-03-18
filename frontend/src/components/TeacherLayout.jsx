@@ -5,6 +5,7 @@ import { useAuth } from '../auth'
 import { useLock } from './LockProvider'
 import api from '../api'
 import { teacherQueries } from '../utils/teacherQueries'
+import TeacherOnboardingTour from './TeacherOnboardingTour'
 
 const baseNavItems = [
   { to: '/teacher', label: 'Dashboard', icon: '📊' },
@@ -16,6 +17,7 @@ const baseNavItems = [
   { to: '/teacher/timetable', label: 'Timetable', icon: '📆' },
   { to: '/teacher/classes', label: 'Classes', icon: '📚' },
   { to: '/teacher/messages', label: 'Messages', icon: '✉️' },
+  { to: '/teacher/onboarding', label: 'Setup Guide', icon: '🚀' },
   { to: '/teacher/profile', label: 'Profile', icon: '👤' },
 ]
 
@@ -238,6 +240,16 @@ export default function TeacherLayout({ children }){
     return () => { mounted = false }
   }, [])
 
+  useEffect(() => {
+    if (user?.role === 'teacher' && pathname.startsWith('/teacher') && pathname !== '/teacher/onboarding') {
+      const key = user?.id ? `teacher_onboarding_completed:${String(user.id)}` : 'teacher_onboarding_completed'
+      const isDone = localStorage.getItem(key) === 'true'
+      if (!isDone) {
+        navigate('/teacher/onboarding', { replace: true })
+      }
+    }
+  }, [user, pathname, navigate])
+
   const sidebarBase = isOpen ? 'w-64' : 'w-16'
 
   const displayName = user?.first_name || user?.username || 'Profile'
@@ -291,6 +303,7 @@ export default function TeacherLayout({ children }){
 
   return (
     <div className={`min-h-screen bg-gray-50 teacher-theme ${effectiveDarkMode ? 'teacher-theme-dark' : ''}`}>
+      <TeacherOnboardingTour userId={user?.id} isClassTeacher={hasAttendanceAccess} />
       {broadcastBanner && (
         <div className="sticky top-0 z-40 w-full bg-red-600 text-white">
           <div className="px-3 md:px-4 py-2 flex items-start gap-2">
@@ -429,6 +442,7 @@ export default function TeacherLayout({ children }){
               const active = pathname === i.to
               return (
                 <Link key={i.to} to={i.to}
+                  data-tour-id={`teacher-nav:${String(i.label || '').toLowerCase().replace(/\s+/g,'-')}`}
                   className={`${active
                     ? 'bg-white/20 text-white shadow-lg border border-white/30'
                     : 'hover:bg-white/10 text-blue-100 hover:text-white'
@@ -462,14 +476,14 @@ export default function TeacherLayout({ children }){
 
         {/* Mobile Drawer Sidebar */}
         <aside
-          className={`fixed inset-y-0 z-40 left-0 bg-gradient-to-b from-blue-600 via-blue-700 to-blue-900 border-r border-blue-500/30 w-full max-w-sm pt-2 pb-3 px-2 md:hidden transition-transform duration-200 shadow-2xl ${isMobileOpen? 'translate-x-0':'-translate-x-full'}`}
+          className={`fixed inset-y-0 z-40 left-0 bg-white border-r border-gray-200 w-full max-w-sm pt-2 pb-3 px-2 md:hidden transition-transform duration-200 shadow-2xl ${isMobileOpen? 'translate-x-0':'-translate-x-full'}`}
         >
           <div className="flex items-center justify-between mb-2 px-1">
-            <span className="text-sm font-semibold text-white/90">Menu</span>
+            <span className="text-sm font-semibold text-gray-900">Menu</span>
             <button
               type="button"
               onClick={()=> setIsMobileOpen(false)}
-              className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-white text-gray-900 shadow-sm hover:bg-gray-100"
+              className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-gray-50 text-gray-900 shadow-sm hover:bg-gray-100 border border-gray-200"
               aria-label="Close menu"
             >
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4">
@@ -486,9 +500,10 @@ export default function TeacherLayout({ children }){
                     key={i.to}
                     to={i.to}
                     onClick={() => setIsMobileOpen(false)}
+                    data-tour-id={`teacher-nav:${String(i.label || '').toLowerCase().replace(/\s+/g,'-')}`}
                     className={`${active
-                      ? 'bg-white/20 text-white border border-white/30'
-                      : 'bg-white/10 text-blue-100 border border-white/10 hover:bg-white/15 hover:text-white'
+                      ? 'bg-gray-900 text-white border border-gray-900 shadow-md'
+                      : 'bg-white text-gray-800 border border-gray-200 hover:bg-gray-50'
                     } relative rounded-2xl px-2 py-3 flex flex-col items-center justify-center gap-1.5 transition-all duration-200 shadow-sm`}
                   >
                     <div className="relative">
@@ -505,11 +520,11 @@ export default function TeacherLayout({ children }){
               })}
             </div>
           </div>
-          <div className="mt-3 pt-2 border-t border-blue-500/30 flex items-center gap-2">
+          <div className="mt-3 pt-2 border-t border-gray-200 flex items-center gap-2">
             <button
               type="button"
               onClick={lock}
-              className="flex-1 px-3 py-2 rounded-lg text-sm font-medium bg-white/10 text-white border border-white/20 hover:bg-white/20 transition-colors"
+              className="flex-1 px-3 py-2 rounded-lg text-sm font-medium bg-gray-900 text-white border border-gray-900 hover:bg-black transition-colors"
             >
               Lock
             </button>
@@ -517,7 +532,7 @@ export default function TeacherLayout({ children }){
               type="button"
               disabled
               onClick={() => {}}
-              className="flex-1 px-3 py-2 rounded-lg text-sm font-medium bg-white/5 text-white border border-white/30 hover:bg-white/15 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+              className="flex-1 px-3 py-2 rounded-lg text-sm font-medium bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-100 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
             >
               {darkMode ? 'Light mode' : 'Dark mode'}
             </button>
@@ -529,14 +544,14 @@ export default function TeacherLayout({ children }){
               Logout
             </button>
           </div>
-          <div className="mt-2 p-2 text-[11px] text-blue-200/80 space-y-1">
+          <div className="mt-2 p-2 text-[11px] text-gray-500 space-y-1">
             {schoolName && (
               <div className="flex items-center gap-2">
-                <div className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></div>
+                <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
                 <span>© {new Date().getFullYear()} {schoolName}</span>
               </div>
             )}
-            <div className="text-[10px] text-blue-100/90">Powered by Genay Technologies</div>
+            <div className="text-[10px] text-gray-400">Powered by Genay Technologies</div>
           </div>
         </aside>
 
