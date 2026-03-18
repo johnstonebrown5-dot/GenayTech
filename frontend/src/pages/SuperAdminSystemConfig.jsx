@@ -5,8 +5,37 @@ export default function SuperAdminSystemConfig(){
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
-  const [server, setServer] = useState({ default_domain: '', teacher_onboarding_video_url: '', teacher_onboarding_video_url_mobile: '', updated_at: null })
-  const [form, setForm] = useState({ default_domain: '', teacher_onboarding_video_url: '', teacher_onboarding_video_url_mobile: '' })
+  const [server, setServer] = useState({ 
+    default_domain: '', 
+    teacher_onboarding_video_url: '', 
+    teacher_onboarding_video_url_mobile: '',
+    video_url_messages: '',
+    video_url_messages_mobile: '',
+    video_url_grades: '',
+    video_url_grades_mobile: '',
+    video_url_attendance: '',
+    video_url_attendance_mobile: '',
+    video_url_print_results: '',
+    video_url_print_results_mobile: '',
+    video_url_results: '',
+    video_url_results_mobile: '',
+    updated_at: null 
+  })
+  const [form, setForm] = useState({ 
+    default_domain: '', 
+    teacher_onboarding_video_url: '', 
+    teacher_onboarding_video_url_mobile: '',
+    video_url_messages: '',
+    video_url_messages_mobile: '',
+    video_url_grades: '',
+    video_url_grades_mobile: '',
+    video_url_attendance: '',
+    video_url_attendance_mobile: '',
+    video_url_print_results: '',
+    video_url_print_results_mobile: '',
+    video_url_results: '',
+    video_url_results_mobile: ''
+  })
 
   const canSave = useMemo(() => true, [])
 
@@ -39,21 +68,11 @@ export default function SuperAdminSystemConfig(){
     setSaving(true)
     setError('')
     try{
-      const payload = { 
-        default_domain: form.default_domain || '',
-        teacher_onboarding_video_url: form.teacher_onboarding_video_url || ''
-      }
+      const payload = { ...form }
       const res = await api.patch('/auth/superadmin/system-config/', payload)
       const data = res?.data || {}
-      setServer({ 
-        default_domain: data.default_domain || '', 
-        teacher_onboarding_video_url: data.teacher_onboarding_video_url || '',
-        updated_at: data.updated_at || null 
-      })
-      setForm({ 
-        default_domain: data.default_domain || '',
-        teacher_onboarding_video_url: data.teacher_onboarding_video_url || ''
-      })
+      setServer({ ...data })
+      setForm({ ...data })
     }catch(e){
       setError(e?.response?.data?.detail || e?.message || 'Failed to save system config')
     }finally{
@@ -130,8 +149,45 @@ export default function SuperAdminSystemConfig(){
           placeholder="https://www.youtube.com/embed/..."
           className="mt-3 w-full rounded-2xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-200"
         />
-        <div className="mt-3 text-xs text-gray-600">
-          {server?.updated_at ? `Last updated: ${String(server.updated_at).slice(0, 19).replace('T', ' ')}` : ''}
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+        {[
+          { key: 'messages', label: 'Messages' },
+          { key: 'grades', label: 'Grades' },
+          { key: 'attendance', label: 'Attendance' },
+          { key: 'print_results', label: 'Print Results' },
+          { key: 'results', label: 'Results' }
+        ].map(section => (
+          <div key={section.key} className="rounded-3xl bg-white border border-gray-200 p-4 shadow-sm space-y-4">
+            <div className="font-semibold text-gray-900 border-b pb-2">How to: {section.label}</div>
+            
+            <div>
+              <label className="text-xs font-medium text-gray-500 uppercase">Desktop URL</label>
+              <input
+                value={form[`video_url_${section.key}`]}
+                onChange={e => setForm(f => ({ ...f, [`video_url_${section.key}`]: e.target.value }))}
+                placeholder={`https://www.youtube.com/embed/... (${section.label} Desktop)`}
+                className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-200"
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-medium text-gray-500 uppercase">Mobile URL</label>
+              <input
+                value={form[`video_url_${section.key}_mobile`]}
+                onChange={e => setForm(f => ({ ...f, [`video_url_${section.key}_mobile`]: e.target.value }))}
+                placeholder={`https://www.youtube.com/embed/... (${section.label} Mobile)`}
+                className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-200"
+              />
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="rounded-3xl bg-slate-50 border border-slate-200 p-4">
+        <div className="text-xs text-slate-500">
+          {server?.updated_at ? `Last system-wide configuration update: ${String(server.updated_at).slice(0, 19).replace('T', ' ')}` : ''}
         </div>
       </div>
 

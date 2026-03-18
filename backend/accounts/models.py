@@ -217,8 +217,27 @@ class MaintenanceNotice(models.Model):
 
 class SystemConfig(models.Model):
     default_domain = models.CharField(max_length=255, blank=True, default='')
+    
+    # Onboarding Videos - Main/Overview
     teacher_onboarding_video_url = models.URLField(max_length=500, blank=True, default='')
     teacher_onboarding_video_url_mobile = models.URLField(max_length=500, blank=True, default='')
+    
+    # Onboarding Videos - Specific Operations
+    video_url_messages = models.URLField(max_length=500, blank=True, default='')
+    video_url_messages_mobile = models.URLField(max_length=500, blank=True, default='')
+    
+    video_url_grades = models.URLField(max_length=500, blank=True, default='')
+    video_url_grades_mobile = models.URLField(max_length=500, blank=True, default='')
+    
+    video_url_attendance = models.URLField(max_length=500, blank=True, default='')
+    video_url_attendance_mobile = models.URLField(max_length=500, blank=True, default='')
+    
+    video_url_print_results = models.URLField(max_length=500, blank=True, default='')
+    video_url_print_results_mobile = models.URLField(max_length=500, blank=True, default='')
+    
+    video_url_results = models.URLField(max_length=500, blank=True, default='')
+    video_url_results_mobile = models.URLField(max_length=500, blank=True, default='')
+    
     updated_at = models.DateTimeField(auto_now=True)
 
     def save(self, *args, **kwargs):

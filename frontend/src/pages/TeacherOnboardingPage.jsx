@@ -23,12 +23,36 @@ export default function TeacherOnboardingPage() {
   const { user } = useAuth()
   const [currentStep, setCurrentStep] = useState(0)
   const [isFinishing, setIsFinishing] = useState(false)
-  const [videoUrl, setVideoUrl] = useState('https://www.youtube.com/embed/dQw4w9WgXcQ')
+  const [config, setConfig] = useState({})
+
+  useEffect(() => {
+    let mounted = true
+    ;(async () => {
+      try {
+        const res = await api.get('/auth/system-config/', { _skipGlobalLoading: true })
+        if (mounted && res?.data) {
+          setConfig(res.data)
+        }
+      } catch (e) {
+        // Fallback to empty config
+      }
+    })()
+    return () => { mounted = false }
+  }, [])
+
+  const getVideoUrl = (desktopKey, mobileKey) => {
+    const isMobile = window.matchMedia && window.matchMedia('(max-width: 767px)').matches
+    const desktopUrl = config[desktopKey]
+    const mobileUrl = config[mobileKey]
+    
+    if (isMobile && mobileUrl) return mobileUrl
+    return desktopUrl || 'https://www.youtube.com/embed/dQw4w9WgXcQ'
+  }
 
   const steps = [
     {
       id: 'welcome',
-      title: 'Welcome to EDU-TRACK',
+      title: 'Welcome to Genay Technologies',
       description: 'Let\'s get you settled into your new digital classroom. We\'ve designed this space to make your teaching life easier.',
       icon: <GraduationCap className="w-12 h-12 text-indigo-600" />,
       color: 'bg-indigo-50',
@@ -53,107 +77,147 @@ export default function TeacherOnboardingPage() {
     },
     {
       id: 'video-guide',
-      title: 'Quick Video Walkthrough',
-      description: 'Watch this short step-by-step video to see how to navigate your new dashboard and perform key operations.',
+      title: 'Quick Overview',
+      description: 'Watch this short video to see how to navigate your new dashboard and perform key operations.',
       icon: <PlayCircle className="w-12 h-12 text-red-600" />,
       color: 'bg-red-50',
       content: (
         <div className="space-y-4">
           <div className="relative aspect-video w-full rounded-2xl bg-slate-900 overflow-hidden shadow-lg ring-1 ring-slate-200 flex items-center justify-center">
-            {/* Video Placeholder - User can replace the src with their URL */}
             <iframe 
               className="absolute inset-0 w-full h-full"
-              src={videoUrl}
-              title="EDU-TRACK Teacher Tutorial"
+              src={getVideoUrl('teacher_onboarding_video_url', 'teacher_onboarding_video_url_mobile')}
+              title="Overview Tutorial"
               frameBorder="0"
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
               allowFullScreen
             ></iframe>
-            <div className="absolute inset-0 bg-slate-900/10 pointer-events-none" />
           </div>
-          <div className="p-3 bg-amber-50 rounded-xl border border-amber-100 flex items-start gap-3">
-            <PlayCircle className="w-5 h-5 text-amber-600 mt-0.5" />
-            <p className="text-xs text-amber-800">This video covers: Attendance, Grade Entry, Results analysis, and Messaging.</p>
-          </div>
+          <p className="text-sm text-slate-600 text-center italic">"Start with the basics: navigation and your workspace."</p>
         </div>
       )
     },
     {
-      id: 'dashboard',
-      title: 'Smart Dashboard',
-      description: 'Your central command center for daily operations and quick access to your classes.',
-      icon: <LayoutDashboard className="w-12 h-12 text-blue-600" />,
-      color: 'bg-blue-50',
+      id: 'messages-guide',
+      title: 'How to: Messages',
+      description: 'Learn how to stay connected with colleagues, parents, and students through our integrated messaging.',
+      icon: <MessageSquare className="w-12 h-12 text-purple-600" />,
+      color: 'bg-purple-50',
       content: (
-        <div className="space-y-3">
-          <ul className="space-y-2">
-            <li className="flex items-center gap-3 p-3 bg-white rounded-xl border border-gray-100 shadow-sm">
-              <div className="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center text-emerald-600">
-                <Calendar size={18} />
-              </div>
-              <span className="text-sm font-medium">Daily Timetable & Events</span>
-            </li>
-            <li className="flex items-center gap-3 p-3 bg-white rounded-xl border border-gray-100 shadow-sm">
-              <div className="w-8 h-8 rounded-lg bg-orange-100 flex items-center justify-center text-orange-600">
-                <ClipboardList size={18} />
-              </div>
-              <span className="text-sm font-medium">Quick Tasks & Duties</span>
-            </li>
-            <li className="flex items-center gap-3 p-3 bg-white rounded-xl border border-gray-100 shadow-sm">
-              <div className="w-8 h-8 rounded-lg bg-indigo-100 flex items-center justify-center text-indigo-600">
-                <BookOpen size={18} />
-              </div>
-              <span className="text-sm font-medium">Your Assigned Classes</span>
-            </li>
-          </ul>
+        <div className="space-y-4">
+          <div className="relative aspect-video w-full rounded-2xl bg-slate-900 overflow-hidden shadow-lg ring-1 ring-slate-200 flex items-center justify-center">
+            <iframe 
+              className="absolute inset-0 w-full h-full"
+              src={getVideoUrl('video_url_messages', 'video_url_messages_mobile')}
+              title="Messages Tutorial"
+              frameBorder="0"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowFullScreen
+            ></iframe>
+          </div>
+          <div className="p-3 bg-purple-50 rounded-xl border border-purple-100 flex items-start gap-3">
+            <MessageSquare className="w-5 h-5 text-purple-600 mt-0.5" />
+            <p className="text-xs text-purple-800">Learn to send broadcasts, private messages, and manage your inbox.</p>
+          </div>
         </div>
       )
     },
     {
-      id: 'academics',
-      title: 'Grading & Results',
-      description: 'Effortlessly manage student performance with our streamlined academic tools.',
+      id: 'grades-guide',
+      title: 'How to: Enter Marks',
+      description: 'Efficiently manage student performance with our streamlined grading tools.',
       icon: <BarChart3 className="w-12 h-12 text-emerald-600" />,
       color: 'bg-emerald-50',
       content: (
         <div className="space-y-4">
-          <div className="flex gap-4 p-4 bg-white rounded-2xl border border-gray-100 shadow-sm">
-            <div className="flex-1 space-y-2">
-              <div className="h-2 w-full bg-gray-100 rounded-full overflow-hidden">
-                <div className="h-full w-3/4 bg-emerald-500 rounded-full" />
-              </div>
-              <div className="h-2 w-2/3 bg-gray-100 rounded-full" />
-              <div className="h-2 w-1/2 bg-gray-100 rounded-full" />
-            </div>
-            <div className="text-right">
-              <span className="text-lg font-bold text-emerald-600">A+</span>
-            </div>
+          <div className="relative aspect-video w-full rounded-2xl bg-slate-900 overflow-hidden shadow-lg ring-1 ring-slate-200 flex items-center justify-center">
+            <iframe 
+              className="absolute inset-0 w-full h-full"
+              src={getVideoUrl('video_url_grades', 'video_url_grades_mobile')}
+              title="Grades Tutorial"
+              frameBorder="0"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowFullScreen
+            ></iframe>
           </div>
-          <p className="text-sm text-gray-600 italic text-center">"Automatic calculations for means, ranks, and grades."</p>
+          <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-100 flex items-start gap-3">
+            <CheckCircle2 className="w-5 h-5 text-emerald-600 mt-0.5" />
+            <p className="text-xs text-emerald-800">Master mark entry, grade calculations, and comment management.</p>
+          </div>
         </div>
       )
     },
     {
-      id: 'communication',
-      title: 'Seamless Communication',
-      description: 'Stay connected with colleagues, parents, and students through our integrated messaging.',
-      icon: <MessageSquare className="w-12 h-12 text-purple-600" />,
-      color: 'bg-purple-50',
+      id: 'attendance-guide',
+      title: 'How to: Attendance',
+      description: 'Quickly record and monitor student attendance for your classes.',
+      icon: <ClipboardList className="w-12 h-12 text-orange-600" />,
+      color: 'bg-orange-50',
       content: (
-        <div className="relative p-4 bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-          <div className="space-y-3 relative z-10">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-full bg-indigo-500" />
-              <div className="h-3 w-32 bg-gray-100 rounded-full" />
-            </div>
-            <div className="ml-11 h-12 w-full bg-gray-50 rounded-xl" />
-            <div className="flex items-center gap-3 justify-end">
-              <div className="h-3 w-24 bg-blue-100 rounded-full" />
-              <div className="w-8 h-8 rounded-full bg-emerald-500" />
-            </div>
+        <div className="space-y-4">
+          <div className="relative aspect-video w-full rounded-2xl bg-slate-900 overflow-hidden shadow-lg ring-1 ring-slate-200 flex items-center justify-center">
+            <iframe 
+              className="absolute inset-0 w-full h-full"
+              src={getVideoUrl('video_url_attendance', 'video_url_attendance_mobile')}
+              title="Attendance Tutorial"
+              frameBorder="0"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowFullScreen
+            ></iframe>
           </div>
-          <div className="absolute top-0 right-0 p-2 opacity-10">
-            <MessageSquare size={80} />
+          <div className="p-3 bg-orange-50 rounded-xl border border-orange-100 flex items-start gap-3">
+            <Calendar className="w-5 h-5 text-orange-600 mt-0.5" />
+            <p className="text-xs text-orange-800">See how to take daily attendance and generate attendance reports.</p>
+          </div>
+        </div>
+      )
+    },
+    {
+      id: 'print-results-guide',
+      title: 'How to: Print Results',
+      description: 'Learn how to generate and print student report cards and result sheets.',
+      icon: <CheckCircle2 className="w-12 h-12 text-slate-600" />,
+      color: 'bg-slate-50',
+      content: (
+        <div className="space-y-4">
+          <div className="relative aspect-video w-full rounded-2xl bg-slate-900 overflow-hidden shadow-lg ring-1 ring-slate-200 flex items-center justify-center">
+            <iframe 
+              className="absolute inset-0 w-full h-full"
+              src={getVideoUrl('video_url_print_results', 'video_url_print_results_mobile')}
+              title="Print Results Tutorial"
+              frameBorder="0"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowFullScreen
+            ></iframe>
+          </div>
+          <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 flex items-start gap-3">
+            <CheckCircle2 className="w-5 h-5 text-slate-600 mt-0.5" />
+            <p className="text-xs text-slate-800">Learn to generate PDFs for report cards, merit lists, and performance summaries.</p>
+          </div>
+        </div>
+      )
+    },
+    {
+      id: 'results-guide',
+      title: 'How to: View Results',
+      description: 'Analyze student performance across different exams and terms.',
+      icon: <BarChart3 className="w-12 h-12 text-blue-600" />,
+      color: 'bg-blue-50',
+      content: (
+        <div className="space-y-4">
+          <div className="relative aspect-video w-full rounded-2xl bg-slate-900 overflow-hidden shadow-lg ring-1 ring-slate-200 flex items-center justify-center">
+            <iframe 
+              className="absolute inset-0 w-full h-full"
+              src={getVideoUrl('video_url_results', 'video_url_results_mobile')}
+              title="Results Tutorial"
+              frameBorder="0"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowFullScreen
+            ></iframe>
+          </div>
+          <div className="p-3 bg-blue-50 rounded-xl border border-blue-100 flex items-start gap-3">
+            <BarChart3 className="w-5 h-5 text-blue-600 mt-0.5" />
+            <p className="text-xs text-blue-800">Explore result analytics, class rankings, and mean performance.</p>
           </div>
         </div>
       )
@@ -177,30 +241,6 @@ export default function TeacherOnboardingPage() {
       )
     }
   ]
-
-
-  useEffect(() => {
-    let mounted = true
-    ;(async () => {
-      try {
-        const res = await api.get('/auth/system-config/', { _skipGlobalLoading: true })
-        if (mounted && res?.data) {
-          const isMobile = window.matchMedia && window.matchMedia('(max-width: 767px)').matches
-          const desktopUrl = res.data.teacher_onboarding_video_url
-          const mobileUrl = res.data.teacher_onboarding_video_url_mobile
-          
-          if (isMobile && mobileUrl) {
-            setVideoUrl(mobileUrl)
-          } else if (desktopUrl) {
-            setVideoUrl(desktopUrl)
-          }
-        }
-      } catch (e) {
-        // Fallback to default
-      }
-    })()
-    return () => { mounted = false }
-  }, [])
 
   const step = steps[currentStep]
   const progress = ((currentStep + 1) / steps.length) * 100
@@ -251,7 +291,7 @@ export default function TeacherOnboardingPage() {
           <div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center text-white shadow-lg shadow-indigo-200">
             <GraduationCap size={24} />
           </div>
-          <span className="text-xl font-bold tracking-tight text-slate-900">EDU-TRACK</span>
+          <span className="text-xl font-bold tracking-tight text-slate-900">Genay Technologies</span>
         </div>
 
         {/* Card */}

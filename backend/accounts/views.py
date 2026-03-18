@@ -1487,6 +1487,16 @@ def system_config_public(request):
         'default_domain': default_domain or '',
         'teacher_onboarding_video_url': getattr(cfg, 'teacher_onboarding_video_url', '') or '',
         'teacher_onboarding_video_url_mobile': getattr(cfg, 'teacher_onboarding_video_url_mobile', '') or '',
+        'video_url_messages': getattr(cfg, 'video_url_messages', '') or '',
+        'video_url_messages_mobile': getattr(cfg, 'video_url_messages_mobile', '') or '',
+        'video_url_grades': getattr(cfg, 'video_url_grades', '') or '',
+        'video_url_grades_mobile': getattr(cfg, 'video_url_grades_mobile', '') or '',
+        'video_url_attendance': getattr(cfg, 'video_url_attendance', '') or '',
+        'video_url_attendance_mobile': getattr(cfg, 'video_url_attendance_mobile', '') or '',
+        'video_url_print_results': getattr(cfg, 'video_url_print_results', '') or '',
+        'video_url_print_results_mobile': getattr(cfg, 'video_url_print_results_mobile', '') or '',
+        'video_url_results': getattr(cfg, 'video_url_results', '') or '',
+        'video_url_results_mobile': getattr(cfg, 'video_url_results_mobile', '') or '',
         'updated_at': getattr(cfg, 'updated_at', None) if cfg else None,
     })
 
@@ -1541,18 +1551,33 @@ def superadmin_system_config(request):
 
     if request.method == 'PATCH':
         data = request.data or {}
-        if 'default_domain' in data:
-            cfg.default_domain = str(data.get('default_domain') or '')
-        if 'teacher_onboarding_video_url' in data:
-            cfg.teacher_onboarding_video_url = str(data.get('teacher_onboarding_video_url') or '')
-        if 'teacher_onboarding_video_url_mobile' in data:
-            cfg.teacher_onboarding_video_url_mobile = str(data.get('teacher_onboarding_video_url_mobile') or '')
-        cfg.save(update_fields=['default_domain', 'teacher_onboarding_video_url', 'teacher_onboarding_video_url_mobile', 'updated_at'])
+        fields = [
+            'default_domain', 'teacher_onboarding_video_url', 'teacher_onboarding_video_url_mobile',
+            'video_url_messages', 'video_url_messages_mobile',
+            'video_url_grades', 'video_url_grades_mobile',
+            'video_url_attendance', 'video_url_attendance_mobile',
+            'video_url_print_results', 'video_url_print_results_mobile',
+            'video_url_results', 'video_url_results_mobile'
+        ]
+        for f in fields:
+            if f in data:
+                setattr(cfg, f, str(data.get(f) or '').strip())
+        cfg.save()
 
     return Response({
         'default_domain': cfg.default_domain or '',
         'teacher_onboarding_video_url': cfg.teacher_onboarding_video_url or '',
         'teacher_onboarding_video_url_mobile': cfg.teacher_onboarding_video_url_mobile or '',
+        'video_url_messages': cfg.video_url_messages or '',
+        'video_url_messages_mobile': cfg.video_url_messages_mobile or '',
+        'video_url_grades': cfg.video_url_grades or '',
+        'video_url_grades_mobile': cfg.video_url_grades_mobile or '',
+        'video_url_attendance': cfg.video_url_attendance or '',
+        'video_url_attendance_mobile': cfg.video_url_attendance_mobile or '',
+        'video_url_print_results': cfg.video_url_print_results or '',
+        'video_url_print_results_mobile': cfg.video_url_print_results_mobile or '',
+        'video_url_results': cfg.video_url_results or '',
+        'video_url_results_mobile': cfg.video_url_results_mobile or '',
         'updated_at': cfg.updated_at,
     })
 
