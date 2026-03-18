@@ -18,6 +18,8 @@ export default function Messages(){
   const [loading, setLoading] = useState(true)
   const [allUsers, setAllUsers] = useState([])
   const [loadingUsers, setLoadingUsers] = useState(false)
+  const [loadingSystem, setLoadingSystem] = useState(false)
+  const [loadingMessages, setLoadingMessages] = useState(false)
   const [query, setQuery] = useState('')
   const [activeUser, setActiveUser] = useState(null)
   const [message, setMessage] = useState('')
@@ -62,6 +64,7 @@ export default function Messages(){
   const loadMessages = async (silent = true) => {
     if (silent) setIsSyncing(true)
     else setLoading(true)
+    setLoadingMessages(true)
     try {
       const [inb, out] = await Promise.all([
         api.get('/communications/messages/', { timeout: 10000, _skipGlobalLoading: true }),
@@ -75,12 +78,14 @@ export default function Messages(){
     } finally {
       if (silent) setIsSyncing(false)
       else setLoading(false)
+      setLoadingMessages(false)
     }
   }
 
   // System messages
   const [systemMessages, setSystemMessages] = useState([])
   const loadSystem = async () => {
+    setLoadingSystem(true)
     try {
       const res = await api.get('/communications/messages/system/', { timeout: 10000, _skipGlobalLoading: true })
       const sData = Array.isArray(res.data) ? res.data : (res.data?.results||[])
@@ -88,6 +93,8 @@ export default function Messages(){
       __messagesCache = { ...(__messagesCache || {}), system: sData }
     } catch {
       setSystemMessages([])
+    } finally {
+      setLoadingSystem(false)
     }
   }
 
@@ -484,6 +491,11 @@ export default function Messages(){
     if (targetIds.length===0 || (!message.trim() && !fileToSend)) return
     setSending(true)
     try {
+      const multiChannel = {
+        // Ensure messages authored here are forwarded via SMS + Email (backend will apply role-based rules too)
+        send_sms: true,
+        send_email: true,
+      }
       // If image is selected, ensure it is uploaded to Cloudinary first, then send URL to backend
       if (fileToSend){
         if (!fileToSend.type?.startsWith('image/')) {
@@ -492,7 +504,7 @@ export default function Messages(){
         let url = uploadedUrl
         if (!url) { url = await uploadImageToCloudinary(fileToSend); setUploadedUrl(url) }
         let sent = false; let lastErr = null
-        const base = { body: message || '', audience: 'users', recipient_ids: targetIds }
+        const base = { body: message || '', audience: 'users', recipient_ids: targetIds, ...multiChannel }
         const urlFields = ['attachment_url','file_url','media_url','image_url','attachment','file','media','image']
         for (const f of urlFields){
           try {
@@ -507,6 +519,7 @@ export default function Messages(){
           body: message,
           audience: 'users',
           recipient_ids: targetIds,
+          ...multiChannel,
         })
       }
       setMessage('')
@@ -674,7 +687,25 @@ export default function Messages(){
           {viewTab === 'chats' && (
             <div className="flex-1 overflow-y-auto md:pt-1">
               {loadingUsers && (
-                <div className="p-3 text-sm text-gray-500">Loading users and conversations...</div>
+                <div className="p-3">
+                  <div className="flex items-center gap-2 text-sm text-gray-600">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span>Fetching users…</span>
+                  </div>
+                  <div className="mt-3 space-y-2">
+                    {Array.from({ length: 6 }).map((_, i) => (
+                      <div key={i} className="mx-2 rounded-xl border border-slate-100 p-3 animate-pulse">
+                        <div className="flex items-center gap-3">
+                          <div className="w-9 h-9 rounded-full bg-slate-100" />
+                          <div className="flex-1">
+                            <div className="h-3 w-32 bg-slate-100 rounded" />
+                            <div className="mt-2 h-2 w-44 bg-slate-100 rounded" />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               )}
               {!loadingUsers && sortedUsers.map(u => {
                 const isActive = activeUser?.id === u.id
@@ -849,14 +880,21 @@ export default function Messages(){
 
         {/* Chat body */}
         <div ref={chatRef} className="flex-1 px-3 sm:px-4 py-4 space-y-3 bg-slate-50 overflow-y-auto scroll-smooth pb-32 sm:pb-6">
-          {loading && viewTab !== 'system' && (
-            <div className="flex items-center justify-center h-full">
+          {((loading && viewTab !== 'system') || (loadingMessages && viewTab !== 'system')) && (
+            <div className="flex flex-col items-center justify-center h-full text-center">
               <Loader2 className="h-8 w-8 text-blue-200 animate-spin" />
+              <div className="mt-2 text-sm text-slate-500">Fetching messages…</div>
             </div>
           )}
           
           {viewTab === 'system' ? (
             <div className="space-y-4 max-w-2xl mx-auto pb-10">
+              {loadingSystem && (
+                <div className="flex items-center justify-center py-10 text-sm text-slate-500">
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  Fetching system messages…
+                </div>
+              )}
               {systemMessages.length === 0 && (
                 <div className="text-center py-20">
                   <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-300">

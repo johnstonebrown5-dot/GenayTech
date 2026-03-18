@@ -9,9 +9,9 @@ export default function TeacherManageClass(){
   const [myClass, setMyClass] = useState(null)
   const [classesLoading, setClassesLoading] = useState(true)
   const search = (typeof window !== 'undefined') ? new URLSearchParams(window.location.search) : null
-  const initialTab = (search?.get('tab') || 'add')
+  const initialTab = (search?.get('tab') || 'dashboard')
   const initialInnerView = (search?.get('view') || '')
-  const [tab, setTab] = useState(initialTab) // info | add | edit | fees
+  const [tab, setTab] = useState(initialTab) // dashboard | info | add | edit | message | fees | reportcards
   const nav = useNavigate()
 
   useEffect(() => {
@@ -48,6 +48,38 @@ export default function TeacherManageClass(){
     </div>
   )
 
+  const sectionLabel = (t) => {
+    if (t === 'info') return 'Class Info'
+    if (t === 'add') return 'Add Student'
+    if (t === 'edit') return 'Edit Students'
+    if (t === 'message') return 'Message Students'
+    if (t === 'fees') return 'Send Fees Notifications'
+    if (t === 'reportcards') return 'Report Cards'
+    if (t === 'classlogs') return 'Class Logs'
+    return ''
+  }
+
+  const goSection = (t) => {
+    setTab(t)
+    try{
+      const qs = new URLSearchParams(window.location.search)
+      qs.set('tab', t)
+      if (t !== 'info') qs.delete('view')
+      nav(`${window.location.pathname}?${qs.toString()}`, { replace: true })
+    }catch{}
+  }
+
+  const goDashboard = () => {
+    setTab('dashboard')
+    try{
+      const qs = new URLSearchParams(window.location.search)
+      qs.delete('tab')
+      qs.delete('view')
+      const next = qs.toString()
+      nav(next ? `${window.location.pathname}?${next}` : window.location.pathname, { replace: true })
+    }catch{}
+  }
+
   return (
     <div className="max-w-full px-2 md:px-0">
       <div className="mb-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
@@ -56,16 +88,38 @@ export default function TeacherManageClass(){
           <div className="text-sm text-slate-600">{myClass?.name || 'Class'} · ID {myClass?.id}</div>
         </div>
       </div>
-      <div className="flex items-center gap-2 mb-4 overflow-x-auto pb-2 scrollbar-hide no-scrollbar -mx-2 px-2 md:mx-0 md:px-0" style={{ WebkitOverflowScrolling: 'touch' }}>
-        <TabButton active={tab==='info'} onClick={()=>setTab('info')}>Class Info</TabButton>
-        <TabButton active={tab==='add'} onClick={()=>setTab('add')}>Add Student</TabButton>
-        <TabButton active={tab==='edit'} onClick={()=>setTab('edit')}>Edit Students</TabButton>
-        <TabButton active={tab==='message'} onClick={()=>setTab('message')}>Message Students</TabButton>
-        <TabButton active={tab==='fees'} onClick={()=>setTab('fees')}>Send Fees Notifications</TabButton>
-        <TabButton active={tab==='reportcards'} onClick={()=>setTab('reportcards')}>Report Cards</TabButton>
-        <TabButton active={tab==='classlogs'} onClick={()=>nav(`/teacher/class-logs?classId=${encodeURIComponent(String(myClass.id))}`)}>Class Logs</TabButton>
-      </div>
       <div className="w-full">
+        {tab !== 'dashboard' && (
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <button
+              type="button"
+              onClick={goDashboard}
+              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-800 hover:bg-slate-50 shadow-sm"
+            >
+              <span aria-hidden className="text-base">←</span>
+              <span className="text-sm font-medium">Back</span>
+            </button>
+            <div className="text-sm text-slate-700 font-medium truncate">
+              {sectionLabel(tab)}
+            </div>
+          </div>
+        )}
+
+        {tab === 'dashboard' && (
+          <div className="rounded-none sm:rounded-xl border-t border-b sm:border border-gray-200 bg-white p-4 shadow w-full">
+            <div className="text-sm text-slate-600 mb-3">Choose an action</div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+              <DashboardCard title="Class Info" subtitle="Overview & settings" icon="🏫" onClick={()=>goSection('info')} />
+              <DashboardCard title="Add Student" subtitle="New admission" icon="➕" onClick={()=>goSection('add')} />
+              <DashboardCard title="Edit Students" subtitle="Update details" icon="🧑‍🎓" onClick={()=>goSection('edit')} />
+              <DashboardCard title="Message Students" subtitle="Send announcements" icon="✉️" onClick={()=>goSection('message')} />
+              <DashboardCard title="Fees Notifications" subtitle="Remind guardians" icon="💳" onClick={()=>goSection('fees')} />
+              <DashboardCard title="Report Cards" subtitle="Print / download" icon="📄" onClick={()=>goSection('reportcards')} />
+              <DashboardCard title="Class Logs" subtitle="Delivery history" icon="🗂️" onClick={()=>nav(`/teacher/class-logs?classId=${encodeURIComponent(String(myClass.id))}`)} />
+            </div>
+          </div>
+        )}
+
         {tab === 'info' && <ClassInfoPanel classId={myClass.id} initialInnerTab={initialInnerView} />}
         {tab === 'add' && <AddStudentPanel classId={myClass.id} />}
         {tab === 'edit' && <EditStudentsPanel classId={myClass.id} />}
@@ -89,6 +143,24 @@ function TabButton({ active, onClick, children }){
   return (
     <button onClick={onClick} className={`${active? 'bg-blue-600 text-white' : 'bg-white text-slate-700 hover:bg-slate-50'} border border-slate-200 px-3 py-1.5 rounded-lg text-sm shadow-sm whitespace-nowrap flex-shrink-0 transition-colors`}>
       {children}
+    </button>
+  )
+}
+
+function DashboardCard({ title, subtitle, icon, onClick }){
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="text-left rounded-xl border border-slate-200 bg-white hover:bg-slate-50 shadow-sm transition-colors p-3 min-h-[92px] flex gap-3"
+    >
+      <div className="flex-none w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-lg">
+        {icon}
+      </div>
+      <div className="min-w-0">
+        <div className="text-sm font-semibold text-slate-900 truncate">{title}</div>
+        <div className="text-xs text-slate-600 mt-0.5 line-clamp-2">{subtitle}</div>
+      </div>
     </button>
   )
 }
@@ -144,6 +216,10 @@ function EditStudentsPanel({ classId }){
   const [search, setSearch] = useState('')
   const [expandedId, setExpandedId] = useState(null)
 
+  const toggleExpanded = (id) => {
+    setExpandedId(prev => (prev === id ? null : id))
+  }
+
   const load = async () => {
     setLoading(true); setError('')
     try{
@@ -189,7 +265,36 @@ function EditStudentsPanel({ classId }){
       </div>
       {error && <div className="mb-3 text-sm text-red-700 bg-red-50 border border-red-200 rounded p-2">{String(error)}</div>}
       {loading ? <div>Loading...</div> : (
-        <div className="overflow-x-auto">
+        <div>
+          <div className="md:hidden space-y-2">
+            {filtered.length === 0 ? (
+              <div className="px-3 py-8 text-center text-gray-500">No students found</div>
+            ) : filtered.map(s => (
+              <div key={s.id} className="border border-slate-200 rounded-xl overflow-hidden bg-white">
+                <button
+                  type="button"
+                  onClick={() => toggleExpanded(s.id)}
+                  className="w-full text-left px-3 py-3 flex items-start justify-between gap-3 hover:bg-slate-50"
+                >
+                  <div className="min-w-0">
+                    <div className="text-sm font-semibold text-slate-900 truncate">{s.name}</div>
+                    <div className="mt-0.5 text-xs text-slate-600 truncate">ADM: <span className="font-mono">{s.admission_no || '-'}</span></div>
+                    <div className="mt-0.5 text-xs text-slate-600 truncate">Phone: {s.guardian_id || '-'}</div>
+                  </div>
+                  <div className="flex-none text-xs px-2 py-1 rounded-lg border bg-white text-slate-700">
+                    {expandedId === s.id ? 'Hide' : 'Edit'}
+                  </div>
+                </button>
+                {expandedId === s.id && (
+                  <div className="px-3 pb-3 bg-slate-50">
+                    <StudentEditForm student={s} onSaved={load} />
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+
+          <div className="hidden md:block overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50/80">
               <tr>
@@ -205,15 +310,38 @@ function EditStudentsPanel({ classId }){
                 <tr><td colSpan="5" className="px-4 py-8 text-center text-gray-500">No students found</td></tr>
               ) : filtered.map(s => (
                 <React.Fragment key={s.id}>
-                  <tr className="hover:bg-gray-50">
+                  <tr
+                    className="hover:bg-gray-50 cursor-pointer"
+                    onClick={(e) => {
+                      try{
+                        const t = e?.target
+                        if (t && typeof t.closest === 'function') {
+                          if (t.closest('a, button, input, select, textarea, [role="button"], [data-row-no-toggle]')) return
+                        }
+                      }catch{}
+                      toggleExpanded(s.id)
+                    }}
+                  >
                     <td className="px-4 py-2 font-mono text-sm text-slate-700">{s.admission_no}</td>
                     <td className="px-4 py-2 text-sm font-medium text-slate-900">
-                      <Link to={`/teacher/students/${s.id}`} className="text-indigo-700 hover:underline">{s.name}</Link>
+                      <Link
+                        to={`/teacher/students/${s.id}`}
+                        className="text-indigo-700 hover:underline"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {s.name}
+                      </Link>
                     </td>
                     <td className="px-4 py-2 text-sm text-slate-700">{s.gender || '-'}</td>
                     <td className="px-4 py-2 text-sm text-slate-700">{s.guardian_id || '-'}</td>
                     <td className="px-4 py-2">
-                      <button onClick={()=> setExpandedId(expandedId===s.id? null : s.id)} className="text-xs px-2.5 py-1.5 rounded border">{expandedId===s.id? 'Hide' : 'Edit'}</button>
+                      <button
+                        data-row-no-toggle
+                        onClick={(e)=> { e.stopPropagation(); toggleExpanded(s.id) }}
+                        className="text-xs px-2.5 py-1.5 rounded border"
+                      >
+                        {expandedId===s.id? 'Hide' : 'Edit'}
+                      </button>
                     </td>
                   </tr>
                   {expandedId === s.id && (
@@ -227,6 +355,7 @@ function EditStudentsPanel({ classId }){
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
     </div>

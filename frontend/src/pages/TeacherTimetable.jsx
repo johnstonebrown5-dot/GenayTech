@@ -317,33 +317,85 @@ export default function TeacherTimetable() {
         }
       `}</style>
 
-      <div className="mb-4 rounded-2xl border border-gray-200 bg-gradient-to-r from-sky-50 via-white to-indigo-50 p-3 sm:p-4">
-        <div className="flex items-center justify-between gap-2">
-          <div className="min-w-0">
-            <h1 className="text-xl sm:text-2xl font-extrabold text-gray-900">Your Timetable</h1>
-            <div className="mt-1 flex flex-wrap items-center gap-2 text-xs sm:text-sm">
-              <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">Term: {plan?.term_detail?.name || (currentTerm ? (`T${currentTerm?.number||''}`) : (currentYear?.terms?.find(t=>t.is_current)?.name || ''))}</span>
-              <span className="px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">Year: {plan?.term_detail?.academic_year_label || currentYear?.label || ''}</span>
-              {teacherName && <span className="px-2 py-0.5 rounded-full bg-sky-50 text-sky-700 border border-sky-200">Teacher: {teacherName}</span>}
+      <div className="mb-4 rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+        <div className="p-3 sm:p-4 bg-gradient-to-r from-sky-50 via-white to-indigo-50">
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-600 to-sky-500 text-white flex items-center justify-center shadow-sm">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3M3 11h18M5 5h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2z" />
+                  </svg>
+                </div>
+                <div className="min-w-0">
+                  <h1 className="text-xl sm:text-2xl font-extrabold text-gray-900 leading-tight">Your Timetable</h1>
+                  <div className="text-xs sm:text-sm text-gray-600 truncate">
+                    {teacherName ? teacherName : ''}
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-3 flex flex-wrap items-center gap-2 text-xs sm:text-sm">
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200">
+                  <span aria-hidden className="text-[11px]">⏱</span>
+                  <span className="font-semibold">Term</span>
+                  <span className="text-emerald-700">{plan?.term_detail?.name || (currentTerm ? (`T${currentTerm?.number||''}`) : (currentYear?.terms?.find(t=>t.is_current)?.name || ''))}</span>
+                </span>
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-50 text-amber-800 border border-amber-200">
+                  <span aria-hidden className="text-[11px]">📅</span>
+                  <span className="font-semibold">Year</span>
+                  <span className="text-amber-700">{plan?.term_detail?.academic_year_label || currentYear?.label || ''}</span>
+                </span>
+                {plan?.name ? (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-sky-50 text-sky-800 border border-sky-200">
+                    <span aria-hidden className="text-[11px]">🧩</span>
+                    <span className="font-semibold">Plan</span>
+                    <span className="text-sky-700">{plan.name}</span>
+                  </span>
+                ) : null}
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-2">
+              <div className="hidden sm:flex items-center gap-2">
+                <select value={selectedClassId||''} onChange={(e)=>setSelectedClassId(e.target.value? Number(e.target.value): null)} className="rounded-xl border-gray-300 px-3 py-2 text-sm bg-white min-w-[180px] focus:ring-2 focus:ring-indigo-200">
+                  <option value="">Select class</option>
+                  {(teacherClasses.length? teacherClasses : classList).map(c=> (<option key={c.id} value={c.id}>{c.name}</option>))}
+                </select>
+                <button
+                  disabled={!selectedClassId}
+                  onClick={()=>{ if(selectedClassId){ const url = `/admin/timetable/class?classId=${selectedClassId}${plan?`&planId=${plan.id}`:''}`; navigate(url) } }}
+                  className="px-3 py-2 rounded-xl text-white bg-gradient-to-r from-indigo-600 to-purple-600 text-sm font-semibold shadow-sm disabled:opacity-50"
+                >Class View</button>
+                <button
+                  onClick={()=>{ navigate('/teacher/block-timetable') }}
+                  className="px-3 py-2 rounded-xl text-white bg-gradient-to-r from-sky-500 to-blue-600 text-sm font-semibold shadow-sm"
+                >Block View</button>
+              </div>
+              <button className="px-4 py-2 rounded-xl text-white bg-gradient-to-r from-amber-500 to-orange-600 text-sm font-semibold shadow-sm" onClick={()=>window.print()}>
+                Print
+              </button>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <div className="hidden sm:flex items-center gap-2">
-              <select value={selectedClassId||''} onChange={(e)=>setSelectedClassId(e.target.value? Number(e.target.value): null)} className="rounded-lg border-gray-300 px-2 py-1.5 text-sm bg-white min-w-[160px] focus:ring-2 focus:ring-indigo-200">
-                <option value="">Select class</option>
-                {(teacherClasses.length? teacherClasses : classList).map(c=> (<option key={c.id} value={c.id}>{c.name}</option>))}
-              </select>
-              <button
-                disabled={!selectedClassId}
-                onClick={()=>{ if(selectedClassId){ const url = `/admin/timetable/class?classId=${selectedClassId}${plan?`&planId=${plan.id}`:''}`; navigate(url) } }}
-                className="px-3 py-1.5 rounded-lg text-white bg-gradient-to-r from-indigo-600 to-purple-600 text-sm disabled:opacity-50"
-              >Class View</button>
-              <button
-                onClick={()=>{ navigate('/teacher/block-timetable') }}
-                className="px-3 py-1.5 rounded-lg text-white bg-gradient-to-r from-sky-500 to-blue-600 text-sm"
-              >Block View</button>
-            </div>
-            <button className="px-3 py-1.5 rounded-lg text-white bg-gradient-to-r from-amber-500 to-orange-600 text-sm" onClick={()=>window.print()}>Print</button>
+
+          <div className="sm:hidden mt-3 grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={()=>{ navigate('/teacher/block-timetable') }}
+              className="px-3 py-2 rounded-xl text-white bg-gradient-to-r from-sky-500 to-blue-600 text-sm font-semibold shadow-sm"
+            >
+              Block View
+            </button>
+            <button
+              type="button"
+              onClick={()=>{
+                const next = (teacherClasses.length? teacherClasses : classList)?.[0]
+                if (next?.id) setSelectedClassId(next.id)
+              }}
+              className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-slate-800 text-sm font-semibold shadow-sm"
+            >
+              Pick Class
+            </button>
           </div>
         </div>
       </div>

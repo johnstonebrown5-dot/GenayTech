@@ -2814,7 +2814,18 @@ class ExamViewSet(viewsets.ModelViewSet):
         Returns: { subject_a: {...}, subject_b: {...}, per_student: [{student, a_pct, b_pct, delta}], deltas: {mean_percentage_delta} }
         Uses percentage values computed in _build_summary per subject.
         """
-        exam = self.get_object()
+        user = getattr(request, 'user', None)
+        try:
+            exam = Exam.objects.select_related('klass').get(pk=pk)
+        except Exam.DoesNotExist:
+            return Response({'detail': 'Exam not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        if not self._is_admin(request):
+            if not user or getattr(user, 'role', None) != 'teacher':
+                return Response({'detail': 'You do not have permission to perform this action.'}, status=status.HTTP_403_FORBIDDEN)
+            school = getattr(user, 'school', None)
+            if school and getattr(exam.klass, 'school_id', None) not in (None, getattr(school, 'id', None)):
+                return Response({'detail': 'Exam not found.'}, status=status.HTTP_404_NOT_FOUND)
         subj_a = request.query_params.get('subject_a')
         subj_b = request.query_params.get('subject_b')
         if not (subj_a and subj_b):

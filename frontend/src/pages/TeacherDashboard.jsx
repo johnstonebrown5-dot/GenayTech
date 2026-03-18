@@ -1,8 +1,9 @@
 import React, { useEffect, useState, useRef } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import api from '../api'
 
 export default function TeacherDashboard(){
+  const navigate = useNavigate()
   const [classes, setClasses] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -264,14 +265,22 @@ function DutiesPanel({ duties=[], onChanged }){
         </div>
       </div>
 
-      {/* Summary: single full-width Classes card on all screen sizes */}
+      {/* Quick access carousel */}
       <div className="w-full">
-        <DashCard title="Classes" value={classes.length} icon="📚" to="/teacher/classes" accent="from-indigo-500 to-indigo-600"/>
+        <div
+          ref={sliderRef}
+          className="flex gap-3 overflow-x-auto pb-1 snap-x snap-mandatory [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        >
+          <DashCard title="Classes" value={classes.length} icon="📚" to="/teacher/classes" accent="from-indigo-500 to-indigo-600"/>
+          <DashCard title="Timetable" value="" icon="🗓️" to="/teacher/timetable" accent="from-sky-500 to-blue-600"/>
+          <DashCard title="Results" value="" icon="📊" to="/teacher/results" accent="from-emerald-500 to-green-600"/>
+          <DashCard title="Analytics" value="" icon="📈" to="/teacher/analytics" accent="from-fuchsia-500 to-pink-600"/>
+        </div>
       </div>
 
       {/* Next class + Today's tasks */}
       <div className="grid gap-3 md:gap-4 sm:grid-cols-2">
-        <NextClassCard nextClass={nextClass} countdown={countdown} />
+        <NextClassCard nextClass={nextClass} countdown={countdown} onOpenTimetable={()=> navigate('/teacher/timetable')} />
         <TodayTasksCard classes={classes} me={me} plansCount={todayPlanCount} />
       </div>
 
@@ -396,9 +405,15 @@ function IconBox({ children, accent = 'from-indigo-500 to-indigo-600' }){
 }
 
 /* Next Class + Today Tasks */
-function NextClassCard({ nextClass, countdown }){
+function NextClassCard({ nextClass, countdown, onOpenTimetable }){
+  const clickable = !!(nextClass && typeof onOpenTimetable === 'function')
+  const Wrapper = clickable ? 'button' : 'div'
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white/90 backdrop-blur p-4 shadow-sm">
+    <Wrapper
+      type={clickable ? 'button' : undefined}
+      onClick={clickable ? onOpenTimetable : undefined}
+      className={`rounded-2xl border border-gray-200 bg-white/90 backdrop-blur p-4 shadow-sm text-left ${clickable ? 'hover:shadow-md transition cursor-pointer' : ''}`}
+    >
       <div className="flex items-center justify-between mb-1">
         <div className="font-medium text-slate-900">My Next Class</div>
         <span className="text-xs text-slate-500">Today</span>
@@ -415,7 +430,7 @@ function NextClassCard({ nextClass, countdown }){
           </div>
         </div>
       )}
-    </div>
+    </Wrapper>
   )
 }
 

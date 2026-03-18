@@ -31,6 +31,7 @@ ChartJS.register(
 export default function TeacherAnalytics(){
   const [classes, setClasses] = useState([])
   const [selectedClass, setSelectedClass] = useState('')
+  const [classesLoading, setClassesLoading] = useState(false)
 
   const [exams, setExams] = useState([])
   const [examA, setExamA] = useState('')
@@ -58,13 +59,17 @@ export default function TeacherAnalytics(){
     let mounted = true
     ;(async () => {
       try{
+        if (mounted) setClassesLoading(true)
         setError('')
         const { data } = await api.get('/academics/classes/')
         if (!mounted) return
-        const list = Array.isArray(data) ? data : []
+        const list = Array.isArray(data)
+          ? data
+          : (Array.isArray(data?.results) ? data.results : [])
         setClasses(list)
         if (list.length){ setSelectedClass(String(list[0].id)) }
       }catch(e){ if (mounted) setError(e?.response?.data?.detail || e?.message || 'Failed to load classes') }
+      finally{ if (mounted) setClassesLoading(false) }
     })()
     return () => { mounted = false }
   }, [])
@@ -197,8 +202,27 @@ export default function TeacherAnalytics(){
     finally{ setLoading(false) }
   }
 
-  const classNameById = (id) => classes.find(c=>String(c.id)===String(id))?.name || id
-  const examLabel = (ex) => `${ex.name} • ${ex.year} • T${ex.term} • ${classNameById(ex.klass)}`
+  const classNameById = (id) => {
+    const hit = classes.find(c=>String(c.id)===String(id))
+    return hit?.name || ''
+  }
+
+  const examClassName = (ex) => {
+    if (!ex) return ''
+    const embedded = ex?.klass_detail?.name || ex?.class_detail?.name || ex?.klass_name || ex?.class_name || ''
+    if (embedded) return String(embedded)
+    const cid = ex?.klass ?? ex?.class ?? ex?.klass_id ?? ex?.class_id
+    const resolved = classNameById(cid)
+    if (resolved) return resolved
+    if (cid != null && String(cid).trim()) return String(cid)
+    return ''
+  }
+
+  const examLabel = (ex) => {
+    const cls = examClassName(ex)
+    const clsPart = cls ? ` • ${cls}` : ''
+    return `${ex?.name || ''} • ${ex?.year || ''} • T${ex?.term || ''}${clsPart}`
+  }
   const subjectName = (sid) => subjectOptions.find(s=>String(s.id)===String(sid))?.name || subjectOptions.find(s=>String(s.id)===String(sid))?.code || sid
 
   // Subject label resolver for examCompare using the subjects list from summaries

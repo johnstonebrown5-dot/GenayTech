@@ -477,29 +477,34 @@ export default function TeacherLayout({ children }){
               </svg>
             </button>
           </div>
-          <nav className="space-y-1 overflow-y-auto">
-            {navItems.map(i => {
-              const active = pathname === i.to
-              return (
-                <Link key={i.to} to={i.to}
-                  className={`${active
-                    ? 'bg-white/20 text-white shadow-lg border border-white/30'
-                    : 'hover:bg-white/10 text-blue-100 hover:text-white'
-                  } flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-300`}
-                >
-                  <span className="text-lg" aria-hidden>{i.icon}</span>
-                  <span className="relative inline-flex items-center gap-2 text-sm font-medium">
-                    {i.label}
-                    {i.label === 'Messages' && unreadCount > 0 && (
-                      <span className="ml-1 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] bg-red-600 text-white">
-                        {unreadCount > 99 ? '99+' : unreadCount}
-                      </span>
-                    )}
-                  </span>
-                </Link>
-              )
-            })}
-          </nav>
+          <div className="overflow-y-auto">
+            <div className="grid grid-cols-3 gap-2 px-1 pb-2">
+              {navItems.map(i => {
+                const active = pathname === i.to
+                return (
+                  <Link
+                    key={i.to}
+                    to={i.to}
+                    onClick={() => setIsMobileOpen(false)}
+                    className={`${active
+                      ? 'bg-white/20 text-white border border-white/30'
+                      : 'bg-white/10 text-blue-100 border border-white/10 hover:bg-white/15 hover:text-white'
+                    } relative rounded-2xl px-2 py-3 flex flex-col items-center justify-center gap-1.5 transition-all duration-200 shadow-sm`}
+                  >
+                    <div className="relative">
+                      <span className="text-2xl" aria-hidden>{i.icon}</span>
+                      {i.label === 'Messages' && unreadCount > 0 && (
+                        <span className="absolute -top-2 -right-2 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] bg-red-600 text-white">
+                          {unreadCount > 99 ? '99+' : unreadCount}
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-[11px] font-semibold text-center leading-tight line-clamp-2">{i.label}</div>
+                  </Link>
+                )
+              })}
+            </div>
+          </div>
           <div className="mt-3 pt-2 border-t border-blue-500/30 flex items-center gap-2">
             <button
               type="button"

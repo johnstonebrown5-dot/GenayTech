@@ -18,7 +18,7 @@ export default function TeacherResults(){
       try{
         setLoading(true)
         setError('')
-        const list = await teacherQueries.getMyClasses()
+        const list = await teacherQueries.fetchAllPages('/academics/classes/?page_size=1000')
         if (!mounted) return
         setClasses(list || [])
         setSelectedClass(list?.[0]?.id ? String(list[0].id) : '')
@@ -97,7 +97,7 @@ export default function TeacherResults(){
         <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-3">
           <div>
             <div className="text-base md:text-xl font-semibold tracking-tight text-gray-900">Results</div>
-            <div className="text-[11px] md:text-xs text-gray-600">You can only view results for classes you teach.</div>
+            <div className="text-[11px] md:text-xs text-gray-600">View published results for any class in the school.</div>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full md:w-auto">
             <label className="text-xs text-gray-600">
