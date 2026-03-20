@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import api from '../api'
 import Modal from '../components/Modal'
 import { useNotification } from '../components/NotificationContext'
 import LoadingOverlay from '../components/LoadingOverlay'
 
 export default function AdminClasses(){
+  const navigate = useNavigate()
   const [classes, setClasses] = useState([])
   const [subjects, setSubjects] = useState([])
   const [streams, setStreams] = useState([])
@@ -245,47 +246,67 @@ export default function AdminClasses(){
       return full || t.username || '-'
     })()
     return (
-      <div key={c.id} className={`group relative bg-white border ${pal.border} rounded-lg shadow-sm hover:shadow-md transition`}>
-        <div className="p-3 sm:p-4">
+      <div 
+        key={c.id} 
+        onClick={() => navigate(`/admin/classes/${c.id}`)}
+        className={`group relative bg-white border-2 ${pal.border} rounded-xl shadow-sm hover:shadow-md transition-all duration-200 overflow-hidden flex flex-col h-full cursor-pointer`}
+      >
+        <div className="p-4 flex-1">
           <div className="flex items-start justify-between gap-2">
-            <Link to={`/admin/classes/${c.id}`} className="text-sm sm:text-base font-semibold text-gray-900 hover:text-blue-700">
+            <div className="text-base font-bold text-gray-900 group-hover:text-blue-700 transition-colors leading-tight">
               {c.name}
-            </Link>
-            <span className={`ml-2 inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium ${pal.badgeBg} ${pal.badgeText}`}>
+            </div>
+            <span className={`shrink-0 inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${pal.badgeBg} ${pal.badgeText}`}>
               {c.grade_level}
             </span>
           </div>
-          <div className="mt-1 text-xs text-gray-600">Stream: {streamName}</div>
-          <div className="mt-0.5 text-xs text-gray-600">Class Teacher: {teacherName}</div>
-          <div className="mt-2 flex flex-wrap gap-1">
+          <div className="mt-2 space-y-1">
+            <div className="flex items-center gap-1.5 text-xs text-gray-600">
+              <span className="font-medium">Stream:</span>
+              <span className="text-gray-900 font-semibold">{streamName}</span>
+            </div>
+            <div className="flex items-center gap-1.5 text-xs text-gray-600">
+              <span className="font-medium">Teacher:</span>
+              <span className="text-gray-900 font-semibold">{teacherName}</span>
+            </div>
+          </div>
+          <div className="mt-4">
+            <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1.5">Subjects</div>
+            <div className="flex flex-wrap gap-1.5">
             {Array.isArray(c.subjects) && c.subjects.length>0 ? (
               <>
-                {c.subjects.slice(0,4).map(s => (
-                  <span key={s.id} className="inline-flex items-center px-2 py-0.5 rounded text-[11px] bg-gray-100 text-gray-700">{s.code}</span>
+                {c.subjects.map(s => (
+                  <span key={s.id} className="inline-flex items-center px-2 py-1 rounded-md text-[10px] font-bold bg-gray-100 text-gray-700 border border-gray-200/50" title={s.name}>
+                    {s.code}
+                  </span>
                 ))}
-                {c.subjects.length>4 && (
-                  <span className="text-[11px] text-gray-500">+{c.subjects.length-4} more</span>
-                )}
               </>
             ) : (
-              <span className="text-[11px] text-gray-400">No subjects</span>
+              <span className="text-xs italic text-gray-400">No subjects assigned</span>
             )}
+            </div>
           </div>
         </div>
-        <div className="px-3 sm:px-4 py-2.5 border-t bg-gray-50 flex items-center justify-between gap-2 sm:gap-3">
-          <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-[11px] sm:text-xs">
-            <Link to={`/admin/classes/${c.id}?tab=results`} className="text-violet-700 hover:underline">View Results</Link>
-            <Link to={`/admin/classes/${c.id}?tab=subjects`} className="text-amber-700 hover:underline">Assign Subjects</Link>
+        <div className="px-4 py-3 border-t bg-gray-50/80 flex flex-col gap-2" onClick={e => e.stopPropagation()}>
+          <div className="flex items-center justify-between">
+            <Link to={`/admin/classes/${c.id}?tab=results`} className="text-[11px] font-bold text-violet-700 hover:text-violet-900 flex items-center gap-1">
+              <span>📊</span> Results
+            </Link>
+            <Link to={`/admin/classes/${c.id}?tab=subjects`} className="text-[11px] font-bold text-amber-700 hover:text-amber-900 flex items-center gap-1">
+              <span>📚</span> Subjects
+            </Link>
           </div>
-          <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-[11px] sm:text-xs">
+          <div className="flex items-center justify-between pt-2 border-t border-gray-200/60">
             <button
               onClick={() => handlePromote(c)}
-              className="text-emerald-700 hover:underline"
+              className="text-[11px] font-bold text-emerald-700 hover:text-emerald-900 flex items-center gap-1"
             >
-              {getPromoteLabel(c)}
+              <span>🚀</span> {getPromoteLabel(c)}
             </button>
-            <button onClick={()=>edit(c)} className="text-blue-600 hover:underline">Edit</button>
-            <button onClick={()=>del(c.id)} className="text-red-600 hover:underline">Delete</button>
+            <div className="flex items-center gap-3">
+              <button onClick={()=>edit(c)} className="text-[11px] font-bold text-blue-600 hover:text-blue-800">Edit</button>
+              <button onClick={()=>del(c.id)} className="text-[11px] font-bold text-red-600 hover:text-red-800">Delete</button>
+            </div>
           </div>
         </div>
       </div>
@@ -510,18 +531,32 @@ export default function AdminClasses(){
                       {streams.map(s => {
                         const st = streamStats[String(s.id)] || { classes: 0, students: 0, loading: true }
                         return (
-                          <div key={s.id} className="bg-white border rounded-lg shadow-sm p-4 flex flex-col gap-2">
-                            <div className="flex items-center justify-between">
-                              <div className="text-base font-semibold text-gray-900">{s.name}</div>
-                              <div className="text-xs text-gray-500">ID: {s.id}</div>
+                          <div key={s.id} className="bg-white border-2 border-gray-100 rounded-xl shadow-sm p-5 flex flex-col gap-4 hover:border-purple-200 transition-colors">
+                            <div className="flex items-center justify-between border-b border-gray-50 pb-3">
+                              <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-lg bg-purple-50 flex items-center justify-center text-purple-600 font-bold text-lg border border-purple-100">
+                                  {s.name.charAt(0).toUpperCase()}
+                                </div>
+                                <div className="flex flex-col">
+                                  <div className="text-lg font-bold text-gray-900 leading-none">{s.name}</div>
+                                  <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">Stream</div>
+                                </div>
+                              </div>
+                              <div className="text-[10px] font-mono bg-gray-50 px-2 py-0.5 rounded border border-gray-100 text-gray-500">ID: {s.id}</div>
                             </div>
-                            <div className="text-sm text-gray-700 flex items-center gap-4">
-                              <span>Classes: <b>{st.classes}</b></span>
-                              <span>Students: <b>{st.loading ? '...' : st.students}</b></span>
+                            <div className="grid grid-cols-2 gap-4">
+                              <div className="bg-gray-50 rounded-lg p-3 border border-gray-100">
+                                <div className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Classes</div>
+                                <div className="text-xl font-black text-gray-900">{st.classes}</div>
+                              </div>
+                              <div className="bg-gray-50 rounded-lg p-3 border border-gray-100">
+                                <div className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Students</div>
+                                <div className="text-xl font-black text-gray-900">{st.loading ? '...' : st.students}</div>
+                              </div>
                             </div>
-                            <div className="mt-2 flex items-center gap-3 justify-end">
-                              <button onClick={()=>editStream(s)} className="text-blue-600 hover:underline">Edit</button>
-                              <button onClick={()=>delStream(s.id)} className="text-red-600 hover:underline">Delete</button>
+                            <div className="flex items-center gap-3 justify-end pt-2">
+                              <button onClick={()=>editStream(s)} className="px-3 py-1.5 rounded-md text-xs font-bold text-blue-600 hover:bg-blue-50 transition-colors">Edit</button>
+                              <button onClick={()=>delStream(s.id)} className="px-3 py-1.5 rounded-md text-xs font-bold text-red-600 hover:bg-red-50 transition-colors">Delete</button>
                             </div>
                           </div>
                         )

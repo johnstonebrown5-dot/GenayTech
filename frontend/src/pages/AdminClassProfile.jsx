@@ -1058,7 +1058,12 @@ export default function AdminClassProfile(){
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-xl font-semibold">{klass?.name || 'Class'}</h1>
-            <div className="text-sm text-gray-500">Grade: {klass?.grade_level || '-'} • Stream: {klass?.stream_detail?.name || '-'}</div>
+            <div className="flex items-center gap-2 text-sm text-gray-500">
+              <span>Grade: {klass?.grade_level || '-'} • Stream: {klass?.stream_detail?.name || '-'}</span>
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 font-medium border border-blue-100">
+                {students.length} Students
+              </span>
+            </div>
           </div>
           <div className="flex items-center gap-2">
             <button onClick={() => navigate(-1)} className="px-3 py-1.5 rounded bg-gray-100 text-gray-800 hover:bg-gray-200">Back</button>
@@ -1675,6 +1680,7 @@ export default function AdminClassProfile(){
                         <table className="min-w-full text-sm">
                           <thead className="bg-gray-50">
                             <tr>
+                              <th className="px-3 py-2 text-left whitespace-nowrap w-10">#</th>
                               <th className="px-3 py-2 text-left whitespace-nowrap">Admission No</th>
                               <th className="px-3 py-2 text-left whitespace-nowrap">Name</th>
                               <th className="px-3 py-2 text-left whitespace-nowrap">Age</th>
@@ -1687,6 +1693,7 @@ export default function AdminClassProfile(){
                             {classStudents.map((s, idx) => (
                               <React.Fragment key={s.id}>
                                 <tr className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                                  <td className="px-3 py-2 text-xs text-gray-400 border-t font-medium">{idx + 1}</td>
                                   <td className="px-3 py-2 font-mono text-xs border-t">{s.admission_no}</td>
                                   <td className="px-3 py-2 border-t">
                                     <Link to={`/admin/students/${s.id}`} className="text-blue-700 hover:underline">{s.name}</Link>

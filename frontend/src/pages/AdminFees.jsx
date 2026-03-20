@@ -23,6 +23,36 @@ export default function AdminFees({ embed=false, initialTab='categories' }){
   const [resetPreview, setResetPreview] = useState(null)
   const [resetOtp, setResetOtp] = useState('')
   const [otpSent, setOtpSent] = useState(false)
+
+  useEffect(()=>{
+    let mounted = true
+    const fetchCount = async (key, url) => {
+      onLoading?.(key, true)
+      try {
+        const qs = url.includes('?') ? '&page=1&page_size=1' : '?page=1&page_size=1'
+        const { data } = await api.get(url + qs)
+        const c = Array.isArray(data) ? data.length : Number(data?.count ?? (Array.isArray(data?.results) ? data.results.length : 0))
+        if (mounted) onCount?.(key, Number.isFinite(c) ? c : 0)
+      } catch {
+        if (mounted) onCount?.(key, 0)
+      } finally {
+        if (mounted) onLoading?.(key, false)
+      }
+    }
+
+    Promise.allSettled([
+      fetchCount('categories', '/finance/fee-categories/'),
+      fetchCount('classFees', '/finance/class-fees/'),
+      fetchCount('studentFees', '/finance/student-fees/'),
+      fetchCount('arrears', '/finance/arrears/'),
+      fetchCount('payments', '/finance/payments/'),
+      fetchCount('mpesaLogs', '/finance/mpesa-logs/'),
+      fetchCount('methods', '/finance/payment-methods/'),
+    ])
+
+    return ()=>{ mounted = false }
+  }, [])
+
   useEffect(()=>{
     let mounted = true
     async function loadSchool(){
@@ -201,10 +231,10 @@ export default function AdminFees({ embed=false, initialTab='categories' }){
           </div>
         </div>
         {/* Tab Navigation */}
-        <div className="bg-white border-b sticky top-0 z-20">
+        <div className="bg-white border-b sticky top-16 z-20">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <nav className="flex gap-4 overflow-x-auto no-scrollbar py-1" aria-label="Tabs">
-              {[ 
+            <nav className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-2 py-3" aria-label="Tabs">
+              {[
                 { id: 'categories', name: 'Fee Categories', icon: '📋' },
                 { id: 'classFees', name: 'Assign Class Fees', icon: '💰' },
                 { id: 'studentFees', name: 'Per-Student Fees', icon: '👤' },
@@ -216,33 +246,23 @@ export default function AdminFees({ embed=false, initialTab='categories' }){
                 <button
                   key={tabItem.id}
                   onClick={() => setTab(tabItem.id)}
-                  className={`shrink-0 group relative py-3 sm:py-4 px-1 border-b-2 font-medium text-sm transition-all duration-200 ${
+                  className={`group relative w-full rounded-lg px-3 py-2 border font-medium text-sm transition-all duration-200 text-left ${
                     tab === tabItem.id
-                      ? 'border-blue-500 text-blue-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                      ? 'border-blue-500 bg-blue-50 text-blue-700'
+                      : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50 hover:text-gray-800'
                   }`}
                 >
                   <div className="flex items-center gap-2">
                     <span className="text-base">{tabItem.icon}</span>
                     <span>{tabItem.name}</span>
-                    {loadingCounts[tabItem.id] ? (
-                      <div className={`inline-flex items-center justify-center w-6 h-4 rounded-full animate-pulse ${
-                        tab === tabItem.id ? 'bg-blue-200' : 'bg-gray-200'
-                      }`}>
-                        <div className={`w-3 h-2 rounded-sm ${tab === tabItem.id ? 'bg-blue-400' : 'bg-gray-400'}`} />
-                      </div>
-                    ) : (
-                      <span className={`inline-flex items-center justify-center min-w-[1.5rem] h-5 px-1 text-[10px] font-semibold rounded-full ${
-                        tab === tabItem.id ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-600'
-                      }`}>
-                        {counts[tabItem.id] ?? 0}
-                      </span>
-                    )}
+                    <span className={`absolute -top-2 -right-2 inline-flex items-center justify-center min-w-[1.5rem] h-5 px-1 text-[10px] font-semibold rounded-full shadow-sm ${
+                      loadingCounts[tabItem.id]
+                        ? (tab === tabItem.id ? 'bg-blue-200 text-blue-700 animate-pulse' : 'bg-gray-200 text-gray-700 animate-pulse')
+                        : (tab === tabItem.id ? 'bg-blue-600 text-white' : 'bg-gray-700 text-white')
+                    }`}>
+                      {loadingCounts[tabItem.id] ? '…' : (counts[tabItem.id] ?? 0)}
+                    </span>
                   </div>
-                  {/* Active tab indicator */}
-                  {tab === tabItem.id && (
-                    <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-500 rounded-full" />
-                  )}
                 </button>
               ))}
             </nav>
