@@ -2114,31 +2114,9 @@ class ExamViewSet(viewsets.ModelViewSet):
         if school and not getattr(user, 'is_superuser', False):
             qs = qs.filter(klass__school=school)
 
-        # If requester is a teacher, restrict to classes they teach (class teacher or subject teacher).
-        # However, for detail actions like summary/rank/report_card_pdf/compare_subjects, allow access to
-        # published exams from the same school to avoid 404 before the per-action permission checks.
-        if user and getattr(user, 'role', None) == 'teacher' and not (user.is_staff or user.is_superuser):
-            try:
-                action = getattr(self, 'action', None)
-            except Exception:
-                action = None
-            is_detail_action = action in ('retrieve', 'summary', 'rank', 'report_card_pdf', 'compare_subjects')
-            if is_detail_action:
-                # Include exams taught by the teacher OR published ones.
-                # Some datasets set textual status='published' without toggling the boolean flag.
-                # Allow both forms to avoid false 404s on detail endpoints.
-                try:
-                    status_published = Q(status__iexact='published')
-                except Exception:
-                    status_published = Q()
-                qs = qs.filter(
-                    Q(klass__teacher=user) |
-                    Q(klass__subject_teachers__teacher=user) |
-                    Q(published=True) |
-                    status_published
-                ).distinct()
-            else:
-                qs = qs.filter(Q(klass__teacher=user) | Q(klass__subject_teachers__teacher=user)).distinct()
+        # Teachers should be able to view all exams within their school (read-only).
+        # Write operations are still restricted by perform_create/update/destroy checks.
+        # Keep school scoping above to prevent cross-school access.
 
         # Default: limit to current academic year unless include_history=true (SAFE methods only, non-admins)
         if self.request.method in permissions.SAFE_METHODS and not self._is_admin(self.request):
@@ -3921,15 +3899,9 @@ class ExamResultViewSet(viewsets.ModelViewSet):
         # Scope for non-admins
         user = getattr(self.request, 'user', None)
         if user and getattr(user, 'role', None) == 'teacher' and not (user.is_staff or user.is_superuser):
-            # Teachers can read:
-            #  - any published results school-wide, and
-            #  - unpublished results only within classes they teach (class teacher or subject teacher mapping)
-            if self.request.method in permissions.SAFE_METHODS:
-                qs = qs.filter(
-                    Q(exam__published=True) |
-                    Q(exam__klass__subject_teachers__teacher=user)
-                ).distinct()
-            else:
+            # Teachers should be able to view all results within their school (read-only).
+            # Keep write operations restricted to assigned classes/subjects.
+            if self.request.method not in permissions.SAFE_METHODS:
                 qs = qs.filter(Q(exam__klass__subject_teachers__teacher=user)).distinct()
         # If requester is a student (not staff), only show published exams and their own results
         if getattr(user, 'role', None) == 'student' and not (user.is_staff or user.is_superuser):

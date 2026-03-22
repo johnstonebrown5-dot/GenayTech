@@ -1,5 +1,25 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import api from '../api';
+import { 
+    Plus, 
+    Search, 
+    Filter, 
+    FileText, 
+    Printer, 
+    Calendar, 
+    Users, 
+    Tag, 
+    DollarSign, 
+    X,
+    Loader2,
+    CheckCircle2,
+    AlertCircle,
+    ChevronRight,
+    ArrowUpDown,
+    Download
+} from 'lucide-react';
+import { toast } from 'react-hot-toast';
+import Modal from '../components/Modal';
 
 export default function FinanceExpenses() {
     const todayStr = () => {
@@ -23,6 +43,10 @@ export default function FinanceExpenses() {
         description: '',
         date: todayStr(),
     });
+
+    const [submitting, setSubmitting] = useState(false);
+    const [searchTerm, setSearchTerm] = useState('');
+    const [selectedCategory, setSelectedCategory] = useState('all');
 
     useEffect(() => {
         (async () => {
@@ -56,19 +80,25 @@ export default function FinanceExpenses() {
     const handleSubmit = async (e) => {
         e.preventDefault();
         if (!String(formData.description||'').trim()){
-            alert('Description is required');
+            toast.error('Description is required');
             return;
         }
         if (!String(formData.payee||'').trim()){
-            alert('Payee is required');
+            toast.error('Payee is required');
             return;
         }
+        if (!formData.amount || Number(formData.amount) <= 0) {
+            toast.error('Please enter a valid amount');
+            return;
+        }
+
+        setSubmitting(true);
         try {
             const payload = { ...formData };
-            // Send null for optional category if blank
             if (!payload.category) payload.category = null;
             const { data } = await api.post('/finance/expenses/', payload);
             setExpenses(prev => [data, ...prev]);
+            toast.success('Expense recorded successfully');
             setShowForm(false);
             setFormData({
                 payee: '',
@@ -79,6 +109,9 @@ export default function FinanceExpenses() {
             });
         } catch (error) {
             console.error("Failed to create expense:", error);
+            toast.error(error.response?.data?.detail || 'Failed to record expense');
+        } finally {
+            setSubmitting(false);
         }
     };
 
@@ -123,116 +156,359 @@ export default function FinanceExpenses() {
         }catch{}
     }
 
-    const displayRows = useMemo(()=>{
-        const base = (Array.isArray(expenses)?expenses:[]).map(e=>({
-            kind:'expense',
-            id:e.id,
-            date:e.date,
-            categoryId:e.category,
-            categoryName:(Array.isArray(categories)?categories:[]).find(c=>c.id===e.category)?.name,
-            payeeName: e.payee || '',
-            amount:e.amount,
-            description:e.description
-        }))
-        if (!includePayslips) return base
-        const ps = (Array.isArray(payslips)?payslips:[]).map(p=>({
-            kind:'payslip',
-            id:p.id,
-            date:p.created_at || `${p.year}-${String(p.month).padStart(2,'0')}-01`,
-            categoryId:null,
-            categoryName:`Payslip – ${p.staff_name||''}`,
-            payeeName: p.staff_name || '',
-            amount:p.net_pay ?? p.gross_pay ?? 0,
-            description:`Payslip for ${String(p.month).padStart(2,'0')}/${p.year}`
-        }))
-        return [...base, ...ps].sort((a,b)=> String(a.date).localeCompare(String(b.date)))
-    }, [expenses, categories, includePayslips, payslips])
+    const filteredRows = useMemo(() => {
+        let rows = displayRows;
+        
+        if (selectedCategory !== 'all') {
+            rows = rows.filter(r => String(r.categoryId) === selectedCategory);
+        }
+
+        if (searchTerm.trim()) {
+            const q = searchTerm.toLowerCase();
+            rows = rows.filter(r => 
+                r.payeeName.toLowerCase().includes(q) ||
+                r.description.toLowerCase().includes(q) ||
+                (r.categoryName && r.categoryName.toLowerCase().includes(q))
+            );
+        }
+
+        return rows.sort((a, b) => new Date(b.date) - new Date(a.date));
+    }, [displayRows, searchTerm, selectedCategory]);
+
+    const stats = useMemo(() => {
+        const total = displayRows.reduce((sum, r) => sum + Number(r.amount || 0), 0);
+        const count = displayRows.length;
+        const categoriesCount = new Set(displayRows.map(r => r.categoryId).filter(Boolean)).size;
+        return { total, count, categoriesCount };
+    }, [displayRows]);
 
     return (
-        <div className="space-y-6">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <h1 className="text-3xl font-bold text-gray-900">Expenses</h1>
-                <button onClick={() => setShowForm(true)} className="px-4 py-2 rounded-lg text-sm font-medium bg-gray-900 text-white hover:bg-gray-800 transition-all duration-200 shadow-soft w-full sm:w-auto">Add Expense</button>
+        <div className="space-y-6 pb-10">
+            {/* Header Section */}
+            <div className="relative overflow-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 rounded-3xl p-8 text-white shadow-2xl">
+                <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+                    <div className="space-y-2">
+                        <div className="flex items-center gap-3">
+                            <div className="p-2 bg-white/10 rounded-xl backdrop-blur-md">
+                                <DollarSign className="w-6 h-6 text-emerald-400" />
+                            </div>
+                            <h1 className="text-3xl font-extrabold tracking-tight">Expenses</h1>
+                        </div>
+                        <p className="text-slate-400 text-sm max-w-md">
+                            Track and manage school expenditures, vendor payments, and staff disbursements.
+                        </p>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-3">
+                        <button 
+                            onClick={() => {
+                                const csv = [
+                                    ['Date', 'Payee', 'Category', 'Amount', 'Description'],
+                                    ...filteredRows.map(r => [r.date, r.payeeName, r.categoryName, r.amount, r.description])
+                                ].map(e => e.join(",")).join("\n");
+                                const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                                const url = URL.createObjectURL(blob);
+                                const link = document.createElement("a");
+                                link.setAttribute("href", url);
+                                link.setAttribute("download", `expenses_${new Date().toISOString().split('T')[0]}.csv`);
+                                link.click();
+                            }}
+                            className="flex items-center gap-2 px-4 py-2.5 bg-white/10 hover:bg-white/20 backdrop-blur-md rounded-xl text-sm font-semibold transition-all border border-white/10"
+                        >
+                            <Download className="w-4 h-4 text-slate-300" />
+                            Export CSV
+                        </button>
+                        <button 
+                            onClick={() => setShowForm(true)}
+                            className="flex items-center gap-2 px-6 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-900 rounded-xl text-sm font-bold transition-all shadow-lg shadow-emerald-500/20 active:scale-95"
+                        >
+                            <Plus className="w-5 h-5" />
+                            Record Expense
+                        </button>
+                    </div>
+                </div>
+
+                {/* Decorative background elements */}
+                <div className="absolute top-0 right-0 -u-12 w-64 h-64 bg-emerald-500/10 rounded-full blur-3xl" />
+                <div className="absolute bottom-0 left-0 -u-12 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl" />
             </div>
 
-            {showForm && (
-                <div className="bg-white rounded-2xl shadow-card border border-gray-200 p-6">
-                    <h2 className="text-lg font-semibold text-gray-900 mb-4">New Expense</h2>
-                    <form onSubmit={handleSubmit} className="space-y-4">
-                        <div>
-                            <label htmlFor="payee" className="block text-sm font-medium text-gray-700">Payee<span className="text-rose-600"> *</span></label>
-                            <input type="text" id="payee" name="payee" value={formData.payee} onChange={handleInputChange} required placeholder="Name of the payee/vendor" className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" />
-                            <div className="text-xs text-gray-500 mt-1">Who is being paid (e.g., supplier, staff, landlord).</div>
+            {/* Stats Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-sm hover:shadow-md transition-shadow">
+                    <div className="flex items-center gap-4">
+                        <div className="p-3 bg-emerald-50 rounded-2xl text-emerald-600">
+                            <DollarSign className="w-6 h-6" />
                         </div>
                         <div>
-                            <label htmlFor="category" className="block text-sm font-medium text-gray-700">Category (optional)</label>
-                            <select id="category" name="category" value={formData.category} onChange={handleInputChange} className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">
-                                <option value="">Select a category</option>
-                                {(Array.isArray(categories) ? categories : []).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                            </select>
+                            <p className="text-sm font-medium text-slate-500">Total Expenditure</p>
+                            <h3 className="text-2xl font-bold text-slate-900">KES {stats.total.toLocaleString()}</h3>
                         </div>
-                        <div>
-                            <label htmlFor="amount" className="block text-sm font-medium text-gray-700">Amount</label>
-                            <input type="number" id="amount" name="amount" value={formData.amount} onChange={handleInputChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" />
-                        </div>
-                        <div>
-                            <label htmlFor="description" className="block text-sm font-medium text-gray-700">Description<span className="text-rose-600"> *</span></label>
-                            <textarea id="description" name="description" value={formData.description} onChange={handleInputChange} rows="3" required className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"></textarea>
-                        </div>
-                        <div>
-                            <label htmlFor="date" className="block text-sm font-medium text-gray-700">Date</label>
-                            <input type="date" id="date" name="date" value={formData.date} onChange={handleInputChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" />
-                        </div>
-                        <div className="flex justify-end gap-4">
-                            <button type="button" onClick={() => setShowForm(false)} className="px-4 py-2 rounded-lg text-sm font-medium bg-gray-200 text-gray-800 hover:bg-gray-300">Cancel</button>
-                            <button type="submit" className="px-4 py-2 rounded-lg text-sm font-medium bg-gray-900 text-white hover:bg-gray-800">Save Expense</button>
-                        </div>
-                    </form>
+                    </div>
                 </div>
-            )}
+                <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-sm hover:shadow-md transition-shadow">
+                    <div className="flex items-center gap-4">
+                        <div className="p-3 bg-blue-50 rounded-2xl text-blue-600">
+                            <FileText className="w-6 h-6" />
+                        </div>
+                        <div>
+                            <p className="text-sm font-medium text-slate-500">Transactions</p>
+                            <h3 className="text-2xl font-bold text-slate-900">{stats.count}</h3>
+                        </div>
+                    </div>
+                </div>
+                <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-sm hover:shadow-md transition-shadow">
+                    <div className="flex items-center gap-4">
+                        <div className="p-3 bg-purple-50 rounded-2xl text-purple-600">
+                            <Tag className="w-6 h-6" />
+                        </div>
+                        <div>
+                            <p className="text-sm font-medium text-slate-500">Categories Used</p>
+                            <h3 className="text-2xl font-bold text-slate-900">{stats.categoriesCount}</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
 
-            <div className="bg-white rounded-2xl shadow-card border border-gray-200 p-6">
-                <h2 className="text-lg font-semibold text-gray-900 mb-4">Expense List</h2>
-                <div className="mb-3 flex items-center gap-3 text-sm">
-                    <label className="inline-flex items-center gap-2 select-none"><input type="checkbox" checked={includePayslips} onChange={e=>setIncludePayslips(e.target.checked)} /> Include Staff Payslips</label>
+            {/* Filter Bar */}
+            <div className="bg-white rounded-3xl p-4 border border-slate-100 shadow-sm flex flex-col md:flex-row items-center gap-4">
+                <div className="relative flex-1 w-full">
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                    <input 
+                        type="text"
+                        placeholder="Search payee, description..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="w-full pl-11 pr-4 py-2.5 bg-slate-50 border-none rounded-2xl text-sm focus:ring-2 focus:ring-emerald-500/20 transition-all placeholder:text-slate-400"
+                    />
                 </div>
+                <div className="flex items-center gap-2 w-full md:w-auto">
+                    <select 
+                        value={selectedCategory}
+                        onChange={(e) => setSelectedCategory(e.target.value)}
+                        className="flex-1 md:w-48 pl-4 pr-10 py-2.5 bg-slate-50 border-none rounded-2xl text-sm focus:ring-2 focus:ring-emerald-500/20 transition-all appearance-none cursor-pointer"
+                    >
+                        <option value="all">All Categories</option>
+                        {categories.map(c => (
+                            <option key={c.id} value={c.id}>{c.name}</option>
+                        ))}
+                    </select>
+                    <label className="flex items-center gap-2 px-4 py-2.5 bg-slate-50 rounded-2xl text-sm text-slate-600 cursor-pointer hover:bg-slate-100 transition-all select-none whitespace-nowrap">
+                        <input 
+                            type="checkbox" 
+                            checked={includePayslips} 
+                            onChange={e=>setIncludePayslips(e.target.checked)}
+                            className="w-4 h-4 rounded border-slate-300 text-emerald-500 focus:ring-emerald-500/20"
+                        />
+                        Staff Payslips
+                    </label>
+                </div>
+            </div>
+
+            {/* Main Content Table */}
+            <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
                 <div className="overflow-x-auto">
-                    <table className="w-full text-left text-sm">
-                        <thead className="text-xs text-gray-700 uppercase bg-gray-50">
-                            <tr>
-                                <th scope="col" className="px-6 py-3">Date</th>
-                                <th scope="col" className="px-6 py-3">Payee</th>
-                                <th scope="col" className="px-6 py-3">Category</th>
-                                <th scope="col" className="px-6 py-3">Amount</th>
-                                <th scope="col" className="px-6 py-3">Description</th>
-                                <th scope="col" className="px-6 py-3 text-right">Actions</th>
+                    <table className="w-full text-left">
+                        <thead>
+                            <tr className="bg-slate-50/50 border-b border-slate-100">
+                                <th className="px-6 py-4 text-[11px] font-bold text-slate-500 uppercase tracking-wider">Date</th>
+                                <th className="px-6 py-4 text-[11px] font-bold text-slate-500 uppercase tracking-wider">Payee / Entity</th>
+                                <th className="px-6 py-4 text-[11px] font-bold text-slate-500 uppercase tracking-wider">Category</th>
+                                <th className="px-6 py-4 text-[11px] font-bold text-slate-500 uppercase tracking-wider">Amount</th>
+                                <th className="px-6 py-4 text-[11px] font-bold text-slate-500 uppercase tracking-wider">Description</th>
+                                <th className="px-6 py-4 text-[11px] font-bold text-slate-500 uppercase tracking-wider text-right">Action</th>
                             </tr>
                         </thead>
-                        <tbody>
-                            {Array.isArray(displayRows) && displayRows.length > 0 ? (
-                                displayRows.map(e => (
-                                    <tr key={e.id} className="bg-white border-b">
-                                        <td className="px-6 py-4">{new Date(e.date).toLocaleDateString()}</td>
-                                        <td className="px-6 py-4">{e.payeeName || '-'}</td>
-                                        <td className="px-6 py-4">{e.categoryName || (Array.isArray(categories)?categories:[]).find(c => c.id === e.categoryId)?.name || '-'}</td>
-                                        <td className="px-6 py-4">KES {Number(e.amount || 0).toLocaleString()}</td>
-                                        <td className="px-6 py-4">{e.description}</td>
+                        <tbody className="divide-y divide-slate-50">
+                            {loading ? (
+                                <tr>
+                                    <td colSpan="6" className="px-6 py-20 text-center">
+                                        <div className="flex flex-col items-center gap-3">
+                                            <Loader2 className="w-8 h-8 text-emerald-500 animate-spin" />
+                                            <p className="text-slate-500 text-sm">Loading expenses...</p>
+                                        </div>
+                                    </td>
+                                </tr>
+                            ) : filteredRows.length > 0 ? (
+                                filteredRows.map((e) => (
+                                    <tr key={`${e.kind}-${e.id}`} className="hover:bg-slate-50/50 transition-colors group">
+                                        <td className="px-6 py-4">
+                                            <div className="flex flex-col">
+                                                <span className="text-sm font-semibold text-slate-900">
+                                                    {new Date(e.date).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}
+                                                </span>
+                                                <span className="text-[10px] text-slate-400 uppercase">
+                                                    {new Date(e.date).getFullYear()}
+                                                </span>
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-4">
+                                            <div className="flex items-center gap-3">
+                                                <div className={`p-2 rounded-xl ${e.kind === 'payslip' ? 'bg-blue-50 text-blue-600' : 'bg-slate-50 text-slate-600'}`}>
+                                                    {e.kind === 'payslip' ? <Users className="w-4 h-4" /> : <Tag className="w-4 h-4" />}
+                                                </div>
+                                                <span className="text-sm font-medium text-slate-700">{e.payeeName || '-'}</span>
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-4">
+                                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                                                e.kind === 'payslip' 
+                                                ? 'bg-blue-100 text-blue-700' 
+                                                : 'bg-emerald-100 text-emerald-700'
+                                            }`}>
+                                                {e.categoryName || '-'}
+                                            </span>
+                                        </td>
+                                        <td className="px-6 py-4">
+                                            <span className="text-sm font-bold text-slate-900">
+                                                KES {Number(e.amount || 0).toLocaleString()}
+                                            </span>
+                                        </td>
+                                        <td className="px-6 py-4">
+                                            <p className="text-sm text-slate-500 max-w-xs truncate" title={e.description}>
+                                                {e.description}
+                                            </p>
+                                        </td>
                                         <td className="px-6 py-4 text-right">
-                                          {e.kind==='expense' && (
-                                            <button onClick={()=>printExpenseReceipt(e)} className="px-3 py-1.5 rounded border bg-white hover:bg-gray-50">Print Receipt</button>
-                                          )}
+                                            {e.kind === 'expense' && (
+                                                <button 
+                                                    onClick={() => printExpenseReceipt(e)}
+                                                    className="p-2 hover:bg-emerald-50 text-slate-400 hover:text-emerald-600 rounded-xl transition-all opacity-0 group-hover:opacity-100"
+                                                    title="Print Receipt"
+                                                >
+                                                    <Printer className="w-4 h-4" />
+                                                </button>
+                                            )}
                                         </td>
                                     </tr>
                                 ))
                             ) : (
                                 <tr>
-                                    <td className="px-6 py-6 text-gray-500" colSpan={5}>{loading ? 'Loading…' : 'No expenses found.'}</td>
+                                    <td colSpan="6" className="px-6 py-20 text-center">
+                                        <div className="flex flex-col items-center gap-2">
+                                            <AlertCircle className="w-10 h-10 text-slate-200" />
+                                            <p className="text-slate-400 text-sm">No expenses found matching your filters.</p>
+                                        </div>
+                                    </td>
                                 </tr>
                             )}
                         </tbody>
                     </table>
                 </div>
             </div>
+
+            {/* Modal for Recording Expense */}
+            <Modal
+                isOpen={showForm}
+                onClose={() => !submitting && setShowForm(false)}
+                title="Record New Expense"
+                maxWidth="max-w-xl"
+            >
+                <form onSubmit={handleSubmit} className="space-y-5">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                        <div className="space-y-1.5">
+                            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Date</label>
+                            <div className="relative">
+                                <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                                <input 
+                                    type="date" 
+                                    name="date" 
+                                    value={formData.date} 
+                                    onChange={handleInputChange}
+                                    className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border-none rounded-2xl text-sm focus:ring-2 focus:ring-emerald-500/20 transition-all"
+                                />
+                            </div>
+                        </div>
+                        <div className="space-y-1.5">
+                            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Amount (KES)</label>
+                            <div className="relative">
+                                <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                                <input 
+                                    type="number" 
+                                    name="amount" 
+                                    value={formData.amount} 
+                                    onChange={handleInputChange}
+                                    placeholder="0.00"
+                                    required
+                                    className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border-none rounded-2xl text-sm font-bold focus:ring-2 focus:ring-emerald-500/20 transition-all"
+                                />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Payee / Vendor</label>
+                        <div className="relative">
+                            <Users className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                            <input 
+                                type="text" 
+                                name="payee" 
+                                value={formData.payee} 
+                                onChange={handleInputChange}
+                                placeholder="Enter name of payee"
+                                required
+                                className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border-none rounded-2xl text-sm focus:ring-2 focus:ring-emerald-500/20 transition-all"
+                            />
+                        </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Category</label>
+                        <select 
+                            name="category" 
+                            value={formData.category} 
+                            onChange={handleInputChange}
+                            className="w-full px-4 py-2.5 bg-slate-50 border-none rounded-2xl text-sm focus:ring-2 focus:ring-emerald-500/20 transition-all appearance-none cursor-pointer"
+                        >
+                            <option value="">Select a category (optional)</option>
+                            {categories.map(c => (
+                                <option key={c.id} value={c.id}>{c.name}</option>
+                            ))}
+                        </select>
+                    </div>
+
+                    <div className="space-y-1.5">
+                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Description</label>
+                        <textarea 
+                            name="description" 
+                            value={formData.description} 
+                            onChange={handleInputChange}
+                            rows="3"
+                            placeholder="Provide details about this expenditure..."
+                            required
+                            className="w-full px-4 py-3 bg-slate-50 border-none rounded-2xl text-sm focus:ring-2 focus:ring-emerald-500/20 transition-all resize-none"
+                        ></textarea>
+                    </div>
+
+                    <div className="flex items-center gap-3 pt-4">
+                        <button 
+                            type="button" 
+                            onClick={() => setShowForm(false)}
+                            disabled={submitting}
+                            className="flex-1 px-6 py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-2xl text-sm font-bold transition-all disabled:opacity-50"
+                        >
+                            Cancel
+                        </button>
+                        <button 
+                            type="submit"
+                            disabled={submitting}
+                            className="flex-[2] flex items-center justify-center gap-2 px-6 py-3 bg-slate-900 hover:bg-slate-800 text-white rounded-2xl text-sm font-bold transition-all shadow-lg active:scale-[0.98] disabled:opacity-50"
+                        >
+                            {submitting ? (
+                                <>
+                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                    Recording...
+                                </>
+                            ) : (
+                                <>
+                                    <CheckCircle2 className="w-4 h-4" />
+                                    Save Expense
+                                </>
+                            )}
+                        </button>
+                    </div>
+                </form>
+            </Modal>
         </div>
     );
 }

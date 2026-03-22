@@ -6,6 +6,7 @@ import { parseIntent, bestFuzzy } from './intentParser'
 import { useAuth } from '../../auth'
 import helpContent from '../../content/helpContent.json'
 import { useNotification } from '../NotificationContext'
+import { X, Trash2, Loader2, Sparkles, ArrowDown } from 'lucide-react'
 
 export default function AssistantPanel(){
   const { open, closePanel, memory, setMemory, pushIntent } = useAssistant()
@@ -13,7 +14,16 @@ export default function AssistantPanel(){
   const { user } = useAuth()
   const { showSuccess, showError } = useNotification()
   const [input, setInput] = React.useState('')
+  const storageKey = React.useMemo(() => {
+    const id = user?.id || user?.username || user?.email || 'anon'
+    return `assistant_messages_v1:${id}`
+  }, [user])
   const [messages, setMessages] = React.useState(() => {
+    try {
+      const raw = typeof window !== 'undefined' ? window.localStorage.getItem(storageKey) : null
+      const parsed = raw ? JSON.parse(raw) : null
+      if (Array.isArray(parsed) && parsed.length) return parsed
+    } catch {}
     const name = user?.first_name || user?.username || 'there'
     return [
       { role: 'assistant', text: `Hello ${name}! I can help you open pages and perform actions. Try: "open exams", "publish exam 42", "delete student 123", or "search students amina".` }
@@ -23,6 +33,34 @@ export default function AssistantPanel(){
   const [flow, setFlow] = React.useState(null)
   const [flowData, setFlowData] = React.useState({})
   const listRef = React.useRef(null)
+  const [stickToBottom, setStickToBottom] = React.useState(true)
+
+  const fmtTime = React.useCallback((d) => {
+    try {
+      const dt = d ? new Date(d) : new Date()
+      return dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    } catch {
+      return ''
+    }
+  }, [])
+
+  // Persist messages
+  React.useEffect(() => {
+    try {
+      if (typeof window === 'undefined') return
+      window.localStorage.setItem(storageKey, JSON.stringify((messages || []).slice(-30)))
+    } catch {}
+  }, [messages, storageKey])
+
+  // ESC closes
+  React.useEffect(() => {
+    if (!open) return
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape') closePanel()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [open, closePanel])
 
   // Known routes and aliases across the app (tabs, page names, common words)
   const ROUTES = React.useMemo(() => {
@@ -165,8 +203,16 @@ export default function AssistantPanel(){
   }, [user])
 
   const append = React.useCallback((role, text, suggestions=null) => {
-    setMessages(m => [...m, { role, text, suggestions: Array.isArray(suggestions) ? suggestions : null }])
+    setMessages(m => [...m, { role, text, suggestions: Array.isArray(suggestions) ? suggestions : null, at: Date.now() }])
   }, [])
+
+  const requestConfirm = React.useCallback((pendingConfirm, prompt) => {
+    setMemory(prev => ({ ...prev, pendingConfirm }))
+    append('assistant', prompt, [
+      { type: 'confirm_yes', label: 'Confirm' },
+      { type: 'confirm_no', label: 'Cancel' },
+    ])
+  }, [append, setMemory])
 
   const handleSubmit = React.useCallback(async () => {
     const q = input.trim()
@@ -453,6 +499,20 @@ export default function AssistantPanel(){
 
   const onSuggestionClick = React.useCallback(async (s) => {
     if (!s) return
+    if (s.type === 'confirm_yes'){
+      const pc = memory?.pendingConfirm
+      if (!pc){ append('assistant', 'Nothing to confirm.'); return }
+      setMemory(prev => ({ ...prev, pendingConfirm: null }))
+      if (pc.action === 'publish') { await handlePublishExam(pc.payload || {}); return }
+      if (pc.action === 'delete') { await handleDelete(pc.payload || {}); return }
+      append('assistant', 'Unsupported confirmation action.')
+      return
+    }
+    if (s.type === 'confirm_no'){
+      setMemory(prev => ({ ...prev, pendingConfirm: null }))
+      append('assistant', pick(phrases.cancelled)())
+      return
+    }
     if (s.type === 'open') { await handleOpen(s.value); return }
     if (s.type === 'open_link' && s.href) { navigate(s.href); append('assistant', pick(phrases.opening)('page')); return }
     if (s.type === 'intent') { await executeIntent(s.value, s.value?.raw || ''); return }
@@ -479,10 +539,6 @@ export default function AssistantPanel(){
         append('assistant', 'I could not resolve the exam. Please specify an ID like "publish exam 42" or provide an exact name and class.')
         return
       }
-      if (!window.confirm(`Publish exam ${examId}? This will make results visible.`)){
-        append('assistant', pick(phrases.cancelled)())
-        return
-      }
       await api.post(`/academics/exams/${examId}/publish/`)
       append('assistant', `Exam ${examId} published.`)
       setMemory(prev => ({ ...prev, lastExamId: examId, lastResource: { type: 'exam', id: examId } }))
@@ -506,10 +562,6 @@ export default function AssistantPanel(){
   const handleDelete = React.useCallback(async ({ resource, id }) => {
     const path = resourceToPath(resource)
     if (!path){ append('assistant', 'Unsupported resource to delete.'); return }
-    if (!window.confirm(`Delete ${resource} ${id}? This cannot be undone.`)){
-      append('assistant', pick(phrases.cancelled)())
-      return
-    }
     try{
       await api.delete(`/academics/${path}/${id}/`)
       append('assistant', `${resource} ${id} deleted.`)
@@ -525,7 +577,7 @@ export default function AssistantPanel(){
     if (/\bpublish\b/.test(t) && /\bit\b/.test(t)){
       const last = memory?.lastExamId || (memory?.lastResource?.type === 'exam' ? memory.lastResource.id : null)
       if (last){
-        await handlePublishExam({ id: last })
+        requestConfirm({ action: 'publish', payload: { id: last } }, `Publish exam ${last}? This will make results visible.`)
         return true
       }
       append('assistant', 'I do not know which exam to publish. Try: "publish exam 42"')
@@ -534,14 +586,14 @@ export default function AssistantPanel(){
     if (/\bdelete\b/.test(t) && /\bit\b/.test(t)){
       const last = memory?.lastResource
       if (last){
-        await handleDelete({ resource: last.type, id: last.id })
+        requestConfirm({ action: 'delete', payload: { resource: last.type, id: last.id } }, `Delete ${last.type} ${last.id}? This cannot be undone.`)
         return true
       }
       append('assistant', 'I do not know what to delete. Try: "delete exam 42"')
       return true
     }
     return false
-  }, [memory, handlePublishExam, handleDelete, append])
+  }, [memory, requestConfirm, append])
 
   const fetchAll = React.useCallback(async (endpoint) => {
     const { data } = await api.get(endpoint)
@@ -696,9 +748,16 @@ export default function AssistantPanel(){
   React.useEffect(() => {
     const el = listRef.current
     if (el) {
-      el.scrollTop = el.scrollHeight
+      if (stickToBottom) el.scrollTop = el.scrollHeight
     }
-  }, [messages, open])
+  }, [messages, open, stickToBottom])
+
+  const onScrollList = React.useCallback((e) => {
+    const el = e?.currentTarget
+    if (!el) return
+    const nearBottom = (el.scrollHeight - el.scrollTop - el.clientHeight) < 50
+    setStickToBottom(nearBottom)
+  }, [])
 
   // Listen for external ask events from other components (e.g., Help Center)
   React.useEffect(() => {
@@ -752,6 +811,19 @@ export default function AssistantPanel(){
     <>
       {open && (
         <div
+          onClick={isSmall ? closePanel : undefined}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: isSmall ? 'rgba(15, 23, 42, 0.35)' : 'transparent',
+            zIndex: 2100,
+            pointerEvents: isSmall ? 'auto' : 'none',
+          }}
+        />
+      )}
+
+      {open && (
+        <div
           role="dialog"
           aria-modal="false"
           style={{
@@ -760,7 +832,7 @@ export default function AssistantPanel(){
             left: isSmall ? 0 : 'auto',
             bottom: isSmall ? 0 : 86,
             width: isSmall ? '100vw' : boxSize.width,
-            height: isSmall ? '50vh' : boxSize.height,
+            height: isSmall ? '65vh' : boxSize.height,
             background: 'white',
             borderTopLeftRadius: 12,
             borderTopRightRadius: 12,
@@ -769,42 +841,70 @@ export default function AssistantPanel(){
             boxShadow: '0 20px 40px rgba(0,0,0,0.25)',
             display: 'flex',
             flexDirection: 'column',
-            zIndex: 1000,
+            zIndex: 2200,
             overflow: 'hidden',
+            pointerEvents: 'auto',
           }}
+          onClick={(e) => e.stopPropagation()}
         >
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', borderBottom: '1px solid #e5e7eb', background: '#f8fafc' }}>
-            <div style={{ fontWeight: 600 }}>Assistant</div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 12px', borderBottom: '1px solid #e2e8f0', background: 'linear-gradient(180deg, #f8fafc, #ffffff)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700 }}>
+              <span style={{ width: 28, height: 28, borderRadius: 10, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(135deg, #2563eb, #4f46e5)', color: 'white' }}>
+                <Sparkles size={16} />
+              </span>
+              <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.1 }}>
+                <span style={{ fontSize: 14 }}>Assistant</span>
+                <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600 }}>{busy ? 'Working…' : 'Ready'}</span>
+              </div>
+              {busy && <Loader2 size={16} style={{ opacity: 0.7 }} className="animate-spin" />}
+            </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               {!isSmall && (
                 <div title="Resize" onMouseDown={startResize} style={{ width: 16, height: 16, cursor: 'nwse-resize', opacity: 0.7 }}>
                   <svg viewBox="0 0 24 24" width="16" height="16"><path d="M3 21h18M7 17h14M11 13h10M15 9h6M19 5h2" stroke="#64748b" fill="none" strokeWidth="2"/></svg>
                 </div>
               )}
-              <button onClick={closePanel} style={{ border: 'none', background: 'transparent', fontSize: '18px', cursor: 'pointer' }}>&times;</button>
+              <button
+                onClick={() => setMessages([{ role: 'assistant', text: `Hello ${user?.first_name || user?.username || 'there'}! I can help you open pages and perform actions. Try: "open exams", "publish exam 42", "delete student 123", or "search students amina".` }])}
+                style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: 6, borderRadius: 10 }}
+                title="Clear chat"
+              >
+                <Trash2 size={18} color="#64748b" />
+              </button>
+              <button onClick={closePanel} style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: 6, borderRadius: 10 }} title="Close">
+                <X size={18} color="#64748b" />
+              </button>
             </div>
           </div>
-          <div ref={listRef} style={{ padding: 12, flex: 1, overflow: 'auto', background: '#ece5dd' }}>
+          <div
+            ref={listRef}
+            onScroll={onScrollList}
+            style={{ padding: 12, flex: 1, overflow: 'auto', background: 'linear-gradient(180deg, #f1f5f9, #e2e8f0)' }}
+          >
             {messages.map((m, i) => {
               const fromUser = m.role !== 'assistant'
               return (
                 <div key={i} style={{ display: 'flex', justifyContent: fromUser ? 'flex-end' : 'flex-start', marginBottom: 8 }}>
                   <div style={{
                     maxWidth: '80%',
-                    background: fromUser ? '#dcf8c6' : '#ffffff',
+                    background: fromUser ? 'linear-gradient(135deg, #22c55e, #16a34a)' : '#ffffff',
                     color: '#111827',
                     borderRadius: 16,
                     borderTopRightRadius: fromUser ? 4 : 16,
                     borderTopLeftRadius: fromUser ? 16 : 4,
-                    padding: '8px 12px',
-                    boxShadow: '0 1px 1px rgba(0,0,0,0.08)'
+                    padding: '10px 12px',
+                    boxShadow: '0 10px 20px rgba(15, 23, 42, 0.08)',
+                    border: fromUser ? '1px solid rgba(22, 163, 74, 0.25)' : '1px solid rgba(148, 163, 184, 0.35)'
                   }}>
-                    <div style={{ whiteSpace: 'pre-wrap', fontSize: 14, lineHeight: 1.35 }}>{m.text}</div>
+                    <div style={{ whiteSpace: 'pre-wrap', fontSize: 13.5, lineHeight: 1.45, color: fromUser ? 'white' : '#0f172a' }}>{m.text}</div>
+                    <div style={{ marginTop: 6, fontSize: 10.5, opacity: 0.75, textAlign: fromUser ? 'right' : 'left', color: fromUser ? 'rgba(255,255,255,0.85)' : '#64748b' }}>
+                      {fmtTime(m.at)}
+                    </div>
                     {!fromUser && Array.isArray(m.suggestions) && m.suggestions.length > 0 && (
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
                         {m.suggestions.map((s, si) => (
                           <button key={si} onClick={() => onSuggestionClick(s)} disabled={busy}
-                            style={{ border: '1px solid #e5e7eb', background: '#f8fafc', color: '#111827', borderRadius: 14, padding: '4px 10px', fontSize: 12, cursor: 'pointer' }}>
+                            style={{ border: '1px solid #e2e8f0', background: '#f8fafc', color: '#0f172a', borderRadius: 9999, padding: '6px 10px', fontSize: 12, cursor: 'pointer', fontWeight: 600 }}>
                             {s.label || s.text || 'Option'}
                           </button>
                         ))}
@@ -814,8 +914,39 @@ export default function AssistantPanel(){
                 </div>
               )
             })}
+
+            {!stickToBottom && (
+              <button
+                onClick={() => {
+                  const el = listRef.current
+                  if (el) el.scrollTop = el.scrollHeight
+                  setStickToBottom(true)
+                }}
+                style={{
+                  position: 'sticky',
+                  bottom: 12,
+                  marginLeft: 'auto',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  border: '1px solid rgba(148, 163, 184, 0.6)',
+                  background: 'rgba(255,255,255,0.9)',
+                  backdropFilter: 'blur(10px)',
+                  color: '#0f172a',
+                  borderRadius: 9999,
+                  padding: '6px 10px',
+                  fontSize: 12,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                }}
+                title="Jump to latest"
+              >
+                <ArrowDown size={14} />
+                Latest
+              </button>
+            )}
           </div>
-          <div style={{ padding: 10, borderTop: '1px solid #e5e7eb', background: '#f8fafc' }}>
+          <div style={{ padding: 10, borderTop: '1px solid #e2e8f0', background: 'linear-gradient(180deg, #ffffff, #f8fafc)' }}>
             {flow === 'create_exam' && (
               <div style={{ display: 'grid', gap: 8 }}>
                 <input placeholder="Exam name" value={flowData.name || ''} onChange={e=>setFlowData(d=>({ ...d, name: e.target.value }))} style={{ height: 36, borderRadius: 8, border: '1px solid #e5e7eb', padding: '0 10px' }} />
@@ -876,9 +1007,31 @@ export default function AssistantPanel(){
                   onChange={e => setInput(e.target.value)}
                   onKeyDown={onKeyDown}
                   disabled={busy}
-                  style={{ flex: 1, height: 40, borderRadius: 20, border: '1px solid #e5e7eb', padding: '0 12px', background: 'white' }}
+                  style={{ flex: 1, height: 42, borderRadius: 9999, border: '1px solid #e2e8f0', padding: '0 14px', background: 'white', outline: 'none', boxShadow: '0 10px 20px rgba(15, 23, 42, 0.06)' }}
                 />
-                <button onClick={handleSubmit} disabled={busy} style={{ height: 40, padding: '0 14px', background: '#22c55e', color: 'white', border: 'none', borderRadius: 20, fontWeight: 600 }}>Send</button>
+                <button onClick={handleSubmit} disabled={busy} style={{ height: 42, padding: '0 16px', background: 'linear-gradient(135deg, #22c55e, #16a34a)', color: 'white', border: 'none', borderRadius: 9999, fontWeight: 800, boxShadow: '0 10px 20px rgba(34, 197, 94, 0.25)', cursor: 'pointer' }}>Send</button>
+              </div>
+            )}
+            {!flow && messages.length <= 2 && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 10 }}>
+                {[
+                  { label: 'Open Students', value: 'students' },
+                  { label: 'Open Exams', value: 'exams' },
+                  { label: 'Search Students', value: 'search students ' },
+                  { label: 'Help', value: 'help' },
+                ].map((x) => (
+                  <button
+                    key={x.label}
+                    onClick={() => {
+                      if (x.value.startsWith('search')) { setInput(x.value); return }
+                      onSuggestionClick({ type: x.value === 'help' ? 'open' : 'open', value: x.value, label: x.label })
+                    }}
+                    disabled={busy}
+                    style={{ border: '1px solid #e5e7eb', background: 'white', color: '#0f172a', borderRadius: 9999, padding: '6px 10px', fontSize: 12, cursor: 'pointer' }}
+                  >
+                    {x.label}
+                  </button>
+                ))}
               </div>
             )}
           </div>

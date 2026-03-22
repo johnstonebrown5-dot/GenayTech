@@ -2,13 +2,14 @@ import React from 'react'
 import { useLocation } from 'react-router-dom'
 import { createPortal } from 'react-dom'
 import { useAssistant } from './AssistantContext'
+import { MessageSquareText } from 'lucide-react'
 
 export default function FloatingButton(){
   const { togglePanel } = useAssistant()
   const { pathname } = useLocation()
   const isSmall = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(max-width: 480px)').matches
   const size = isSmall ? 40 : 44
-  const iconSize = isSmall ? 16 : 18
+  const iconSize = isSmall ? 18 : 20
   const [root, setRoot] = React.useState(null)
 
   React.useEffect(() => {
@@ -36,11 +37,10 @@ export default function FloatingButton(){
         height: `${size}px`,
         borderRadius: '9999px',
         border: 'none',
-        background: '#2563eb',
+        background: 'linear-gradient(135deg, #2563eb, #4f46e5)',
         color: 'white',
         boxShadow: '0 6px 12px rgba(0,0,0,0.18)',
         cursor: 'pointer',
-        fontSize: `${iconSize}px`,
         lineHeight: 1,
         display: 'inline-flex',
         alignItems: 'center',
@@ -51,7 +51,7 @@ export default function FloatingButton(){
       }}
       title={pathname?.includes('/messages') ? 'Assistant (messages)' : 'Assistant'}
     >
-      ✨
+      <MessageSquareText size={iconSize} />
     </button>
   )
 

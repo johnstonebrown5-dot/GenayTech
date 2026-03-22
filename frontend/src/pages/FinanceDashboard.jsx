@@ -1,10 +1,33 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { Line, Bar, Doughnut } from 'react-chartjs-2';
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Tooltip, Legend } from 'chart.js';
-import StatCard from '../components/StatCard';
+import { 
+    LayoutDashboard, 
+    Search, 
+    Calendar as CalendarIcon, 
+    CreditCard, 
+    Plus, 
+    TrendingUp, 
+    ArrowUpRight, 
+    ArrowDownRight, 
+    Wallet, 
+    Receipt, 
+    FileText, 
+    PieChart, 
+    ChevronLeft, 
+    ChevronRight,
+    Printer,
+    Download,
+    Target,
+    AlertCircle,
+    Clock,
+    DollarSign,
+    MoreHorizontal
+} from 'lucide-react';
 import Modal from '../components/Modal';
 import api from '../api';
+import { toast } from 'react-hot-toast';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Tooltip, Legend);
 function amountToWordsKES(num){
@@ -326,44 +349,75 @@ export default function FinanceDashboard() {
         );
     }
 
-    const revenueData = {
+    const collectionRate = Math.max(0, Math.min(100, Number(stats?.collectionRate || 0)));
+    const netPosition = Number(stats?.totalRevenue || 0) - Number(stats?.totalExpenses || 0);
+
+    const revenueData = useMemo(() => ({
         labels: stats?.revenueTrend?.map(d => d.month) || [],
         datasets: [
             {
                 label: 'Revenue',
                 data: stats?.revenueTrend?.map(d => d.amount) || [],
-                borderColor: 'rgb(75, 192, 192)',
-                backgroundColor: 'rgba(75, 192, 192, 0.5)',
+                borderColor: '#10b981',
+                backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                fill: true,
+                tension: 0.4,
+                borderWidth: 3,
+                pointRadius: 4,
+                pointBackgroundColor: '#fff',
+                pointBorderColor: '#10b981',
+                pointHoverRadius: 6,
             },
         ],
-    };
+    }), [stats]);
 
-    const expensesData = {
+    const expensesData = useMemo(() => ({
         labels: stats?.expenseBreakdown?.map(d => d.category) || [],
         datasets: [
             {
                 label: 'Expenses',
                 data: stats?.expenseBreakdown?.map(d => d.amount) || [],
                 backgroundColor: [
-                    'rgba(255, 99, 132, 0.8)',
-                    'rgba(54, 162, 235, 0.8)',
-                    'rgba(255, 206, 86, 0.8)',
-                    'rgba(75, 192, 192, 0.8)',
-                    'rgba(153, 102, 255, 0.8)',
+                    'rgba(244, 63, 94, 0.8)',
+                    'rgba(59, 130, 246, 0.8)',
+                    'rgba(245, 158, 11, 0.8)',
+                    'rgba(16, 185, 129, 0.8)',
+                    'rgba(139, 92, 246, 0.8)',
                 ],
+                borderRadius: 8,
+                barThickness: 20,
             },
         ],
-    };
+    }), [stats]);
 
-    const collectionRate = Math.max(0, Math.min(100, Number(stats?.collectionRate || 0)));
-    const netPosition = Number(stats?.totalRevenue || 0) - Number(stats?.totalExpenses || 0);
-    const collectionData = {
+    const collectionData = useMemo(() => ({
         labels: ['Collected', 'Outstanding'],
         datasets: [{
             data: [collectionRate, 100 - collectionRate],
-            backgroundColor: ['#10B981', '#E5E7EB'],
+            backgroundColor: ['#10B981', '#f1f5f9'],
             borderWidth: 0,
+            hoverOffset: 4
         }]
+    }), [collectionRate]);
+
+    const chartOptions = {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: { display: false },
+            tooltip: {
+                backgroundColor: '#1e293b',
+                titleFont: { size: 12, weight: 'bold' },
+                bodyFont: { size: 12 },
+                padding: 12,
+                borderRadius: 12,
+                displayColors: false
+            }
+        },
+        scales: {
+            x: { grid: { display: false }, ticks: { font: { size: 10, weight: '600' }, color: '#64748b' } },
+            y: { border: { display: false }, grid: { color: '#f1f5f9' }, ticks: { font: { size: 10, weight: '600' }, color: '#64748b' } }
+        }
     };
 
     // Mini calendar helpers (local, same as TeacherDashboard style)
@@ -376,525 +430,529 @@ export default function FinanceDashboard() {
     const colorForEvent = (ev) => { const key = (ev?.category || ev?.audience || ev?.visibility || '').toString().toLowerCase(); if (/student/.test(key)) return { chip:'bg-emerald-50 text-emerald-700 border-emerald-200', dot:'bg-emerald-500' }; if (/teach/.test(key)) return { chip:'bg-purple-50 text-purple-700 border-purple-200', dot:'bg-purple-500' }; if (/parent|guard/.test(key)) return { chip:'bg-amber-50 text-amber-700 border-amber-200', dot:'bg-amber-500' }; if (/exam|assessment|test/.test(key)) return { chip:'bg-rose-50 text-rose-700 border-rose-200', dot:'bg-rose-500' }; if (/holiday|break|vacation/.test(key)) return { chip:'bg-sky-50 text-sky-700 border-sky-200', dot:'bg-sky-500' }; return { chip:'bg-blue-50 text-blue-700 border-blue-200', dot:'bg-blue-500' } }
 
     return (
-        <div className="min-h-[calc(100vh-4rem)] bg-gradient-to-br from-emerald-50 via-slate-50 to-sky-50 rounded-3xl p-2.5 sm:p-3.5 lg:p-5 xl:p-6">
-            <div className="h-full w-full rounded-3xl bg-white/80 shadow-elevated border border-emerald-50/80 backdrop-blur-xl flex flex-col gap-3.5 sm:gap-4.5 lg:gap-5 p-3 sm:p-4 lg:p-5">
-                {/* Top bar: title, search, filters */}
-                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                    <div className="space-y-0.5">
-                        <h1 className="text-lg sm:text-xl lg:text-2xl font-extrabold tracking-tight text-slate-900">Finance overview</h1>
-                        <p className="text-[10px] sm:text-[11px] text-slate-600">Track collections, expenses and cashflow across the school in one place.</p>
-                    </div>
-                    <div className="flex flex-col sm:flex-row gap-2 sm:items-center w-full lg:w-auto">
-                        <div className="flex-1 inline-flex items-center gap-1.5 rounded-2xl border border-slate-200 bg-slate-50/70 px-2.5 py-1 shadow-inner">
-                            <span className="text-slate-400 text-[11px]">🔎</span>
-                            <input
-                                placeholder="Search payments, students or invoices"
-                                className="w-full bg-transparent border-none text-[11px] sm:text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-0"
-                            />
+        <div className="min-h-screen bg-gray-50/50 pb-20">
+            {/* Header Section */}
+            <div className="bg-white border-b border-gray-200 sticky top-0 z-30">
+                <div className="max-w-[1600px] mx-auto px-6 py-6">
+                    <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-6">
+                        <div>
+                            <div className="flex items-center gap-2 text-emerald-600 mb-1">
+                                <LayoutDashboard size={20} />
+                                <span className="text-sm font-bold uppercase tracking-wider">Financial Insights</span>
+                            </div>
+                            <h1 className="text-3xl font-black text-gray-900 tracking-tight">
+                                Finance <span className="text-emerald-600">Dashboard</span>
+                            </h1>
+                            <p className="text-gray-500 mt-1 font-medium">Track collections, expenses and school cashflow</p>
                         </div>
-                        <div className="flex items-center gap-2 justify-end">
-                            <div className="hidden md:flex items-center gap-0.5 bg-slate-50 border border-slate-200 rounded-full p-0.5 shadow-inner">
+
+                        <div className="flex flex-col sm:flex-row gap-4 sm:items-center">
+                            {/* Search */}
+                            <div className="relative group">
+                                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-emerald-500 transition-colors" size={18} />
+                                <input 
+                                    placeholder="Search transactions..."
+                                    className="h-12 w-full sm:w-64 bg-gray-50 border-2 border-gray-100 rounded-2xl pl-11 pr-4 text-sm font-bold focus:border-emerald-500 transition-all outline-none"
+                                />
+                            </div>
+
+                            {/* Date Presets */}
+                            <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-2xl border border-gray-200">
                                 {[
-                                  {k:'', label:'All'},
-                                  {k:'7d', label:'7D'},
-                                  {k:'30d', label:'30D'},
-                                  {k:'ytd', label:'YTD'},
+                                    { k: '', label: 'All Time' },
+                                    { k: '7d', label: '7D' },
+                                    { k: '30d', label: '30D' },
+                                    { k: 'ytd', label: 'YTD' },
                                 ].map(b => (
-                                  <button
-                                      key={b.k}
-                                      onClick={() => applyPreset(b.k)}
-                                      className={`px-2.5 py-1 text-[10px] rounded-full transition ${preset===b.k ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-700 hover:bg-white'}`}
-                                  >
-                                      {b.label}
-                                  </button>
+                                    <button
+                                        key={b.k}
+                                        onClick={() => applyPreset(b.k)}
+                                        className={`px-4 py-2 text-xs font-black rounded-xl transition-all uppercase tracking-widest ${preset === b.k ? 'bg-white text-emerald-600 shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
+                                    >
+                                        {b.label}
+                                    </button>
                                 ))}
                             </div>
-                            <div className="flex items-center gap-2">
+
+                            {/* Custom Range */}
+                            <div className="flex items-center gap-2 bg-white border-2 border-gray-100 p-1 rounded-2xl shadow-sm">
                                 <input
                                     type="date"
-                                    name="start"
                                     value={dateRange.start}
-                                    onChange={e => setDateRange(prev => ({...prev, start: e.target.value}))}
-                                    className="w-24 sm:w-28 lg:w-32 border border-slate-200 rounded-xl bg-white/80 shadow-sm py-1 px-1.5 text-[10px] sm:text-[11px] focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
+                                    onChange={e => setDateRange(prev => ({ ...prev, start: e.target.value }))}
+                                    className="bg-transparent border-none text-xs font-bold text-gray-700 focus:ring-0 px-2 cursor-pointer"
                                 />
-                                <span className="text-[10px] text-slate-400">–</span>
+                                <span className="text-gray-300 text-xs font-black">TO</span>
                                 <input
                                     type="date"
-                                    name="end"
                                     value={dateRange.end}
-                                    onChange={e => setDateRange(prev => ({...prev, end: e.target.value}))}
-                                    className="w-24 sm:w-28 lg:w-32 border border-slate-200 rounded-xl bg-white/80 shadow-sm py-1.5 px-2 text-[11px] sm:text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
+                                    onChange={e => setDateRange(prev => ({ ...prev, end: e.target.value }))}
+                                    className="bg-transparent border-none text-xs font-bold text-gray-700 focus:ring-0 px-2 cursor-pointer"
                                 />
                             </div>
                         </div>
                     </div>
                 </div>
+            </div>
 
-                {/* Primary row: left overview card + right profit/revenue chart */}
-                <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] gap-4 lg:gap-5">
-                    {/* Collections / card-like summary */}
-                    <div className="relative overflow-hidden rounded-3xl border border-emerald-100 bg-gradient-to-br from-emerald-500 via-teal-500 to-emerald-600 text-white shadow-soft p-3 sm:p-4 lg:p-5 flex flex-col gap-3.5">
-                        <div className="pointer-events-none absolute -right-10 -top-10 w-40 h-40 rounded-full bg-white/20 blur-3 opacity-30" />
-                        <div className="flex items-start justify-start gap-3 pr-20 sm:pr-24 lg:pr-32">
-                            <div>
-                                <div className="text-[10px] uppercase tracking-[0.15em] text-emerald-100 font-semibold">My school collections</div>
-                                <div className="mt-0.5 text-lg sm:text-xl lg:text-2xl font-extrabold tracking-tight">
-                                    KES {Number(stats?.totalRevenue || 0).toLocaleString()}
+            <div className="max-w-[1600px] mx-auto px-6 py-8">
+                {/* Top Statistics Row */}
+                <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 mb-8">
+                    {/* Main Balance Card */}
+                    <div className="xl:col-span-5 relative overflow-hidden rounded-[2.5rem] bg-gradient-to-br from-emerald-600 via-emerald-500 to-teal-600 text-white shadow-2xl shadow-emerald-200 p-8 flex flex-col justify-between group">
+                        <div className="absolute -right-20 -top-20 w-64 h-64 rounded-full bg-white/10 blur-3xl group-hover:bg-white/20 transition-all duration-700" />
+                        <div className="absolute -left-20 -bottom-20 w-64 h-64 rounded-full bg-black/10 blur-3xl group-hover:bg-black/20 transition-all duration-700" />
+                        
+                        <div className="relative z-10">
+                            <div className="flex items-center justify-between mb-8">
+                                <div className="w-14 h-14 rounded-2xl bg-white/20 backdrop-blur-md border border-white/30 flex items-center justify-center shadow-inner">
+                                    <Wallet size={28} />
                                 </div>
-                                <div className="mt-0.5 flex items-center gap-1.5 text-[10px] sm:text-[11px] text-emerald-100/90">
-                                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-900/20 px-2 py-0.5 border border-white/20">
-                                        <span className="text-[10px]">▲</span>
-                                        <span>{Math.round(stats?.trends?.totalRevenue || 0)}% vs last period</span>
-                                    </span>
-                                    <span>Collection rate {Math.round(collectionRate)}%</span>
+                                <div className="text-right">
+                                    <div className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-100/80 mb-1">Status</div>
+                                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/20 border border-white/30 text-[10px] font-black uppercase tracking-widest backdrop-blur-md">
+                                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-300 animate-pulse" />
+                                        In Account
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="space-y-1">
+                                <div className="text-sm font-black text-emerald-100 uppercase tracking-widest opacity-80">Total Collections</div>
+                                <div className="text-5xl font-black tracking-tighter flex items-baseline gap-2">
+                                    <span className="text-2xl opacity-60">KES</span>
+                                    {Number(stats?.totalRevenue || 0).toLocaleString()}
+                                </div>
+                            </div>
+
+                            <div className="mt-8 grid grid-cols-2 gap-4">
+                                <div className="bg-white/10 border border-white/20 rounded-3xl p-4 backdrop-blur-sm">
+                                    <div className="text-[10px] font-black text-emerald-100 uppercase tracking-widest mb-1 opacity-70">Outstanding</div>
+                                    <div className="text-lg font-bold">KES {Number(stats?.outstandingFees || 0).toLocaleString()}</div>
+                                </div>
+                                <div className="bg-emerald-900/20 border border-white/10 rounded-3xl p-4 backdrop-blur-sm">
+                                    <div className="text-[10px] font-black text-emerald-100 uppercase tracking-widest mb-1 opacity-70">Rate</div>
+                                    <div className="text-lg font-bold">{Math.round(collectionRate)}% Verified</div>
                                 </div>
                             </div>
                         </div>
-                        <div className="hidden sm:flex absolute right-3 sm:right-5 lg:right-7 top-3 sm:top-4 lg:top-5">
-                            <div className="w-32 sm:w-36 lg:w-40 h-24 rounded-3xl bg-white/12 border border-white/25 shadow-inner flex flex-col justify-between p-2.5 text-[10px] backdrop-blur-sm">
-                                <div className="flex items-center justify-between text-emerald-50">
-                                    <span className="inline-flex items-center gap-1 text-[11px] font-medium">
-                                        <span className="inline-block w-6 h-6 rounded-full bg-white/20 flex items-center justify-center text-sm">💳</span>
-                                        Fees card
-                                    </span>
-                                    <span className="text-[10px]">•••</span>
-                                </div>
-                                <div className="mt-1.5 text-[12px] leading-tight font-semibold tracking-wide">
-                                    Outstanding
-                                </div>
-                                <div className="text-sm font-bold">
-                                    KES {Number(stats?.outstandingFees || 0).toLocaleString()}
-                                </div>
-                            </div>
-                        </div>
-                        <div className="mt-auto pt-2 grid grid-cols-2 md:grid-cols-3 gap-1.5">
-                            <button className="flex items-center justify-center gap-1.5 rounded-2xl bg-emerald-900/10 hover:bg-emerald-900/20 border border-white/15 px-2.5 py-1.5 text-[10px] sm:text-xs font-medium transition">
-                                <span className="w-6 h-6 rounded-full bg-white/15 flex items-center justify-center text-sm shrink-0">➕</span>
-                                <span className="truncate">Record fee</span>
+
+                        <div className="relative z-10 mt-8 pt-6 border-t border-white/10 flex items-center gap-3">
+                            <button className="flex-1 h-12 rounded-2xl bg-white text-emerald-600 font-black text-xs uppercase tracking-widest hover:bg-emerald-50 transition-all shadow-lg active:scale-95 flex items-center justify-center gap-2">
+                                <Plus size={18} /> Record Fee
                             </button>
-                            <Link
-                                to="/finance/expenses"
-                                className="flex items-center justify-center gap-1.5 rounded-2xl bg-emerald-900/5 hover:bg-emerald-900/15 border border-white/15 px-2.5 py-1.5 text-[10px] sm:text-xs font-medium transition"
-                            >
-                                <span className="w-6 h-6 rounded-full bg-white/15 flex items-center justify-center text-sm shrink-0">💸</span>
-                                <span className="truncate">New expense</span>
-                            </Link>
-                            <Link
-                                to="/finance/reports"
-                                className="flex items-center justify-center gap-1.5 rounded-2xl bg-emerald-900/5 hover:bg-emerald-900/15 border border-white/15 px-2.5 py-1.5 text-[10px] sm:text-xs font-medium transition"
-                            >
-                                <span className="w-6 h-6 rounded-full bg-white/15 flex items-center justify-center text-sm shrink-0">📈</span>
-                                <span className="truncate">View reports</span>
+                            <Link to="/finance/expenses" className="flex-1 h-12 rounded-2xl bg-emerald-900/20 text-white border border-white/20 font-black text-xs uppercase tracking-widest hover:bg-emerald-900/30 transition-all active:scale-95 flex items-center justify-center gap-2">
+                                <DollarSign size={18} /> New Expense
                             </Link>
                         </div>
                     </div>
 
-                    {/* Profit / revenue chart */}
-                    <div className="rounded-3xl bg-white/90 border border-slate-100 shadow-card px-3.5 py-2.5 sm:px-4.5 sm:py-3.5 flex flex-col">
-                        <div className="flex items-center justify-between gap-2 mb-2.5">
-                            <h2 className="text-xs sm:text-sm font-semibold text-slate-900">Profit & cashflow</h2>
-                            <div className="flex items-center gap-1 text-[10px] text-slate-500">
-                                <span className="inline-flex items-center gap-1 rounded-full border border-slate-200/80 bg-slate-50 px-2 py-0.5">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                                    Revenue
+                    {/* Revenue Trend Chart */}
+                    <div className="xl:col-span-7 bg-white rounded-[2.5rem] border border-gray-100 shadow-sm p-8 flex flex-col">
+                        <div className="flex items-center justify-between mb-8">
+                            <div>
+                                <h2 className="text-xl font-black text-gray-900 tracking-tight">Revenue Trend</h2>
+                                <p className="text-xs font-medium text-gray-500 italic">Monthly collection performance</p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 border border-emerald-100 text-emerald-600 text-[10px] font-black uppercase tracking-widest">
+                                    <TrendingUp size={14} />
+                                    +{Math.round(stats?.trends?.totalRevenue || 0)}%
+                                </div>
+                                <button className="w-10 h-10 rounded-xl bg-gray-50 border border-gray-100 text-gray-400 flex items-center justify-center hover:text-gray-900 transition-colors">
+                                    <MoreHorizontal size={20} />
+                                </button>
+                            </div>
+                        </div>
+                        <div className="flex-1 min-h-[240px]">
+                            <Line data={revenueData} options={chartOptions} />
+                        </div>
+                    </div>
+                </div>
+
+                {/* Secondary Cards Row */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 mb-8">
+                    {/* Net Position Card */}
+                    <div className="bg-white rounded-[2rem] border border-gray-100 shadow-sm p-6 hover:shadow-xl hover:shadow-gray-200/50 transition-all group">
+                        <div className="flex items-start justify-between mb-4">
+                            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-sm ${netPosition >= 0 ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600'}`}>
+                                <TrendingUp size={24} />
+                            </div>
+                            <div className={`px-2 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${netPosition >= 0 ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-rose-50 text-rose-600 border border-rose-100'}`}>
+                                {netPosition >= 0 ? 'Profitable' : 'Deficit'}
+                            </div>
+                        </div>
+                        <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Net Position</div>
+                        <div className="text-xl font-black text-gray-900 tracking-tight">KES {Number(netPosition).toLocaleString()}</div>
+                        <div className="mt-4 h-1.5 w-full bg-gray-50 rounded-full overflow-hidden">
+                            <div className={`h-full rounded-full ${netPosition >= 0 ? 'bg-emerald-500' : 'bg-rose-500'}`} style={{ width: '70%' }} />
+                        </div>
+                    </div>
+
+                    {/* Expenses Card */}
+                    <div className="bg-white rounded-[2rem] border border-gray-100 shadow-sm p-6 hover:shadow-xl hover:shadow-gray-200/50 transition-all group">
+                        <div className="flex items-start justify-between mb-4">
+                            <div className="w-12 h-12 rounded-2xl bg-amber-100 text-amber-600 flex items-center justify-center shadow-sm">
+                                <DollarSign size={24} />
+                            </div>
+                            <Link to="/finance/expenses" className="w-8 h-8 rounded-xl bg-gray-50 text-gray-400 flex items-center justify-center hover:bg-gray-100 transition-colors">
+                                <ChevronRight size={16} />
+                            </Link>
+                        </div>
+                        <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Total Expenses</div>
+                        <div className="text-xl font-black text-gray-900 tracking-tight">KES {Number(stats?.totalExpenses || 0).toLocaleString()}</div>
+                        <div className="mt-4 flex items-center gap-1.5 text-[10px] font-bold text-amber-600">
+                            <ArrowUpRight size={14} />
+                            <span>{Math.round(stats?.trends?.totalExpenses || 0)}% vs last month</span>
+                        </div>
+                    </div>
+
+                    {/* Collection Progress Card */}
+                    <div className="bg-white rounded-[2rem] border border-gray-100 shadow-sm p-6 hover:shadow-xl hover:shadow-gray-200/50 transition-all">
+                        <div className="flex items-center justify-between mb-4">
+                            <div>
+                                <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Collection Rate</div>
+                                <div className="text-xl font-black text-gray-900 tracking-tight">{Math.round(collectionRate)}%</div>
+                            </div>
+                            <div className="w-14 h-14">
+                                <Doughnut data={collectionData} options={{ cutout: '75%', plugins: { legend: { display: false } } }} />
+                            </div>
+                        </div>
+                        <div className="space-y-2">
+                            <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider">
+                                <span className="text-emerald-600 flex items-center gap-1.5">
+                                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> Paid
+                                </span>
+                                <span className="text-gray-400 flex items-center gap-1.5">
+                                    <div className="w-1.5 h-1.5 rounded-full bg-gray-200" /> Pending
                                 </span>
                             </div>
                         </div>
-                        <div className="h-32 sm:h-40 md:h-44 lg:h-[11rem]">
-                            <Line data={revenueData} options={{ responsive: true, maintainAspectRatio: false }} />
+                    </div>
+
+                    {/* Quick Link Card */}
+                    <div className="bg-emerald-50 rounded-[2rem] border border-emerald-100 shadow-sm p-6 flex flex-col justify-between group cursor-pointer hover:bg-emerald-100 transition-all border-dashed">
+                        <div className="flex items-center justify-between">
+                            <div className="w-12 h-12 rounded-2xl bg-white text-emerald-600 flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform">
+                                <FileText size={24} />
+                            </div>
+                            <ArrowUpRight size={20} className="text-emerald-400 group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />
+                        </div>
+                        <div>
+                            <h3 className="text-base font-black text-emerald-900 tracking-tight">View Reports</h3>
+                            <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest">Full analytics directory</p>
                         </div>
                     </div>
                 </div>
 
-                {/* Middle row: income / expenses / collection cards */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 lg:gap-4.5">
-                    <StatCard
-                        title="Net position"
-                        value={netPosition}
-                        icon="⚖️"
-                        accent={netPosition >= 0 ? 'from-emerald-500 to-emerald-600' : 'from-rose-500 to-rose-600'}
-                        format={v => `KES ${Number(v||0).toLocaleString()}`}
-                        trend={stats?.trends?.totalRevenue}
-                        animate
-                    />
-                    <StatCard
-                        title="Expenses"
-                        value={stats?.totalExpenses}
-                        icon="💸"
-                        accent="from-amber-500 to-orange-600"
-                        format={v => `KES ${v?.toLocaleString()}`}
-                        trend={stats?.trends?.totalExpenses}
-                        animate
-                    />
-                    <div className="relative overflow-hidden rounded-2xl border border-slate-100 bg-white/90 shadow-card flex flex-col">
-                        <div className="flex items-center justify-between px-3.5 pt-2.5 pb-1">
-                            <div>
-                                <div className="text-[11px] font-medium text-slate-500">Collection rate</div>
-                                <div className="mt-0.5 text-lg font-extrabold tracking-tight text-slate-900">{collectionRate}%</div>
-                            </div>
-                            <div className="w-18 sm:w-20">
-                                <Doughnut data={collectionData} options={{ cutout: '70%', plugins:{legend:{display:false}} }} />
-                            </div>
-                        </div>
-                        <div className="px-3.5 pb-2.5 text-[10px] text-slate-600 flex items-center justify-between gap-2">
-                            <span className="inline-flex items-center gap-1">
-                                <span className="w-2 h-2 rounded-full bg-emerald-500" /> Collected
-                            </span>
-                            <span className="inline-flex items-center gap-1">
-                                <span className="w-2 h-2 rounded-full bg-slate-200" /> Outstanding
-                            </span>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Charts row: expense breakdown + calendar */}
-                <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] gap-3.5 lg:gap-4.5">
-                    <div className="rounded-3xl bg-white/95 backdrop-blur-sm border border-slate-100 shadow-card p-3.5 sm:p-4.5">
-                        <div className="flex items-center justify-between mb-2.5">
-                            <h2 className="text-xs sm:text-sm font-semibold text-slate-900">Spending by category</h2>
-                            <span className="text-[10px] text-slate-500">KES {Number(stats?.totalExpenses || 0).toLocaleString()}</span>
-                        </div>
-                        <div className="h-40 sm:h-48 lg:h-56">
-                            <Bar data={expensesData} options={{ responsive: true, indexAxis: 'y', maintainAspectRatio: false }} />
-                        </div>
-                    </div>
-
-                    <div className="rounded-3xl bg-white/95 border border-slate-100 shadow-card p-3.5 sm:p-4.5 flex flex-col">
-                        <div className="flex items-center justify-between mb-2.5">
-                            <h2 className="text-xs sm:text-sm font-semibold text-slate-900">School calendar</h2>
-                            <div className="flex items-center gap-1">
-                                <button onClick={()=>setViewMonth(prev=>{ const d=new Date(prev); d.setMonth(d.getMonth()-1); return d })} className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 text-xs" aria-label="Previous month">‹</button>
-                                <button onClick={()=>setViewMonth(prev=>{ const d=new Date(prev); d.setMonth(d.getMonth()+1); return d })} className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 text-xs" aria-label="Next month">›</button>
-                                <button onClick={()=>setViewMonth(new Date())} className="px-2 py-1 text-[11px] rounded-full border border-slate-200 hover:bg-slate-50">Today</button>
-                            </div>
-                        </div>
-                        <div className="text-[11px] text-slate-600 mb-1.5">{viewMonth.toLocaleString(undefined,{ month:'long', year:'numeric' })}</div>
-                        <div className="space-y-2.5">
-                            <div className="grid grid-cols-7 text-[9px] font-semibold text-slate-500 mb-0.5">
-                                {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d=> <div key={d} className="px-1 py-1 text-center tracking-wide">{d}</div>)}
-                            </div>
-                            <div className="grid grid-cols-7 gap-0.5">
-                                {monthDays.map((d,i)=>{
-                                    const key = localKey(d)
-                                    const inMonth = d.getMonth()===viewMonth.getMonth()
-                                    const isToday = key === localKey(new Date())
-                                    const dayEvents = eventsByDay[key] || []
-                                    const color = dayEvents.length>0 ? colorForEvent(dayEvents[0]) : null
-                                    const baseBg = inMonth ? 'bg-white' : 'bg-slate-50'
-                                    const activeBg = color ? color.chip.split(' ').find(c=>c.startsWith('bg-')) : baseBg
-                                    return (
-                                        <div key={i} className={`relative rounded-2xl min-h-[52px] p-1.5 text-[9px] border ${inMonth? 'border-slate-200':'border-slate-200/70'} ${dayEvents.length? activeBg : baseBg} hover:border-emerald-300 hover:shadow-soft transition-all`}>
-                                            <div className="flex items-center justify-between">
-                                                <div className={`${inMonth? 'text-slate-800':'text-slate-400'} text-[9px] font-semibold`}>{d.getDate()}</div>
-                                                {isToday && <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">Today</span>}
-                                            </div>
-                                            <div className="mt-0.5 flex flex-wrap gap-0.5">
-                                                {dayEvents.slice(0,2).map(ev => {
-                                                    const c = colorForEvent(ev)
-                                                    return (
-                                                        <span key={ev.id} className={`px-1.5 py-0.5 rounded-full text-[8px] border truncate max-w-full ${c.chip}`} title={ev.title}>
-                                                            {ev.title}
-                                                        </span>
-                                                    )
-                                                })}
-                                                {dayEvents.length>2 && <span className="text-[8px] text-slate-500">+{dayEvents.length-2} more</span>}
-                                            </div>
-                                            {dayEvents.length>0 && (
-                                                <div className="absolute bottom-1 right-1 inline-flex items-center gap-1 text-[8px] text-slate-500">
-                                                    <span className={`w-1.5 h-1.5 rounded-full ${color?.dot || 'bg-blue-500'}`} />
-                                                    {dayEvents.length}
-                                                </div>
-                                            )}
-                                        </div>
-                                    )
-                                })}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Bottom row: planning + latest transactions + side banner */}
-                <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] gap-3.5 lg:gap-4.5">
-                    <div className="rounded-3xl bg-white/95 border border-slate-100 shadow-card overflow-hidden flex flex-col">
-                        <div className="px-3.5 sm:px-4.5 py-2.5 border-b border-slate-100 flex items-center justify-between">
-                            <h2 className="text-xs sm:text-sm font-semibold text-slate-900">Latest transactions</h2>
-                            <Link to="/finance/payments" className="text-[10px] font-medium text-emerald-700 hover:text-emerald-800">View all</Link>
-                        </div>
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-left text-[11px] sm:text-xs">
-                                <thead className="text-[9px] sm:text-[10px] uppercase text-slate-600 bg-slate-50/80 backdrop-blur-sm">
-                                    <tr>
-                                        <th className="px-3.5 sm:px-4.5 py-2 font-semibold">Transaction</th>
-                                        <th className="px-3.5 sm:px-4.5 py-2 font-semibold">Date</th>
-                                        <th className="px-3.5 sm:px-4.5 py-2 font-semibold">Amount</th>
-                                        <th className="px-3.5 sm:px-4.5 py-2 font-semibold">Type</th>
-                                        <th className="px-3.5 sm:px-4.5 py-2 font-semibold">Status</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {(stats?.recentTransactions || []).map((t, i) => (
-                                        <tr
-                                            key={t.id || i}
-                                            className={`${i % 2 === 0 ? 'bg-white' : 'bg-slate-50/70'} hover:bg-emerald-50/70 cursor-pointer transition-colors`}
-                                            onClick={()=>openReceipt(t.id)}
-                                        >
-                                            <td className="px-3.5 sm:px-4.5 py-2 font-medium text-slate-900 whitespace-nowrap">#{t.id}</td>
-                                            <td className="px-3.5 sm:px-4.5 py-2 text-slate-700">{new Date(t.date).toLocaleDateString()}</td>
-                                            <td className="px-3.5 sm:px-4.5 py-2 font-semibold text-slate-900">KES {Number(t.amount||0).toLocaleString()}</td>
-                                            <td className="px-3.5 sm:px-4.5 py-2 capitalize text-slate-700">{t.type}</td>
-                                            <td className="px-3.5 sm:px-4.5 py-2">
-                                                <span className={`inline-flex items-center gap-1 px-2 py-0.5 text-[10px] sm:text-xs font-medium rounded-full border ${t.status === 'completed' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>
-                                                    <span className={`w-1.5 h-1.5 rounded-full ${t.status === 'completed' ? 'bg-emerald-500' : 'bg-amber-500'}`} />
-                                                    {t.status}
-                                                </span>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                    {(!stats?.recentTransactions || stats.recentTransactions.length === 0) && (
-                                        <tr><td colSpan={5} className="px-3.5 sm:px-4.5 py-5 text-center text-slate-500">No transactions yet.</td></tr>
-                                    )}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-1 gap-3.5 lg:gap-4.5">
-                        <div className="rounded-3xl bg-white/95 border border-slate-100 shadow-card p-3.5 sm:p-4.5 flex flex-col gap-2.5">
-                            <div className="flex items-center justify-between">
-                                <h2 className="text-xs sm:text-sm font-semibold text-slate-900">Planning</h2>
-                                <button className="text-[10px] text-emerald-700 hover:text-emerald-800 font-medium">Add goal</button>
-                            </div>
-                            <div className="space-y-2.5 text-[11px] sm:text-xs">
+                <div className="grid grid-cols-1 xl:grid-cols-12 gap-8">
+                    {/* Left Column: Spending Breakdown */}
+                    <div className="xl:col-span-4 space-y-8">
+                        <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm p-8 h-full flex flex-col">
+                            <div className="flex items-center justify-between mb-8">
                                 <div>
-                                    <div className="flex items-center justify-between mb-1">
-                                        <span className="font-medium text-slate-800">Term fees target</span>
-                                        <span className="text-slate-500">KES {Number(stats?.termTarget || 0).toLocaleString() || '—'}</span>
+                                    <h2 className="text-xl font-black text-gray-900 tracking-tight">Expense Mix</h2>
+                                    <p className="text-xs font-medium text-gray-500 italic">Spending by category</p>
+                                </div>
+                                <PieChart size={20} className="text-gray-400" />
+                            </div>
+                            <div className="flex-1 min-h-[300px]">
+                                <Bar data={expensesData} options={{ ...chartOptions, indexAxis: 'y' }} />
+                            </div>
+                            <div className="mt-8 space-y-4">
+                                <div>
+                                    <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-widest mb-2">
+                                        <span className="text-gray-500">Fees Target</span>
+                                        <span className="text-emerald-600">{Math.round(collectionRate)}%</span>
                                     </div>
-                                    <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
-                                        <div className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-teal-500" style={{ width: `${Math.min(100, collectionRate || 0)}%` }} />
+                                    <div className="h-2 w-full bg-gray-50 rounded-full overflow-hidden border border-gray-100 p-0.5">
+                                        <div className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-emerald-600 shadow-sm" style={{ width: `${collectionRate}%` }} />
                                     </div>
                                 </div>
                                 <div>
-                                    <div className="flex items-center justify-between mb-1">
-                                        <span className="font-medium text-slate-800">Expense ceiling</span>
-                                        <span className="text-slate-500">KES {Number(stats?.expenseLimit || 0).toLocaleString() || '—'}</span>
+                                    <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-widest mb-2">
+                                        <span className="text-gray-500">Budget Usage</span>
+                                        <span className="text-amber-600">45% Used</span>
                                     </div>
-                                    <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
-                                        <div className="h-full rounded-full bg-gradient-to-r from-amber-400 to-rose-500" style={{ width: `${Math.min(100, (stats && stats.totalExpenses && stats.expenseLimit) ? (100 * Number(stats.totalExpenses)/Number(stats.expenseLimit||1)) : 45)}%` }} />
+                                    <div className="h-2 w-full bg-gray-50 rounded-full overflow-hidden border border-gray-100 p-0.5">
+                                        <div className="h-full rounded-full bg-gradient-to-r from-amber-400 to-orange-500 shadow-sm" style={{ width: '45%' }} />
                                     </div>
                                 </div>
                             </div>
                         </div>
+                    </div>
 
-                        <div className="rounded-3xl bg-gradient-to-br from-emerald-600 via-emerald-500 to-teal-500 text-white shadow-card p-3.5 sm:p-4.5 flex flex-col justify-between">
-                            <div>
-                                <div className="inline-flex items-center gap-1 rounded-full bg-white/10 px-2 py-0.5 text-[9px] font-medium mb-1.5 border border-white/20">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-300" />
-                                    Collections insight
-                                </div>
-                                <h2 className="text-sm sm:text-base font-semibold tracking-tight">Outstanding fees</h2>
-                                <p className="mt-0.5 text-[10px] sm:text-[11px] text-emerald-50/90 max-w-xs">
-                                    KES {Number(stats?.outstandingFees || 0).toLocaleString()} still to be collected this term.
-                                </p>
-                            </div>
-                            <div className="mt-2.5 flex items-end justify-between gap-2 text-[10px] sm:text-[11px]">
-                                <div className="flex-1 space-y-1.5">
-                                    <div className="flex items-center justify-between gap-2">
-                                        <span className="text-emerald-100/90">Collection rate</span>
-                                        <span className="font-semibold text-white">{collectionRate}%</span>
+                    {/* Middle Column: Latest Transactions */}
+                    <div className="xl:col-span-5">
+                        <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden h-full flex flex-col">
+                            <div className="p-8 border-b border-gray-50 flex items-center justify-between bg-gradient-to-r from-gray-50/50 to-white">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 rounded-xl bg-gray-100 text-gray-600 flex items-center justify-center">
+                                        <Receipt size={20} />
                                     </div>
-                                    <div className="h-1.5 rounded-full bg-emerald-900/30 overflow-hidden">
-                                        <div
-                                            className="h-full rounded-full bg-white"
-                                            style={{ width: `${Math.min(100, collectionRate || 0)}%` }}
-                                        />
+                                    <div>
+                                        <h2 className="text-lg font-black text-gray-900 tracking-tight">Recent Activity</h2>
+                                        <p className="text-xs font-medium text-gray-500 italic">Latest financial movements</p>
                                     </div>
                                 </div>
-                                <Link
-                                    to="/finance/reports"
-                                    className="inline-flex items-center justify-center gap-1.5 rounded-full bg-white/95 text-emerald-700 text-[10px] sm:text-[11px] font-semibold px-3 py-1.5 shadow-soft hover:bg-white transition whitespace-nowrap"
-                                >
-                                    View reports
+                                <Link to="/finance/payments" className="h-10 px-4 rounded-xl bg-gray-50 border border-gray-100 text-[10px] font-black uppercase tracking-widest text-gray-600 hover:bg-white hover:text-emerald-600 transition-all flex items-center justify-center gap-2">
+                                    View All
+                                    <ArrowUpRight size={14} />
                                 </Link>
                             </div>
+                            <div className="flex-1 overflow-auto">
+                                <div className="divide-y divide-gray-50">
+                                    {(stats?.recentTransactions || []).map((t, i) => (
+                                        <button 
+                                            key={t.id || i}
+                                            onClick={() => openReceipt(t.id)}
+                                            className="w-full p-6 flex items-center justify-between hover:bg-gray-50 transition-all group text-left"
+                                        >
+                                            <div className="flex items-center gap-4">
+                                                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-sm transition-transform group-hover:scale-110 ${t.type === 'payment' ? 'bg-emerald-50 text-emerald-600' : 'bg-gray-50 text-gray-400'}`}>
+                                                    {t.type === 'payment' ? <ArrowUpRight size={20} /> : <ArrowDownRight size={20} />}
+                                                </div>
+                                                <div>
+                                                    <div className="font-black text-gray-900 tracking-tight leading-none mb-1">ID #{t.id}</div>
+                                                    <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{new Date(t.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</div>
+                                                </div>
+                                            </div>
+                                            <div className="text-right">
+                                                <div className="font-black text-gray-900 tracking-tight leading-none mb-1">KES {Number(t.amount || 0).toLocaleString()}</div>
+                                                <div className={`text-[9px] font-black uppercase tracking-widest ${t.status === 'completed' ? 'text-emerald-500' : 'text-amber-500'}`}>
+                                                    {t.status}
+                                                </div>
+                                            </div>
+                                        </button>
+                                    ))}
+                                    {(!stats?.recentTransactions || stats.recentTransactions.length === 0) && (
+                                        <div className="p-12 text-center">
+                                            <div className="w-16 h-16 rounded-full bg-gray-50 flex items-center justify-center mx-auto mb-4">
+                                                <Receipt size={32} className="text-gray-200" />
+                                            </div>
+                                            <h3 className="text-gray-400 font-black uppercase tracking-widest text-sm mb-1">No activity</h3>
+                                            <p className="text-gray-400 text-xs font-medium">Transactions will appear here</p>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Right Column: Mini Calendar */}
+                    <div className="xl:col-span-3">
+                        <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm p-8 flex flex-col h-full overflow-hidden">
+                            <div className="flex items-center justify-between mb-6">
+                                <div>
+                                    <h2 className="text-lg font-black text-gray-900 tracking-tight">Calendar</h2>
+                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{viewMonth.toLocaleString(undefined, { month: 'long', year: 'numeric' })}</p>
+                                </div>
+                                <div className="flex items-center gap-1">
+                                    <button onClick={() => setViewMonth(prev => { const d = new Date(prev); d.setMonth(d.getMonth() - 1); return d })} className="w-8 h-8 rounded-lg bg-gray-50 flex items-center justify-center text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 transition-all"><ChevronLeft size={16} /></button>
+                                    <button onClick={() => setViewMonth(prev => { const d = new Date(prev); d.setMonth(d.getMonth() + 1); return d })} className="w-8 h-8 rounded-lg bg-gray-50 flex items-center justify-center text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 transition-all"><ChevronRight size={16} /></button>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-7 text-center mb-2">
+                                {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(d => <div key={d} className="text-[10px] font-black text-gray-300 uppercase">{d}</div>)}
+                            </div>
+                            <div className="grid grid-cols-7 gap-1">
+                                {monthDays.map((d, i) => {
+                                    const key = localKey(d);
+                                    const inMonth = d.getMonth() === viewMonth.getMonth();
+                                    const isToday = key === localKey(new Date());
+                                    const dayEvents = eventsByDay[key] || [];
+                                    const hasEvents = dayEvents.length > 0;
+
+                                    return (
+                                        <div 
+                                            key={i} 
+                                            className={`aspect-square rounded-xl flex items-center justify-center text-[10px] font-bold transition-all relative cursor-pointer
+                                                ${inMonth ? 'text-gray-700 hover:bg-gray-50' : 'text-gray-200'}
+                                                ${isToday ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-200 hover:bg-emerald-700' : ''}
+                                                ${hasEvents && !isToday ? 'bg-emerald-50 text-emerald-600 ring-1 ring-inset ring-emerald-100' : ''}
+                                            `}
+                                        >
+                                            {d.getDate()}
+                                            {hasEvents && !isToday && <div className="absolute bottom-1 w-1 h-1 rounded-full bg-emerald-500" />}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+
+                            <div className="mt-8 space-y-3 flex-1 overflow-auto">
+                                <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Upcoming Events</h3>
+                                {events.slice(0, 3).map(ev => {
+                                    const c = colorForEvent(ev);
+                                    return (
+                                        <div key={ev.id} className="flex items-start gap-3 group">
+                                            <div className={`w-1 h-10 rounded-full shrink-0 ${c.dot}`} />
+                                            <div className="min-w-0">
+                                                <div className="text-xs font-black text-gray-900 truncate group-hover:text-emerald-600 transition-colors">{ev.title}</div>
+                                                <div className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">{new Date(ev.start).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</div>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                                {events.length === 0 && <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest text-center py-4 italic">No scheduled events</div>}
+                            </div>
                         </div>
                     </div>
                 </div>
+            </div>
 
-                {/* Print styles injected when receipt modal is open */}
-                {showReceipt && (
-                    <style>{`
-                      @page { margin: ${paperSize==='80mm' ? '4mm' : (paperSize==='A5' ? '8mm 8mm 12mm 8mm' : '0mm 12mm 10mm 12mm')}; ${paperSize==='A5' ? 'size: A5 portrait;' : paperSize==='80mm' ? 'size: 80mm auto;' : 'size: A4 portrait;'} }
-                      @media print {
+            {/* Receipt Modal and Styles */}
+            {showReceipt && (
+                <style>{`
+                    @page { margin: ${paperSize === '80mm' ? '4mm' : (paperSize === 'A5' ? '8mm 8mm 12mm 8mm' : '0mm 12mm 10mm 12mm')}; ${paperSize === 'A5' ? 'size: A5 portrait;' : paperSize === '80mm' ? 'size: 80mm auto;' : 'size: A4 portrait;'} }
+                    @media print {
                         html, body { margin: 0 !important; padding: 0 !important; }
                         body { -webkit-print-color-adjust: exact; print-color-adjust: exact; background: #fff; }
-                        /* Hide everything except the printable node via visibility (prevents layout collapse) */
                         * { visibility: hidden !important; }
                         #printable-receipt, #printable-receipt * { visibility: visible !important; }
-                        /* place it at the top-left for printing */
-                        #printable-receipt { position: fixed; left: 0; top: 0; margin: 0 !important; padding-top: 0 !important; width: ${contentWidthMm}mm; max-width: ${contentWidthMm}mm; max-height: calc(100vh - 8mm); overflow: hidden; page-break-after: avoid; page-break-before: avoid; break-inside: avoid; font-size: ${paperSize==='A5' ? '13px' : '11px'}; line-height: ${paperSize==='A5' ? '1.45' : '1.2'}; }
-                        #printable-receipt > *:first-child, #printable-receipt .header { margin-top: 0 !important; padding-top: 0 !important; }
+                        #printable-receipt { position: fixed; left: 0; top: 0; margin: 0 !important; padding-top: 0 !important; width: ${contentWidthMm}mm; max-width: ${contentWidthMm}mm; max-height: calc(100vh - 8mm); overflow: hidden; page-break-after: avoid; page-break-before: avoid; break-inside: avoid; font-size: ${paperSize === 'A5' ? '13px' : '11px'}; line-height: ${paperSize === 'A5' ? '1.45' : '1.2'}; }
                         #printable-receipt .wm { display: none !important; }
-                      }
-                      #printable-receipt table { width: 100% !important; }
-                      #printable-receipt img { max-width: 100% !important; height: auto; }
                     }
-                    /* On screen */
                     #printable-receipt { background: #ffffff; color: #111827; }
-                  `}</style>
-                )}
+                `}</style>
+            )}
 
-                {/* Receipt Modal */}
-                <Modal open={showReceipt} onClose={()=>setShowReceipt(false)} title="Payment Receipt" size="md">
-                {receiptLoading && (<div className="p-2 text-sm text-gray-600">Loading receipt...</div>)}
-                {!receiptLoading && receipt?.error && (<div className="bg-red-50 text-red-700 text-sm p-2 rounded">{receipt.error}</div>)}
-                {!receiptLoading && receipt && !receipt.error && (
-                    <div id="printable-receipt" ref={printableRef} style={{ ['--print-scale']: printScale }} className={`relative text-sm ${compactMode ? 'compact' : ''}`}>
-                        {/* Watermark */}
-                        {receipt.school?.logo_url && (
-                          <div aria-hidden className="pointer-events-none absolute inset-0 flex items-center justify-center no-break wm">
-                            <img src={receipt.school.logo_url} alt="" className="opacity-5 w-[50%] max-w-[420px] -z-10" />
-                          </div>
-                        )}
-                        {/* Header */}
-                        <div className="flex items-center justify-between pb-4 border-b no-break header">
-                            <div className="flex items-center gap-3">
-                                {receipt.school?.logo_url && (
-                                    <img src={receipt.school.logo_url} alt="School Logo" className="w-12 h-12 object-contain" />
-                                )}
-                                <div>
-                                    {(()=>{ const accent = (receipt.school?.accent_color || receipt.school?.brand_color || receipt.school?.primary_color || '#2563eb');
-                                      return (
-                                        <div className="text-xl font-bold" style={{ color: accent }}>{receipt.school?.name || 'Payment Receipt'}</div>
-                                      )
-                                    })()}
-                                    <div className="text-xs text-gray-600">{receipt.school?.address || ''}</div>
+            <Modal open={showReceipt} onClose={() => setShowReceipt(false)} title="Payment Receipt" size="md">
+                {receiptLoading ? (
+                    <div className="p-12 text-center">
+                        <Clock size={40} className="text-emerald-200 animate-spin mx-auto mb-4" />
+                        <p className="text-sm font-bold text-gray-400 uppercase tracking-widest">Gathering Receipt Details...</p>
+                    </div>
+                ) : receipt?.error ? (
+                    <div className="p-8 text-center bg-rose-50 rounded-3xl border border-rose-100">
+                        <AlertCircle size={40} className="text-rose-400 mx-auto mb-4" />
+                        <p className="text-sm font-black text-rose-700">{receipt.error}</p>
+                    </div>
+                ) : receipt && (
+                    <div className="space-y-8">
+                        <div id="printable-receipt" ref={printableRef} className={`relative p-2 rounded-2xl border border-gray-100 shadow-inner ${compactMode ? 'compact' : ''}`}>
+                            {/* Header */}
+                            <div className="flex items-center justify-between pb-6 border-b border-gray-100">
+                                <div className="flex items-center gap-4">
+                                    {receipt.school?.logo_url && <img src={receipt.school.logo_url} alt="Logo" className="w-16 h-16 object-contain" />}
+                                    <div>
+                                        <div className="text-2xl font-black text-gray-900 tracking-tight leading-none mb-1">{receipt.school?.name || 'Payment Receipt'}</div>
+                                        <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{receipt.school?.address || 'School Financial Document'}</div>
+                                    </div>
+                                </div>
+                                <div className="text-right">
+                                    <div className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-1">Receipt No</div>
+                                    <div className="text-lg font-black text-gray-900 tracking-tighter">#{receipt.receipt_no || (receipt.fallback ? `PMT-${receipt.id}` : receipt.id)}</div>
+                                    <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">{String(receipt.date).slice(0, 10)}</div>
                                 </div>
                             </div>
-                            <div className="text-right">
-                                <div className="text-xs text-gray-600">Date</div>
-                                <div className="font-medium">{String(receipt.date).slice(0,10)}</div>
-                                <div className="text-xs text-gray-600 mt-1">Receipt No</div>
-                                <div className="font-medium">{receipt.receipt_no || (receipt.fallback ? `PMT-${receipt.id}` : '-')}</div>
-                            </div>
-                        </div>
 
-                        {/* Parties and meta */}
-                        <div className="grid md:grid-cols-2 gap-6 py-3 no-break">
-                            <div>
-                                <div className="text-[11px] uppercase text-gray-600 mb-1">Payer</div>
-                                <div className="font-medium">{receipt.student?.name || '-'}</div>
-                                <div className="text-gray-700">Admission: {receipt.student?.admission_no || '-'}</div>
-                                <div className="text-gray-700">Class: {receipt.student?.class || '-'}</div>
+                            {/* Info Grid */}
+                            <div className="grid grid-cols-2 gap-8 py-6">
+                                <div className="space-y-3">
+                                    <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-50 pb-1">Payer Details</div>
+                                    <div className="font-black text-gray-900 leading-none mb-1">{receipt.student?.name || '-'}</div>
+                                    <div className="text-xs font-bold text-gray-500 uppercase tracking-wider">Adm: {receipt.student?.admission_no || '-'}</div>
+                                    <div className="text-xs font-bold text-gray-500 uppercase tracking-wider">Class: {receipt.student?.class || '-'}</div>
+                                </div>
+                                <div className="space-y-3 text-right">
+                                    <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-50 pb-1">Payment Info</div>
+                                    <div className="text-xs font-bold text-gray-700 uppercase tracking-wider">Method: <span className="text-emerald-600">{String(receipt.method || '').toUpperCase()}</span></div>
+                                    <div className="text-xs font-bold text-gray-500 uppercase tracking-wider">Ref: {receipt.reference || '-'}</div>
+                                    <div className="text-xs font-bold text-gray-500 uppercase tracking-wider">Invoice: #{receipt.invoice || '-'}</div>
+                                </div>
                             </div>
-                            <div>
-                                <div className="text-[11px] uppercase text-gray-600 mb-1">Payment Details</div>
-                                <div className="text-gray-700">Method: {String(receipt.method || '').toUpperCase() || '-'}</div>
-                                <div className="text-gray-700">Reference: {receipt.reference || '-'}</div>
-                                <div className="text-gray-700">Invoice: {receipt.invoice || '-'}</div>
-                            </div>
-                        </div>
 
-                        {/* Amounts table */}
-                        <div className="rounded-xl border border-gray-200 overflow-hidden no-break mt-3">
-                            <table className="w-full text-sm">
-                                <thead className="bg-gray-50">
-                                    <tr className="text-left text-gray-600">
-                                        <th className="px-4 py-2">Item</th>
-                                        <th className="px-4 py-2 w-40 text-right">KES</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {Array.isArray(receipt.fee_assignments) && receipt.fee_assignments.map((f,i)=> (
-                                      <tr key={`fa-${i}`} className="border-t">
-                                        <td className="px-4 py-2">{f.category || 'Fee'} {f.year ? `(${f.year} Term ${f.term||''})` : ''}</td>
-                                        <td className="px-4 py-2 text-right">{Number(f.amount||0).toLocaleString()}</td>
-                                      </tr>
-                                    ))}
-                                    {!receipt.fallback && (
-                                        <tr className="border-t">
-                                            <td className="px-4 py-2">Invoice #{receipt.invoice} (Total)</td>
-                                            <td className="px-4 py-2 text-right">{Number(receipt.invoice_amount||0).toLocaleString()}</td>
+                            {/* Table */}
+                            <div className="rounded-[1.5rem] border border-gray-100 overflow-hidden shadow-sm mb-6">
+                                <table className="w-full text-xs">
+                                    <thead className="bg-gray-50/80 backdrop-blur-sm border-b border-gray-100">
+                                        <tr className="text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                                            <th className="px-6 py-3">Description</th>
+                                            <th className="px-6 py-3 text-right">Amount (KES)</th>
                                         </tr>
-                                    )}
-                                    <tr className="border-t">
-                                        <td className="px-4 py-2 font-medium">Paid now</td>
-                                        <td className="px-4 py-2 text-right font-semibold">{Number(receipt.amount||0).toLocaleString()}</td>
-                                    </tr>
-                                </tbody>
-                                <tfoot>
-                                    <tr className="border-t">
-                                        <td className="px-4 py-2 text-right font-semibold">Total paid today</td>
-                                        {(()=>{ const accent = (receipt.school?.accent_color || receipt.school?.brand_color || receipt.school?.primary_color || '#2563eb');
-                                            return <td className="px-4 py-2 text-right font-extrabold" style={{ color: accent }}>{Number(receipt.amount||0).toLocaleString()}</td>
-                                        })()}
-                                    </tr>
-                                    <tr>
-                                        <td className="px-4 py-2 text-right">This term balance</td>
-                                        <td className="px-4 py-2 text-right">{Number(receipt.current_term_balance||0).toLocaleString()}</td>
-                                    </tr>
-                                    <tr>
-                                        <td className="px-4 py-2 text-right">Previous terms (arrears)</td>
-                                        <td className="px-4 py-2 text-right">{Number(receipt.arrears_balance||0).toLocaleString()}</td>
-                                    </tr>
-                                    <tr>
-                                        <td className="px-4 py-2 text-right">Total balance</td>
-                                        <td className="px-4 py-2 text-right">{Number(receipt.student_balance||0).toLocaleString()}</td>
-                                    </tr>
-                                </tfoot>
-                            </table>
-                        </div>
-
-                        {/* Amount in words */}
-                        <div className="mt-2 text-xs text-gray-700 no-break"><span className="font-medium">Amount in words:</span> {amountToWordsKES(receipt.amount)}</div>
-
-                        {/* QR + Signature */}
-                        <div className="grid grid-cols-[1fr_auto] gap-6 items-start pt-4 no-break mt-4">
-                            <div>
-                                <div className="text-xs text-gray-600">Received by</div>
-                                <div className="inline-block border-b border-gray-400 font-semibold text-sm min-w-[240px]">{receipt.recorded_by_name || '-'}</div>
-                                <div className="mt-6 min-h-[150px]" />
-                                <div className="border-t border-gray-400 mt-2" />
-                                <div className="text-xs text-gray-600 mt-1">Signature</div>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-50">
+                                        {Array.isArray(receipt.fee_assignments) && receipt.fee_assignments.map((f, i) => (
+                                            <tr key={`fa-${i}`}>
+                                                <td className="px-6 py-4 font-bold text-gray-700">{f.category || 'Fee'} {f.year ? `(${f.year} T${f.term || ''})` : ''}</td>
+                                                <td className="px-6 py-4 text-right font-black text-gray-900">{Number(f.amount || 0).toLocaleString()}</td>
+                                            </tr>
+                                        ))}
+                                        <tr className="bg-emerald-50/30">
+                                            <td className="px-6 py-4 font-black text-emerald-900 uppercase tracking-widest">Amount Paid</td>
+                                            <td className="px-6 py-4 text-right font-black text-emerald-600 text-base">{Number(receipt.amount || 0).toLocaleString()}</td>
+                                        </tr>
+                                    </tbody>
+                                    <tfoot className="bg-gray-50/50">
+                                        <tr>
+                                            <td className="px-6 py-3 text-right text-[10px] font-black text-gray-400 uppercase tracking-widest">Closing Balance</td>
+                                            <td className="px-6 py-3 text-right font-black text-gray-900">{Number(receipt.student_balance || 0).toLocaleString()}</td>
+                                        </tr>
+                                    </tfoot>
+                                </table>
                             </div>
-                            <div className="justify-self-end text-center">
-                                {(()=>{
-                                  const url = `${window.location.origin}/receipt/${encodeURIComponent(receipt.receipt_no || receipt.id)}`
-                                  const src = `https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encodeURIComponent(url)}`
-                                  return (
-                                    <>
-                                      <img src={src} alt="Receipt QR" className="w-28 h-28 ml-auto" />
-                                      <div className="text-[10px] text-gray-600 mt-1">Scan to verify</div>
-                                    </>
-                                  )
-                                })()}
+
+                            <div className="text-[10px] font-bold text-gray-500 italic mb-8 border-l-2 border-emerald-500 pl-3 py-1 bg-emerald-50/30 rounded-r-lg">
+                                Word: {amountToWordsKES(receipt.amount)}
+                            </div>
+
+                            {/* Signatures */}
+                            <div className="flex items-end justify-between gap-8 pt-4 border-t border-dashed border-gray-200">
+                                <div className="flex-1 space-y-6">
+                                    <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Authorization</div>
+                                    <div className="text-sm font-black text-gray-900 leading-none pb-2 border-b border-gray-300 min-w-[200px]">{receipt.recorded_by_name || '-'}</div>
+                                    <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Authorized Signature</div>
+                                </div>
+                                <div className="text-center">
+                                    {(() => {
+                                        const url = `${window.location.origin}/receipt/${encodeURIComponent(receipt.receipt_no || receipt.id)}`
+                                        const src = `https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encodeURIComponent(url)}`
+                                        return (
+                                            <>
+                                                <div className="bg-white p-2 rounded-2xl border border-gray-100 shadow-sm mb-2">
+                                                    <img src={src} alt="Verification QR" className="w-20 h-20" />
+                                                </div>
+                                                <div className="text-[8px] font-black text-gray-400 uppercase tracking-[0.2em]">Scan to Verify</div>
+                                            </>
+                                        )
+                                    })()}
+                                </div>
                             </div>
                         </div>
 
-                        {/* Footer */}
-                        <div className="pt-3 text-xs text-gray-600 flex items-center justify-between print:mt-4 no-break">
-                            <div>Thank you for your payment.</div>
-                            <div>Printed by Genay Technologies Finance</div>
-                        </div>
-
-                        {/* On-screen controls only */}
-                        <div className="mt-3 flex items-center justify-between gap-2 print-hidden">
-                            <div className="flex items-center gap-1 text-xs">
-                                <span className="text-gray-600">Paper:</span>
-                                {['A4','A5','80mm'].map(ps => (
-                                  <button key={ps} onClick={()=>setPaperSize(ps)} className={`px-2 py-1 rounded border ${paperSize===ps? 'bg-gray-900 text-white' : 'bg-white text-gray-800'}`}>{ps}</button>
+                        {/* Modal Actions */}
+                        <div className="flex items-center justify-between pt-4 border-t border-gray-100">
+                            <div className="flex items-center gap-2">
+                                <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest mr-2">Paper:</div>
+                                {['A4', 'A5', '80mm'].map(ps => (
+                                    <button 
+                                        key={ps} 
+                                        onClick={() => setPaperSize(ps)} 
+                                        className={`h-10 px-4 rounded-xl text-xs font-black transition-all border-2 ${paperSize === ps ? 'bg-gray-900 border-gray-900 text-white shadow-lg' : 'bg-white border-gray-100 text-gray-500 hover:border-gray-200'}`}
+                                    >
+                                        {ps}
+                                    </button>
                                 ))}
-                                <span className="ml-2 text-gray-600">Layout:</span>
-                                <button onClick={()=>setCompactMode(v=>!v)} className={`px-2 py-1 rounded border ${compactMode? 'bg-gray-900 text-white' : 'bg-white text-gray-800'}`}>{compactMode? 'Compact' : 'Normal'}</button>
                             </div>
-                            <div className="flex justify-end gap-2">
-                                <button onClick={printReceipt} className="px-3 py-2 rounded border">Print</button>
+                            <div className="flex items-center gap-3">
+                                <button 
+                                    onClick={() => setCompactMode(!compactMode)}
+                                    className={`h-10 px-4 rounded-xl text-xs font-black transition-all border-2 ${compactMode ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white border-gray-100 text-gray-500 hover:border-gray-200'}`}
+                                >
+                                    {compactMode ? 'Compact' : 'Normal'}
+                                </button>
+                                <button 
+                                    onClick={printReceipt}
+                                    className="h-12 px-8 rounded-2xl bg-emerald-600 text-white font-black shadow-lg shadow-emerald-200 hover:bg-emerald-700 transition-all active:scale-95 flex items-center justify-center gap-2"
+                                >
+                                    <Printer size={18} /> Print Receipt
+                                </button>
                             </div>
                         </div>
                     </div>
                 )}
-                </Modal>
-            </div>
+            </Modal>
         </div>
     );
 }

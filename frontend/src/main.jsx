@@ -4,6 +4,7 @@ import { BrowserRouter } from 'react-router-dom'
 import App from './App'
 import './index.css'
 import { unlockAudioOnUserGesture } from './utils/sounds'
+import { Toaster } from 'react-hot-toast'
 
 // Global PWA install wiring: capture the beforeinstallprompt event and expose a helper
 if (typeof window !== 'undefined') {
@@ -33,6 +34,7 @@ if (typeof window !== 'undefined') {
 createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <BrowserRouter>
+      <Toaster position="top-right" />
       <App />
     </BrowserRouter>
   </React.StrictMode>

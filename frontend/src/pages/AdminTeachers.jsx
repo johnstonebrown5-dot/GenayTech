@@ -3,7 +3,27 @@ import api from '../api'
 import Modal from '../components/Modal'
 import { useNotification } from '../components/NotificationContext'
 import { Link } from 'react-router-dom'
-import StatCard from '../components/StatCard'
+import { 
+  Users, 
+  UserCheck, 
+  BookOpen, 
+  Plus, 
+  UserPlus, 
+  ClipboardCheck, 
+  Filter, 
+  Search, 
+  ChevronDown, 
+  X, 
+  Trash2, 
+  Edit3, 
+  CheckCircle2, 
+  AlertCircle,
+  TrendingUp,
+  LayoutGrid,
+  MoreVertical,
+  ArrowRight
+} from 'lucide-react'
+import { toast } from 'react-hot-toast'
 
 // Simple in-memory cache so revisiting this page in the same session can
 // reuse previously loaded data without refetching immediately.

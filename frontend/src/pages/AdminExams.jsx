@@ -2,6 +2,30 @@ import React, { useEffect, useState } from 'react'
 import api from '../api'
 import Modal from '../components/Modal'
 import { useNavigate } from 'react-router-dom'
+import { 
+  Plus, 
+  Calendar, 
+  FileSpreadsheet, 
+  Filter, 
+  Search, 
+  MoreVertical, 
+  CheckCircle2, 
+  XCircle, 
+  Edit3, 
+  Trash2, 
+  ChevronRight,
+  ArrowUpDown,
+  LayoutGrid,
+  List,
+  ChevronLeft,
+  Eye,
+  FileText,
+  Send,
+  Ban,
+  AlertCircle,
+  Loader2,
+  X
+} from 'lucide-react'
 
 export default function AdminExams(){
   const navigate = useNavigate()
@@ -148,7 +172,8 @@ export default function AdminExams(){
       setPublishingId(exam.id)
       setBanner('')
       await api.post(`/academics/exams/${exam.id}/publish/`)
-      setBanner(`Published results for ${exam.name}. Students have been notified.`)
+      const examName = exam?.name || (Array.isArray(exams) ? exams : []).find(x => x?.id === exam?.id)?.name || `Exam #${exam.id}`
+      setBanner(`Published results for ${examName}. Students have been notified.`)
       // Refresh list to reflect published flag
       load()
     } catch (err) {
@@ -162,7 +187,7 @@ export default function AdminExams(){
     if (!exam) return
     openConfirm({
       title: 'Unpublish exam',
-      message: `Unpublish “${exam.name}”?`,
+      message: `Unpublish “${exam?.name || (Array.isArray(exams) ? exams : []).find(x => x?.id === exam?.id)?.name || `Exam #${exam.id}` }”?`,
       intentText: 'Students will no longer see this exam/results once unpublished.',
       confirmText: 'Unpublish',
       confirmClass: 'bg-orange-600 hover:bg-orange-700',
@@ -171,7 +196,8 @@ export default function AdminExams(){
           setUnpublishingId(exam.id)
           setBanner('')
           await api.post(`/academics/exams/${exam.id}/unpublish/`)
-          setBanner(`Unpublished ${exam.name}.`)
+          const examName = exam?.name || (Array.isArray(exams) ? exams : []).find(x => x?.id === exam?.id)?.name || `Exam #${exam.id}`
+          setBanner(`Unpublished ${examName}.`)
           load()
         }catch(err){
           setBanner(err?.response?.data?.detail || 'Failed to unpublish exam')
@@ -204,6 +230,8 @@ export default function AdminExams(){
         term: term?.data?.number || prev.term,
         date: prev.date || new Date().toISOString().slice(0,10),
       }))
+    }catch(err){
+      setBanner(err?.response?.data?.detail || 'Failed to load exams')
     }finally{
       setLoading(false)
     }
@@ -464,220 +492,381 @@ export default function AdminExams(){
 
   return (
     <React.Fragment>
-      <div className="space-y-6">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Exams</h1>
-            <div className="text-sm text-gray-600 mt-0.5">Published: {publishedCount} · Draft: {draftCount}</div>
+      <div className="max-w-[1600px] mx-auto space-y-8 p-4 sm:p-6 lg:p-8 animate-in fade-in duration-500">
+        {/* Header Section */}
+        <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
+          <div className="space-y-1">
+            <h1 className="text-3xl font-extrabold tracking-tight text-gray-900 sm:text-4xl">Exams Management</h1>
+            <p className="text-gray-500 font-medium">Create, manage and publish student examinations.</p>
           </div>
-          {loading && (
-            <div className="text-xs text-gray-500">Loading…</div>
-          )}
-        </div>
-
-        <div className="bg-white rounded-xl shadow-card border border-gray-200 p-4 flex flex-wrap items-center justify-between gap-3">
-          <div className="font-medium text-gray-800">Manage Exams</div>
-          <div className="flex items-center gap-2 w-full sm:w-auto overflow-x-auto -mx-1 px-1">
+          
+          <div className="flex flex-wrap items-center gap-3">
             <button
-              onClick={()=>setShowCalendar(true)}
-              className="shrink-0 flex-1 sm:flex-none inline-flex items-center justify-center gap-0 sm:gap-2 bg-gray-800 text-white px-2.5 sm:px-3.5 py-2 rounded-lg hover:bg-gray-900"
-              aria-label="View Calendar"
+              onClick={() => setShowCalendar(true)}
+              className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 bg-white text-gray-700 px-4 py-2.5 rounded-xl font-semibold border border-gray-200 shadow-sm hover:bg-gray-50 transition-all active:scale-95"
             >
-              <span className="text-xs sm:text-sm font-semibold">Exam Calendar</span>
+              <Calendar size={18} className="text-gray-500" />
+              <span>Calendar</span>
             </button>
             <button
-              onClick={()=>navigate('/admin/results')}
-              className="shrink-0 flex-1 sm:flex-none inline-flex items-center justify-center gap-0 sm:gap-2 bg-indigo-600 text-white px-2.5 sm:px-3.5 py-2 rounded-lg hover:bg-indigo-700"
-              aria-label="Open Results"
+              onClick={() => navigate('/admin/results')}
+              className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 bg-indigo-50 text-indigo-700 px-4 py-2.5 rounded-xl font-semibold border border-indigo-100 hover:bg-indigo-100 transition-all active:scale-95"
             >
-              <span className="text-xs sm:text-sm font-semibold">Open Results</span>
+              <FileSpreadsheet size={18} />
+              <span>Results</span>
             </button>
             <button
-              onClick={()=>setShowCreateExam(true)}
-              className="shrink-0 flex-1 sm:flex-none inline-flex items-center justify-center gap-0 sm:gap-2 bg-blue-600 text-white px-2.5 sm:px-3.5 py-2 rounded-lg hover:bg-blue-700"
-              aria-label="Create Exam"
+              onClick={() => setShowCreateExam(true)}
+              className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 bg-blue-600 text-white px-5 py-2.5 rounded-xl font-bold shadow-lg shadow-blue-200 hover:bg-blue-700 hover:shadow-xl transition-all active:scale-95"
             >
-              <span className="text-xs sm:text-sm font-semibold">New Exam</span>
+              <Plus size={20} />
+              <span>New Exam</span>
             </button>
           </div>
         </div>
 
-        <div className="bg-white rounded-2xl shadow-card border border-gray-200 p-4">
-          <div className="flex items-center justify-between mb-2">
-            <h2 className="text-base font-semibold">Exams</h2>
-            <button
-              type="button"
-              onClick={() => setShowFilters(v => !v)}
-              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-full border border-gray-200 text-xs text-gray-700 hover:bg-gray-50"
-              aria-label={showFilters ? 'Hide filters' : 'Show filters'}
-            >
-              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M4 5h16M6 12h12M10 19h4" />
-              </svg>
-              <span className="hidden xs:inline">Filters</span>
-              <span className="xs:hidden">Filter</span>
-            </button>
-          </div>
-          {banner && (
-            <div className="mb-2 text-sm bg-blue-50 text-blue-800 px-3 py-2 rounded">{banner}</div>
-          )}
-          {/* Filters */}
-          <div className={`${showFilters ? '' : 'hidden'} grid gap-2 md:gap-3 md:grid-cols-6 mb-3`}>
-            <label className="grid gap-1">
-              <span className="text-xs text-gray-600">Search</span>
-              <div className="relative">
-                <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M10.5 18a7.5 7.5 0 100-15 7.5 7.5 0 000 15z"/></svg>
-                <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search name, class, year" className="border pl-9 pr-9 py-2 rounded-lg w-full shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white placeholder-gray-400" />
-                {search && (
-                  <button type="button" onClick={()=>setSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-full text-gray-500 hover:bg-gray-100" aria-label="Clear search">
-                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M6 6l12 12M18 6l-12 12"/></svg>
-                  </button>
-                )}
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow group">
+            <div className="flex items-center justify-between mb-4">
+              <div className="p-3 bg-blue-50 text-blue-600 rounded-xl group-hover:scale-110 transition-transform">
+                <FileText size={24} />
               </div>
-            </label>
-            <label className="grid gap-1">
-              <span className="text-xs text-gray-600">Grade</span>
-              <select value={filterGrade} onChange={e=>setFilterGrade(e.target.value)} className="border p-2 rounded w-full bg-white">
-                <option value="">All Grades</option>
-                {gradeOptions.map(g => <option key={g} value={g}>{g}</option>)}
-              </select>
-            </label>
-            <label className="grid gap-1">
-              <span className="text-xs text-gray-600">Class</span>
-              <select value={filterClass} onChange={e=>setFilterClass(e.target.value)} className="border p-2 rounded w-full bg-white">
-                <option value="">All Classes</option>
-                {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
-            </label>
-            <label className="grid gap-1">
-              <span className="text-xs text-gray-600">Status</span>
-              <select value={filterStatus} onChange={e=>setFilterStatus(e.target.value)} className="border p-2 rounded w-full bg-white">
-                <option value="all">All</option>
-                <option value="published">Published</option>
-                <option value="unpublished">Unpublished</option>
-              </select>
-            </label>
-            <label className="grid gap-1">
-              <span className="text-xs text-gray-600">Sort</span>
-              <select value={sortBy} onChange={e=>setSortBy(e.target.value)} className="border p-2 rounded w-full bg-white">
-                <option value="published_first">Published first</option>
-                <option value="latest">Latest</option>
-                <option value="unpublished_first">Unpublished first</option>
-                <option value="oldest">Oldest</option>
-              </select>
-            </label>
-            <div className="flex items-end">
-              <button onClick={()=>{setSearch('');setFilterGrade('');setFilterClass('');setFilterStatus('all')}} className="w-full border px-3 py-2 rounded">Clear</button>
+              <span className="text-xs font-bold text-gray-400 bg-gray-50 px-2 py-1 rounded-lg uppercase tracking-wider">Total</span>
             </div>
-          </div>
-          <div className="sticky top-0 z-10 -mx-4 px-4 py-2 mb-3 bg-white/95 backdrop-blur border-b border-gray-100 flex items-center justify-between gap-3">
-            <div className="text-sm text-gray-700">
-              <span className="font-medium">Selected</span>: {selected.size}
-            </div>
-            <div className="flex items-center gap-2">
-              <button onClick={bulkPublishExams} disabled={selected.size===0 || bulkPublishing} className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium ${selected.size===0? 'border text-gray-400' : 'bg-purple-600 text-white hover:bg-purple-700'}`}>{bulkPublishing? 'Publishing...' : 'Publish selected'}</button>
-              <button onClick={bulkDeleteExams} disabled={selected.size===0 || bulkDeleting} className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium ${selected.size===0? 'border text-gray-400' : 'bg-red-600 text-white hover:bg-red-700'}`}>{bulkDeleting? 'Deleting...' : 'Delete selected'}</button>
-            </div>
+            <div className="text-3xl font-black text-gray-900 tracking-tight">{exams.length}</div>
+            <div className="text-sm font-medium text-gray-500 mt-1">Total Examinations</div>
           </div>
 
-          {/* Mobile cards */}
-          <div className="grid gap-2 md:hidden">
-            {sortedExams.map(e => {
-              const klassName = classes.find(c=>c.id===e.klass)?.name || e.klass
-              const gradeLevel = classes.find(c=>c.id===e.klass)?.grade_level || ''
-              return (
-                <div key={e.id} className="p-3 rounded-xl border border-gray-200 bg-white hover:shadow-sm transition-shadow flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <button onClick={()=>openByName(e.name)} className="font-medium text-blue-700 hover:underline" title="Show all classes for this exam name">{e.name}</button>
-                    <div className="text-xs text-gray-500 truncate">{klassName} • {e.year} • T{e.term} • {e.date}</div>
-                    <div className="text-[11px] text-gray-500">Total {e.total_marks}</div>
-                  </div>
-                  <div className="shrink-0 flex flex-col items-end gap-1">
-                    <span className={`px-2 py-0.5 rounded-full text-[11px] ${e.published? 'bg-emerald-100 text-emerald-700':'bg-gray-100 text-gray-600'}`}>{e.published? 'Published':'Draft'}</span>
-                    <div className="flex items-center gap-2">
-                      <button onClick={()=>navigate(`/admin/exams/${e.id}/enter`)} className="text-blue-600 text-xs">Enter</button>
-                      <button onClick={()=>navigate(`/admin/results?exam=${e.id}&grade=${encodeURIComponent(classes.find(c=>c.id===e.klass)?.grade_level || '')}`)} className="text-indigo-700 text-xs">View Results</button>
-                    </div>
-                  </div>
+          <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow group">
+            <div className="flex items-center justify-between mb-4">
+              <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl group-hover:scale-110 transition-transform">
+                <CheckCircle2 size={24} />
+              </div>
+              <span className="text-xs font-bold text-emerald-400 bg-emerald-50 px-2 py-1 rounded-lg uppercase tracking-wider">Live</span>
+            </div>
+            <div className="text-3xl font-black text-gray-900 tracking-tight">{publishedCount}</div>
+            <div className="text-sm font-medium text-gray-500 mt-1">Published Exams</div>
+          </div>
+
+          <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow group">
+            <div className="flex items-center justify-between mb-4">
+              <div className="p-3 bg-amber-50 text-amber-600 rounded-xl group-hover:scale-110 transition-transform">
+                <Edit3 size={24} />
+              </div>
+              <span className="text-xs font-bold text-amber-400 bg-amber-50 px-2 py-1 rounded-lg uppercase tracking-wider">Draft</span>
+            </div>
+            <div className="text-3xl font-black text-gray-900 tracking-tight">{draftCount}</div>
+            <div className="text-sm font-medium text-gray-500 mt-1">Pending Publication</div>
+          </div>
+
+          <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow group">
+            <div className="flex items-center justify-between mb-4">
+              <div className="p-3 bg-purple-50 text-purple-600 rounded-xl group-hover:scale-110 transition-transform">
+                <LayoutGrid size={24} />
+              </div>
+              <span className="text-xs font-bold text-purple-400 bg-purple-50 px-2 py-1 rounded-lg uppercase tracking-wider">Classes</span>
+            </div>
+            <div className="text-3xl font-black text-gray-900 tracking-tight">{classes.length}</div>
+            <div className="text-sm font-medium text-gray-500 mt-1">Active Classes</div>
+          </div>
+        </div>
+
+        {/* Main Content Area */}
+        <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
+          {/* Tool Bar */}
+          <div className="p-6 border-b border-gray-50 space-y-4">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="relative flex-1 max-w-md">
+                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                <input 
+                  value={search} 
+                  onChange={e => setSearch(e.target.value)}
+                  placeholder="Search exams, classes, or years..." 
+                  className="w-full bg-gray-50 border-none rounded-2xl pl-11 pr-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 transition-all placeholder:text-gray-400"
+                />
+              </div>
+              
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setShowFilters(!showFilters)}
+                  className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-all ${showFilters ? 'bg-blue-50 text-blue-600' : 'text-gray-600 hover:bg-gray-50'}`}
+                >
+                  <Filter size={18} />
+                  <span>Filters</span>
+                </button>
+                
+                <div className="h-8 w-px bg-gray-100 mx-2" />
+                
+                <select 
+                  value={sortBy} 
+                  onChange={e => setSortBy(e.target.value)}
+                  className="bg-transparent border-none text-sm font-bold text-gray-600 focus:ring-0 cursor-pointer"
+                >
+                  <option value="latest">Sort: Latest</option>
+                  <option value="oldest">Sort: Oldest</option>
+                  <option value="published_first">Sort: Published</option>
+                  <option value="unpublished_first">Sort: Unpublished</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Expanded Filters */}
+            {showFilters && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 p-4 bg-gray-50 rounded-2xl animate-in slide-in-from-top-2 duration-300">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">Grade Level</label>
+                  <select 
+                    value={filterGrade} 
+                    onChange={e => setFilterGrade(e.target.value)}
+                    className="w-full bg-white border-none rounded-xl text-sm font-medium focus:ring-2 focus:ring-blue-500 shadow-sm"
+                  >
+                    <option value="">All Grades</option>
+                    {gradeOptions.map(g => <option key={g} value={g}>{g}</option>)}
+                  </select>
                 </div>
-              )
-            })}
+                
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">Specific Class</label>
+                  <select 
+                    value={filterClass} 
+                    onChange={e => setFilterClass(e.target.value)}
+                    className="w-full bg-white border-none rounded-xl text-sm font-medium focus:ring-2 focus:ring-blue-500 shadow-sm"
+                  >
+                    <option value="">All Classes</option>
+                    {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">Pub. Status</label>
+                  <select 
+                    value={filterStatus} 
+                    onChange={e => setFilterStatus(e.target.value)}
+                    className="w-full bg-white border-none rounded-xl text-sm font-medium focus:ring-2 focus:ring-blue-500 shadow-sm"
+                  >
+                    <option value="all">Any Status</option>
+                    <option value="published">Published Only</option>
+                    <option value="unpublished">Drafts Only</option>
+                  </select>
+                </div>
+
+                <div className="flex items-end">
+                  <button 
+                    onClick={() => { setSearch(''); setFilterGrade(''); setFilterClass(''); setFilterStatus('all'); }}
+                    className="w-full bg-gray-200 text-gray-700 py-2.5 rounded-xl text-sm font-bold hover:bg-gray-300 transition-colors active:scale-95"
+                  >
+                    Reset Filters
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
-          {!loading && sortedExams.length===0 && (
-            <div className="py-10 text-center text-sm text-gray-600">
-              No exams match your filters.
+          {/* Bulk Action Bar */}
+          {selected.size > 0 && (
+            <div className="bg-blue-600 p-4 flex items-center justify-between text-white animate-in slide-in-from-top duration-300">
+              <div className="flex items-center gap-3 ml-4">
+                <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center font-bold">
+                  {selected.size}
+                </div>
+                <span className="font-bold">Exams Selected</span>
+              </div>
+              
+              <div className="flex items-center gap-3">
+                <button 
+                  onClick={bulkPublishExams}
+                  disabled={bulkPublishing}
+                  className="bg-white text-blue-600 px-4 py-2 rounded-xl text-sm font-bold hover:bg-blue-50 transition-colors shadow-sm active:scale-95 disabled:opacity-50"
+                >
+                  {bulkPublishing ? 'Publishing...' : 'Publish Selected'}
+                </button>
+                <button 
+                  onClick={bulkDeleteExams}
+                  disabled={bulkDeleting}
+                  className="bg-red-500 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-red-600 transition-colors shadow-sm active:scale-95 disabled:opacity-50"
+                >
+                  {bulkDeleting ? 'Deleting...' : 'Delete Selected'}
+                </button>
+                <button 
+                  onClick={() => setSelected(new Set())}
+                  className="text-white/80 hover:text-white px-3"
+                >
+                  <X size={20} />
+                </button>
+              </div>
             </div>
           )}
 
-          {/* Desktop table */}
-          <div className="hidden md:block overflow-x-auto rounded-xl border border-gray-100">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-gray-50 sticky top-12 z-10">
-                <tr>
-                  <th className="px-3 py-2 w-10"><input type="checkbox" checked={allSelected} onChange={toggleSelectAll} aria-label="Select all" /></th>
-                  <th className="px-3 py-2">Exam</th>
-                  <th className="px-3 py-2">Year</th>
-                  <th className="px-3 py-2">Term</th>
-                  <th className="px-3 py-2">Class</th>
-                  <th className="px-3 py-2">Date</th>
-                  <th className="px-3 py-2">Total</th>
-                  <th className="px-3 py-2">Status</th>
-                  <th className="px-3 py-2 text-right">Actions</th>
+          {banner && (
+            <div className="mx-6 mt-6 p-4 bg-blue-50 border border-blue-100 rounded-2xl flex items-center gap-3 text-blue-700 animate-in zoom-in duration-300">
+              <AlertCircle size={20} className="shrink-0" />
+              <p className="text-sm font-bold">{banner}</p>
+              <button onClick={() => setBanner('')} className="ml-auto text-blue-400 hover:text-blue-600">
+                <X size={18} />
+              </button>
+            </div>
+          )}
+
+          {/* Table Container */}
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse min-w-[1000px]">
+              <thead>
+                <tr className="border-b border-gray-50">
+                  <th className="p-6 w-12 text-center">
+                    <div className="flex items-center justify-center">
+                      <input 
+                        type="checkbox" 
+                        checked={allSelected} 
+                        onChange={toggleSelectAll}
+                        className="w-5 h-5 rounded-lg border-gray-200 text-blue-600 focus:ring-blue-500 cursor-pointer" 
+                      />
+                    </div>
+                  </th>
+                  <th className="p-6 text-xs font-black text-gray-400 uppercase tracking-widest">Exam Details</th>
+                  <th className="p-6 text-xs font-black text-gray-400 uppercase tracking-widest">Academic Info</th>
+                  <th className="p-6 text-xs font-black text-gray-400 uppercase tracking-widest">Date & Total</th>
+                  <th className="p-6 text-xs font-black text-gray-400 uppercase tracking-widest">Status</th>
+                  <th className="p-6 text-xs font-black text-gray-400 uppercase tracking-widest text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody>
-                {sortedExams.map(e => (
-                  <tr key={e.id} className="border-t odd:bg-white even:bg-gray-50/40 hover:bg-blue-50/30 transition-colors">
-                    <td className="px-3 py-2"><input type="checkbox" checked={selected.has(e.id)} onChange={()=>toggleSelect(e.id)} aria-label={`Select exam ${e.name}`} /></td>
-                    <td className="px-3 py-2">
-                      <div className="flex flex-col">
-                        <button onClick={()=>openByName(e.name)} className="text-blue-700 hover:underline text-left font-medium" title="Show all classes for this exam name">{e.name}</button>
-                        <div className="text-xs text-gray-500">ID #{e.id}</div>
-                      </div>
-                    </td>
-                    <td className="px-3 py-2">{e.year}</td>
-                    <td className="px-3 py-2">T{e.term}</td>
-                    <td className="px-3 py-2">{classes.find(c=>c.id===e.klass)?.name || e.klass}</td>
-                    <td className="px-3 py-2">{e.date}</td>
-                    <td className="px-3 py-2">{e.total_marks}</td>
-                    <td className="px-3 py-2">{e.published ? (<span className="px-2 py-0.5 rounded-full text-xs bg-emerald-100 text-emerald-700">Published</span>) : (<span className="px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-600">Draft</span>)}</td>
-                    <td className="px-3 py-2">
-                      <div className="flex items-center justify-end gap-1 flex-wrap">
-                        <button onClick={()=>navigate(`/admin/exams/${e.id}/enter`)} className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-blue-700 hover:bg-blue-50" title="Enter results">
-                          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M12 20h9"/><path strokeLinecap="round" strokeLinejoin="round" d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>
-                          <span className="text-xs font-medium">Enter</span>
-                        </button>
-                        <button onClick={()=>navigate(`/admin/results?exam=${e.id}&grade=${encodeURIComponent(classes.find(c=>c.id===e.klass)?.grade_level || '')}`)} className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-indigo-700 hover:bg-indigo-50" title="Open results page">
-                          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M4 19V5a2 2 0 012-2h9l5 5v11a2 2 0 01-2 2H6a2 2 0 01-2-2z"/><path strokeLinecap="round" strokeLinejoin="round" d="M9 9h6M9 13h6M9 17h4"/></svg>
-                          <span className="text-xs font-medium">Results</span>
-                        </button>
-                        <button onClick={()=>publishExam(e)} disabled={!!e.published || publishingId===e.id} className={`inline-flex items-center gap-1 px-2 py-1 rounded-md ${e.published? 'text-gray-400' : 'text-purple-700 hover:bg-purple-50'}`} title="Publish results">
-                          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M12 5v14"/><path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14"/></svg>
-                          <span className="text-xs font-medium">{publishingId===e.id ? 'Publishing…' : (e.published ? 'Published' : 'Publish')}</span>
-                        </button>
-                        <button onClick={()=>unpublishExam(e)} disabled={!e.published || unpublishingId===e.id} className={`inline-flex items-center gap-1 px-2 py-1 rounded-md ${!e.published? 'text-gray-400' : 'text-orange-700 hover:bg-orange-50'}`} title="Unpublish results">
-                          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M10 14l2-2 2 2m-2-2v6"/><path strokeLinecap="round" strokeLinejoin="round" d="M20 12a8 8 0 10-16 0"/></svg>
-                          <span className="text-xs font-medium">{unpublishingId===e.id ? 'Unpublishing…' : 'Unpublish'}</span>
-                        </button>
-                        <button onClick={()=>openEdit(e)} className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-gray-700 hover:bg-gray-100" title="Edit exam">
-                          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M12 20h9"/><path strokeLinecap="round" strokeLinejoin="round" d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>
-                          <span className="text-xs font-medium">Edit</span>
-                        </button>
-                        <button onClick={()=>deleteExam(e)} disabled={deletingId===e.id} className={`inline-flex items-center gap-1 px-2 py-1 rounded-md ${deletingId===e.id? 'text-gray-400' : 'text-red-700 hover:bg-red-50'}`} title="Delete exam">
-                          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M6 7h12"/><path strokeLinecap="round" strokeLinejoin="round" d="M9 7V5a1 1 0 011-1h4a1 1 0 011 1v2"/><path strokeLinecap="round" strokeLinejoin="round" d="M10 11v6M14 11v6"/><path strokeLinecap="round" strokeLinejoin="round" d="M8 7l1 14h6l1-14"/></svg>
-                          <span className="text-xs font-medium">{deletingId===e.id ? 'Deleting…' : 'Delete'}</span>
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+              <tbody className="divide-y divide-gray-50">
+                {sortedExams.map(e => {
+                  const klass = classes.find(c => c.id === e.klass);
+                  return (
+                    <tr key={e.id} className={`group transition-all hover:bg-gray-50/80 ${selected.has(e.id) ? 'bg-blue-50/50' : ''}`}>
+                      <td className="p-6 text-center">
+                        <div className="flex items-center justify-center">
+                          <input 
+                            type="checkbox" 
+                            checked={selected.has(e.id)} 
+                            onChange={() => toggleSelect(e.id)}
+                            className="w-5 h-5 rounded-lg border-gray-200 text-blue-600 focus:ring-blue-500 cursor-pointer" 
+                          />
+                        </div>
+                      </td>
+                      <td className="p-6">
+                        <div className="flex flex-col gap-1">
+                          <button 
+                            onClick={() => openByName(e.name)} 
+                            className="text-base font-bold text-gray-900 hover:text-blue-600 text-left transition-colors"
+                          >
+                            {e.name}
+                          </button>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-black text-gray-400 bg-gray-100 px-2 py-0.5 rounded uppercase tracking-wider">ID #{e.id}</span>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="p-6">
+                        <div className="flex flex-col gap-1">
+                          <span className="text-sm font-bold text-gray-700">{klass?.name || e.klass}</span>
+                          <span className="text-xs font-medium text-gray-500">{e.year} • Term {e.term}</span>
+                        </div>
+                      </td>
+                      <td className="p-6">
+                        <div className="flex flex-col gap-1">
+                          <span className="text-sm font-bold text-gray-700">{e.date}</span>
+                          <span className="text-xs font-medium text-gray-500">Max Marks: {e.total_marks}</span>
+                        </div>
+                      </td>
+                      <td className="p-6">
+                        {e.published ? (
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-600 border border-emerald-100">
+                            <CheckCircle2 size={14} />
+                            Published
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-gray-50 text-gray-500 border border-gray-200">
+                            <Edit3 size={14} />
+                            Draft
+                          </span>
+                        )}
+                      </td>
+                      <td className="p-6">
+                        <div className="flex items-center justify-end gap-2">
+                          <button 
+                            onClick={() => navigate(`/admin/exams/${e.id}/enter`)}
+                            className="p-2 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-600 hover:text-white transition-all shadow-sm active:scale-95"
+                            title="Enter Marks"
+                          >
+                            <Edit3 size={18} />
+                          </button>
+                          <button 
+                            onClick={() => navigate(`/admin/results?exam=${e.id}&grade=${encodeURIComponent(klass?.grade_level || '')}`)}
+                            className="p-2 bg-indigo-50 text-indigo-600 rounded-xl hover:bg-indigo-600 hover:text-white transition-all shadow-sm active:scale-95"
+                            title="View Results"
+                          >
+                            <FileText size={18} />
+                          </button>
+                          <div className="w-px h-6 bg-gray-200 mx-1" />
+                          {e.published ? (
+                            <button 
+                              onClick={() => unpublishExam(e)}
+                              disabled={unpublishingId === e.id}
+                              className="p-2 bg-amber-50 text-amber-600 rounded-xl hover:bg-amber-600 hover:text-white transition-all shadow-sm active:scale-95"
+                              title="Unpublish"
+                            >
+                              <Ban size={18} />
+                            </button>
+                          ) : (
+                            <button 
+                              onClick={() => publishExam(e)}
+                              disabled={publishingId === e.id}
+                              className="p-2 bg-purple-50 text-purple-600 rounded-xl hover:bg-purple-600 hover:text-white transition-all shadow-sm active:scale-95"
+                              title="Publish"
+                            >
+                              <Send size={18} />
+                            </button>
+                          )}
+                          <button 
+                            onClick={() => openEdit(e)}
+                            className="p-2 bg-gray-50 text-gray-600 rounded-xl hover:bg-gray-200 transition-all shadow-sm active:scale-95"
+                            title="Edit Exam"
+                          >
+                            <MoreVertical size={18} />
+                          </button>
+                          <button 
+                            onClick={() => deleteExam(e)}
+                            className="p-2 bg-red-50 text-red-600 rounded-xl hover:bg-red-600 hover:text-white transition-all shadow-sm active:scale-95"
+                            title="Delete Exam"
+                          >
+                            <Trash2 size={18} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
-        </div>
 
-        
+          {loading && (
+            <div className="p-20 flex flex-col items-center justify-center gap-4 text-gray-400">
+              <Loader2 className="w-12 h-12 animate-spin text-blue-500" />
+              <p className="font-bold text-gray-500">Retrieving examination records...</p>
+            </div>
+          )}
+          
+          {!loading && sortedExams.length === 0 && (
+            <div className="p-20 flex flex-col items-center justify-center gap-4 text-gray-400">
+              <div className="p-6 bg-gray-50 rounded-full">
+                <Search size={48} className="text-gray-200" />
+              </div>
+              <div className="text-center">
+                <p className="text-lg font-bold text-gray-900">No exams found</p>
+                <p className="text-sm font-medium">Try adjusting your filters or search query.</p>
+              </div>
+              <button 
+                onClick={() => { setSearch(''); setFilterGrade(''); setFilterClass(''); setFilterStatus('all'); }}
+                className="text-blue-600 font-bold hover:underline"
+              >
+                Clear all filters
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Create Exam Modal */}
@@ -900,6 +1089,26 @@ export default function AdminExams(){
           </div>
         </div>
       </Modal>
+      <Modal open={dayOpen} onClose={()=>setDayOpen(false)} title={`Exams — ${dayKey}`} size="md">
+        <div className="space-y-2">
+          {dayItems.length===0 ? (
+            <div className="text-sm text-gray-600">No exams on this day.</div>
+          ) : (
+            dayItems.map(ev => (
+              <div key={ev.id} className="border rounded-lg p-3 flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="font-medium truncate">{ev.name}</div>
+                  <div className="text-xs text-gray-600 truncate">{classes.find(c=>c.id===ev.klass)?.name || ev.klass} • {ev.date}</div>
+                </div>
+                <div className="shrink-0 flex items-center gap-2">
+                  <button onClick={()=>{ setDayOpen(false); openEdit(ev) }} className="px-2 py-1 text-sm rounded border bg-white hover:bg-gray-50">Edit</button>
+                  <button onClick={()=>{ setDayOpen(false); navigate(`/admin/exams/${ev.id}/enter`) }} className="px-2 py-1 text-sm rounded border bg-white hover:bg-gray-50">Enter</button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </Modal>
 
       {/* Grouped by Exam Name Modal */}
       <Modal open={groupedOpen} onClose={()=>setGroupedOpen(false)} title={`Exams — ${groupedName}`} size="xl">
@@ -946,27 +1155,6 @@ export default function AdminExams(){
           <div className="flex justify-end">
             <button onClick={()=>setGroupedOpen(false)} className="px-4 py-2 rounded border">Close</button>
           </div>
-        </div>
-      </Modal>
-
-      <Modal open={dayOpen} onClose={()=>setDayOpen(false)} title={`Exams — ${dayKey}`} size="md">
-        <div className="space-y-2">
-          {dayItems.length===0 ? (
-            <div className="text-sm text-gray-600">No exams on this day.</div>
-          ) : (
-            dayItems.map(ev => (
-              <div key={ev.id} className="border rounded-lg p-3 flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="font-medium truncate">{ev.name}</div>
-                  <div className="text-xs text-gray-600 truncate">{classes.find(c=>c.id===ev.klass)?.name || ev.klass} • {ev.date}</div>
-                </div>
-                <div className="shrink-0 flex items-center gap-2">
-                  <button onClick={()=>{ setDayOpen(false); openEdit(ev) }} className="px-2 py-1 text-sm rounded border bg-white hover:bg-gray-50">Edit</button>
-                  <button onClick={()=>{ setDayOpen(false); navigate(`/admin/exams/${ev.id}/enter`) }} className="px-2 py-1 text-sm rounded border bg-white hover:bg-gray-50">Enter</button>
-                </div>
-              </div>
-            ))
-          )}
         </div>
       </Modal>
     </React.Fragment>
