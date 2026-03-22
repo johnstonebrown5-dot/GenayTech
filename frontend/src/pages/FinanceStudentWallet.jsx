@@ -1,5 +1,21 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { 
+  ArrowLeft, 
+  Search, 
+  PlusCircle, 
+  MinusCircle, 
+  History, 
+  Download, 
+  User, 
+  Wallet,
+  AlertCircle,
+  CheckCircle2,
+  X,
+  ChevronLeft,
+  ChevronRight,
+  Filter
+} from 'lucide-react';
 import api from '../api';
 
 export default function FinanceStudentWallet() {
@@ -16,6 +32,15 @@ export default function FinanceStudentWallet() {
   const [showForm, setShowForm] = useState(false);
   const [transactionType, setTransactionType] = useState('deposit');
   const [formData, setFormData] = useState({ amount: '', description: '' });
+  const [isSaving, setIsSaving] = useState(false);
+  const [alert, setAlert] = useState(null); // { type: 'success' | 'error', message: '' }
+
+  useEffect(() => {
+    if (alert) {
+      const timer = setTimeout(() => setAlert(null), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [alert]);
 
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
@@ -116,10 +141,15 @@ export default function FinanceStudentWallet() {
     e.preventDefault();
     if (!wallet?.id) return;
     if (!formData.amount || Number(formData.amount) <= 0) {
-      alert('Enter a valid amount greater than 0');
+      setAlert({ type: 'error', message: 'Enter a valid amount greater than 0' });
+      return;
+    }
+    if (transactionType === 'withdrawal' && Number(formData.amount) > Number(wallet.balance)) {
+      setAlert({ type: 'error', message: `Insufficient balance. Current balance is KES ${Number(wallet.balance).toLocaleString()}` });
       return;
     }
     try {
+      setIsSaving(true);
       await api.post('/finance/pocket-money-transactions/', {
         wallet: wallet.id,
         transaction_type: transactionType,
@@ -130,10 +160,13 @@ export default function FinanceStudentWallet() {
       const w = Array.isArray(wref.data) ? (wref.data[0] || null) : ((wref.data.results && wref.data.results[0]) || null);
       if (w) setWallet(w);
       await fetchTransactions(1, pageSize, w?.id || wallet.id);
+      setAlert({ type: 'success', message: `${transactionType === 'deposit' ? 'Deposit' : 'Withdrawal'} successful` });
       setShowForm(false);
       setFormData({ amount: '', description: '' });
     } catch (err) {
-      console.error('Failed to save transaction:', err);
+      setAlert({ type: 'error', message: err.response?.data?.amount?.[0] || 'Failed to save transaction' });
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -181,179 +214,392 @@ export default function FinanceStudentWallet() {
   if (!student || !wallet) return <div className="p-6">Not found</div>;
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-gray-900">{student.name} ({student.admission_no})</h1>
-          <p className="text-sm text-gray-600">Pocket Money Wallet</p>
+    <div className="max-w-7xl mx-auto space-y-6 pb-12">
+      {/* Toast Notification */}
+      {alert && (
+        <div className={`fixed top-20 right-4 z-50 flex items-center gap-3 px-4 py-3 rounded-xl shadow-2xl border animate-in fade-in slide-in-from-top-4 duration-300 ${
+          alert.type === 'success' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-rose-50 border-rose-200 text-rose-800'
+        }`}>
+          {alert.type === 'success' ? <CheckCircle2 className="w-5 h-5" /> : <AlertCircle className="w-5 h-5" />}
+          <span className="text-sm font-medium">{alert.message}</span>
+          <button onClick={() => setAlert(null)} className="ml-2 hover:opacity-70">
+            <X className="w-4 h-4" />
+          </button>
         </div>
-        <div className="text-right">
-          <div className="text-sm text-gray-700">Current Balance</div>
-          <div className="text-2xl font-bold">{new Intl.NumberFormat(undefined, { style: 'currency', currency: 'KES', minimumFractionDigits: 0 }).format(Number(wallet.balance))}</div>
-        </div>
-      </div>
+      )}
 
-      <div className="flex flex-wrap gap-3">
-        <button onClick={() => openForm('deposit')} className="px-4 py-2 rounded-lg text-sm font-medium bg-emerald-600 text-white hover:bg-emerald-700 w-full sm:w-auto">Deposit</button>
-        <button onClick={() => openForm('withdrawal')} className="px-4 py-2 rounded-lg text-sm font-medium bg-rose-600 text-white hover:bg-rose-700 w-full sm:w-auto">Withdraw</button>
-        <div className="sm:flex-1" />
-        <button onClick={async () => {
-            setSearchOpen(true);
-            if (searchStudents.length === 0) {
-              try {
-                setSearchLoading(true);
-                const res = await api.get('/academics/students/?page_size=10000');
-                const payload = Array.isArray(res.data) ? res.data : (res.data?.results || []);
-                setSearchStudents(payload);
-              } catch (e) { console.error('Failed to load students', e); }
-              finally { setSearchLoading(false); }
-            }
-          }}
-          className="px-4 py-2 rounded-lg text-sm font-medium bg-indigo-600 text-white hover:bg-indigo-700 w-full sm:w-auto">
-          Search Student
-        </button>
-        <button onClick={() => navigate(-1)} className="px-4 py-2 rounded-lg text-sm font-medium bg-gray-200 text-gray-800 hover:bg-gray-300 w-full sm:w-auto">Back</button>
+      {/* Header Card */}
+      <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="bg-gradient-to-r from-gray-900 to-gray-800 p-6 sm:p-8">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+            <div className="flex items-center gap-4">
+              <div className="w-16 h-16 rounded-2xl bg-white/10 flex items-center justify-center backdrop-blur-md">
+                <User className="w-8 h-8 text-white" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold text-white tracking-tight">{student.name}</h1>
+                <div className="flex items-center gap-2 mt-1">
+                  <span className="px-2 py-0.5 rounded-md bg-white/20 text-white/90 text-xs font-medium uppercase tracking-wider">
+                    {student.admission_no}
+                  </span>
+                  <span className="text-white/60 text-sm">•</span>
+                  <span className="text-white/80 text-sm font-medium">Pocket Money Wallet</span>
+                </div>
+              </div>
+            </div>
+            
+            <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/10 flex flex-col items-end">
+              <div className="text-xs font-semibold text-white/60 uppercase tracking-widest mb-1">Current Balance</div>
+              <div className="text-3xl font-black text-white tabular-nums">
+                {new Intl.NumberFormat(undefined, { 
+                  style: 'currency', 
+                  currency: 'KES', 
+                  minimumFractionDigits: 0 
+                }).format(Number(wallet.balance))}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="p-4 bg-gray-50/50 border-t border-gray-100 flex flex-wrap items-center gap-3">
+          <button 
+            onClick={() => openForm('deposit')} 
+            className="flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-bold bg-emerald-600 text-white hover:bg-emerald-700 transition-all hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-emerald-200"
+          >
+            <PlusCircle className="w-4 h-4" />
+            Deposit
+          </button>
+          <button 
+            onClick={() => openForm('withdrawal')} 
+            className="flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-bold bg-rose-600 text-white hover:bg-rose-700 transition-all hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-rose-200"
+          >
+            <MinusCircle className="w-4 h-4" />
+            Withdraw
+          </button>
+          <div className="flex-1" />
+          <button 
+            onClick={async () => {
+              setSearchOpen(true);
+              if (searchStudents.length === 0) {
+                try {
+                  setSearchLoading(true);
+                  const res = await api.get('/academics/students/?page_size=10000');
+                  const payload = Array.isArray(res.data) ? res.data : (res.data?.results || []);
+                  setSearchStudents(payload);
+                } catch (e) { console.error('Failed to load students', e); }
+                finally { setSearchLoading(false); }
+              }
+            }}
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold bg-white text-gray-900 border border-gray-200 hover:bg-gray-50 transition-all"
+          >
+            <Search className="w-4 h-4" />
+            Find Student
+          </button>
+          <button 
+            onClick={() => navigate(-1)} 
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold bg-gray-900 text-white hover:bg-gray-800 transition-all"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Back
+          </button>
+        </div>
       </div>
 
       {showForm && (
-        <div className="bg-white rounded-2xl shadow-card border border-gray-200 p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">{transactionType === 'deposit' ? 'New Deposit' : 'New Withdrawal'}</h2>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label htmlFor="amount" className="block text-sm font-medium text-gray-700">Amount</label>
-              <input type="number" id="amount" name="amount" value={formData.amount} onChange={handleInputChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" />
+        <div className="bg-white rounded-3xl shadow-xl border border-gray-100 p-8 animate-in zoom-in-95 duration-200 max-w-2xl mx-auto">
+          <div className="flex items-center gap-3 mb-6">
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+              transactionType === 'deposit' ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600'
+            }`}>
+              {transactionType === 'deposit' ? <PlusCircle className="w-6 h-6" /> : <MinusCircle className="w-6 h-6" />}
             </div>
-            <div>
-              <label htmlFor="description" className="block text-sm font-medium text-gray-700">Description</label>
-              <textarea id="description" name="description" value={formData.description} onChange={handleInputChange} rows="3" className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"></textarea>
+            <h2 className="text-xl font-bold text-gray-900">
+              {transactionType === 'deposit' ? 'New Deposit' : 'New Withdrawal'}
+            </h2>
+          </div>
+
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div className="space-y-2">
+              <label htmlFor="amount" className="text-sm font-bold text-gray-700 ml-1">Amount (KES)</label>
+              <div className="relative">
+                <div className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400">KES</div>
+                <input 
+                  disabled={isSaving} 
+                  type="number" 
+                  id="amount" 
+                  name="amount" 
+                  placeholder="0.00"
+                  value={formData.amount} 
+                  onChange={handleInputChange} 
+                  className="block w-full bg-gray-50 border-0 rounded-2xl py-4 pl-14 pr-4 text-xl font-bold focus:ring-2 focus:ring-gray-900 transition-all disabled:opacity-50" 
+                />
+              </div>
             </div>
-            <div className="flex justify-end gap-4">
-              <button type="button" onClick={() => setShowForm(false)} className="px-4 py-2 rounded-lg text-sm font-medium bg-gray-200 text-gray-800 hover:bg-gray-300">Cancel</button>
-              <button type="submit" className="px-4 py-2 rounded-lg text-sm font-medium bg-gray-900 text-white hover:bg-gray-800">Save</button>
+            <div className="space-y-2">
+              <label htmlFor="description" className="text-sm font-bold text-gray-700 ml-1">Description (Optional)</label>
+              <textarea 
+                disabled={isSaving} 
+                id="description" 
+                name="description" 
+                value={formData.description} 
+                onChange={handleInputChange} 
+                rows="3" 
+                placeholder="Add a note about this transaction..."
+                className="block w-full bg-gray-50 border-0 rounded-2xl py-3 px-4 text-gray-900 focus:ring-2 focus:ring-gray-900 transition-all disabled:opacity-50"
+              ></textarea>
+            </div>
+            <div className="flex gap-3 pt-2">
+              <button 
+                disabled={isSaving} 
+                type="button" 
+                onClick={() => setShowForm(false)} 
+                className="flex-1 py-3 rounded-2xl text-sm font-bold bg-gray-100 text-gray-900 hover:bg-gray-200 transition-all disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button 
+                disabled={isSaving} 
+                type="submit" 
+                className="flex-[2] py-3 rounded-2xl text-sm font-bold bg-gray-900 text-white hover:bg-gray-800 transition-all shadow-lg shadow-gray-200 disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {isSaving ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="w-4 h-4" />
+                    Complete Transaction
+                  </>
+                )}
+              </button>
             </div>
           </form>
         </div>
       )}
 
-      <div className="bg-white rounded-2xl shadow-card border border-gray-200 p-6">
-        <div className="flex flex-wrap items-end justify-between gap-3 mb-3">
-          <h2 className="text-lg font-semibold text-gray-900">Transaction History</h2>
-          <div className="flex flex-wrap items-end gap-3 text-sm w-full sm:w-auto">
-            <div className="min-w-[140px]">
-              <label className="block text-xs text-gray-500">Type</label>
-              <select value={filterType} onChange={(e)=>{ setFilterType(e.target.value); fetchTransactions(1, pageSize); }} className="mt-1 border border-gray-300 rounded-md py-1 px-2 w-full">
-                <option value="">All</option>
-                <option value="deposit">Deposit</option>
-                <option value="withdrawal">Withdrawal</option>
+      <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="p-6 border-b border-gray-50 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center">
+              <History className="w-5 h-5 text-gray-600" />
+            </div>
+            <h2 className="text-lg font-bold text-gray-900">Transaction History</h2>
+          </div>
+
+          <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-3">
+            <div className="relative group col-span-2 sm:col-span-1 sm:min-w-[140px]">
+              <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <select 
+                value={filterType} 
+                onChange={(e)=>{ setFilterType(e.target.value); fetchTransactions(1, pageSize); }} 
+                className="w-full bg-gray-50 border-0 rounded-xl py-2 pl-9 pr-4 text-sm font-semibold focus:ring-2 focus:ring-gray-900"
+              >
+                <option value="">All Types</option>
+                <option value="deposit">Deposits</option>
+                <option value="withdrawal">Withdrawals</option>
               </select>
             </div>
-            <div className="min-w-[140px]">
-              <label className="block text-xs text-gray-500">From</label>
-              <input type="date" value={dateFrom} onChange={(e)=>{ setDateFrom(e.target.value); fetchTransactions(1, pageSize); }} className="mt-1 border border-gray-300 rounded-md py-1 px-2 w-full" />
+            <div className="sm:min-w-[140px]">
+              <input 
+                type="date" 
+                value={dateFrom} 
+                onChange={(e)=>{ setDateFrom(e.target.value); fetchTransactions(1, pageSize); }} 
+                className="w-full bg-gray-50 border-0 rounded-xl py-2 px-3 text-sm font-semibold focus:ring-2 focus:ring-gray-900" 
+              />
             </div>
-            <div className="min-w-[140px]">
-              <label className="block text-xs text-gray-500">To</label>
-              <input type="date" value={dateTo} onChange={(e)=>{ setDateTo(e.target.value); fetchTransactions(1, pageSize); }} className="mt-1 border border-gray-300 rounded-md py-1 px-2 w-full" />
+            <div className="sm:min-w-[140px]">
+              <input 
+                type="date" 
+                value={dateTo} 
+                onChange={(e)=>{ setDateTo(e.target.value); fetchTransactions(1, pageSize); }} 
+                className="w-full bg-gray-50 border-0 rounded-xl py-2 px-3 text-sm font-semibold focus:ring-2 focus:ring-gray-900" 
+              />
             </div>
-            <div className="min-w-[140px]">
-              <label className="block text-xs text-gray-500">Page size</label>
-              <select value={pageSize} onChange={(e)=>{ setPageSize(Number(e.target.value)); fetchTransactions(1, Number(e.target.value)); }} className="mt-1 border border-gray-300 rounded-md py-1 px-2 w-full">
-                {[10,20,50,100].map(n => <option key={n} value={n}>{n}</option>)}
+            <div className="sm:min-w-[100px]">
+              <select 
+                value={pageSize} 
+                onChange={(e)=>{ setPageSize(Number(e.target.value)); fetchTransactions(1, Number(e.target.value)); }} 
+                className="w-full bg-gray-50 border-0 rounded-xl py-2 px-3 text-sm font-semibold focus:ring-2 focus:ring-gray-900"
+              >
+                {[10,20,50,100].map(n => <option key={n} value={n}>{n} rows</option>)}
               </select>
             </div>
-            <button type="button" onClick={handleExportCsv} className="sm:ml-2 w-full sm:w-auto px-3 py-2 rounded-lg text-sm font-medium bg-gray-900 text-white hover:bg-gray-800">Export CSV</button>
+            <button 
+              type="button" 
+              onClick={handleExportCsv} 
+              className="col-span-2 sm:col-span-1 flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-sm font-bold bg-gray-50 text-gray-900 hover:bg-gray-100 transition-all border border-gray-100"
+            >
+              <Download className="w-4 h-4" />
+              Export
+            </button>
           </div>
         </div>
+
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="sticky top-0 z-10 text-xs text-gray-700 uppercase bg-gray-50">
-              <tr>
-                <th className="px-6 py-3">Date</th>
-                <th className="px-6 py-3">Type</th>
-                <th className="px-6 py-3">Amount</th>
-                <th className="px-6 py-3">Description</th>
+          <table className="w-full text-left">
+            <thead>
+              <tr className="bg-gray-50/50">
+                <th className="px-8 py-4 text-[11px] font-black uppercase tracking-widest text-gray-400">Date & Time</th>
+                <th className="px-8 py-4 text-[11px] font-black uppercase tracking-widest text-gray-400">Type</th>
+                <th className="px-8 py-4 text-[11px] font-black uppercase tracking-widest text-gray-400 text-right">Amount</th>
+                <th className="px-8 py-4 text-[11px] font-black uppercase tracking-widest text-gray-400">Description</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-gray-50">
               {tableLoading && (
-                Array.from({ length: 6 }).map((_, i) => (
-                  <tr key={`skeleton-${i}`} className="border-b animate-pulse">
-                    <td className="px-6 py-3"><div className="h-4 bg-gray-100 rounded w-40"/></td>
-                    <td className="px-6 py-3"><div className="h-4 bg-gray-100 rounded w-24"/></td>
-                    <td className="px-6 py-3"><div className="h-4 bg-gray-100 rounded w-24"/></td>
-                    <td className="px-6 py-3"><div className="h-4 bg-gray-100 rounded w-56"/></td>
+                Array.from({ length: 5 }).map((_, i) => (
+                  <tr key={`skeleton-${i}`} className="animate-pulse">
+                    <td className="px-8 py-5"><div className="h-4 bg-gray-100 rounded-full w-40"/></td>
+                    <td className="px-8 py-5"><div className="h-6 bg-gray-100 rounded-lg w-20"/></td>
+                    <td className="px-8 py-5 flex justify-end"><div className="h-4 bg-gray-100 rounded-full w-24"/></td>
+                    <td className="px-8 py-5"><div className="h-4 bg-gray-100 rounded-full w-64"/></td>
                   </tr>
                 ))
               )}
               {transactions.map(tx => (
-                <tr key={tx.id} className="bg-white border-b">
-                  <td className="px-6 py-4 whitespace-nowrap">{new Date(tx.created_at).toLocaleString()}</td>
-                  <td className="px-6 py-4 capitalize">{tx.transaction_type}</td>
-                  <td className="px-6 py-4">KES {Number(tx.amount).toLocaleString()}</td>
-                  <td className="px-6 py-4 text-gray-600">{tx.description || ''}</td>
+                <tr key={tx.id} className="hover:bg-gray-50/50 transition-colors group">
+                  <td className="px-8 py-4 whitespace-nowrap">
+                    <div className="text-sm font-semibold text-gray-900">
+                      {new Date(tx.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                    </div>
+                    <div className="text-xs text-gray-400">
+                      {new Date(tx.created_at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
+                    </div>
+                  </td>
+                  <td className="px-8 py-4">
+                    <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider ${
+                      tx.transaction_type === 'deposit' 
+                      ? 'bg-emerald-50 text-emerald-600' 
+                      : 'bg-rose-50 text-rose-600'
+                    }`}>
+                      {tx.transaction_type === 'deposit' ? <PlusCircle className="w-3 h-3" /> : <MinusCircle className="w-3 h-3" />}
+                      {tx.transaction_type}
+                    </span>
+                  </td>
+                  <td className={`px-8 py-4 text-right tabular-nums font-black ${
+                    tx.transaction_type === 'deposit' ? 'text-emerald-600' : 'text-rose-600'
+                  }`}>
+                    {tx.transaction_type === 'deposit' ? '+' : '-'}
+                    {Number(tx.amount).toLocaleString()}
+                  </td>
+                  <td className="px-8 py-4">
+                    <div className="text-sm text-gray-600 max-w-xs truncate group-hover:max-w-none group-hover:whitespace-normal transition-all">
+                      {tx.description || <span className="text-gray-300 italic">No description</span>}
+                    </div>
+                  </td>
                 </tr>
               ))}
               {(!tableLoading && transactions.length === 0) && (
                 <tr>
-                  <td className="px-6 py-6 text-gray-500" colSpan={4}>No transactions yet.</td>
+                  <td className="px-8 py-12 text-center" colSpan={4}>
+                    <div className="flex flex-col items-center justify-center grayscale opacity-20">
+                      <History className="w-12 h-12 mb-2" />
+                      <p className="text-sm font-bold tracking-tight">No transactions yet</p>
+                    </div>
+                  </td>
                 </tr>
               )}
             </tbody>
           </table>
         </div>
-        <div className="flex flex-col sm:flex-row items-center sm:justify-between gap-3 mt-4 text-sm text-gray-700">
-          <div>
-            Showing page {page} of {Math.max(1, Math.ceil(totalCount / pageSize))} ({totalCount} total)
+
+        <div className="p-6 bg-gray-50/50 border-t border-gray-100 flex flex-col sm:flex-row items-center sm:justify-between gap-4">
+          <div className="text-xs font-bold text-gray-400 uppercase tracking-widest">
+            Page {page} of {Math.max(1, Math.ceil(totalCount / pageSize))} <span className="mx-2 opacity-30">|</span> {totalCount} total entries
           </div>
-          <div className="flex gap-2">
-            <button disabled={page <= 1} onClick={()=> fetchTransactions(page-1, pageSize)} className={`px-3 py-1 rounded border ${page<=1 ? 'text-gray-400 border-gray-200' : 'text-gray-800 border-gray-300 hover:bg-gray-50'}`}>Prev</button>
-            <button disabled={page >= Math.ceil(totalCount / pageSize)} onClick={()=> fetchTransactions(page+1, pageSize)} className={`px-3 py-1 rounded border ${page >= Math.ceil(totalCount / pageSize) ? 'text-gray-400 border-gray-200' : 'text-gray-800 border-gray-300 hover:bg-gray-50'}`}>Next</button>
+          <div className="flex items-center gap-2">
+            <button 
+              disabled={page <= 1} 
+              onClick={()=> fetchTransactions(page-1, pageSize)} 
+              className="p-2 rounded-xl border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-30 transition-all shadow-sm"
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </button>
+            <button 
+              disabled={page >= Math.ceil(totalCount / pageSize)} 
+              onClick={()=> fetchTransactions(page+1, pageSize)} 
+              className="p-2 rounded-xl border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-30 transition-all shadow-sm"
+            >
+              <ChevronRight className="w-5 h-5" />
+            </button>
           </div>
         </div>
       </div>
 
       {/* Search modal */}
       {searchOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/40" onClick={() => setSearchOpen(false)}></div>
-          <div className="relative bg-white w-full max-w-xl mx-4 rounded-2xl shadow-card border border-gray-200 p-6">
-            <div className="flex items-start justify-between gap-4 mb-4">
-              <h3 className="text-lg font-semibold text-gray-900">Find Student</h3>
-              <button onClick={() => setSearchOpen(false)} className="text-gray-500 hover:text-gray-700">✕</button>
-            </div>
-            <input
-              type="text"
-              placeholder="Search by Admission No. or Name"
-              value={searchQuery}
-              onChange={(e)=> setSearchQuery(e.target.value)}
-              className="w-full border border-gray-300 rounded-md py-2 px-3 text-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-            />
-            <div className="mt-3 max-h-80 overflow-auto border border-gray-200 rounded-md divide-y">
-              {searchLoading && <div className="p-3 text-sm text-gray-500">Loading students...</div>}
-              {!searchLoading && searchStudents
-                .filter(s => {
-                  const q = searchQuery.trim().toLowerCase();
-                  if (!q) return true;
-                  return (
-                    (s.admission_no || '').toLowerCase().includes(q) ||
-                    (s.name || '').toLowerCase().includes(q)
-                  );
-                })
-                .slice(0, 100)
-                .map(s => (
-                  <button
-                    key={s.id}
-                    type="button"
-                    onClick={() => { setSearchOpen(false); navigate(`/finance/pocket-money/wallet/${s.id}`); }}
-                    className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50"
-                  >
-                    <div className="font-medium text-gray-900">{s.admission_no} - {s.name}</div>
-                    <div className="text-xs text-gray-500">Class: {s?.klass_detail?.name || '—'}</div>
-                  </button>
-                ))}
-              {!searchLoading && searchStudents.length === 0 && (
-                <div className="p-3 text-sm text-gray-500">No students found.</div>
-              )}
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => setSearchOpen(false)}></div>
+          <div className="relative bg-white w-full max-w-lg rounded-[32px] shadow-2xl border border-gray-100 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="p-8">
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center">
+                    <Search className="w-5 h-5 text-indigo-600" />
+                  </div>
+                  <h3 className="text-xl font-bold text-gray-900 tracking-tight">Find Student</h3>
+                </div>
+                <button onClick={() => setSearchOpen(false)} className="w-10 h-10 rounded-full hover:bg-gray-100 flex items-center justify-center transition-colors">
+                  <X className="w-5 h-5 text-gray-400" />
+                </button>
+              </div>
+              
+              <div className="relative group">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 group-focus-within:text-gray-900 transition-colors" />
+                <input
+                  type="text"
+                  placeholder="Admission No. or Name..."
+                  value={searchQuery}
+                  onChange={(e)=> setSearchQuery(e.target.value)}
+                  className="w-full bg-gray-50 border-0 rounded-2xl py-4 pl-12 pr-4 text-gray-900 font-medium placeholder:text-gray-400 focus:ring-2 focus:ring-gray-900 transition-all"
+                  autoFocus
+                />
+              </div>
+
+              <div className="mt-6 max-h-[400px] overflow-auto rounded-2xl border border-gray-100 bg-gray-50/50 divide-y divide-gray-100">
+                {searchLoading && (
+                  <div className="p-8 text-center">
+                    <div className="w-8 h-8 border-4 border-gray-200 border-t-gray-900 rounded-full animate-spin mx-auto mb-3" />
+                    <p className="text-sm font-bold text-gray-400">Searching students...</p>
+                  </div>
+                )}
+                {!searchLoading && searchStudents
+                  .filter(s => {
+                    const q = searchQuery.trim().toLowerCase();
+                    if (!q) return true;
+                    return (
+                      (s.admission_no || '').toLowerCase().includes(q) ||
+                      (s.name || '').toLowerCase().includes(q)
+                    );
+                  })
+                  .slice(0, 50)
+                  .map(s => (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => { setSearchOpen(false); navigate(`/finance/pocket-money/wallet/${s.id}`); }}
+                      className="w-full text-left px-6 py-4 flex items-center justify-between hover:bg-white transition-all group"
+                    >
+                      <div>
+                        <div className="font-bold text-gray-900 group-hover:text-indigo-600 transition-colors">{s.name}</div>
+                        <div className="text-xs font-bold text-gray-400 tracking-wider uppercase mt-0.5">{s.admission_no}</div>
+                      </div>
+                      <div className="text-right">
+                        <div className="px-2 py-1 rounded-md bg-gray-100 text-[10px] font-black uppercase text-gray-500 tracking-widest">
+                          {s?.klass_detail?.name || '—'}
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                {!searchLoading && searchStudents.length === 0 && (
+                  <div className="p-12 text-center">
+                    <User className="w-12 h-12 text-gray-200 mx-auto mb-2" />
+                    <p className="text-sm font-bold text-gray-400">No students found</p>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>

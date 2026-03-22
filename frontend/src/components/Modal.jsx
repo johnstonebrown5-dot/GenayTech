@@ -60,20 +60,24 @@ export default function Modal({ open, onClose, title, children, size = 'md' }){
     : (size === 'lg' ? 'max-w-3xl' : size === 'xl' ? 'max-w-5xl' : size === 'sm' ? 'max-w-md' : 'max-w-xl')
 
   return (
-    <div className={`fixed inset-0 z-50 flex p-3 sm:p-0 ${isFull ? 'items-stretch justify-stretch' : 'items-center justify-center'}`}>
+    <div className={`fixed inset-0 z-50 flex p-3 sm:p-0 ${isFull ? 'items-stretch justify-stretch' : 'items-center justify-center'} overflow-hidden`}>
       <div className="absolute inset-0 bg-black/40 opacity-0 animate-fadeIn" onClick={onClose} />
       <span ref={sentinelStart} tabIndex={0} />
       <div
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
-        className={`relative bg-white ${isFull ? 'shadow-none' : 'shadow-lg'} w-full ${sizeClass} transform scale-95 opacity-0 animate-zoomIn ${isFull ? 'flex flex-col' : 'rounded-none sm:rounded p-4 max-h-[calc(100dvh-1.5rem)] sm:max-h-[90vh]'}`}
+        className={`relative bg-white ${isFull ? 'shadow-none' : 'shadow-lg'} w-full ${sizeClass} transform scale-95 opacity-0 animate-zoomIn ${isFull ? 'flex flex-col' : 'rounded-none sm:rounded p-4 max-h-[calc(100dvh-1.5rem)] sm:max-h-[90vh]'} overflow-hidden`}
       >
         <div className={`flex items-center justify-between ${isFull ? 'px-4 py-3 border-b sticky top-0 bg-white z-10' : 'mb-3'}`}>
           <h3 className="font-semibold text-gray-800">{title}</h3>
           <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded" aria-label="Close" data-modal-close>✖</button>
         </div>
-        <div className={`${isFull ? 'flex-1 overflow-auto px-4 pb-4' : 'overflow-auto max-h-[calc(100dvh-6rem)] sm:max-h-[75vh] pr-1'}`}>
+        <div
+          className={`${isFull ? 'flex-1 overflow-auto px-4 pb-4' : 'overflow-auto max-h-[calc(100dvh-6rem)] sm:max-h-[75vh] pr-1'} overscroll-contain`}
+          onWheel={(e) => e.stopPropagation()}
+          onTouchMove={(e) => e.stopPropagation()}
+        >
           {children}
         </div>
       </div>

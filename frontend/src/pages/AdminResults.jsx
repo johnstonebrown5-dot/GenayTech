@@ -811,7 +811,7 @@ export default function AdminResults(){
                 <>
                   <button onClick={()=>download(selectedExam,'csv')} className="px-3 py-1.5 rounded border text-sm">Download CSV</button>
                   <button onClick={()=>download(selectedExam,'pdf')} className="px-3 py-1.5 rounded border text-sm">Download PDF</button>
-                  <button onClick={printClassResults} className="px-3 py-1.5 rounded border text-sm">Print</button>
+                  <button onClick={printClassResults} className="px-3 py-1.5 rounded text-sm font-semibold bg-amber-500 text-white shadow-sm hover:bg-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-300">Print</button>
                 </>
               )}
             </div>
@@ -921,7 +921,7 @@ export default function AdminResults(){
             <div className="flex items-center gap-3">
               <div className="text-sm text-gray-600">Total students: <b>{blockResults?.students?.length || 0}</b></div>
               <input value={fullListSearch} onChange={e=>setFullListSearch(e.target.value)} placeholder="Search name or class" className="border p-2 rounded w-64 bg-white" />
-              <button onClick={printFullList} className="px-3 py-1.5 rounded border text-sm">Print</button>
+              <button onClick={printFullList} className="px-3 py-1.5 rounded text-sm font-semibold bg-amber-500 text-white shadow-sm hover:bg-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-300">Print</button>
             </div>
           </div>
           {!selectedExam ? (

@@ -3030,8 +3030,15 @@ class PocketMoneyTransactionViewSet(viewsets.ModelViewSet):
         return qs
 
     def perform_create(self, serializer):
+        transaction_type = serializer.validated_data.get('transaction_type')
+        amount = serializer.validated_data.get('amount')
+        wallet = serializer.validated_data.get('wallet')
+
+        if transaction_type == 'withdrawal' and amount > wallet.balance:
+            from rest_framework.exceptions import ValidationError
+            raise ValidationError({'amount': f"Insufficient balance. Current balance is KES {wallet.balance:,.2f}"})
+
         transaction = serializer.save(recorded_by=self.request.user)
-        wallet = transaction.wallet
         if transaction.transaction_type == 'deposit':
             wallet.balance += transaction.amount
         elif transaction.transaction_type == 'withdrawal':

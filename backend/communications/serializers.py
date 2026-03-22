@@ -70,7 +70,16 @@ class MessageRecipientSerializer(serializers.ModelSerializer):
         read_only_fields = ['username', 'read_at']
 
     def get_username(self, obj):
-        return getattr(obj.user, 'username', None)
+        try:
+            # Avoid lazy-loading `user` during serialization (can trigger extra queries
+            # and exacerbate sqlite "database is locked" errors). Only return username
+            # when the relation is already available.
+            cache = getattr(getattr(obj, '_state', None), 'fields_cache', {}) or {}
+            if 'user' not in cache:
+                return None
+            return getattr(obj.user, 'username', None)
+        except Exception:
+            return None
 
 
 class MessageSerializer(serializers.ModelSerializer):

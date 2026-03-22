@@ -477,7 +477,7 @@ class MessageViewSet(viewsets.ModelViewSet):
         # Inbox: messages where user is a recipient
         return Message.objects.filter(
             recipients__user_id=user.id
-        ).select_related('sender').prefetch_related('recipients').order_by('-created_at', 'id')
+        ).select_related('sender').prefetch_related('recipients', 'recipients__user').order_by('-created_at', 'id')
 
     def perform_create(self, serializer):
         # serializer handles school, sender, recipients
@@ -520,7 +520,7 @@ class MessageViewSet(viewsets.ModelViewSet):
         qs = Message.objects.filter(
             recipients__user_id=user.id,
             system_tag__isnull=False,
-        ).select_related('sender').prefetch_related('recipients').order_by('-created_at','id')
+        ).select_related('sender').prefetch_related('recipients', 'recipients__user').order_by('-created_at','id')
         page = self.paginate_queryset(qs)
         if page is not None:
             ser = self.get_serializer(page, many=True)
@@ -531,7 +531,7 @@ class MessageViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'])
     def outbox(self, request):
         user = request.user
-        qs = Message.objects.filter(sender_id=user.id).select_related('sender').prefetch_related('recipients').order_by('-created_at', 'id')
+        qs = Message.objects.filter(sender_id=user.id).select_related('sender').prefetch_related('recipients', 'recipients__user').order_by('-created_at', 'id')
         page = self.paginate_queryset(qs)
         if page is not None:
             ser = self.get_serializer(page, many=True)

@@ -1,5 +1,20 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import {
+    ArrowLeft,
+    Search,
+    PlusCircle,
+    MinusCircle,
+    History,
+    Download,
+    User,
+    AlertCircle,
+    CheckCircle2,
+    X,
+    ChevronLeft,
+    ChevronRight,
+    Filter,
+} from 'lucide-react';
 import api from '../api';
 
 export default function FinancePocketMoney() {
@@ -14,10 +29,19 @@ export default function FinancePocketMoney() {
     const [selectedWallet, setSelectedWallet] = useState(null);
     const [transactionType, setTransactionType] = useState('deposit');
     const [formData, setFormData] = useState({ amount: '', description: '' });
+    const [isSaving, setIsSaving] = useState(false);
+    const [alert, setAlert] = useState(null); // { type: 'success' | 'error', message: '' }
     // New: allow selecting student when opening a global transaction form
     const [studentQuery, setStudentQuery] = useState('');
     const [selectedStudentId, setSelectedStudentId] = useState(null);
     const todayLabel = new Date().toLocaleDateString();
+
+    useEffect(() => {
+        if (alert) {
+            const timer = setTimeout(() => setAlert(null), 5000);
+            return () => clearTimeout(timer);
+        }
+    }, [alert]);
 
     // Filters and pagination for transactions list
     const [filterStudentId, setFilterStudentId] = useState(''); // '' means all
@@ -263,19 +287,40 @@ export default function FinancePocketMoney() {
         try {
             // Resolve wallet either from a selected row or from selected student
             let walletId = selectedWallet?.id;
+            let w = selectedWallet || null;
             if (!walletId) {
-                let w = wallets.find(w => w.student === selectedStudentId);
+                if (!selectedStudentId) {
+                    alert('Select a student first.');
+                    return;
+                }
+                const sid = Number(selectedStudentId);
+                w = wallets.find(w => Number(w.student) === sid);
                 if (!w) {
-                    // Try to auto-create wallet then reload
+                    // First try a targeted fetch; it's smaller and avoids paging issues
                     try {
-                        await api.post('/finance/pocket-money-wallets/', { student: selectedStudentId, balance: 0 });
-                        const refresh = await api.get('/finance/pocket-money-wallets/');
-                        const refreshedPayload = normaliseList(refresh.data);
-                        setWallets(refreshedPayload);
-                        w = refreshedPayload.find(x => x.student === selectedStudentId);
-                    } catch (err) {
-                        console.error('Failed to auto-create wallet:', err);
-                    }
+                        const wres0 = await api.get(`/finance/pocket-money-wallets/?student=${sid}`);
+                        const list0 = normaliseList(wres0.data);
+                        w = list0[0] || null;
+                        if (w) setWallets(prev => {
+                            const existing = Array.isArray(prev) ? prev : [];
+                            return existing.some(x => x.id === w.id) ? existing : [w, ...existing];
+                        });
+                    } catch (_) {}
+                }
+                if (!w) {
+                    // Try to auto-create wallet; if it already exists (OneToOne), fall back to refetch
+                    try {
+                        await api.post('/finance/pocket-money-wallets/', { student: sid, balance: 0 });
+                    } catch (_) {}
+                    try {
+                        const wres1 = await api.get(`/finance/pocket-money-wallets/?student=${sid}`);
+                        const list1 = normaliseList(wres1.data);
+                        w = list1[0] || null;
+                        if (w) setWallets(prev => {
+                            const existing = Array.isArray(prev) ? prev : [];
+                            return existing.some(x => x.id === w.id) ? existing : [w, ...existing];
+                        });
+                    } catch (_) {}
                 }
                 if (!w) {
                     alert('No wallet found for the selected student.');
@@ -285,10 +330,16 @@ export default function FinancePocketMoney() {
             }
 
             if (!formData.amount || Number(formData.amount) <= 0) {
-                alert('Enter a valid amount greater than 0');
+                setAlert({ type: 'error', message: 'Enter a valid amount greater than 0' });
                 return;
             }
 
+            if (transactionType === 'withdrawal' && w && Number(formData.amount) > Number(w.balance)) {
+                setAlert({ type: 'error', message: `Insufficient balance. Current balance is KES ${Number(w.balance).toLocaleString()}` });
+                return;
+            }
+
+            setIsSaving(true);
             await api.post('/finance/pocket-money-transactions/', {
                 wallet: walletId,
                 transaction_type: transactionType,
@@ -326,7 +377,9 @@ export default function FinancePocketMoney() {
             setSelectedStudentId(null);
             setStudentQuery('');
         } catch (error) {
-            console.error("Failed to create transaction:", error);
+            setAlert({ type: 'error', message: error?.response?.data?.amount?.[0] || 'Failed to save transaction' });
+        } finally {
+            setIsSaving(false);
         }
     };
 
@@ -343,78 +396,374 @@ export default function FinancePocketMoney() {
     };
 
     return (
-        <div className="space-y-6">
-            <h1 className="text-3xl font-bold text-gray-900">Pocket Money</h1>
+        <div className="max-w-7xl mx-auto space-y-6 pb-12">
+            {/* Toast Notification */}
+            {alert && (
+                <div className={`fixed top-20 right-4 z-50 flex items-center gap-3 px-4 py-3 rounded-xl shadow-2xl border animate-in fade-in slide-in-from-top-4 duration-300 ${
+                    alert.type === 'success' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-rose-50 border-rose-200 text-rose-800'
+                }`}>
+                    {alert.type === 'success' ? <CheckCircle2 className="w-5 h-5" /> : <AlertCircle className="w-5 h-5" />}
+                    <span className="text-sm font-medium">{alert.message}</span>
+                    <button onClick={() => setAlert(null)} className="ml-2 hover:opacity-70">
+                        <X className="w-4 h-4" />
+                    </button>
+                </div>
+            )}
 
-            {/* Top-level quick actions */}
-            <div className="flex flex-wrap gap-3">
-                <button onClick={() => openTransactionForm(null, 'deposit')} className="px-4 py-2 rounded-lg text-sm font-medium bg-emerald-600 text-white hover:bg-emerald-700 w-full sm:w-auto">
-                    Deposit
-                </button>
-                <button onClick={() => openTransactionForm(null, 'withdrawal')} className="px-4 py-2 rounded-lg text-sm font-medium bg-rose-600 text-white hover:bg-rose-700 w-full sm:w-auto">
-                    Withdraw
-                </button>
-                <button onClick={() => { setSearchOpen(true); setSearchQueryGlobal(''); }} className="px-4 py-2 rounded-lg text-sm font-medium bg-gray-900 text-white hover:bg-gray-800 w-full sm:w-auto">
-                    Search
-                </button>
+            {/* Header Card */}
+            <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
+                <div className="bg-gradient-to-r from-gray-900 to-gray-800 p-6 sm:p-8">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+                        <div className="flex items-center gap-4">
+                            <div className="w-16 h-16 rounded-2xl bg-white/10 flex items-center justify-center backdrop-blur-md">
+                                <History className="w-8 h-8 text-white" />
+                            </div>
+                            <div>
+                                <h1 className="text-2xl font-bold text-white tracking-tight">Pocket Money</h1>
+                                <div className="flex items-center gap-2 mt-1">
+                                    <span className="text-white/80 text-sm font-medium">Recent transactions</span>
+                                    <span className="text-white/40">•</span>
+                                    <span className="text-white/60 text-sm">{todayLabel}</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="flex flex-wrap gap-3">
+                            <button
+                                onClick={() => openTransactionForm(null, 'deposit')}
+                                className="flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-bold bg-emerald-600 text-white hover:bg-emerald-700 transition-all hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-emerald-200"
+                            >
+                                <PlusCircle className="w-4 h-4" />
+                                Deposit
+                            </button>
+                            <button
+                                onClick={() => openTransactionForm(null, 'withdrawal')}
+                                className="flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-bold bg-rose-600 text-white hover:bg-rose-700 transition-all hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-rose-200"
+                            >
+                                <MinusCircle className="w-4 h-4" />
+                                Withdraw
+                            </button>
+                            <button
+                                onClick={() => { setSearchOpen(true); setSearchQueryGlobal(''); }}
+                                className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold bg-white text-gray-900 border border-white/10 hover:bg-gray-50 transition-all"
+                            >
+                                <Search className="w-4 h-4" />
+                                Find Student
+                            </button>
+                            <button
+                                onClick={() => navigate(-1)}
+                                className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold bg-white/10 text-white border border-white/10 hover:bg-white/15 transition-all"
+                            >
+                                <ArrowLeft className="w-4 h-4" />
+                                Back
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* Recent Transactions */}
+            <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
+                <div className="p-6 sm:p-8 border-b border-gray-100">
+                    <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-6">
+                        <div>
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center">
+                                    <History className="w-5 h-5 text-gray-700" />
+                                </div>
+                                <div>
+                                    <h2 className="text-lg font-bold text-gray-900">Recent Transactions</h2>
+                                    <p className="text-sm text-gray-500">Browse deposits and withdrawals across all wallets</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="flex flex-wrap gap-3">
+                            <button
+                                type="button"
+                                onClick={handleExportCsv}
+                                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold bg-indigo-600 text-white hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200"
+                            >
+                                <Download className="w-4 h-4" />
+                                Export CSV
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="mt-6 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
+                        <div className="xl:col-span-2">
+                            <label className="block text-xs font-black uppercase tracking-widest text-gray-400">Student</label>
+                            <div className="mt-2 relative">
+                                <Filter className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                <select
+                                    value={filterStudentId}
+                                    onChange={(e)=>{ setFilterStudentId(e.target.value); setPage(1); }}
+                                    className="w-full bg-gray-50 border-0 rounded-2xl py-3 pl-11 pr-4 text-sm font-bold text-gray-900 focus:ring-2 focus:ring-gray-900 transition-all"
+                                >
+                                    <option value="">All students</option>
+                                    {students.map(s => (
+                                        <option key={s.id} value={s.id}>{s.admission_no} - {s.name}</option>
+                                    ))}
+                                </select>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label className="block text-xs font-black uppercase tracking-widest text-gray-400">Type</label>
+                            <select
+                                value={filterType}
+                                onChange={(e)=>{ setFilterType(e.target.value); setPage(1); }}
+                                className="mt-2 w-full bg-gray-50 border-0 rounded-2xl py-3 px-4 text-sm font-bold text-gray-900 focus:ring-2 focus:ring-gray-900 transition-all"
+                            >
+                                <option value="">All</option>
+                                <option value="deposit">Deposit</option>
+                                <option value="withdrawal">Withdrawal</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label className="block text-xs font-black uppercase tracking-widest text-gray-400">From</label>
+                            <input
+                                type="date"
+                                value={dateFrom}
+                                onChange={(e)=>{ setDateFrom(e.target.value); setPage(1); }}
+                                className="mt-2 w-full bg-gray-50 border-0 rounded-2xl py-3 px-4 text-sm font-bold text-gray-900 focus:ring-2 focus:ring-gray-900 transition-all"
+                            />
+                        </div>
+
+                        <div>
+                            <label className="block text-xs font-black uppercase tracking-widest text-gray-400">To</label>
+                            <input
+                                type="date"
+                                value={dateTo}
+                                onChange={(e)=>{ setDateTo(e.target.value); setPage(1); }}
+                                className="mt-2 w-full bg-gray-50 border-0 rounded-2xl py-3 px-4 text-sm font-bold text-gray-900 focus:ring-2 focus:ring-gray-900 transition-all"
+                            />
+                        </div>
+                    </div>
+
+                    <div className="mt-4 flex flex-wrap items-end justify-between gap-4">
+                        <div className="text-sm text-gray-500 font-medium">
+                            {tableLoading ? 'Loading transactions…' : `Showing ${transactions.length} of ${totalCount}`}
+                        </div>
+                        <div>
+                            <label className="block text-xs font-black uppercase tracking-widest text-gray-400">Page size</label>
+                            <select
+                                value={pageSize}
+                                onChange={(e)=>{ setPageSize(Number(e.target.value)); setPage(1); }}
+                                className="mt-2 bg-gray-50 border-0 rounded-2xl py-2.5 px-4 text-sm font-bold text-gray-900 focus:ring-2 focus:ring-gray-900 transition-all"
+                            >
+                                {[10,20,50,100].map(n => <option key={n} value={n}>{n}</option>)}
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="overflow-x-auto">
+                    <table className="w-full text-left text-sm">
+                        <thead className="text-[11px] text-gray-500 uppercase tracking-widest bg-gray-50">
+                            <tr>
+                                <th scope="col" className="px-6 py-4">Date</th>
+                                <th scope="col" className="px-6 py-4">Student</th>
+                                <th scope="col" className="px-6 py-4">Type</th>
+                                <th scope="col" className="px-6 py-4">Amount</th>
+                                <th scope="col" className="px-6 py-4">Description</th>
+                                <th scope="col" className="px-6 py-4">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                            {tableLoading && (
+                                Array.from({ length: Math.min(pageSize, 8) }).map((_, i) => (
+                                    <tr key={`skeleton-${i}`} className="animate-pulse">
+                                        <td className="px-6 py-4"><div className="h-4 bg-gray-100 rounded w-44"/></td>
+                                        <td className="px-6 py-4"><div className="h-4 bg-gray-100 rounded w-60"/></td>
+                                        <td className="px-6 py-4"><div className="h-4 bg-gray-100 rounded w-24"/></td>
+                                        <td className="px-6 py-4"><div className="h-4 bg-gray-100 rounded w-24"/></td>
+                                        <td className="px-6 py-4"><div className="h-4 bg-gray-100 rounded w-64"/></td>
+                                        <td className="px-6 py-4"><div className="h-4 bg-gray-100 rounded w-28"/></td>
+                                    </tr>
+                                ))
+                            )}
+
+                            {!tableLoading && transactions.map(tx => {
+                                const wallet = walletById.get(tx.wallet);
+                                const s = wallet ? studentById.get(wallet.student) : null;
+                                return (
+                                    <tr key={tx.id} className="bg-white hover:bg-gray-50/60 transition-colors">
+                                        <td className="px-6 py-4 whitespace-nowrap font-medium text-gray-900">{new Date(tx.created_at).toLocaleString()}</td>
+                                        <td className="px-6 py-4 whitespace-nowrap">
+                                            {s ? (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => navigate(`/finance/pocket-money/wallet/${wallet.student}`)}
+                                                    className="font-bold text-indigo-600 hover:text-indigo-700 hover:underline"
+                                                >
+                                                    {s.name} ({s.admission_no})
+                                                </button>
+                                            ) : (
+                                                <span className="text-gray-400">—</span>
+                                            )}
+                                        </td>
+                                        <td className="px-6 py-4">
+                                            <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-black tracking-widest uppercase ${tx.transaction_type === 'deposit' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-rose-50 text-rose-700 border border-rose-100'}`}>
+                                                {tx.transaction_type}
+                                            </span>
+                                        </td>
+                                        <td className="px-6 py-4 font-bold text-gray-900">KES {Number(tx.amount).toLocaleString()}</td>
+                                        <td className="px-6 py-4 text-gray-600">{tx.description || ''}</td>
+                                        <td className="px-6 py-4">
+                                            {s ? (
+                                                <div className="flex items-center gap-2">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => openTransactionForm(wallet, 'deposit')}
+                                                        className="inline-flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-black bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-100"
+                                                    >
+                                                        <PlusCircle className="w-4 h-4" />
+                                                        Deposit
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => openTransactionForm(wallet, 'withdrawal')}
+                                                        className="inline-flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-black bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-100"
+                                                    >
+                                                        <MinusCircle className="w-4 h-4" />
+                                                        Withdraw
+                                                    </button>
+                                                </div>
+                                            ) : (
+                                                <span className="text-gray-300">—</span>
+                                            )}
+                                        </td>
+                                    </tr>
+                                );
+                            })}
+
+                            {!tableLoading && (!transactions || transactions.length === 0) && (
+                                <tr>
+                                    <td className="px-6 py-12 text-center" colSpan={6}>
+                                        <div className="text-sm font-bold text-gray-500">No transactions found</div>
+                                        <div className="text-xs text-gray-400 mt-1">Try changing filters or date range</div>
+                                    </td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+
+                <div className="p-6 sm:p-8 border-t border-gray-100 flex flex-col sm:flex-row items-center sm:justify-between gap-4 text-sm">
+                    <div className="text-gray-500 font-medium">
+                        Page {page} of {Math.max(1, Math.ceil(totalCount / pageSize))}
+                        <span className="text-gray-300"> • </span>
+                        {totalCount} total
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <button
+                            type="button"
+                            disabled={page <= 1}
+                            onClick={()=> setPage(p=> Math.max(1, p-1))}
+                            className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl border text-sm font-bold transition-all ${page <= 1 ? 'text-gray-400 border-gray-200 bg-gray-50' : 'text-gray-900 border-gray-200 hover:bg-gray-50'}`}
+                        >
+                            <ChevronLeft className="w-4 h-4" />
+                            Prev
+                        </button>
+                        <button
+                            type="button"
+                            disabled={page >= Math.ceil(totalCount / pageSize)}
+                            onClick={()=> setPage(p=> Math.min(Math.ceil(totalCount / pageSize), p+1))}
+                            className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl border text-sm font-bold transition-all ${page >= Math.ceil(totalCount / pageSize) ? 'text-gray-400 border-gray-200 bg-gray-50' : 'text-gray-900 border-gray-200 hover:bg-gray-50'}`}
+                        >
+                            Next
+                            <ChevronRight className="w-4 h-4" />
+                        </button>
+                    </div>
+                </div>
             </div>
             {/* Global Search modal */}
             {searchOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center">
-                    <div className="absolute inset-0 bg-black/40" onClick={() => setSearchOpen(false)}></div>
-                    <div className="relative bg-white w-full max-w-xl mx-4 rounded-2xl shadow-card border border-gray-200 p-6">
-                        <div className="flex items-start justify-between gap-4 mb-4">
-                            <h3 className="text-lg font-semibold text-gray-900">Find Student</h3>
-                            <button onClick={() => setSearchOpen(false)} className="text-gray-500 hover:text-gray-700">✕</button>
-                        </div>
-                        <input
-                            type="text"
-                            placeholder="Search by Admission No. or Name"
-                            value={searchQueryGlobal}
-                            onChange={(e)=> setSearchQueryGlobal(e.target.value)}
-                            className="w-full border border-gray-300 rounded-md py-2 px-3 text-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                        />
-                        <div className="mt-3 max-h-80 overflow-auto border border-gray-200 rounded-md divide-y">
-                            {studentsLoading && (
-                                <div className="px-3 py-2 text-sm text-gray-500">Loading students...</div>
-                            )}
-                            {students
-                                .filter(s => {
-                                    const q = searchQueryGlobal.trim().toLowerCase();
-                                    if (!q) return true;
-                                    const parts = [
-                                        s.admission_no,
-                                        s.name,
-                                        s.full_name,
-                                        s.first_name && s.last_name ? `${s.first_name} ${s.last_name}` : undefined,
-                                        s.first_name,
-                                        s.last_name,
-                                        s.klass_detail?.name,
-                                    ].filter(Boolean).join(' ').toLowerCase();
-                                    return parts.includes(q);
-                                })
-                                .slice(0, 200)
-                                .map(s => (
-                                    <button
-                                        key={s.id}
-                                        type="button"
-                                        onClick={() => { setSearchOpen(false); navigate(`/finance/pocket-money/wallet/${s.id}`); }}
-                                        className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50"
-                                    >
-                                        <div className="font-medium text-gray-900">{s.admission_no} - {s.name}</div>
-                                        <div className="text-xs text-gray-500">Class: {s?.klass_detail?.name || '—'}</div>
-                                    </button>
-                                ))}
-                            {(!studentsLoading && students.length === 0) && (
-                                <div className="p-3 text-sm text-gray-500">No students loaded. Please wait or refresh.</div>
-                            )}
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+                    <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => setSearchOpen(false)}></div>
+                    <div className="relative bg-white w-full max-w-lg rounded-[32px] shadow-2xl border border-gray-100 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+                        <div className="p-8">
+                            <div className="flex items-center justify-between mb-6">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center">
+                                        <Search className="w-5 h-5 text-indigo-600" />
+                                    </div>
+                                    <h3 className="text-xl font-bold text-gray-900 tracking-tight">Find Student</h3>
+                                </div>
+                                <button onClick={() => setSearchOpen(false)} className="w-10 h-10 rounded-full hover:bg-gray-100 flex items-center justify-center transition-colors">
+                                    <X className="w-5 h-5 text-gray-400" />
+                                </button>
+                            </div>
+
+                            <div className="relative group">
+                                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 group-focus-within:text-gray-900 transition-colors" />
+                                <input
+                                    type="text"
+                                    placeholder="Admission No. or Name..."
+                                    value={searchQueryGlobal}
+                                    onChange={(e)=> setSearchQueryGlobal(e.target.value)}
+                                    className="w-full bg-gray-50 border-0 rounded-2xl py-4 pl-12 pr-4 text-gray-900 font-medium placeholder:text-gray-400 focus:ring-2 focus:ring-gray-900 transition-all"
+                                    autoFocus
+                                />
+                            </div>
+
+                            <div className="mt-6 max-h-[400px] overflow-auto rounded-2xl border border-gray-100 bg-gray-50/50 divide-y divide-gray-100">
+                                {studentsLoading && (
+                                    <div className="p-8 text-center">
+                                        <div className="w-8 h-8 border-4 border-gray-200 border-t-gray-900 rounded-full animate-spin mx-auto mb-3" />
+                                        <p className="text-sm font-bold text-gray-400">Loading students...</p>
+                                    </div>
+                                )}
+                                {!studentsLoading && students
+                                    .filter(s => {
+                                        const q = searchQueryGlobal.trim().toLowerCase();
+                                        if (!q) return true;
+                                        const parts = [
+                                            s.admission_no,
+                                            s.name,
+                                            s.full_name,
+                                            s.first_name && s.last_name ? `${s.first_name} ${s.last_name}` : undefined,
+                                            s.first_name,
+                                            s.last_name,
+                                            s.klass_detail?.name,
+                                        ].filter(Boolean).join(' ').toLowerCase();
+                                        return parts.includes(q);
+                                    })
+                                    .slice(0, 50)
+                                    .map(s => (
+                                        <button
+                                            key={s.id}
+                                            type="button"
+                                            onClick={() => { setSearchOpen(false); navigate(`/finance/pocket-money/wallet/${s.id}`); }}
+                                            className="w-full text-left px-6 py-4 flex items-center justify-between hover:bg-white transition-all group"
+                                        >
+                                            <div>
+                                                <div className="font-bold text-gray-900 group-hover:text-indigo-600 transition-colors">{s.name}</div>
+                                                <div className="text-xs font-bold text-gray-400 tracking-wider uppercase mt-0.5">{s.admission_no}</div>
+                                            </div>
+                                            <div className="text-right">
+                                                <div className="px-2 py-1 rounded-md bg-gray-100 text-[10px] font-black uppercase text-gray-500 tracking-widest">
+                                                    {s?.klass_detail?.name || '—'}
+                                                </div>
+                                            </div>
+                                        </button>
+                                    ))}
+                                {(!studentsLoading && students.length === 0) && (
+                                    <div className="p-12 text-center">
+                                        <User className="w-12 h-12 text-gray-200 mx-auto mb-2" />
+                                        <p className="text-sm font-bold text-gray-400">No students loaded</p>
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     </div>
                 </div>
             )}
 
             {showForm && (
-                <div className="bg-white rounded-2xl shadow-card border border-gray-200 p-6">
+                <div className="bg-white rounded-3xl shadow-xl border border-gray-100 p-8 animate-in zoom-in-95 duration-200 max-w-2xl mx-auto">
                     <h2 className="text-lg font-semibold text-gray-900 mb-4">
                         {transactionType === 'deposit' ? 'New Deposit' : 'New Withdrawal'}
                         {(() => {
@@ -423,18 +772,19 @@ export default function FinancePocketMoney() {
                             return s ? ` for ${s.name} (${s.admission_no})` : '';
                         })()}
                     </h2>
-                    <form onSubmit={handleSubmit} className="space-y-4">
+                    <form onSubmit={handleSubmit} className="space-y-6">
                         {/* Student selection (only when not launched from a specific wallet) */}
                         {!selectedWallet && (
                             <div>
                                 <label htmlFor="student" className="block text-sm font-medium text-gray-700">Student (search by Admission No. or Name)</label>
                                 <input
+                                    disabled={isSaving}
                                     type="text"
                                     id="student"
                                     placeholder="Type to search..."
                                     value={studentQuery}
                                     onChange={(e) => setStudentQuery(e.target.value)}
-                                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                                    className="mt-1 block w-full bg-gray-50 border-0 rounded-2xl py-3 px-4 text-gray-900 focus:ring-2 focus:ring-gray-900 transition-all disabled:opacity-50"
                                 />
                                 <div className="mt-2 max-h-40 overflow-auto border border-gray-200 rounded-md divide-y">
                                     {studentsLoading && (
@@ -493,131 +843,50 @@ export default function FinancePocketMoney() {
                         </div>
                         <div>
                             <label htmlFor="amount" className="block text-sm font-medium text-gray-700">Amount</label>
-                            <input type="number" id="amount" name="amount" value={formData.amount} onChange={handleInputChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" />
+                            <input
+                                disabled={isSaving}
+                                type="number"
+                                id="amount"
+                                name="amount"
+                                value={formData.amount}
+                                onChange={handleInputChange}
+                                className="mt-1 block w-full bg-gray-50 border-0 rounded-2xl py-3 px-4 text-gray-900 focus:ring-2 focus:ring-gray-900 transition-all disabled:opacity-50"
+                            />
                         </div>
                         <div>
                             <label htmlFor="description" className="block text-sm font-medium text-gray-700">Description</label>
-                            <textarea id="description" name="description" value={formData.description} onChange={handleInputChange} rows="3" className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"></textarea>
-                        </div>
-                        <div className="flex justify-end gap-4">
-                            <button type="button" onClick={() => { setShowForm(false); setSelectedWallet(null); }} className="px-4 py-2 rounded-lg text-sm font-medium bg-gray-200 text-gray-800 hover:bg-gray-300">Cancel</button>
-                            <button type="submit" className="px-4 py-2 rounded-lg text-sm font-medium bg-gray-900 text-white hover:bg-gray-800">Save</button>
+                            <textarea
+                                disabled={isSaving}
+                                id="description"
+                                name="description"
+                                value={formData.description}
+                                onChange={handleInputChange}
+                                rows="3"
+                                className="mt-1 block w-full bg-gray-50 border-0 rounded-2xl py-3 px-4 text-gray-900 focus:ring-2 focus:ring-gray-900 transition-all disabled:opacity-50"
+                            ></textarea>
+                            <div className="flex gap-3 pt-2">
+                                <button disabled={isSaving} type="button" onClick={() => setShowForm(false)} className="flex-1 py-3 rounded-2xl text-sm font-bold bg-gray-100 text-gray-900 hover:bg-gray-200 transition-all disabled:opacity-50">
+                                    Cancel
+                                </button>
+                                <button disabled={isSaving} type="submit" className="flex-[2] py-3 rounded-2xl text-sm font-bold bg-gray-900 text-white hover:bg-gray-800 transition-all shadow-lg shadow-gray-200 disabled:opacity-50 flex items-center justify-center gap-2">
+                                    {isSaving ? (
+                                        <div>
+                                            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                            Saving...
+                                        </div>
+                                    ) : (
+                                        <div>
+                                            <CheckCircle2 className="w-4 h-4" />
+                                            Complete Transaction
+                                        </div>
+                                    )}
+                                </button>
+                            </div>
                         </div>
                     </form>
                 </div>
             )}
 
-            <div className="bg-white rounded-2xl shadow-card border border-gray-200 p-6">
-                <h2 className="text-lg font-semibold text-gray-900 mb-4">Recent Transactions</h2>
-                {/* Filters */}
-                <div className="flex flex-wrap items-end gap-3 mb-4">
-                    <div className="w-full sm:w-48">
-                        <label className="block text-sm font-medium text-gray-700">Student</label>
-                        <select value={filterStudentId} onChange={(e)=>{ setFilterStudentId(e.target.value); setPage(1); }} className="mt-1 block w-full border border-gray-300 rounded-md py-2 px-3 text-sm">
-                            <option value="">All students</option>
-                            {students.map(s => (
-                                <option key={s.id} value={s.id}>{s.admission_no} - {s.name}</option>
-                            ))}
-                        </select>
-                    </div>
-                    <div className="w-full sm:w-40">
-                        <label className="block text-sm font-medium text-gray-700">Type</label>
-                        <select value={filterType} onChange={(e)=>{ setFilterType(e.target.value); setPage(1); }} className="mt-1 block w-full border border-gray-300 rounded-md py-2 px-3 text-sm">
-                            <option value="">All</option>
-                            <option value="deposit">Deposit</option>
-                            <option value="withdrawal">Withdrawal</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700">From</label>
-                        <input type="date" value={dateFrom} onChange={(e)=>{ setDateFrom(e.target.value); setPage(1); }} className="mt-1 block border border-gray-300 rounded-md py-2 px-3 text-sm" />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700">To</label>
-                        <input type="date" value={dateTo} onChange={(e)=>{ setDateTo(e.target.value); setPage(1); }} className="mt-1 block border border-gray-300 rounded-md py-2 px-3 text-sm" />
-                    </div>
-                    <div className="flex-1"></div>
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700">Page size</label>
-                        <select value={pageSize} onChange={(e)=>{ setPageSize(Number(e.target.value)); setPage(1); }} className="mt-1 block border border-gray-300 rounded-md py-2 px-3 text-sm">
-                            {[10,20,50,100].map(n => <option key={n} value={n}>{n}</option>)}
-                        </select>
-                    </div>
-                    <div>
-                        <button type="button" onClick={handleExportCsv} className="mt-6 px-3 py-2 rounded-lg text-sm font-medium bg-gray-900 text-white hover:bg-gray-800">Export CSV</button>
-                    </div>
-                </div>
-                <div className="overflow-x-auto">
-                    <table className="w-full text-left text-sm">
-                        <thead className="text-xs text-gray-700 uppercase bg-gray-50">
-                            <tr>
-                                <th scope="col" className="px-6 py-3">Date</th>
-                                <th scope="col" className="px-6 py-3">Student</th>
-                                <th scope="col" className="px-6 py-3">Type</th>
-                                <th scope="col" className="px-6 py-3">Amount</th>
-                                <th scope="col" className="px-6 py-3">Description</th>
-                                <th scope="col" className="px-6 py-3">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {tableLoading && (
-                                Array.from({ length: Math.min(pageSize, 10) }).map((_, i) => (
-                                    <tr key={`skeleton-${i}`} className="border-b animate-pulse">
-                                        <td className="px-6 py-4"><div className="h-4 bg-gray-100 rounded w-40"/></td>
-                                        <td className="px-6 py-4"><div className="h-4 bg-gray-100 rounded w-56"/></td>
-                                        <td className="px-6 py-4"><div className="h-4 bg-gray-100 rounded w-24"/></td>
-                                        <td className="px-6 py-4"><div className="h-4 bg-gray-100 rounded w-20"/></td>
-                                        <td className="px-6 py-4"><div className="h-4 bg-gray-100 rounded w-56"/></td>
-                                        <td className="px-6 py-4"><div className="h-4 bg-gray-100 rounded w-24"/></td>
-                                    </tr>
-                                ))
-                            )}
-                            {transactions.map(tx => {
-                                const wallet = walletById.get(tx.wallet);
-                                const s = wallet ? studentById.get(wallet.student) : null;
-                                return (
-                                    <tr key={tx.id} className="bg-white border-b">
-                                        <td className="px-6 py-4 whitespace-nowrap">{new Date(tx.created_at).toLocaleString()}</td>
-                                        <td className="px-6 py-4 font-medium text-gray-900 whitespace-nowrap">
-                                            {s ? (
-                                                <button type="button" onClick={() => navigate(`/finance/pocket-money/wallet/${wallet.student}`)} className="text-indigo-600 hover:underline">
-                                                    {s.name} ({s.admission_no})
-                                                </button>
-                                            ) : '—'}
-                                        </td>
-                                        <td className="px-6 py-4 capitalize">{tx.transaction_type}</td>
-                                        <td className="px-6 py-4">KES {Number(tx.amount).toLocaleString()}</td>
-                                        <td className="px-6 py-4 text-gray-600">{tx.description || ''}</td>
-                                        <td className="px-6 py-4 flex gap-3">
-                                            {s && (
-                                                <>
-                                                    <button onClick={() => openTransactionForm(wallet, 'deposit')} className="text-emerald-600 hover:underline">Deposit</button>
-                                                    <button onClick={() => openTransactionForm(wallet, 'withdrawal')} className="text-rose-600 hover:underline">Withdraw</button>
-                                                </>
-                                            )}
-                                        </td>
-                                    </tr>
-                                );
-                            })}
-                            {(!transactions || transactions.length === 0) && (
-                                <tr>
-                                    <td className="px-6 py-6 text-gray-500" colSpan={6}>No transactions yet.</td>
-                                </tr>
-                            )}
-                        </tbody>
-                    </table>
-                </div>
-                {/* Pagination controls */}
-                <div className="flex flex-col sm:flex-row items-center sm:justify-between gap-3 mt-4 text-sm text-gray-700">
-                    <div>
-                        Showing page {page} of {Math.max(1, Math.ceil(totalCount / pageSize))} ({totalCount} total)
-                    </div>
-                    <div className="flex gap-2">
-                        <button disabled={page <= 1} onClick={()=> setPage(p=> Math.max(1, p-1))} className={`px-3 py-1 rounded border ${page<=1 ? 'text-gray-400 border-gray-200' : 'text-gray-800 border-gray-300 hover:bg-gray-50'}`}>Prev</button>
-                        <button disabled={page >= Math.ceil(totalCount / pageSize)} onClick={()=> setPage(p=> Math.min(Math.ceil(totalCount / pageSize), p+1))} className={`px-3 py-1 rounded border ${page >= Math.ceil(totalCount / pageSize) ? 'text-gray-400 border-gray-200' : 'text-gray-800 border-gray-300 hover:bg-gray-50'}`}>Next</button>
-                    </div>
-                </div>
-            </div>
             {/* Wallet modal */}
             {walletModalOpen && walletModalWallet && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center">
