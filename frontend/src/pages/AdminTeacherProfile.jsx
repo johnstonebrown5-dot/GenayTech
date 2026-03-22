@@ -2,6 +2,22 @@ import React, { useEffect, useState } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import api from '../api'
 import { useNotification } from '../components/NotificationContext'
+import { 
+  User, 
+  Mail, 
+  Phone, 
+  Hash, 
+  BookOpen, 
+  School, 
+  ArrowLeft, 
+  Save, 
+  Search, 
+  CheckCircle2, 
+  ShieldCheck,
+  UserCircle,
+  LayoutGrid
+} from 'lucide-react'
+import { toast } from 'react-hot-toast'
 
 export default function AdminTeacherProfile(){
   const { id } = useParams()
@@ -120,68 +136,156 @@ export default function AdminTeacherProfile(){
   }
 
   return (
-    <React.Fragment>
-      <div className="space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="h-12 w-12 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-lg font-semibold">
-              {(teacher?.user?.first_name?.[0] || teacher?.user?.username?.[0] || '?').toUpperCase()}
+    <div className="min-h-screen bg-gray-50/50 pb-20 text-left">
+      {/* Premium Header */}
+      <div className="bg-white border-b border-gray-200 sticky top-0 z-30">
+        <div className="max-w-[1600px] mx-auto px-6 py-6">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+            <div className="flex items-center gap-4">
+              <button 
+                onClick={()=>navigate(-1)}
+                className="w-10 h-10 rounded-xl bg-gray-50 text-gray-400 flex items-center justify-center hover:bg-indigo-50 hover:text-indigo-600 transition-all border border-gray-100"
+              >
+                <ArrowLeft size={20} />
+              </button>
+              <div className="flex items-center gap-4">
+                <div className="w-14 h-14 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-black text-xl shadow-sm ring-2 ring-white">
+                  {(teacher?.user?.first_name?.[0] || teacher?.user?.username?.[0] || '?').toUpperCase()}
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <ShieldCheck size={16} className="text-indigo-600" />
+                    <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">Faculty Profile</span>
+                  </div>
+                  <h1 className="text-2xl font-black text-gray-900 tracking-tight leading-none">
+                    {teacher?.user?.first_name} {teacher?.user?.last_name}
+                  </h1>
+                  <div className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mt-1.5 flex items-center gap-2">
+                    <UserCircle size={12} />
+                    @{teacher?.user?.username}
+                  </div>
+                </div>
+              </div>
             </div>
-            <div className="min-w-0">
-              <h1 className="text-xl font-semibold truncate">
-                {teacher?.user?.first_name} {teacher?.user?.last_name}
-              </h1>
-              <div className="text-sm text-gray-500 truncate">@{teacher?.user?.username}</div>
+
+            <div className="flex items-center gap-3">
+              <Link to="/admin/teachers" className="h-11 px-5 rounded-xl bg-white border-2 border-gray-100 text-gray-600 font-black text-[10px] uppercase tracking-widest hover:border-gray-900 hover:text-gray-900 transition-all flex items-center gap-2">
+                <LayoutGrid size={16} />
+                Directory
+              </Link>
+              <button 
+                onClick={save}
+                disabled={saving || loading}
+                className="h-11 px-8 rounded-xl bg-indigo-600 text-white font-black text-[10px] uppercase tracking-widest shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-all active:scale-95 flex items-center gap-2"
+              >
+                {saving ? (
+                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                ) : (
+                  <Save size={16} />
+                )}
+                {saving ? 'Processing...' : 'Save Profile'}
+              </button>
             </div>
-          </div>
-          <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
-            <button onClick={()=>navigate(-1)} className="px-3 py-2 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 shadow-sm transition-colors flex-1 sm:flex-none">Back</button>
-            <Link to="/admin/teachers" className="px-3 py-2 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 shadow-sm transition-colors flex-1 sm:flex-none">Directory</Link>
-            <button onClick={save} disabled={saving || loading} className="px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white shadow-sm disabled:opacity-60 transition-colors w-full sm:w-auto">{saving? 'Saving...' : 'Save Changes'}</button>
           </div>
         </div>
+      </div>
 
-        <form onSubmit={save} className="bg-white rounded-2xl shadow-md border border-gray-100 ring-1 ring-blue-50 overflow-hidden">
-          <div className="border-b px-4 py-3">
-            <div className="text-base md:text-lg font-semibold text-gray-800">Teacher Profile</div>
-            <div className="text-xs text-gray-500">Edit personal info and assignments</div>
-          </div>
-          <div className="p-4 md:p-6 space-y-4 pb-24 sm:pb-6">
-          {loading && <div>Loading profile...</div>}
-          {error && <div className="text-red-600 text-sm">{error}</div>}
-          {!loading && !error && teacher && (
-            <div className="grid md:grid-cols-2 gap-4">
-              <div>
-                <label className="text-gray-600 text-sm font-medium">First name</label>
-                <input className="w-full border border-gray-200 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-200 focus:border-blue-300 transition-colors" value={form.first_name} onChange={e=>setForm({...form, first_name:e.target.value})} />
+      <div className="max-w-[1600px] mx-auto px-6 py-8">
+        <form onSubmit={save} className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+          {/* Left Column: Personal Information */}
+          <div className="xl:col-span-2 space-y-8">
+            <div className="bg-white rounded-[2.5rem] shadow-sm border border-gray-100 overflow-hidden">
+              <div className="p-8 border-b border-gray-50 bg-gradient-to-r from-gray-50/50 to-white">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                    <User size={20} />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-black text-gray-900 tracking-tight">Identity & Contact</h2>
+                    <p className="text-xs font-medium text-gray-500 italic">Personal registration details</p>
+                  </div>
+                </div>
               </div>
-              <div>
-                <label className="text-gray-600 text-sm font-medium">Last name</label>
-                <input className="w-full border border-gray-200 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-200 focus:border-blue-300 transition-colors" value={form.last_name} onChange={e=>setForm({...form, last_name:e.target.value})} />
+              
+              <div className="p-8">
+                {loading ? (
+                  <div className="space-y-6">
+                    <div className="h-12 bg-gray-50 rounded-2xl animate-pulse" />
+                    <div className="h-12 bg-gray-50 rounded-2xl animate-pulse" />
+                    <div className="h-12 bg-gray-50 rounded-2xl animate-pulse" />
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-left">
+                    <div className="space-y-1.5 text-left">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">First Name</label>
+                      <div className="relative group">
+                        <User className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-indigo-500 transition-colors" size={18} />
+                        <input className="w-full h-12 bg-gray-50 border-2 border-gray-100 rounded-2xl pl-11 pr-4 text-sm font-bold text-gray-900 focus:border-indigo-500 transition-all outline-none" value={form.first_name} onChange={e=>setForm({...form, first_name:e.target.value})} required />
+                      </div>
+                    </div>
+                    <div className="space-y-1.5 text-left">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Last Name</label>
+                      <div className="relative group">
+                        <User className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-indigo-500 transition-colors" size={18} />
+                        <input className="w-full h-12 bg-gray-50 border-2 border-gray-100 rounded-2xl pl-11 pr-4 text-sm font-bold text-gray-900 focus:border-indigo-500 transition-all outline-none" value={form.last_name} onChange={e=>setForm({...form, last_name:e.target.value})} required />
+                      </div>
+                    </div>
+                    <div className="space-y-1.5 text-left">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1 text-left">Primary Email</label>
+                      <div className="relative group">
+                        <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-indigo-500 transition-colors" size={18} />
+                        <input type="email" className="w-full h-12 bg-gray-50 border-2 border-gray-100 rounded-2xl pl-11 pr-4 text-sm font-bold text-gray-900 focus:border-indigo-500 transition-all outline-none" value={form.email} onChange={e=>setForm({...form, email:e.target.value})} required />
+                      </div>
+                    </div>
+                    <div className="space-y-1.5 text-left">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1 text-left">Portal Username</label>
+                      <div className="relative group">
+                        <UserCircle className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-indigo-500 transition-colors" size={18} />
+                        <input className="w-full h-12 bg-gray-50 border-2 border-gray-100 rounded-2xl pl-11 pr-4 text-sm font-bold text-gray-900 focus:border-indigo-500 transition-all outline-none" value={form.username} onChange={e=>setForm({...form, username:e.target.value})} required />
+                      </div>
+                    </div>
+                    <div className="space-y-1.5 text-left md:col-span-2">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1 text-left">Contact Number</label>
+                      <div className="relative group">
+                        <Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-indigo-500 transition-colors" size={18} />
+                        <input className="w-full h-12 bg-gray-50 border-2 border-gray-100 rounded-2xl pl-11 pr-4 text-sm font-bold text-gray-900 focus:border-indigo-500 transition-all outline-none" value={form.phone} onChange={e=>setForm({...form, phone:e.target.value})} />
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
-              <div>
-                <label className="text-gray-600 text-sm font-medium">Email</label>
-                <input type="email" className="w-full border border-gray-200 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-200 focus:border-blue-300 transition-colors" value={form.email} onChange={e=>setForm({...form, email:e.target.value})} />
+            </div>
+
+            <div className="bg-white rounded-[2.5rem] shadow-sm border border-gray-100 overflow-hidden">
+              <div className="p-8 border-b border-gray-50 bg-gradient-to-r from-gray-50/50 to-white flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center">
+                    <BookOpen size={20} />
+                  </div>
+                  <div className="text-left">
+                    <h2 className="text-lg font-black text-gray-900 tracking-tight">Academic Expertise</h2>
+                    <p className="text-xs font-medium text-gray-500 italic">Subject allocations and search</p>
+                  </div>
+                </div>
+                <div className="px-4 py-1.5 rounded-full bg-purple-50 text-purple-600 text-[10px] font-black uppercase tracking-widest">
+                  {selectedSubjectIds.size} Subjects
+                </div>
               </div>
-              <div>
-                <label className="text-gray-600 text-sm font-medium">Username</label>
-                <input className="w-full border border-gray-200 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-200 focus:border-blue-300 transition-colors" value={form.username} onChange={e=>setForm({...form, username:e.target.value})} />
-              </div>
-              <div>
-                <label className="text-gray-600 text-sm font-medium">Phone</label>
-                <input className="w-full border border-gray-200 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-200 focus:border-blue-300 transition-colors" value={form.phone} onChange={e=>setForm({...form, phone:e.target.value})} />
-              </div>
-              <div className="md:col-span-2">
-                <label className="text-gray-600 text-sm font-medium">Subjects</label>
-                <div className="mt-1 grid gap-2">
-                  <input
-                    className="w-full border border-gray-200 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-200 focus:border-blue-300 transition-colors"
-                    placeholder="Search subjects..."
-                    value={subjectSearch}
-                    onChange={e=>setSubjectSearch(e.target.value)}
-                  />
-                  <div className="max-h-48 overflow-auto rounded-lg border border-gray-200 p-2 bg-white">
-                    <div className="grid sm:grid-cols-2 gap-2">
+              
+              <div className="p-8">
+                <div className="space-y-6">
+                  <div className="relative group w-full">
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-indigo-500 transition-colors" size={18} />
+                    <input 
+                      value={subjectSearch} 
+                      onChange={e=>setSubjectSearch(e.target.value)}
+                      placeholder="Search global curriculum..."
+                      className="h-12 w-full bg-gray-50 border-2 border-gray-100 rounded-2xl pl-11 pr-4 text-sm font-bold focus:border-indigo-500 transition-all outline-none"
+                    />
+                  </div>
+
+                  <div className="bg-gray-50 rounded-[2rem] border-2 border-gray-100 p-6 max-h-[400px] overflow-y-auto custom-scrollbar text-left">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-left">
                       {(subjectsCatalog||[])
                         .filter(s=>{
                           const q = subjectSearch.trim().toLowerCase()
@@ -190,70 +294,122 @@ export default function AdminTeacherProfile(){
                         })
                         .map(s=>{
                           const sid = String(s.id)
-                          const checked = selectedSubjectIds.has(sid)
+                          const isChecked = selectedSubjectIds.has(sid)
                           return (
-                            <label key={sid} className="flex items-center gap-2 text-sm">
-                              <input
-                                type="checkbox"
-                                className="h-4 w-4"
-                                checked={checked}
-                                onChange={e=>{
-                                  setSelectedSubjectIds(prev=>{
-                                    const next = new Set(Array.from(prev))
-                                    if(e.target.checked) next.add(sid); else next.delete(sid)
-                                    // sync to form.subjects as comma separated names
-                                    const names = (subjectsCatalog||[])
-                                      .filter(x=> next.has(String(x.id)))
-                                      .map(x=> x.name || x.code || '')
-                                      .filter(Boolean)
-                                    setForm(f=>({ ...f, subjects: names.join(', ') }))
-                                    return next
-                                  })
-                                }}
-                              />
-                              <span><span className="px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 text-xs align-middle mr-1">{s.code}</span>{s.name}</span>
-                            </label>
+                            <button
+                              type="button"
+                              key={sid}
+                              onClick={() => {
+                                setSelectedSubjectIds(prev => {
+                                  const next = new Set(Array.from(prev))
+                                  if(!isChecked) next.add(sid); else next.delete(sid)
+                                  const names = (subjectsCatalog||[])
+                                    .filter(x=> next.has(String(x.id)))
+                                    .map(x=> x.name || x.code || '')
+                                    .filter(Boolean)
+                                  setForm(f=>({ ...f, subjects: names.join(', ') }))
+                                  return next
+                                })
+                              }}
+                              className={`flex items-center justify-between p-4 rounded-2xl border-2 transition-all text-left ${isChecked ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg shadow-indigo-100' : 'bg-white border-white text-gray-600 hover:border-indigo-100'}`}
+                            >
+                              <div className="flex items-center gap-3 text-left overflow-hidden">
+                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-[10px] font-black shrink-0 ${isChecked ? 'bg-white/20' : 'bg-gray-100 text-gray-400'}`}>
+                                  {s.code}
+                                </div>
+                                <span className="text-xs font-bold truncate">{s.name}</span>
+                              </div>
+                              {isChecked && <CheckCircle2 size={16} className="shrink-0" />}
+                            </button>
                           )
                         })}
                     </div>
                   </div>
+
                   {form.subjects && (
-                    <div className="flex flex-wrap gap-1.5">
+                    <div className="flex flex-wrap gap-2 pt-2 text-left">
                       {form.subjects.split(',').map(s=>s.trim()).filter(Boolean).map((s,i)=>(
-                        <span key={i} className="px-2 py-0.5 rounded-full text-xs bg-purple-100 text-purple-700 border border-purple-200">{s}</span>
+                        <span key={i} className="px-3 py-1 rounded-full text-[10px] font-black bg-white border-2 border-purple-100 text-purple-600 uppercase tracking-widest">
+                          {s}
+                        </span>
                       ))}
                     </div>
                   )}
                 </div>
               </div>
-              <div>
-                <label className="text-gray-600 text-sm font-medium">T.S.C number</label>
-                <input className="w-full border border-gray-200 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-200 focus:border-blue-300 transition-colors" value={form.tsc_number} onChange={e=>setForm({...form, tsc_number:e.target.value})} />
-              </div>
-              <div>
-                <label className="text-gray-600 text-sm font-medium">Assigned Class (Class Teacher)</label>
-                <select className="w-full border border-gray-200 rounded-lg p-2.5 bg-white focus:ring-2 focus:ring-blue-200 focus:border-blue-300 transition-colors" value={form.klass || ''} onChange={e=>setForm({...form, klass:e.target.value})}>
-                  <option value="">No Class</option>
-                  {(Array.isArray(classes) ? classes : []).map(c => (
-                    <option key={c.id} value={c.id}>{c.name} - {c.grade_level}</option>
-                  ))}
-                </select>
-                <div className="text-xs text-gray-500 mt-1">Selecting a class will also set this teacher as the class teacher.</div>
-              </div>
-              <div className="md:col-span-2">
-                <div className="sm:static fixed left-0 right-0 bottom-0 sm:bottom-auto sm:left-auto sm:right-auto bg-white/90 backdrop-blur border-t sm:border-0 p-3 sm:p-0 z-20">
-                  <div className="max-w-screen-2xl mx-auto px-4 sm:px-0">
-                    <div className="flex gap-2 justify-end">
-                      <button type="submit" disabled={saving} className="w-full sm:w-auto px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white shadow-sm disabled:opacity-60 transition-colors">{saving? 'Saving...' : 'Save Changes'}</button>
-                    </div>
+            </div>
+          </div>
+
+          {/* Right Column: Deployment & Meta */}
+          <div className="space-y-8">
+            <div className="bg-white rounded-[2.5rem] shadow-sm border border-gray-100 overflow-hidden">
+              <div className="p-8 border-b border-gray-50 bg-gradient-to-r from-gray-50/50 to-white">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                    <School size={20} />
+                  </div>
+                  <div className="text-left">
+                    <h2 className="text-lg font-black text-gray-900 tracking-tight">Staff Deployment</h2>
+                    <p className="text-xs font-medium text-gray-500 italic text-left">Official designations</p>
                   </div>
                 </div>
               </div>
+              
+              <div className="p-8 space-y-6 text-left">
+                <div className="space-y-1.5 text-left">
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1 text-left">T.S.C Number</label>
+                  <div className="relative group">
+                    <Hash className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-indigo-500 transition-colors" size={18} />
+                    <input className="w-full h-12 bg-gray-50 border-2 border-gray-100 rounded-2xl pl-11 pr-4 text-sm font-bold text-gray-900 focus:border-indigo-500 transition-all outline-none" value={form.tsc_number} onChange={e=>setForm({...form, tsc_number:e.target.value})} />
+                  </div>
+                </div>
+
+                <div className="space-y-1.5 text-left">
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1 text-left">Primary Class</label>
+                  <div className="relative group">
+                    <School className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-indigo-500 transition-colors" size={18} />
+                    <select 
+                      className="w-full h-12 bg-gray-50 border-2 border-gray-100 rounded-2xl pl-11 pr-4 text-sm font-bold text-gray-900 focus:border-indigo-500 transition-all outline-none appearance-none" 
+                      value={form.klass || ''} 
+                      onChange={e=>setForm({...form, klass:e.target.value})}
+                    >
+                      <option value="">No Assigned Class</option>
+                      {(Array.isArray(classes) ? classes : []).map(c => (
+                        <option key={c.id} value={c.id}>{c.name} - {c.grade_level}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-2 px-1 text-left">Selecting a class establishes this faculty as Class Teacher</p>
+                </div>
+              </div>
             </div>
-          )}
+
+            {/* Quick Summary Card */}
+            <div className="bg-gray-900 rounded-[2.5rem] p-8 shadow-xl text-left">
+              <h3 className="text-white font-black uppercase tracking-widest text-[10px] mb-6 text-left">Employment Summary</h3>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between py-3 border-b border-white/10">
+                  <span className="text-white/50 text-xs font-bold uppercase tracking-widest">Profile Status</span>
+                  <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                    <span className="text-white font-black text-[10px] uppercase tracking-widest">Active Member</span>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between py-3 border-b border-white/10 text-left">
+                  <span className="text-white/50 text-xs font-bold uppercase tracking-widest">Permissions</span>
+                  <span className="text-white font-black text-[10px] uppercase tracking-widest">Faculty Access</span>
+                </div>
+                <div className="flex items-center justify-between py-3 text-left">
+                  <span className="text-white/50 text-xs font-bold uppercase tracking-widest">Joined</span>
+                  <span className="text-white font-black text-[10px] uppercase tracking-widest">
+                    {teacher?.user?.date_joined ? new Date(teacher.user.date_joined).toLocaleDateString() : 'N/A'}
+                  </span>
+                </div>
+              </div>
+            </div>
           </div>
         </form>
       </div>
-    </React.Fragment>
+    </div>
   )
 }

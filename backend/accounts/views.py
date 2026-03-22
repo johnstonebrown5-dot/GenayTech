@@ -2946,6 +2946,130 @@ def superadmin_recycle_bin_schools(request):
     return Response({'results': data})
 
 
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def superadmin_recycle_bin_classes(request):
+    denied = _require_superuser(request)
+    if denied is not None:
+        return denied
+
+    qs = Klass.objects.filter(is_deleted=True).select_related('school', 'stream').order_by('-deleted_at', '-id')
+    out = []
+    for k in qs[:2000]:
+        out.append({
+            'id': k.id,
+            'name': k.name,
+            'grade_level': k.grade_level,
+            'school_id': getattr(k, 'school_id', None),
+            'school_name': getattr(k.school, 'name', '') if k.school else '',
+            'stream_name': getattr(k.stream, 'name', '') if k.stream else '',
+            'deleted_at': k.deleted_at,
+            'deleted_by': getattr(k.deleted_by, 'username', None),
+        })
+    return Response({'results': out})
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def superadmin_recycle_bin_class_restore(request, id: int):
+    denied = _require_superuser(request)
+    if denied is not None:
+        return denied
+
+    try:
+        obj = Klass.objects.get(id=id)
+    except Klass.DoesNotExist:
+        return Response({"detail": "Not found"}, status=404)
+    if not bool(getattr(obj, 'is_deleted', False)):
+        return Response({"detail": "Not in recycle bin"}, status=400)
+    
+    obj.is_deleted = False
+    obj.deleted_at = None
+    obj.deleted_by = None
+    obj.save(update_fields=['is_deleted', 'deleted_at', 'deleted_by'])
+    return Response({"detail": "restored"})
+
+
+@api_view(["DELETE"])
+@permission_classes([IsAuthenticated])
+def superadmin_recycle_bin_class_purge(request, id: int):
+    denied = _require_superuser(request)
+    if denied is not None:
+        return denied
+
+    try:
+        obj = Klass.objects.only('id', 'is_deleted').get(id=id)
+    except Klass.DoesNotExist:
+        return Response({"detail": "Not found"}, status=404)
+    if not bool(getattr(obj, 'is_deleted', False)):
+        return Response({"detail": "Not in recycle bin"}, status=400)
+    obj.delete()
+    return Response(status=204)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def superadmin_recycle_bin_users(request):
+    denied = _require_superuser(request)
+    if denied is not None:
+        return denied
+
+    qs = User.objects.filter(is_deleted=True).select_related('school').order_by('-deleted_at', '-id')
+    out = []
+    for u in qs[:2000]:
+        out.append({
+            'id': u.id,
+            'username': u.username,
+            'first_name': u.first_name,
+            'last_name': u.last_name,
+            'role': u.role,
+            'school_id': getattr(u, 'school_id', None),
+            'school_name': getattr(u.school, 'name', '') if u.school else '',
+            'deleted_at': u.deleted_at,
+            'deleted_by': getattr(u.deleted_by, 'username', None),
+        })
+    return Response({'results': out})
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def superadmin_recycle_bin_user_restore(request, id: int):
+    denied = _require_superuser(request)
+    if denied is not None:
+        return denied
+
+    try:
+        obj = User.objects.get(id=id)
+    except User.DoesNotExist:
+        return Response({"detail": "Not found"}, status=404)
+    if not bool(getattr(obj, 'is_deleted', False)):
+        return Response({"detail": "Not in recycle bin"}, status=400)
+    
+    obj.is_deleted = False
+    obj.is_active = True
+    obj.deleted_at = None
+    obj.deleted_by = None
+    obj.save(update_fields=['is_deleted', 'is_active', 'deleted_at', 'deleted_by'])
+    return Response({"detail": "restored"})
+
+
+@api_view(["DELETE"])
+@permission_classes([IsAuthenticated])
+def superadmin_recycle_bin_user_purge(request, id: int):
+    denied = _require_superuser(request)
+    if denied is not None:
+        return denied
+
+    try:
+        obj = User.objects.only('id', 'is_deleted').get(id=id)
+    except User.DoesNotExist:
+        return Response({"detail": "Not found"}, status=404)
+    if not bool(getattr(obj, 'is_deleted', False)):
+        return Response({"detail": "Not in recycle bin"}, status=400)
+    obj.delete()
+    return Response(status=204)
+
+
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 @parser_classes([JSONParser])
@@ -3206,7 +3330,24 @@ def superadmin_recycle_bin_clear(request):
 
     # Purge academics first (for non-deleted schools)
     try:
-        from academics.models import Exam, AcademicYear, Term
+        from academics.models import Exam, AcademicYear, Term, Class as Klass
+        
+        class_ids = list(Klass.objects.filter(is_deleted=True).values_list('id', flat=True)[:1000])
+        for cid in class_ids:
+            try:
+                Klass.objects.filter(id=int(cid), is_deleted=True).delete()
+                purged += 1
+            except Exception:
+                failed += 1
+
+        user_ids = list(User.objects.filter(is_deleted=True).values_list('id', flat=True)[:1000])
+        for uid in user_ids:
+            try:
+                User.objects.filter(id=int(uid), is_deleted=True).delete()
+                purged += 1
+            except Exception:
+                failed += 1
+                
         exam_ids = list(Exam.objects.filter(is_deleted=True).values_list('id', flat=True)[:1000])
         for eid in exam_ids:
             try:

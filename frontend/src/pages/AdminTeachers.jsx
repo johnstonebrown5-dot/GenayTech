@@ -331,371 +331,269 @@ export default function AdminTeachers(){
   }
 
   return (
-    <React.Fragment>
-      <div className="space-y-6">
-        {/* Header */}
-        <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Manage Teachers</h1>
-            <p className="text-sm text-gray-600">Create teacher accounts, assign subjects and class, and manage the directory.</p>
+    <div className="min-h-screen bg-gray-50/50 pb-20 text-left">
+      {/* Header Section */}
+      <div className="bg-white border-b border-gray-200 sticky top-0 z-30">
+        <div className="max-w-[1600px] mx-auto px-6 py-6">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 text-left">
+            <div className="text-left">
+              <div className="flex items-center gap-2 text-indigo-600 mb-1">
+                <Users size={20} />
+                <span className="text-sm font-bold uppercase tracking-wider">Academic Staff</span>
+              </div>
+              <h1 className="text-3xl font-black text-gray-900 tracking-tight">
+                Manage <span className="text-indigo-600">Teachers</span>
+              </h1>
+              <p className="text-gray-500 mt-1 font-medium">Create accounts, assign subjects, and manage the directory</p>
+            </div>
+
+            <div className="flex flex-col sm:flex-row items-center gap-4">
+              <Link to="/admin/subjects" className="h-12 px-6 rounded-2xl bg-white border-2 border-gray-100 text-gray-700 font-black hover:border-gray-900 hover:text-gray-900 transition-all flex items-center gap-2 shadow-sm">
+                <BookOpen size={18} />
+                Subjects
+              </Link>
+              <button 
+                onClick={()=>setShowAssign(true)}
+                className="h-12 px-6 rounded-2xl bg-indigo-600 text-white font-black hover:bg-indigo-700 transition-all flex items-center gap-2 shadow-lg shadow-indigo-200 active:scale-95"
+              >
+                <ClipboardCheck size={18} />
+                Assign Subjects & Class
+              </button>
+            </div>
           </div>
-          <div className="flex items-center gap-2 overflow-x-auto md:overflow-visible py-1 -mx-1 px-1">
-            <Link to="/admin/subjects" className="shrink-0 px-3 py-1.5 rounded border hover:bg-gray-50">Subjects</Link>
-            <button onClick={()=>setShowAssign(true)} className="shrink-0 px-3 py-1.5 rounded bg-indigo-600 hover:bg-indigo-700 text-white">Assign Subjects & Class</button>
+
+          {/* Stats Bar */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-8">
+            <div className="bg-gray-50/50 p-4 rounded-2xl border border-gray-100 flex items-center gap-4 text-left">
+              <div className="w-12 h-12 rounded-xl bg-indigo-100 text-indigo-600 flex items-center justify-center shadow-sm">
+                <Users size={24} />
+              </div>
+              <div>
+                <div className="text-2xl font-black text-gray-900 leading-none">{activeTeachersCount}</div>
+                <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-1">Active Teachers</div>
+              </div>
+            </div>
+            <div className="bg-gray-50/50 p-4 rounded-2xl border border-gray-100 flex items-center gap-4 text-left">
+              <div className="w-12 h-12 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center shadow-sm">
+                <UserCheck size={24} />
+              </div>
+              <div>
+                <div className="text-2xl font-black text-gray-900 leading-none">{assignedTeachersCount}</div>
+                <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-1">Assigned</div>
+              </div>
+            </div>
+            <div className="bg-gray-50/50 p-4 rounded-2xl border border-gray-100 flex items-center gap-4 text-left">
+              <div className="w-12 h-12 rounded-xl bg-fuchsia-100 text-fuchsia-600 flex items-center justify-center shadow-sm">
+                <BookOpen size={24} />
+              </div>
+              <div>
+                <div className="text-2xl font-black text-gray-900 leading-none">{coveredSubjectsCount}</div>
+                <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-1">Subjects Covered</div>
+              </div>
+            </div>
+            <div className="bg-gray-900 p-4 rounded-2xl shadow-xl flex items-center justify-between group text-left">
+              <div className="text-left">
+                <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Status</div>
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                  <span className="text-xs font-black text-white uppercase tracking-wider">Active Directory</span>
+                </div>
+              </div>
+              <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center text-white">
+                <CheckCircle2 size={20} />
+              </div>
+            </div>
           </div>
         </div>
-        {isCompact ? (
-          <div className="space-y-2">
-            {statItems.map((item, i) => (
-              <div key={item.title} className={i === statIndex ? 'block' : 'hidden'}>
-                <StatCard
-                  title={item.title}
-                  value={item.value}
-                  icon={item.icon}
-                  accent={item.accent}
-                  animate
-                  format={(v)=>v.toLocaleString()}
-                  trend={0}
-                  size="sm"
+      </div>
+
+      <div className="max-w-[1600px] mx-auto px-6 py-8 text-left">
+        {/* Quick Actions Card */}
+        <div className="bg-white rounded-[2rem] p-8 border-2 border-gray-100 shadow-sm mb-12 flex flex-col md:flex-row items-center justify-between gap-8 group overflow-hidden relative">
+          <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-50 rounded-full -mr-32 -mt-32 opacity-50 group-hover:scale-110 transition-transform duration-700" />
+          <div className="relative z-10 text-left w-full md:w-auto">
+            <div className="flex items-center gap-3 mb-4 text-left">
+              <div className="w-14 h-14 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
+                <UserPlus size={28} />
+              </div>
+              <div className="text-left">
+                <h2 className="text-xl font-black text-gray-900 tracking-tight">Onboard Faculty</h2>
+                <p className="text-sm font-medium text-gray-500 italic">Add new teacher users and set their initial access</p>
+              </div>
+            </div>
+          </div>
+          <div className="relative z-10 flex flex-col sm:flex-row gap-4 w-full md:w-auto">
+            <button 
+              onClick={()=>setShowCreateUser(true)}
+              className="h-12 px-8 rounded-2xl bg-white border-2 border-gray-100 text-gray-700 font-black text-xs uppercase tracking-widest hover:border-indigo-600 hover:text-indigo-600 transition-all flex items-center justify-center gap-2 shadow-sm"
+            >
+              <Plus size={18} /> Create User
+            </button>
+            <button 
+              onClick={()=>setShowAssign(true)}
+              className="h-12 px-8 rounded-2xl bg-indigo-600 text-white font-black text-xs uppercase tracking-widest hover:bg-indigo-700 transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-200 active:scale-95"
+            >
+              <ClipboardCheck size={18} /> Assign Now
+            </button>
+          </div>
+        </div>
+
+        {/* Directory Card */}
+        <div className="bg-white rounded-[2.5rem] shadow-sm border border-gray-100 overflow-hidden text-left">
+          <div className="p-8 border-b border-gray-50 flex flex-col lg:flex-row lg:items-center justify-between gap-6 bg-gradient-to-r from-gray-50/50 to-white text-left">
+            <div className="flex items-center gap-4 text-left">
+              <div className="w-12 h-12 rounded-2xl bg-gray-100 text-gray-600 flex items-center justify-center shadow-sm">
+                <LayoutGrid size={24} />
+              </div>
+              <div className="text-left">
+                <h2 className="text-xl font-black text-gray-900 tracking-tight">Teachers Directory</h2>
+                <p className="text-xs font-medium text-gray-500 italic uppercase tracking-widest text-left">Global Staff Listing</p>
+              </div>
+
+            </div>
+
+            <div className="flex flex-col sm:flex-row items-center gap-4">
+              <div className="relative group w-full sm:w-64">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-indigo-500 transition-colors" size={18} />
+                <input 
+                  value={search} 
+                  onChange={e=>setSearch(e.target.value)}
+                  placeholder="Search staff..."
+                  className="h-12 w-full bg-gray-50 border-2 border-gray-100 rounded-2xl pl-11 pr-4 text-sm font-bold focus:border-indigo-500 transition-all outline-none"
                 />
               </div>
-            ))}
-            <div className="flex justify-center gap-1.5 pt-1">
-              {statItems.map((_, i) => (
-                <span key={i} className={`inline-block w-1.5 h-1.5 rounded-full ${i===statIndex? 'bg-indigo-600':'bg-gray-300'}`} />
-              ))}
-            </div>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-            {statItems.map(item => (
-              <StatCard
-                key={item.title}
-                title={item.title}
-                value={item.value}
-                icon={item.icon}
-                accent={item.accent}
-                animate
-                format={(v)=>v.toLocaleString()}
-                trend={0}
-              />
-            ))}
-          </div>
-        )}
-        <div className="hidden md:block relative overflow-hidden rounded-2xl shadow-elevated p-5 text-white bg-gradient-to-r from-brand-600 via-indigo-600 to-fuchsia-600">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <div className="text-sm font-medium text-white/90">Quick Actions</div>
-              <div className="text-lg font-semibold">Create or Assign Teacher</div>
-              <div className="text-xs text-white/80">Add a teacher user, then assign subjects and class</div>
-            </div>
-            <div className="flex items-center gap-2">
-              <button onClick={()=>setShowCreateUser(true)} className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-semibold bg-white/15 hover:bg-white/25 border border-white/25 backdrop-blur-md">Create User</button>
-              <button onClick={()=>setShowAssign(true)} className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-semibold bg-white/15 hover:bg-white/25 border border-white/25 backdrop-blur-md">Assign</button>
-            </div>
-          </div>
-        </div>
-        {/* Mobile toolbar */}
-        <div className="md:hidden space-y-2">
-          <div className="flex items-center gap-2">
-            <div className="relative flex-1">
-              <input
-                type="text"
-                placeholder="Search teachers..."
-                value={search}
-                onChange={(e)=>setSearch(e.target.value)}
-                className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent w-full"
-              />
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
-              </div>
-            </div>
-            <button
-              onClick={()=> setShowFilters(v=>!v)}
-              className="px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm"
-            >Filters</button>
-          </div>
-          {showFilters && (
-            <div className="p-3 rounded-xl border border-gray-200 bg-white/90 backdrop-blur-xl supports-[backdrop-filter]:bg-white/70 space-y-2">
-              <select
-                value={filterSubject}
-                onChange={(e)=>setFilterSubject(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+              <button 
+                onClick={() => setShowFilters(!showFilters)}
+                className={`h-12 px-6 rounded-2xl border-2 transition-all flex items-center gap-2 font-black text-xs uppercase tracking-widest ${showFilters ? 'bg-indigo-50 border-indigo-200 text-indigo-600 shadow-sm' : 'bg-white border-gray-100 text-gray-600 hover:border-gray-200'}`}
               >
-                <option value="">All Subjects</option>
-                {(subjects||[]).map(s => (
-                  <option key={s.id} value={s.id}>{s.code ? `${s.code} — ${s.name}` : s.name}</option>
-                ))}
-              </select>
-              <div className="flex items-center gap-2">
-                <select
-                  value={filterClass}
-                  onChange={(e)=>setFilterClass(e.target.value)}
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                <Filter size={18} />
+                Filters
+                <ChevronDown size={16} className={`transform transition-transform ${showFilters ? 'rotate-180' : ''}`} />
+              </button>
+            </div>
+          </div>
+
+          {showFilters && (
+            <div className="p-8 bg-gray-50 border-b border-gray-100 grid grid-cols-1 md:grid-cols-3 gap-6 animate-in slide-in-from-top-4 duration-300 text-left">
+              <div className="space-y-1.5 text-left">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Subject Expertise</label>
+                <select 
+                  value={filterSubject} 
+                  onChange={e=>setFilterSubject(e.target.value)}
+                  className="w-full h-11 bg-white border-2 border-white rounded-xl px-4 text-sm font-bold text-gray-700 shadow-sm focus:border-indigo-500 transition-all outline-none appearance-none"
+                >
+                  <option value="">All Subjects</option>
+                  {subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select>
+              </div>
+              <div className="space-y-1.5 text-left">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Class Responsibility</label>
+                <select 
+                  value={filterClass} 
+                  onChange={e=>setFilterClass(e.target.value)}
+                  className="w-full h-11 bg-white border-2 border-white rounded-xl px-4 text-sm font-bold text-gray-700 shadow-sm focus:border-indigo-500 transition-all outline-none appearance-none"
                 >
                   <option value="">All Classes</option>
-                  {classes.map(c => (
-                    <option key={c.id} value={c.id}>{c.name} {c.grade_level ? `- ${c.grade_level}` : ''}</option>
-                  ))}
-                </select>
-                <select
-                  value={filterAssigned}
-                  onChange={(e)=>setFilterAssigned(e.target.value)}
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                >
-                  <option value="all">All</option>
-                  <option value="assigned">Assigned</option>
-                  <option value="unassigned">Unassigned</option>
+                  {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
               </div>
-              <div className="flex justify-end">
-                <button
+              <div className="flex items-end gap-3 text-left">
+                <button 
                   onClick={()=>{ setFilterSubject(''); setFilterClass(''); setFilterAssigned('all'); setSearch('') }}
-                  className="px-3 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
-                >Clear</button>
+                  className="h-11 px-6 rounded-xl bg-white border-2 border-gray-100 text-gray-500 font-black text-[10px] uppercase tracking-widest hover:border-gray-900 hover:text-gray-900 transition-all flex-1"
+                >
+                  Reset
+                </button>
+                <div className="flex-1 flex flex-col justify-center text-left">
+                  <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Matches</div>
+                  <div className="text-xl font-black text-indigo-600">{filteredTeachers.length} <span className="text-gray-300 text-xs font-bold uppercase tracking-widest ml-1">staff</span></div>
+                </div>
               </div>
             </div>
           )}
-        </div>
-        <button
-          onClick={()=> setShowCreateUser(true)}
-          aria-label="Create teacher"
-          title="Create teacher"
-          className="md:hidden fixed right-4 bottom-24 z-40 px-3.5 py-2 rounded-full text-sm font-semibold bg-indigo-600 text-white shadow-soft"
-        >
-          + Create
-        </button>
 
-        {/* Action Modals */}
-        <Modal open={showCreateUser} onClose={()=>setShowCreateUser(false)} title="Create Teacher User" size="lg">
-          <form onSubmit={createTeacherUser} className="grid gap-3 md:grid-cols-3">
-            <input className="border p-2 rounded" placeholder="Username" value={newTeacher.username} onChange={e=>setNewTeacher({...newTeacher, username:e.target.value})} />
-            <input className="border p-2 rounded" placeholder="Password" type="password" value={newTeacher.password} onChange={e=>setNewTeacher({...newTeacher, password:e.target.value})} />
-            <input className="border p-2 rounded" placeholder="Email" type="email" value={newTeacher.email} onChange={e=>setNewTeacher({...newTeacher, email:e.target.value})} />
-            <input className="border p-2 rounded" placeholder="First name" value={newTeacher.first_name} onChange={e=>setNewTeacher({...newTeacher, first_name:e.target.value})} />
-            <input className="border p-2 rounded" placeholder="Last name" value={newTeacher.last_name} onChange={e=>setNewTeacher({...newTeacher, last_name:e.target.value})} />
-            <div className="md:col-span-3 flex justify-end">
-              <button type="submit" className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded shadow" disabled={creating}>
-                {creating? 'Creating...' : 'Create Teacher User'}
-              </button>
-            </div>
-          </form>
-          <p className="text-xs text-gray-500 mt-2">After creating a teacher user, they will appear in the selector for assignment.</p>
-        </Modal>
-
-        <Modal open={showRelease} onClose={()=>!releasing && setShowRelease(false)} title="Release Teacher" size="md">
-          <div className="space-y-3">
-            <p className="text-sm text-gray-700">
-              This will disable the teacher's portal access, unassign them from their class and subjects, and clear any timetable allocations.
-            </p>
-            <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-amber-700 text-sm">
-              <strong>Teacher:</strong> {releaseTarget?.user?.first_name} {releaseTarget?.user?.last_name} (@{releaseTarget?.user?.username})
-            </div>
-            <p className="text-sm text-gray-600">This action cannot be undone automatically. Are you sure you want to proceed?</p>
-          </div>
-          <div className="mt-6 flex justify-end gap-2">
-            <button type="button" onClick={()=>!releasing && setShowRelease(false)} className="px-3 py-1.5 rounded border text-sm" disabled={releasing}>
-              Cancel
-            </button>
-            <button type="button" onClick={releaseTeacher} className="px-3 py-1.5 rounded text-sm bg-red-600 text-white hover:bg-red-700 disabled:opacity-60" disabled={releasing}>
-              {releasing ? 'Releasing...' : 'Release Teacher'}
-            </button>
-          </div>
-        </Modal>
-
-        <Modal open={showAssign} onClose={()=>setShowAssign(false)} title="Assign Subjects & Class" size="lg">
-          <form onSubmit={create} className="grid gap-3 md:grid-cols-3">
-            <select className="border p-2 rounded" value={form.user_id} onChange={e=>setForm({...form, user_id:e.target.value})} disabled={loading}>
-              <option value="">Select Teacher User</option>
-              {users.map(u=> <option key={u.id} value={u.id}>{u.username} — {u.first_name} {u.last_name}</option>)}
-            </select>
-            <input className="border p-2 rounded" placeholder="Subjects (comma separated)" value={form.subjects} onChange={e=>setForm({...form, subjects:e.target.value})} />
-            <select className="border p-2 rounded" value={form.klass} onChange={e=>setForm({...form, klass:e.target.value})} disabled={loading}>
-              <option value="">Assign Class</option>
-              {classes.map(c=> <option key={c.id} value={c.id}>{c.name} - {c.grade_level}</option>)}
-            </select>
-            <div className="md:col-span-3 flex justify-end">
-              <button className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded shadow disabled:opacity-60" disabled={assigning || loading || !form.user_id}>
-                {assigning? 'Saving...' : 'Assign / Update'}
-              </button>
-            </div>
-          </form>
-        </Modal>
-
-        {/* Directory */}
-        <div className="rounded-2xl border border-gray-200 p-4 md:p-5 bg-white/90 backdrop-blur-xl supports-[backdrop-filter]:bg-white/70 shadow-card">
-          <div className="flex items-center justify-between gap-3 mb-3">
-            <h2 className="text-base font-semibold">Teachers Directory</h2>
-            <div className="hidden md:block">
-              <input className="w-64 border p-2 rounded-lg" placeholder="Search name, subject or class" value={search} onChange={e=>setSearch(e.target.value)} />
-            </div>
-          </div>
-          <div className="hidden md:flex items-center gap-2 mb-2">
-            <select
-              value={filterSubject}
-              onChange={(e)=>setFilterSubject(e.target.value)}
-              className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-            >
-              <option value="">All Subjects</option>
-              {(subjects||[]).map(s => (
-                <option key={s.id} value={s.id}>{s.code ? `${s.code} — ${s.name}` : s.name}</option>
-              ))}
-            </select>
-            <select
-              value={filterClass}
-              onChange={(e)=>setFilterClass(e.target.value)}
-              className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-            >
-              <option value="">All Classes</option>
-              {classes.map(c => (
-                <option key={c.id} value={c.id}>{c.name} {c.grade_level ? `- ${c.grade_level}` : ''}</option>
-              ))}
-            </select>
-            <select
-              value={filterAssigned}
-              onChange={(e)=>setFilterAssigned(e.target.value)}
-              className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-            >
-              <option value="all">All</option>
-              <option value="assigned">Assigned</option>
-              <option value="unassigned">Unassigned</option>
-            </select>
-            <button
-              onClick={()=>{ setFilterSubject(''); setFilterClass(''); setFilterAssigned('all'); setSearch('') }}
-              className="px-3 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
-            >Clear</button>
-          </div>
-          {/* Mobile cards */}
-          <div className="grid gap-2 md:hidden">
-            {loading ? (
-              <div className="py-6 text-center text-gray-500">Loading...</div>
-            ) : filteredTeachers.length === 0 ? (
-              <div className="py-6 text-center text-gray-500">No teachers found.</div>
-            ) : (
-              filteredTeachers.map(t => {
-                const subj = (t.subjects || '')
-                  .split(',')
-                  .map(s => s.trim())
-                  .filter(Boolean)
-                const Container = t.id ? Link : 'div'
-                const containerProps = t.id ? { to: `/admin/teachers/${t.id}` } : {}
-                return (
-                  <Container key={t.id || `u-${t.user?.id}`} {...containerProps} className="relative overflow-hidden rounded-2xl border border-gray-200 bg-white/90 backdrop-blur-xl supports-[backdrop-filter]:bg-white/70 shadow-card p-3 space-y-2">
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div className="h-10 w-10 rounded-full bg-gradient-to-br from-brand-500 to-indigo-600 text-white flex items-center justify-center font-semibold ring-1 ring-white/30">
-                          {(t.user?.first_name?.[0] || t.user?.username?.[0] || '?').toUpperCase()}
-                        </div>
-                        <div className="min-w-0">
-                          <div className="font-medium truncate">{t.user?.first_name} {t.user?.last_name}</div>
-                          <div className="text-xs text-gray-500 truncate">@{t.user?.username}</div>
-                        </div>
-                      </div>
-                      <div className="shrink-0">
-                        {t.klass_detail?.name ? (
-                          <span className="px-2 py-0.5 rounded-full text-xs bg-emerald-100 text-emerald-700">{t.klass_detail.name}</span>
-                        ) : <span className="text-xs text-gray-500">-</span>}
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="min-w-0 flex flex-wrap gap-1.5">
-                        {subj.slice(0,3).map((s, idx) => (
-                          <span key={idx} className="px-2 py-0.5 rounded-full text-[11px] bg-purple-100 text-purple-700">{s}</span>
-                        ))}
-                        {subj.length>3 && <span className="text-[11px] text-gray-500">+{subj.length-3} more</span>}
-                        {!subj.length && <span className="text-[11px] text-gray-500">No subjects</span>}
-                      </div>
-                      <div className="shrink-0 flex items-center gap-1.5">
-                        <button type="button" onClick={(e)=>{ e.preventDefault(); openQuickAssign(t) }} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded-md border border-gray-200 bg-white/80 hover:bg-gray-50">
-                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"/></svg>
-                          Assign
-                        </button>
-                        {t.id && (
-                          <button type="button" onClick={(e)=>{ e.preventDefault(); openRelease(t) }} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded-md border border-red-200 bg-white/80 text-red-600 hover:bg-red-50">
-                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m8 4V7a2 2 0 00-2-2H7a2 2 0 00-2 2v9a2 2 0 002 2h3l2 2 2-2h3a2 2 0 002-2z"/></svg>
-                            Release
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  </Container>
-                )
-              })
-            )}
-          </div>
-          {/* Desktop table */}
-          <div className="hidden md:block overflow-x-auto rounded-lg border border-gray-100">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-gray-50 text-gray-600">
-                <tr>
-                  <th className="py-2 px-3">User</th>
-                  <th className="py-2 px-3">Subjects</th>
-                  <th className="py-2 px-3">Class</th>
-                  <th className="py-2 px-3 text-right">Actions</th>
+          <div className="p-0 overflow-x-auto text-left">
+            <table className="w-full min-w-[1000px] text-left">
+              <thead>
+                <tr className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] border-b border-gray-50 text-left">
+                  <th className="py-6 px-8 text-left">Staff Member</th>
+                  <th className="py-6 px-8 text-left">Subject Assignments</th>
+                  <th className="py-6 px-8 text-center">Primary Class</th>
+                  <th className="py-6 px-8 text-right">Operations</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="divide-y divide-gray-50 text-left">
                 {loading ? (
-                  <tr><td colSpan={3} className="py-6 text-center text-gray-500">Loading...</td></tr>
+                  Array.from({ length: 5 }).map((_, i) => (
+                    <tr key={i} className="animate-pulse">
+                      <td colSpan={4} className="py-8 px-8"><div className="h-12 bg-gray-50 rounded-2xl w-full" /></td>
+                    </tr>
+                  ))
                 ) : filteredTeachers.length === 0 ? (
-                  <tr><td colSpan={3} className="py-6 text-center text-gray-500">No teachers found.</td></tr>
+                  <tr>
+                    <td colSpan={4} className="py-20 text-center">
+                      <div className="w-20 h-20 rounded-full bg-gray-50 flex items-center justify-center mx-auto mb-4 border-2 border-gray-100 border-dashed">
+                        <Users size={40} className="text-gray-200" />
+                      </div>
+                      <h3 className="text-gray-400 font-black uppercase tracking-widest text-sm mb-1">No staff records</h3>
+                      <p className="text-gray-400 text-xs font-medium italic">Adjust filters or create a new user</p>
+                    </td>
+                  </tr>
                 ) : (
                   filteredTeachers.map(t => {
-                    const subj = (t.subjects || '')
-                      .split(',')
-                      .map(s => s.trim())
-                      .filter(Boolean)
+                    const subj = (t.subjects || '').split(',').map(s => s.trim()).filter(Boolean)
                     return (
-                      <tr key={t.id || `u-${t.user?.id}`} className="border-t hover:bg-gray-50/60">
-                        <td className="py-2 px-3">
-                          {t.id ? (
-                            <Link to={`/admin/teachers/${t.id}`} className="flex items-center gap-2 group">
-                              <div className="h-8 w-8 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center font-semibold">
-                                {(t.user?.first_name?.[0] || t.user?.username?.[0] || '?').toUpperCase()}
-                              </div>
-                              <div>
-                                <div className="font-medium group-hover:underline">{t.user?.first_name} {t.user?.last_name}</div>
-                                <div className="text-xs text-gray-500">@{t.user?.username}</div>
-                              </div>
-                            </Link>
-                          ) : (
-                            <div className="flex items-center gap-2">
-                              <div className="h-8 w-8 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center font-semibold">
-                                {(t.user?.first_name?.[0] || t.user?.username?.[0] || '?').toUpperCase()}
-                              </div>
-                              <div>
-                                <div className="font-medium">{t.user?.first_name} {t.user?.last_name}</div>
-                                <div className="text-xs text-gray-500">@{t.user?.username}</div>
-                                <div className="text-[11px] text-gray-500">Not yet assigned</div>
-                              </div>
+                      <tr key={t.id || `u-${t.user?.id}`} className="group hover:bg-gray-50/50 transition-colors text-left">
+                        <td className="py-6 px-8 text-left">
+                          <Link to={t.id ? `/admin/teachers/${t.id}` : '#'} className="flex items-center gap-4 group/item text-left">
+                            <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-black text-base shadow-sm ring-2 ring-transparent group-hover/item:ring-indigo-100 transition-all shrink-0">
+                              {(t.user?.first_name?.[0] || t.user?.username?.[0] || '?').toUpperCase()}
                             </div>
-                          )}
+                            <div className="text-left">
+                              <div className="font-black text-gray-900 tracking-tight leading-none mb-1 group-hover/item:text-indigo-600 transition-colors text-left">
+                                {t.user?.first_name} {t.user?.last_name}
+                              </div>
+                              <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest text-left">@{t.user?.username}</div>
+                            </div>
+                          </Link>
                         </td>
-                        <td className="py-2 px-3">
-                          <div className="flex flex-wrap gap-1.5">
-                            {subj.length ? subj.map((s, idx) => (
-                              <span key={idx} className="px-2 py-0.5 rounded-full text-xs bg-purple-100 text-purple-700">{s}</span>
-                            )) : <span className="text-gray-500">-</span>}
+                        <td className="py-6 px-8 text-left">
+                          <div className="flex flex-wrap gap-1.5 max-w-md text-left">
+                            {subj.length > 0 ? subj.map((s, idx) => (
+                              <span key={idx} className="px-2.5 py-1 rounded-lg text-[10px] font-black bg-purple-50 text-purple-600 border border-purple-100 uppercase tracking-wider">
+                                {s}
+                              </span>
+                            )) : <span className="text-[10px] font-bold text-gray-300 uppercase tracking-widest italic">Unassigned</span>}
                           </div>
                         </td>
-                        <td className="py-2 px-3">
+                        <td className="py-6 px-8 text-center">
                           {t.klass_detail?.name ? (
-                            <span className="px-2 py-0.5 rounded-full text-xs bg-emerald-100 text-emerald-700">{t.klass_detail.name}</span>
-                          ) : <span className="text-gray-500">-</span>}
-                        </td>
-                        <td className="py-2 px-3 text-right">
-                          <button type="button" onClick={()=>openQuickAssign(t)} className="px-2 py-1 rounded border text-xs hover:bg-gray-50">Assign Subjects</button>
-                          {t.id && (
-                            <button
-                              type="button"
-                              onClick={()=>openRelease(t)}
-                              className="ml-2 px-2 py-1 rounded border border-red-200 text-xs text-red-600 hover:bg-red-50"
-                            >
-                              Release
-                            </button>
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black bg-emerald-50 text-emerald-600 border border-emerald-100 uppercase tracking-wider">
+                              <CheckCircle2 size={12} />
+                              {t.klass_detail.name}
+                            </span>
+                          ) : (
+                            <span className="text-[10px] font-bold text-gray-300 uppercase tracking-widest">None</span>
                           )}
+                        </td>
+                        <td className="py-6 px-8 text-right">
+                          <div className="flex items-center justify-end gap-2 text-right">
+                            <button 
+                              onClick={()=>openQuickAssign(t)}
+                              className="h-9 px-4 rounded-xl bg-white border-2 border-gray-100 text-indigo-600 font-black text-[10px] uppercase tracking-widest hover:border-indigo-600 transition-all active:scale-95 shadow-sm"
+                            >
+                              Edit Subjects
+                            </button>
+                            {t.id && (
+                              <button 
+                                onClick={()=>openRelease(t)}
+                                className="h-9 w-9 flex items-center justify-center rounded-xl bg-white border-2 border-gray-100 text-gray-300 hover:text-rose-600 hover:border-rose-600 transition-all active:scale-95 shadow-sm"
+                                title="Release Staff"
+                              >
+                                <X size={18} />
+                              </button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     )
@@ -825,6 +723,6 @@ export default function AdminTeachers(){
           </div>
         )}
       </div>
-    </React.Fragment>
+    </div>
   )
 }

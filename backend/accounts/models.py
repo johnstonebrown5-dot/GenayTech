@@ -95,6 +95,10 @@ class User(AbstractUser):
     # Avatar/profile picture for UI
     profile_picture = models.ImageField(upload_to='avatars/', null=True, blank=True)
 
+    is_deleted = models.BooleanField(default=False)
+    deleted_at = models.DateTimeField(null=True, blank=True)
+    deleted_by = models.ForeignKey('self', null=True, blank=True, on_delete=models.SET_NULL, related_name='deleted_users')
+
 
 class EmailVerificationToken(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='email_tokens')

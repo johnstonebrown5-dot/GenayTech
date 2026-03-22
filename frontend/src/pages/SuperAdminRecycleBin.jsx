@@ -23,7 +23,11 @@ export default function SuperAdminRecycleBin(){
       ? '/auth/superadmin/recycle-bin/academic-years/'
       : tab === 'terms'
         ? '/auth/superadmin/recycle-bin/terms/'
-        : '/auth/superadmin/recycle-bin/schools/'
+        : tab === 'classes'
+          ? '/auth/superadmin/recycle-bin/classes/'
+          : tab === 'users'
+            ? '/auth/superadmin/recycle-bin/users/'
+            : '/auth/superadmin/recycle-bin/schools/'
 
   const fetchItems = async () => {
     setLoading(true)
@@ -63,7 +67,11 @@ export default function SuperAdminRecycleBin(){
           ? `/auth/superadmin/recycle-bin/academic-years/${row.id}/restore/`
           : tab === 'terms'
             ? `/auth/superadmin/recycle-bin/terms/${row.id}/restore/`
-            : `/auth/superadmin/recycle-bin/schools/${row.id}/restore/`
+            : tab === 'classes'
+              ? `/auth/superadmin/recycle-bin/classes/${row.id}/restore/`
+              : tab === 'users'
+                ? `/auth/superadmin/recycle-bin/users/${row.id}/restore/`
+                : `/auth/superadmin/recycle-bin/schools/${row.id}/restore/`
       await api.post(url, {})
       await fetchItems()
     }catch(e){
@@ -88,7 +96,11 @@ This cannot be undone.`)
           ? `/auth/superadmin/recycle-bin/academic-years/${row.id}/purge/`
           : tab === 'terms'
             ? `/auth/superadmin/recycle-bin/terms/${row.id}/purge/`
-            : `/auth/superadmin/recycle-bin/schools/${row.id}/purge/`
+            : tab === 'classes'
+              ? `/auth/superadmin/recycle-bin/classes/${row.id}/purge/`
+              : tab === 'users'
+                ? `/auth/superadmin/recycle-bin/users/${row.id}/purge/`
+                : `/auth/superadmin/recycle-bin/schools/${row.id}/purge/`
       await api.delete(url)
       await fetchItems()
     }catch(e){
@@ -126,10 +138,12 @@ This cannot be undone.`)
       </div>
 
       <div className="mt-4 flex flex-col sm:flex-row sm:flex-wrap items-start sm:items-center gap-2">
-        <button onClick={() => setTab('schools')} className={`px-3 py-2 rounded-xl text-sm font-semibold border ${tab==='schools' ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'}`}>Schools</button>
-        <button onClick={() => setTab('exams')} className={`px-3 py-2 rounded-xl text-sm font-semibold border ${tab==='exams' ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'}`}>Exams</button>
-        <button onClick={() => setTab('academic-years')} className={`px-3 py-2 rounded-xl text-sm font-semibold border ${tab==='academic-years' ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'}`}>Academic Years</button>
-        <button onClick={() => setTab('terms')} className={`px-3 py-2 rounded-xl text-sm font-semibold border ${tab==='terms' ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'}`}>Terms</button>
+        <button onClick={() => setTab('schools')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${tab === 'schools' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-200'}`}>Schools</button>
+        <button onClick={() => setTab('classes')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${tab === 'classes' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-200'}`}>Classes</button>
+        <button onClick={() => setTab('users')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${tab === 'users' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-200'}`}>Users</button>
+        <button onClick={() => setTab('exams')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${tab === 'exams' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-200'}`}>Exams</button>
+        <button onClick={() => setTab('academic-years')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${tab === 'academic-years' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-200'}`}>Academic Years</button>
+        <button onClick={() => setTab('terms')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${tab === 'terms' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-200'}`}>Terms</button>
       </div>
 
       {error && (
@@ -172,6 +186,78 @@ This cannot be undone.`)
                       <div className="flex flex-wrap items-center justify-end gap-2">
                         <button onClick={() => restore(s)} className="px-3 py-1.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">Restore</button>
                         <button onClick={() => purge(s)} className="px-3 py-1.5 rounded-lg border border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100">Purge</button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : tab === 'classes' ? (
+            <table className="min-w-[1000px] w-full text-sm">
+              <thead className="bg-gray-50 text-gray-700">
+                <tr>
+                  <th className="text-left px-4 py-3">ID</th>
+                  <th className="text-left px-4 py-3">Class</th>
+                  <th className="text-left px-4 py-3">School</th>
+                  <th className="text-left px-4 py-3">Stream</th>
+                  <th className="text-left px-4 py-3">Deleted At</th>
+                  <th className="text-left px-4 py-3">Deleted By</th>
+                  <th className="text-right px-4 py-3">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr><td className="px-4 py-6 text-gray-600" colSpan={7}>Loading…</td></tr>
+                ) : filtered.length === 0 ? (
+                  <tr><td className="px-4 py-6 text-gray-600" colSpan={7}>Recycle bin is empty</td></tr>
+                ) : filtered.map(c => (
+                  <tr key={c.id} className="border-t">
+                    <td className="px-4 py-3 text-gray-900">{c.id}</td>
+                    <td className="px-4 py-3 text-gray-900 font-medium">{c.name}</td>
+                    <td className="px-4 py-3 text-gray-700">{c.school_name}</td>
+                    <td className="px-4 py-3 text-gray-700">{c.stream_name}</td>
+                    <td className="px-4 py-3 text-gray-700">{fmtDt(c.deleted_at)}</td>
+                    <td className="px-4 py-3 text-gray-700">{c.deleted_by || '—'}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex flex-wrap items-center justify-end gap-2">
+                        <button onClick={() => restore(c)} className="px-3 py-1.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">Restore</button>
+                        <button onClick={() => purge(c)} className="px-3 py-1.5 rounded-lg border border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100">Purge</button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : tab === 'users' ? (
+            <table className="min-w-[1000px] w-full text-sm">
+              <thead className="bg-gray-50 text-gray-700">
+                <tr>
+                  <th className="text-left px-4 py-3">ID</th>
+                  <th className="text-left px-4 py-3">Username</th>
+                  <th className="text-left px-4 py-3">Name</th>
+                  <th className="text-left px-4 py-3">Role</th>
+                  <th className="text-left px-4 py-3">School</th>
+                  <th className="text-left px-4 py-3">Deleted At</th>
+                  <th className="text-right px-4 py-3">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr><td className="px-4 py-6 text-gray-600" colSpan={7}>Loading…</td></tr>
+                ) : filtered.length === 0 ? (
+                  <tr><td className="px-4 py-6 text-gray-600" colSpan={7}>Recycle bin is empty</td></tr>
+                ) : filtered.map(u => (
+                  <tr key={u.id} className="border-t">
+                    <td className="px-4 py-3 text-gray-900">{u.id}</td>
+                    <td className="px-4 py-3 text-gray-900 font-medium">{u.username}</td>
+                    <td className="px-4 py-3 text-gray-700">{u.first_name} {u.last_name}</td>
+                    <td className="px-4 py-3 text-gray-700 capitalize">{u.role}</td>
+                    <td className="px-4 py-3 text-gray-700">{u.school_name}</td>
+                    <td className="px-4 py-3 text-gray-700">{fmtDt(u.deleted_at)}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex flex-wrap items-center justify-end gap-2">
+                        <button onClick={() => restore(u)} className="px-3 py-1.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">Restore</button>
+                        <button onClick={() => purge(u)} className="px-3 py-1.5 rounded-lg border border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100">Purge</button>
                       </div>
                     </td>
                   </tr>
