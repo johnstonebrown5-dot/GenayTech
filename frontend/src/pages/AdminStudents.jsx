@@ -5,6 +5,18 @@ import Modal from '../components/Modal'
 import { useNotification } from '../components/NotificationContext'
 import StatCard from '../components/StatCard'
 import { showLoadingHint, setLoadingProgress, clearLoadingHint } from '../utils/loading'
+import {
+  Users,
+  UserPlus,
+  Printer,
+  Download,
+  Search,
+  SlidersHorizontal,
+  X,
+  CheckCircle2,
+  GraduationCap,
+  UserX
+} from 'lucide-react'
 
 // Simple in-memory cache so that navigating away and back within the same
 // session can reuse previously loaded data without refetching immediately.
@@ -607,46 +619,51 @@ export default function AdminStudents(){
   }
 
   return (
-    <React.Fragment>
-      <div className="space-y-6">
-        {/* Header Section */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Students</h1>
-            <p className="text-gray-600 mt-1">Manage and organize your student records</p>
-          </div>
-          <div className="flex items-center gap-1.5 overflow-x-auto sm:overflow-visible flex-nowrap sm:flex-wrap">
-            <button
-              onClick={() => setShowAddStudent(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded-md transition-colors shrink-0"
-            >
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
-              Enroll Student
-            </button>
-            <button
-              onClick={handlePrint}
-              disabled={exporting}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs rounded-md transition-colors"
-            >
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-              </svg>
-              Print
-            </button>
-            <button
-              onClick={handleDownload}
-              disabled={exporting}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-xs rounded-md transition-colors"
-            >
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-              Download
-            </button>
+    <div className="min-h-screen bg-gray-50/50 pb-20 text-left">
+      <div className="bg-white border-b border-gray-200 sticky top-0 z-30">
+        <div className="max-w-[1600px] mx-auto px-6 py-6">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+            <div className="text-left">
+              <div className="flex items-center gap-2 text-indigo-600 mb-1">
+                <Users size={20} />
+                <span className="text-sm font-bold uppercase tracking-wider">Student Directory</span>
+              </div>
+              <h1 className="text-3xl font-black text-gray-900 tracking-tight">
+                Manage <span className="text-indigo-600">Students</span>
+              </h1>
+              <p className="text-gray-500 mt-1 font-medium">Manage and organize your student records</p>
+            </div>
+
+            <div className="flex flex-col sm:flex-row items-center gap-3">
+              <button
+                onClick={() => setShowAddStudent(true)}
+                className="h-12 px-6 rounded-2xl bg-indigo-600 text-white font-black hover:bg-indigo-700 transition-all flex items-center gap-2 shadow-lg shadow-indigo-200 active:scale-95 w-full sm:w-auto"
+              >
+                <UserPlus size={18} />
+                Enroll Student
+              </button>
+              <button
+                onClick={handlePrint}
+                disabled={exporting}
+                className="h-12 px-5 rounded-2xl bg-white border-2 border-gray-100 text-gray-700 font-black hover:border-gray-900 hover:text-gray-900 transition-all flex items-center gap-2 shadow-sm disabled:opacity-60 w-full sm:w-auto"
+              >
+                <Printer size={18} />
+                Print
+              </button>
+              <button
+                onClick={handleDownload}
+                disabled={exporting}
+                className="h-12 px-5 rounded-2xl bg-emerald-600 text-white font-black hover:bg-emerald-700 transition-all flex items-center gap-2 shadow-lg shadow-emerald-200 active:scale-95 disabled:opacity-60 w-full sm:w-auto"
+              >
+                <Download size={18} />
+                Download
+              </button>
+            </div>
           </div>
         </div>
+      </div>
+
+      <div className="max-w-[1600px] mx-auto px-6 py-8 space-y-8">
 
         {/* Stats Cards */}
         {(() => {
@@ -761,38 +778,129 @@ export default function AdminStudents(){
           + Enroll
         </button>
 
-        {/* Tabs: Active / Graduated / Inactive */}
-        <div className="mt-2 inline-flex w-full max-w-xs rounded-full bg-gray-100 p-0.5 shadow-inner">
-          <button
-            className={`flex-1 px-2.5 py-1.5 text-[11px] font-medium rounded-full border transition-colors ${
-              tab==='active'
-                ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
-                : 'bg-transparent text-gray-700 border-transparent hover:bg-white'
-            }`}
-            onClick={()=>{ setTab('active'); setSearchTerm(''); setSearchDraft(''); }}
-          >
-            Active
-          </button>
-          <button
-            className={`flex-1 px-2.5 py-1.5 text-[11px] font-medium rounded-full border transition-colors ${
-              tab==='graduated'
-                ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
-                : 'bg-transparent text-gray-700 border-transparent hover:bg-white'
-            }`}
-            onClick={()=>{ setTab('graduated'); setSearchTerm(''); setSearchDraft(''); }}
-          >
-            Graduated
-          </button>
-          <button
-            className={`flex-1 px-2.5 py-1.5 text-[11px] font-medium rounded-full border transition-colors ${
-              tab==='inactive'
-                ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
-                : 'bg-transparent text-gray-700 border-transparent hover:bg-white'
-            }`}
-            onClick={()=>{ setTab('inactive'); setSearchTerm(''); setSearchDraft(''); }}
-          >
-            Inactive
-          </button>
+        <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm p-6">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+            <div className="inline-flex w-full max-w-md rounded-full bg-gray-100 p-1 shadow-inner">
+              <button
+                className={`flex-1 h-10 px-4 rounded-full text-[10px] font-black uppercase tracking-widest border transition-all flex items-center justify-center gap-2 ${
+                  tab==='active'
+                    ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                    : 'bg-transparent text-gray-700 border-transparent hover:bg-white'
+                }`}
+                onClick={()=>{ setTab('active'); setSearchTerm(''); setSearchDraft(''); }}
+              >
+                <CheckCircle2 size={14} />
+                Active
+              </button>
+              <button
+                className={`flex-1 h-10 px-4 rounded-full text-[10px] font-black uppercase tracking-widest border transition-all flex items-center justify-center gap-2 ${
+                  tab==='graduated'
+                    ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                    : 'bg-transparent text-gray-700 border-transparent hover:bg-white'
+                }`}
+                onClick={()=>{ setTab('graduated'); setSearchTerm(''); setSearchDraft(''); }}
+              >
+                <GraduationCap size={14} />
+                Graduated
+              </button>
+              <button
+                className={`flex-1 h-10 px-4 rounded-full text-[10px] font-black uppercase tracking-widest border transition-all flex items-center justify-center gap-2 ${
+                  tab==='inactive'
+                    ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                    : 'bg-transparent text-gray-700 border-transparent hover:bg-white'
+                }`}
+                onClick={()=>{ setTab('inactive'); setSearchTerm(''); setSearchDraft(''); }}
+              >
+                <UserX size={14} />
+                Inactive
+              </button>
+            </div>
+
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full lg:w-auto">
+              <div className="relative w-full sm:w-[340px]">
+                <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Search students..."
+                  value={searchDraft}
+                  onChange={(e) => setSearchDraft(e.target.value)}
+                  className="h-11 w-full bg-gray-50 border-2 border-gray-100 rounded-2xl pl-11 pr-4 text-sm font-semibold focus:border-indigo-500 transition-all outline-none"
+                />
+              </div>
+              <button
+                onClick={()=> setSearchTerm(searchDraft)}
+                className="h-11 px-6 rounded-2xl bg-gray-900 text-white font-black text-[10px] uppercase tracking-widest shadow-lg hover:bg-gray-800 transition-all active:scale-95 flex items-center gap-2 justify-center"
+              >
+                <Search size={16} />
+                Search
+              </button>
+              <button
+                type="button"
+                onClick={()=> setShowFilters(v=>!v)}
+                className={`h-11 px-5 rounded-2xl border-2 font-black text-[10px] uppercase tracking-widest transition-all flex items-center gap-2 justify-center ${showFilters ? 'bg-indigo-600 text-white border-indigo-600 shadow-lg shadow-indigo-200' : 'bg-white text-gray-700 border-gray-100 hover:border-gray-900 hover:text-gray-900 shadow-sm'}`}
+              >
+                <SlidersHorizontal size={16} />
+                Filters
+              </button>
+              {(filterGrade || filterClass || filterGender || searchTerm) && (
+                <button
+                  type="button"
+                  onClick={()=>{ setFilterGrade(''); setFilterClass(''); setFilterGender(''); setSearchTerm(''); setSearchDraft('') }}
+                  className="h-11 px-5 rounded-2xl bg-white border-2 border-gray-100 text-gray-600 font-black text-[10px] uppercase tracking-widest hover:border-rose-200 hover:text-rose-600 transition-all flex items-center gap-2 justify-center"
+                >
+                  <X size={16} />
+                  Clear
+                </button>
+              )}
+            </div>
+          </div>
+
+          {showFilters && (
+            <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+              {tab==='active' && (
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Grade</label>
+                  <select
+                    value={filterGrade}
+                    onChange={(e)=>{ setFilterGrade(e.target.value); setFilterClass('') }}
+                    className="h-11 w-full bg-gray-50 border-2 border-gray-100 rounded-2xl px-4 text-sm font-semibold focus:border-indigo-500 transition-all outline-none"
+                  >
+                    <option value="">All Grades</option>
+                    {gradeOptions.map(g => (
+                      <option key={g} value={g}>Grade {g}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              {tab==='active' && (
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Class</label>
+                  <select
+                    value={filterClass}
+                    onChange={(e)=>setFilterClass(e.target.value)}
+                    className="h-11 w-full bg-gray-50 border-2 border-gray-100 rounded-2xl px-4 text-sm font-semibold focus:border-indigo-500 transition-all outline-none"
+                  >
+                    <option value="">All Classes</option>
+                    {classOptions.map(c => (
+                      <option key={c.id} value={c.id}>{c.name} {c.grade_level ? `- ${c.grade_level}` : ''}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Gender</label>
+                <select
+                  value={filterGender}
+                  onChange={(e)=>setFilterGender(e.target.value)}
+                  className="h-11 w-full bg-gray-50 border-2 border-gray-100 rounded-2xl px-4 text-sm font-semibold focus:border-indigo-500 transition-all outline-none"
+                >
+                  <option value="">All Genders</option>
+                  <option value="Male">Male</option>
+                  <option value="Female">Female</option>
+                </select>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Mobile toolbar */}
@@ -870,71 +978,6 @@ export default function AdminStudents(){
               </div>
             </div>
           )}
-        </div>
-
-        {/* Filters & Search Toolbar (desktop) */}
-        <div className="hidden sm:flex items-center gap-2.5 flex-wrap">
-          {/* Filters */}
-          {tab==='active' && (
-          <select
-            value={filterGrade}
-            onChange={(e)=>{ setFilterGrade(e.target.value); setFilterClass('') }}
-            className="px-2.5 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          >
-            <option value="">All Grades</option>
-            {gradeOptions.map(g => (
-              <option key={g} value={g}>Grade {g}</option>
-            ))}
-          </select>
-          )}
-          {tab==='active' && (
-          <select
-            value={filterClass}
-            onChange={(e)=>setFilterClass(e.target.value)}
-            className="px-2.5 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          >
-            <option value="">All Classes</option>
-            {classOptions.map(c => (
-              <option key={c.id} value={c.id}>{c.name} {c.grade_level ? `- ${c.grade_level}` : ''}</option>
-            ))}
-          </select>
-          )}
-          <select
-            value={filterGender}
-            onChange={(e)=>setFilterGender(e.target.value)}
-            className="px-2.5 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          >
-            <option value="">All Genders</option>
-            <option value="Male">Male</option>
-            <option value="Female">Female</option>
-          </select>
-          <button
-            onClick={()=>{ setFilterGrade(''); setFilterClass(''); setFilterGender(''); setSearchTerm(''); setSearchDraft('') }}
-            className="px-2.5 py-1.5 text-sm border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
-          >
-            Clear
-          </button>
-          <div className="relative">
-            <input
-              type="text"
-              placeholder="Search students..."
-              value={searchDraft}
-              onChange={(e) => setSearchDraft(e.target.value)}
-              className="pl-10 pr-4 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent w-64"
-            />
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
-            </div>
-          </div>
-          <button
-            onClick={()=> setSearchTerm(searchDraft)}
-            className="inline-flex items-center gap-1 px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-4.35-4.35m1.35-4.65a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-            Search
-          </button>
         </div>
 
         {/* Mobile Card List */}
@@ -1560,6 +1603,6 @@ export default function AdminStudents(){
           </div>
         </div>
       </Modal>
-    </React.Fragment>
+    </div>
   )
 }
