@@ -150,6 +150,8 @@ export default function AdminTeachers(){
       setForm(f => ({ ...f, user_id: data.id }))
       setNewTeacher({ username:'', password:'', first_name:'', last_name:'', email:'' })
       showSuccess('Teacher User Created', `Teacher user account for ${data.first_name} ${data.last_name} has been created successfully.`)
+      setShowCreateUser(false)
+      setShowAssign(true)
     } catch (err) {
       showError('Failed to Create Teacher User', 'There was an error creating the teacher user account. Please try again.')
     } finally {
@@ -334,7 +336,7 @@ export default function AdminTeachers(){
     <div className="min-h-screen bg-gray-50/50 pb-20 text-left">
       {/* Header Section */}
       <div className="bg-white border-b border-gray-200 sticky top-0 z-30">
-        <div className="max-w-[1600px] mx-auto px-6 py-6">
+        <div className="max-w-[1600px] mx-auto px-4 sm:px-6 py-5 sm:py-6">
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 text-left">
             <div className="text-left">
               <div className="flex items-center gap-2 text-indigo-600 mb-1">
@@ -347,14 +349,14 @@ export default function AdminTeachers(){
               <p className="text-gray-500 mt-1 font-medium">Create accounts, assign subjects, and manage the directory</p>
             </div>
 
-            <div className="flex flex-col sm:flex-row items-center gap-4">
-              <Link to="/admin/subjects" className="h-12 px-6 rounded-2xl bg-white border-2 border-gray-100 text-gray-700 font-black hover:border-gray-900 hover:text-gray-900 transition-all flex items-center gap-2 shadow-sm">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4">
+              <Link to="/admin/subjects" className="h-12 px-6 rounded-2xl bg-white border-2 border-gray-100 text-gray-700 font-black hover:border-gray-900 hover:text-gray-900 transition-all flex items-center justify-center gap-2 shadow-sm w-full sm:w-auto">
                 <BookOpen size={18} />
                 Subjects
               </Link>
               <button 
                 onClick={()=>setShowAssign(true)}
-                className="h-12 px-6 rounded-2xl bg-indigo-600 text-white font-black hover:bg-indigo-700 transition-all flex items-center gap-2 shadow-lg shadow-indigo-200 active:scale-95"
+                className="h-12 px-6 rounded-2xl bg-indigo-600 text-white font-black hover:bg-indigo-700 transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-200 active:scale-95 w-full sm:w-auto"
               >
                 <ClipboardCheck size={18} />
                 Assign Subjects & Class
@@ -363,8 +365,9 @@ export default function AdminTeachers(){
           </div>
 
           {/* Stats Bar */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-8">
-            <div className="bg-gray-50/50 p-4 rounded-2xl border border-gray-100 flex items-center gap-4 text-left">
+          <div className="mt-6 sm:mt-8">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 md:gap-4">
+              <div className="bg-gray-50/50 p-4 rounded-2xl border border-gray-100 flex items-center gap-4 text-left">
               <div className="w-12 h-12 rounded-xl bg-indigo-100 text-indigo-600 flex items-center justify-center shadow-sm">
                 <Users size={24} />
               </div>
@@ -372,8 +375,8 @@ export default function AdminTeachers(){
                 <div className="text-2xl font-black text-gray-900 leading-none">{activeTeachersCount}</div>
                 <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-1">Active Teachers</div>
               </div>
-            </div>
-            <div className="bg-gray-50/50 p-4 rounded-2xl border border-gray-100 flex items-center gap-4 text-left">
+              </div>
+              <div className="bg-gray-50/50 p-4 rounded-2xl border border-gray-100 flex items-center gap-4 text-left">
               <div className="w-12 h-12 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center shadow-sm">
                 <UserCheck size={24} />
               </div>
@@ -381,8 +384,8 @@ export default function AdminTeachers(){
                 <div className="text-2xl font-black text-gray-900 leading-none">{assignedTeachersCount}</div>
                 <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-1">Assigned</div>
               </div>
-            </div>
-            <div className="bg-gray-50/50 p-4 rounded-2xl border border-gray-100 flex items-center gap-4 text-left">
+              </div>
+              <div className="bg-gray-50/50 p-4 rounded-2xl border border-gray-100 flex items-center gap-4 text-left">
               <div className="w-12 h-12 rounded-xl bg-fuchsia-100 text-fuchsia-600 flex items-center justify-center shadow-sm">
                 <BookOpen size={24} />
               </div>
@@ -390,8 +393,8 @@ export default function AdminTeachers(){
                 <div className="text-2xl font-black text-gray-900 leading-none">{coveredSubjectsCount}</div>
                 <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-1">Subjects Covered</div>
               </div>
-            </div>
-            <div className="bg-gray-900 p-4 rounded-2xl shadow-xl flex items-center justify-between group text-left">
+              </div>
+              <div className="bg-gray-900 p-4 rounded-2xl shadow-xl flex items-center justify-between group text-left">
               <div className="text-left">
                 <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Status</div>
                 <div className="flex items-center gap-2">
@@ -402,14 +405,15 @@ export default function AdminTeachers(){
               <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center text-white">
                 <CheckCircle2 size={20} />
               </div>
+              </div>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="max-w-[1600px] mx-auto px-6 py-8 text-left">
+      <div className="max-w-[1600px] mx-auto px-4 sm:px-6 py-6 sm:py-8 text-left">
         {/* Quick Actions Card */}
-        <div className="bg-white rounded-[2rem] p-8 border-2 border-gray-100 shadow-sm mb-12 flex flex-col md:flex-row items-center justify-between gap-8 group overflow-hidden relative">
+        <div className="bg-white rounded-[2rem] p-5 sm:p-8 border-2 border-gray-100 shadow-sm mb-8 sm:mb-12 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-5 sm:gap-8 group overflow-hidden relative">
           <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-50 rounded-full -mr-32 -mt-32 opacity-50 group-hover:scale-110 transition-transform duration-700" />
           <div className="relative z-10 text-left w-full md:w-auto">
             <div className="flex items-center gap-3 mb-4 text-left">
@@ -425,13 +429,13 @@ export default function AdminTeachers(){
           <div className="relative z-10 flex flex-col sm:flex-row gap-4 w-full md:w-auto">
             <button 
               onClick={()=>setShowCreateUser(true)}
-              className="h-12 px-8 rounded-2xl bg-white border-2 border-gray-100 text-gray-700 font-black text-xs uppercase tracking-widest hover:border-indigo-600 hover:text-indigo-600 transition-all flex items-center justify-center gap-2 shadow-sm"
+              className="h-12 px-8 rounded-2xl bg-white border-2 border-gray-100 text-gray-700 font-black text-xs uppercase tracking-widest hover:border-indigo-600 hover:text-indigo-600 transition-all flex items-center justify-center gap-2 shadow-sm w-full sm:w-auto"
             >
               <Plus size={18} /> Create User
             </button>
             <button 
               onClick={()=>setShowAssign(true)}
-              className="h-12 px-8 rounded-2xl bg-indigo-600 text-white font-black text-xs uppercase tracking-widest hover:bg-indigo-700 transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-200 active:scale-95"
+              className="h-12 px-8 rounded-2xl bg-indigo-600 text-white font-black text-xs uppercase tracking-widest hover:bg-indigo-700 transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-200 active:scale-95 w-full sm:w-auto"
             >
               <ClipboardCheck size={18} /> Assign Now
             </button>
@@ -452,7 +456,7 @@ export default function AdminTeachers(){
 
             </div>
 
-            <div className="flex flex-col sm:flex-row items-center gap-4">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4 w-full lg:w-auto">
               <div className="relative group w-full sm:w-64">
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-indigo-500 transition-colors" size={18} />
                 <input 
@@ -464,7 +468,7 @@ export default function AdminTeachers(){
               </div>
               <button 
                 onClick={() => setShowFilters(!showFilters)}
-                className={`h-12 px-6 rounded-2xl border-2 transition-all flex items-center gap-2 font-black text-xs uppercase tracking-widest ${showFilters ? 'bg-indigo-50 border-indigo-200 text-indigo-600 shadow-sm' : 'bg-white border-gray-100 text-gray-600 hover:border-gray-200'}`}
+                className={`h-12 px-6 rounded-2xl border-2 transition-all flex items-center justify-center gap-2 font-black text-xs uppercase tracking-widest w-full sm:w-auto ${showFilters ? 'bg-indigo-50 border-indigo-200 text-indigo-600 shadow-sm' : 'bg-white border-gray-100 text-gray-600 hover:border-gray-200'}`}
               >
                 <Filter size={18} />
                 Filters
@@ -512,8 +516,83 @@ export default function AdminTeachers(){
             </div>
           )}
 
-          <div className="p-0 overflow-x-auto text-left">
-            <table className="w-full min-w-[1000px] text-left">
+          <div className="p-0 text-left">
+            <div className="md:hidden p-4 sm:p-6 grid gap-3">
+              {loading ? (
+                Array.from({ length: 5 }).map((_, i) => (
+                  <div key={i} className="p-4 rounded-2xl border border-gray-100 bg-gray-50 animate-pulse">
+                    <div className="h-10 bg-white/70 rounded-xl" />
+                  </div>
+                ))
+              ) : filteredTeachers.length === 0 ? (
+                <div className="py-10 text-center text-gray-500">No staff records</div>
+              ) : (
+                filteredTeachers.map(t => {
+                  const subj = (t.subjects || '').split(',').map(s => s.trim()).filter(Boolean)
+                  return (
+                    <div key={t.id || `u-${t.user?.id}`} className="p-4 rounded-[2rem] border border-gray-100 bg-white shadow-sm">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="w-11 h-11 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-black shrink-0">
+                            {(t.user?.first_name?.[0] || t.user?.username?.[0] || '?').toUpperCase()}
+                          </div>
+                          <div className="min-w-0">
+                            <div className="font-black text-gray-900 truncate">
+                              {t.user?.first_name} {t.user?.last_name}
+                            </div>
+                            <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest truncate">@{t.user?.username}</div>
+                          </div>
+                        </div>
+                        {t.klass_detail?.name ? (
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black bg-emerald-50 text-emerald-600 border border-emerald-100 uppercase tracking-wider shrink-0">
+                            <CheckCircle2 size={12} />
+                            {t.klass_detail.name}
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-bold text-gray-300 uppercase tracking-widest shrink-0">None</span>
+                        )}
+                      </div>
+
+                      <div className="mt-3 flex flex-wrap gap-1.5">
+                        {subj.length ? subj.slice(0, 6).map((s, idx) => (
+                          <span key={idx} className="px-2.5 py-1 rounded-lg text-[10px] font-black bg-purple-50 text-purple-600 border border-purple-100 uppercase tracking-wider">
+                            {s}
+                          </span>
+                        )) : (
+                          <span className="text-[10px] font-bold text-gray-300 uppercase tracking-widest italic">Unassigned</span>
+                        )}
+                        {subj.length > 6 && (
+                          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">+{subj.length - 6} more</span>
+                        )}
+                      </div>
+
+                      <div className="mt-4 flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={()=>openQuickAssign(t)}
+                          className="flex-1 h-11 rounded-2xl bg-white border-2 border-gray-100 text-indigo-600 font-black text-[10px] uppercase tracking-widest hover:border-indigo-600 transition-all active:scale-95"
+                        >
+                          Edit Subjects
+                        </button>
+                        {t.id && (
+                          <button
+                            type="button"
+                            onClick={()=>openRelease(t)}
+                            className="h-11 w-11 rounded-2xl bg-white border-2 border-gray-100 text-gray-300 hover:text-rose-600 hover:border-rose-600 transition-all active:scale-95"
+                            title="Release Staff"
+                          >
+                            <X size={18} className="mx-auto" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })
+              )}
+            </div>
+
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full min-w-[1000px] text-left">
               <thead>
                 <tr className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] border-b border-gray-50 text-left">
                   <th className="py-6 px-8 text-left">Staff Member</th>
@@ -600,7 +679,8 @@ export default function AdminTeachers(){
                   })
                 )}
               </tbody>
-            </table>
+              </table>
+            </div>
           </div>
           {/* Quick Assign Modal */}
           <Modal open={showQuickAssign} onClose={()=>setShowQuickAssign(false)} title={`Assign Subjects — ${qaTeacher.name}`} size="lg">
@@ -626,6 +706,91 @@ export default function AdminTeachers(){
                 <button type="submit" className="px-3 py-2 rounded bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-60" disabled={qaSaving}>{qaSaving? 'Saving...' : 'Save'}</button>
               </div>
             </form>
+          </Modal>
+
+          <Modal open={showCreateUser} onClose={()=>!creating && setShowCreateUser(false)} title="Create Teacher User" size="lg">
+            <form onSubmit={createTeacherUser} className="space-y-5">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <label className="grid gap-1">
+                  <span className="text-xs font-semibold text-gray-600">First name</span>
+                  <input className="h-11 px-4 rounded-xl border border-gray-200 focus:ring-2 focus:ring-indigo-200 focus:border-indigo-300" value={newTeacher.first_name} onChange={e=>setNewTeacher(t=>({ ...t, first_name: e.target.value }))} required />
+                </label>
+                <label className="grid gap-1">
+                  <span className="text-xs font-semibold text-gray-600">Last name</span>
+                  <input className="h-11 px-4 rounded-xl border border-gray-200 focus:ring-2 focus:ring-indigo-200 focus:border-indigo-300" value={newTeacher.last_name} onChange={e=>setNewTeacher(t=>({ ...t, last_name: e.target.value }))} required />
+                </label>
+                <label className="grid gap-1">
+                  <span className="text-xs font-semibold text-gray-600">Username</span>
+                  <input className="h-11 px-4 rounded-xl border border-gray-200 focus:ring-2 focus:ring-indigo-200 focus:border-indigo-300" value={newTeacher.username} onChange={e=>setNewTeacher(t=>({ ...t, username: e.target.value }))} required />
+                </label>
+                <label className="grid gap-1">
+                  <span className="text-xs font-semibold text-gray-600">Password</span>
+                  <input type="password" className="h-11 px-4 rounded-xl border border-gray-200 focus:ring-2 focus:ring-indigo-200 focus:border-indigo-300" value={newTeacher.password} onChange={e=>setNewTeacher(t=>({ ...t, password: e.target.value }))} required />
+                </label>
+                <label className="grid gap-1 md:col-span-2">
+                  <span className="text-xs font-semibold text-gray-600">Email (optional)</span>
+                  <input type="email" className="h-11 px-4 rounded-xl border border-gray-200 focus:ring-2 focus:ring-indigo-200 focus:border-indigo-300" value={newTeacher.email} onChange={e=>setNewTeacher(t=>({ ...t, email: e.target.value }))} />
+                </label>
+              </div>
+              <div className="flex justify-end gap-2">
+                <button type="button" onClick={()=>setShowCreateUser(false)} disabled={creating} className="h-11 px-5 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 text-sm font-semibold disabled:opacity-60">Cancel</button>
+                <button type="submit" disabled={creating} className="h-11 px-6 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold disabled:opacity-60">
+                  {creating ? 'Creating…' : 'Create User'}
+                </button>
+              </div>
+            </form>
+          </Modal>
+
+          <Modal open={showAssign} onClose={()=>!assigning && setShowAssign(false)} title="Assign Subjects & Class" size="lg">
+            <form onSubmit={create} className="space-y-5">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <label className="grid gap-1 md:col-span-2">
+                  <span className="text-xs font-semibold text-gray-600">Teacher User</span>
+                  <select className="h-11 px-4 rounded-xl border border-gray-200 bg-white focus:ring-2 focus:ring-indigo-200 focus:border-indigo-300" value={form.user_id} onChange={e=>setForm(f=>({ ...f, user_id: e.target.value }))} required>
+                    <option value="">Select teacher user…</option>
+                    {(users||[]).map(u => (
+                      <option key={u.id} value={u.id}>{u.first_name} {u.last_name} (@{u.username})</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="grid gap-1 md:col-span-2">
+                  <span className="text-xs font-semibold text-gray-600">Subjects (comma separated)</span>
+                  <input className="h-11 px-4 rounded-xl border border-gray-200 focus:ring-2 focus:ring-indigo-200 focus:border-indigo-300" placeholder="e.g. Mathematics, English" value={form.subjects} onChange={e=>setForm(f=>({ ...f, subjects: e.target.value }))} />
+                </label>
+                <label className="grid gap-1 md:col-span-2">
+                  <span className="text-xs font-semibold text-gray-600">Primary Class (optional)</span>
+                  <select className="h-11 px-4 rounded-xl border border-gray-200 bg-white focus:ring-2 focus:ring-indigo-200 focus:border-indigo-300" value={form.klass || ''} onChange={e=>setForm(f=>({ ...f, klass: e.target.value }))}>
+                    <option value="">No class</option>
+                    {(classes||[]).map(c => (
+                      <option key={c.id} value={c.id}>{c.name} {c.grade_level ? `- ${c.grade_level}` : ''}</option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+              <div className="flex justify-end gap-2">
+                <button type="button" onClick={()=>setShowAssign(false)} disabled={assigning} className="h-11 px-5 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 text-sm font-semibold disabled:opacity-60">Cancel</button>
+                <button type="submit" disabled={assigning} className="h-11 px-6 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold disabled:opacity-60">
+                  {assigning ? 'Saving…' : 'Save Assignment'}
+                </button>
+              </div>
+            </form>
+          </Modal>
+
+          <Modal open={showRelease} onClose={()=>!releasing && setShowRelease(false)} title="Release Teacher" size="md">
+            <div className="space-y-4">
+              <div className="text-sm text-gray-700">
+                Release <span className="font-semibold">{releaseTarget?.user?.first_name} {releaseTarget?.user?.last_name}</span> (@{releaseTarget?.user?.username})?
+              </div>
+              <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
+                This will disable portal access and clear class/subject/timetable assignments.
+              </div>
+              <div className="flex justify-end gap-2">
+                <button type="button" onClick={()=>setShowRelease(false)} disabled={releasing} className="h-11 px-5 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 text-sm font-semibold disabled:opacity-60">Cancel</button>
+                <button type="button" onClick={releaseTeacher} disabled={releasing} className="h-11 px-6 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-sm font-semibold disabled:opacity-60">
+                  {releasing ? 'Releasing…' : 'Release'}
+                </button>
+              </div>
+            </div>
           </Modal>
         </div>
 

@@ -1,5 +1,33 @@
 import React, { useEffect, useRef } from 'react'
 
+const LOCK_ATTR = 'data-scroll-lock-count'
+
+function lockBodyScroll(){
+  if (typeof document === 'undefined') return
+  const body = document.body
+  const prev = Number(body.getAttribute(LOCK_ATTR) || 0)
+  if (prev === 0) {
+    body.setAttribute('data-scroll-lock-prev-overflow', body.style.overflow || '')
+    body.style.overflow = 'hidden'
+  }
+  body.setAttribute(LOCK_ATTR, String(prev + 1))
+}
+
+function unlockBodyScroll(){
+  if (typeof document === 'undefined') return
+  const body = document.body
+  const prev = Number(body.getAttribute(LOCK_ATTR) || 0)
+  const next = Math.max(0, prev - 1)
+  if (next === 0) {
+    const prevOverflow = body.getAttribute('data-scroll-lock-prev-overflow')
+    body.style.overflow = prevOverflow ?? ''
+    body.removeAttribute('data-scroll-lock-prev-overflow')
+    body.removeAttribute(LOCK_ATTR)
+  } else {
+    body.setAttribute(LOCK_ATTR, String(next))
+  }
+}
+
 export default function Modal({ open, onClose, title, children, size = 'md' }){
   const dialogRef = useRef(null)
   const sentinelStart = useRef(null)
@@ -34,8 +62,7 @@ export default function Modal({ open, onClose, title, children, size = 'md' }){
       }
     }
     document.addEventListener('keydown', onKey)
-    const prevOverflow = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
+    lockBodyScroll()
     // initial focus (prefer input/select/textarea then primary button)
     setTimeout(() => {
       if (!dialogRef.current) return
@@ -48,7 +75,7 @@ export default function Modal({ open, onClose, title, children, size = 'md' }){
     }, 0)
     return () => {
       document.removeEventListener('keydown', onKey)
-      document.body.style.overflow = prevOverflow
+      unlockBodyScroll()
     }
   }, [open])
 
@@ -75,8 +102,6 @@ export default function Modal({ open, onClose, title, children, size = 'md' }){
         </div>
         <div
           className={`${isFull ? 'flex-1 overflow-auto px-4 pb-4' : 'overflow-auto max-h-[calc(100dvh-6rem)] sm:max-h-[75vh] pr-1'} overscroll-contain`}
-          onWheel={(e) => e.stopPropagation()}
-          onTouchMove={(e) => e.stopPropagation()}
         >
           {children}
         </div>
