@@ -659,19 +659,22 @@ export default function TeacherGrades(){
             }
             return out
           }
+          // Strictly fetch only unpublished exams for the selected class.
+          // Do not fall back to unfiltered endpoints; that causes exams from other classes to appear.
           const attempts = [
             `/academics/exams/?published=false&klass=${encodeURIComponent(selectedClass)}&page_size=1000`,
-            `/academics/exams/?klass=${encodeURIComponent(selectedClass)}&page_size=1000`,
-            `/academics/exams/?published=false&page_size=1000`,
-            `/academics/exams/?include_history=true&page_size=1000`,
-            `/academics/exams/?page_size=1000`,
-            `/academics/exams/`,
+            `/academics/exams/?published=false&class=${encodeURIComponent(selectedClass)}&page_size=1000`,
+            `/academics/exams/?published=false&klass_id=${encodeURIComponent(selectedClass)}&page_size=1000`,
+            `/academics/exams/?published=false&class_id=${encodeURIComponent(selectedClass)}&page_size=1000`,
           ]
           let list = []
           for (const url of attempts){
             try{
               const arr = await fetchAll(url)
-              if (arr && arr.length){ list = list.concat(arr) }
+              if (arr && arr.length){
+                list = arr
+                break
+              }
             }catch{}
           }
           const getKlassId = (e)=>{
@@ -689,22 +692,30 @@ export default function TeacherGrades(){
             if (e?.published_at) return false
             return true
           }
+          // Dedupe and enforce selected class only (backend should already do this, but keep it safe).
           const byId = new Map()
           ;(list||[]).forEach(e=>{ if (e && e.id != null) byId.set(e.id, e) })
           const all = Array.from(byId.values())
-          const unpublished = all.filter(isUnpublished)
-          // Prioritize current class but include all unpublished so user can still pick
-          const prioritized = unpublished.sort((a,b)=>{
-            const ak = getKlassId(a) === String(selectedClass) ? 0 : 1
-            const bk = getKlassId(b) === String(selectedClass) ? 0 : 1
-            if (ak !== bk) return ak - bk
-            const ad = String(a.date||'')
-            const bd = String(b.date||'')
-            return bd.localeCompare(ad)
+          const currentClassOnly = all.filter(e => getKlassId(e) === String(selectedClass))
+          const unpublished0 = currentClassOnly.filter(isUnpublished)
+          // Some backends can return duplicates with different IDs; dedupe by a stable signature.
+          const bySig = new Map()
+          unpublished0.forEach(e => {
+            const sig = [
+              getKlassId(e),
+              String(e?.name || ''),
+              String(e?.year || ''),
+              String(e?.term || ''),
+              String(e?.date || ''),
+              String(e?.total_marks || ''),
+            ].join('|')
+            if (!bySig.has(sig)) bySig.set(sig, e)
           })
-          examsCacheRef.current[String(selectedClass)] = prioritized
+          const unpublished = Array.from(bySig.values())
+          unpublished.sort((a,b)=> String(b.date||'').localeCompare(String(a.date||'')))
+          examsCacheRef.current[String(selectedClass)] = unpublished
           setExamsLoading(false)
-          return prioritized
+          return unpublished
         }
         const [studentsRes, examsList] = await Promise.allSettled([fetchAllStudents(), loadExams()])
         if (!mounted) return
@@ -727,9 +738,12 @@ export default function TeacherGrades(){
         if (examsList.status === 'fulfilled'){
           const filtered = examsList.value || []
           setExams(filtered)
+          const exists = filtered.some(e => String(e?.id) === String(selectedExamId))
           const first = filtered[0]
-          setSelectedExamId(first?.id ? String(first.id) : '')
-          if (first?.total_marks) setExamMeta(m=>({...m, total_marks: Number(first.total_marks)}))
+          const nextId = exists ? selectedExamId : (first?.id ? String(first.id) : '')
+          setSelectedExamId(nextId)
+          const nextExam = filtered.find(e => String(e?.id) === String(nextId)) || first
+          if (nextExam?.total_marks) setExamMeta(m=>({...m, total_marks: Number(nextExam.total_marks)}))
         }
       }catch(e){ setError(e?.response?.data?.detail || e?.message) }
       finally { if (mounted) setStudentsLoading(false) }
