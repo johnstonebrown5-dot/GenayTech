@@ -5,6 +5,7 @@ from rest_framework.decorators import action
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.response import Response
 from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import APIException
 from django.db.models import Q
 from django.db import IntegrityError, transaction
 from django.db.models import Sum, Avg
@@ -49,6 +50,12 @@ from .serializers import (
     TimetableTemplateSerializer, PeriodSlotTemplateSerializer, TimetablePlanSerializer, TimetableClassConfigSerializer,
     ClassSubjectQuotaSerializer, TeacherAvailabilitySerializer, TimetableVersionSerializer, TeacherDutySerializer
 )
+
+
+class Conflict(APIException):
+    status_code = status.HTTP_409_CONFLICT
+    default_detail = 'Conflict'
+    default_code = 'conflict'
 
 class IsTeacherOrAdmin(permissions.BasePermission):
     def has_permission(self, request, view):
@@ -145,7 +152,24 @@ class TeacherDutyViewSet(viewsets.ModelViewSet):
                 setattr(instance, k, v)
             instance.save(update_fields=list(allowed.keys()) or ['status'])
             return instance
-        serializer.save()
+        # Optimistic concurrency on update
+        if instance is not None:
+            if idempotency_key and getattr(instance, 'last_idempotency_key', None) and str(instance.last_idempotency_key) == str(idempotency_key):
+                return
+            if if_unmodified_since is not None:
+                try:
+                    if getattr(instance, 'updated_at', None) and instance.updated_at > if_unmodified_since:
+                        raise Conflict({
+                            'detail': 'Conflict: mark was modified by another user. Refresh to see latest.',
+                            'code': 'conflict',
+                            'current': ExamResultSerializer(instance, context=getattr(serializer, 'context', None) or {}).data,
+                        })
+                except Conflict:
+                    raise
+                except Exception:
+                    pass
+
+        serializer.save(last_idempotency_key=(str(idempotency_key) if idempotency_key else getattr(instance, 'last_idempotency_key', None)))
 
     @action(detail=True, methods=['post'], permission_classes=[IsTeacherOrAdmin], url_path='mark-done')
     def mark_done(self, request, pk=None):
@@ -3915,6 +3939,8 @@ class ExamResultViewSet(viewsets.ModelViewSet):
         component = serializer.validated_data.get('component')
         marks = serializer.validated_data.get('marks')
         out_of = serializer.validated_data.get('out_of')
+        if_unmodified_since = serializer.validated_data.get('if_unmodified_since')
+        idempotency_key = serializer.validated_data.get('idempotency_key')
         user = getattr(self.request, 'user', None)
         # Auto-assign sole component if subject has exactly one and none provided
         try:
@@ -3995,20 +4021,80 @@ class ExamResultViewSet(viewsets.ModelViewSet):
                     reason = 'subject_teacher_exact'
             if not allowed:
                 raise ValidationError({'detail': 'You are not assigned to this class/subject for this exam', 'code': 'not_assigned'})
-        # Upsert to avoid unique_together conflicts (exam, student, subject)
-        try:
-            serializer.save()
-        except IntegrityError:
-            vd = serializer.validated_data
-            with transaction.atomic():
-                obj, _ = ExamResult.objects.update_or_create(
-                    exam=vd['exam'],
-                    student=vd['student'],
-                    subject=vd['subject'],
-                    component=vd.get('component'),
-                    defaults={'marks': vd['marks'], 'out_of': vd.get('out_of')},
-                )
-            serializer.instance = obj
+        # Concurrency + idempotent upsert.
+        # - idempotency_key: if same key is re-sent, treat as success.
+        # - if_unmodified_since: if provided, require row not changed since that timestamp (unless idempotency matches).
+        vd = serializer.validated_data
+        # Note: student is always present in validated data for creates.
+        lookup = {
+            'exam': vd['exam'],
+            'student': vd['student'],
+            'subject': vd['subject'],
+            'component': vd.get('component'),
+        }
+
+        with transaction.atomic():
+            existing = ExamResult.objects.select_for_update().filter(**lookup).first()
+            if existing is not None:
+                # Idempotent retry: same idempotency_key => no-op success
+                if idempotency_key and existing.last_idempotency_key and str(existing.last_idempotency_key) == str(idempotency_key):
+                    serializer.instance = existing
+                    return
+                # Optimistic concurrency: reject if stale
+                if if_unmodified_since is not None:
+                    try:
+                        if existing.updated_at and existing.updated_at > if_unmodified_since:
+                            raise Conflict({
+                                'detail': 'Conflict: mark was modified by another user. Refresh to see latest.',
+                                'code': 'conflict',
+                                'current': ExamResultSerializer(existing, context=getattr(serializer, 'context', None) or {}).data,
+                            })
+                    except Conflict:
+                        raise
+                    except Exception:
+                        # If parsing/comparison fails, do not block save
+                        pass
+                existing.marks = vd['marks']
+                existing.out_of = vd.get('out_of')
+                if idempotency_key:
+                    existing.last_idempotency_key = str(idempotency_key)
+                    existing.save(update_fields=['marks','out_of','last_idempotency_key'])
+                else:
+                    existing.save(update_fields=['marks','out_of'])
+                serializer.instance = existing
+                return
+
+            # Not existing: create, but protect against race with unique constraint
+            try:
+                obj = serializer.save(last_idempotency_key=(str(idempotency_key) if idempotency_key else None))
+                serializer.instance = obj
+                return
+            except IntegrityError:
+                # Another concurrent request inserted first: update existing row
+                obj = ExamResult.objects.select_for_update().filter(**lookup).first()
+                if obj is None:
+                    raise
+                # If optimistic concurrency token supplied, apply same rule
+                if if_unmodified_since is not None:
+                    try:
+                        if obj.updated_at and obj.updated_at > if_unmodified_since:
+                            raise Conflict({
+                                'detail': 'Conflict: mark was modified by another user. Refresh to see latest.',
+                                'code': 'conflict',
+                                'current': ExamResultSerializer(obj, context=getattr(serializer, 'context', None) or {}).data,
+                            })
+                    except Conflict:
+                        raise
+                    except Exception:
+                        pass
+                obj.marks = vd['marks']
+                obj.out_of = vd.get('out_of')
+                if idempotency_key:
+                    obj.last_idempotency_key = str(idempotency_key)
+                    obj.save(update_fields=['marks','out_of','last_idempotency_key'])
+                else:
+                    obj.save(update_fields=['marks','out_of'])
+                serializer.instance = obj
 
     def perform_update(self, serializer):
         user = getattr(self.request, 'user', None)
@@ -4016,6 +4102,8 @@ class ExamResultViewSet(viewsets.ModelViewSet):
         exam = serializer.validated_data.get('exam') or getattr(instance, 'exam', None)
         subject = serializer.validated_data.get('subject') or getattr(instance, 'subject', None)
         component = serializer.validated_data.get('component') or getattr(instance, 'component', None)
+        if_unmodified_since = serializer.validated_data.get('if_unmodified_since')
+        idempotency_key = serializer.validated_data.get('idempotency_key')
 
         school = getattr(getattr(self.request, 'user', None), 'school', None)
         if school and exam and getattr(getattr(exam, 'klass', None), 'school_id', None) != school.id:

@@ -475,6 +475,9 @@ class ExamResult(models.Model):
     marks = models.FloatField()
     # Denominator to interpret marks (per paper/subject). Optional for backward compatibility.
     out_of = models.FloatField(null=True, blank=True)
+    # For optimistic concurrency + client retry idempotency.
+    updated_at = models.DateTimeField(auto_now=True, db_index=True)
+    last_idempotency_key = models.CharField(max_length=80, null=True, blank=True, db_index=True)
 
     class Meta:
         unique_together = ("exam","student","subject","component")

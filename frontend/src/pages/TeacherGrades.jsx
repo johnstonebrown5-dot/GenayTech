@@ -34,6 +34,8 @@ export default function TeacherGrades(){
   const saveTimersRef = useRef({}) // { student_id: timeoutId }
   const saveTimersAllRef = useRef({}) // { `${compId}:${studentId}`: timeoutId }
   const lastSavedRef = useRef({}) // { key: { raw: string, examId: string, subjectId: string, compId?: string } }
+  const serverUpdatedAtRef = useRef({}) // { key: ISOString } optimistic concurrency token from backend
+  const saveIdempotencyRef = useRef({}) // { key: string } stable per-(key,value) idempotency key
   const retryTimersRef = useRef({}) // { key: timeoutId }
   const retryCountRef = useRef({}) // { key: number }
   const [isOnline, setIsOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true)
@@ -159,7 +161,7 @@ export default function TeacherGrades(){
   const subjectDisplay = useMemo(()=>{
     const s = subjects.find(x=> String(x.id)===String(selectedSubject))
     if (!s) return 'Subject'
-    return s.code ? `${s.code} - ${s.name}` : String(s.name || 'Subject')
+    return String(s.name || 'Subject')
   }, [subjects, selectedSubject])
   const examDisplay = useMemo(()=>{
     const e = exams.find(x=> String(x.id)===String(selectedExamId))
@@ -173,6 +175,17 @@ export default function TeacherGrades(){
     const saved = vals.filter(v => v && v.status === 'saved').length
     return { saving, errors, saved }
   }, [saveState])
+
+  const entryLocked = useMemo(() => {
+    if (studentsLoading || examsLoading || marksLoading) return true
+    if (!selectedClass || !selectedSubject || !selectedExamId) return true
+    if (!Array.isArray(students) || students.length === 0) return true
+    if (entryMode === 'single'){
+      const subjectHasComponents = Array.isArray(components) && components.length > 0
+      if (subjectHasComponents && !selectedComponentId) return true
+    }
+    return false
+  }, [studentsLoading, examsLoading, marksLoading, selectedClass, selectedSubject, selectedExamId, students, entryMode, components, selectedComponentId])
 
   const componentDisplay = useMemo(()=>{
     if (entryMode !== 'single') return ''
@@ -235,6 +248,13 @@ export default function TeacherGrades(){
   // (Removed) Local saved snapshot fallback to honor strict matching requirement
 
   // ---------- Robust save helper ----------
+  const newIdempotencyKey = () => {
+    try{
+      if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID()
+    }catch{}
+    try{ return `tg_${Date.now()}_${Math.random().toString(16).slice(2)}` }catch{ return String(Date.now()) }
+  }
+
   const saveResults = async (rows) => {
     if (!Array.isArray(rows) || rows.length === 0) return { ok: true, failed: 0, errors: [] }
     // Try bulk first
@@ -618,6 +638,16 @@ export default function TeacherGrades(){
       if (last && String(last.sig) === sig && String(last.raw) === String(raw)) {
         return
       }
+
+      // idempotency key stable for this (key,value) until success
+      const idemSig = `${sig}|${String(raw)}`
+      const prevIdem = saveIdempotencyRef.current[key]
+      if (!prevIdem || String(prevIdem).indexOf(idemSig) !== 0){
+        saveIdempotencyRef.current[key] = `${idemSig}|${newIdempotencyKey()}`
+      }
+      const idempotency_key = String(saveIdempotencyRef.current[key]).split('|').slice(-1)[0]
+      const if_unmodified_since = serverUpdatedAtRef.current[key] || undefined
+
       setSaveState(prev => ({
         ...prev,
         [key]: { status: 'saving', updatedAt: Date.now() }
@@ -625,10 +655,15 @@ export default function TeacherGrades(){
       const item = { exam: examId, subject: subjectId, student: studentId, marks: num }
       if (componentId) item.component = componentId
       if (out) item.out_of = out
+      if (if_unmodified_since) item.if_unmodified_since = if_unmodified_since
+      if (idempotency_key) item.idempotency_key = idempotency_key
       await saveResults([item])
       lastSavedRef.current[key] = { raw: String(raw), sig }
       retryCountRef.current[key] = 0
       clearPending(key)
+      // After save, assume server state is at least now; exact updated_at comes from GET.
+      // If backend returns 409, it will be caught below.
+      try{ delete saveIdempotencyRef.current[key] }catch{}
       setSaveState(prev => ({
         ...prev,
         [key]: { status: 'saved', updatedAt: Date.now() }
@@ -639,12 +674,20 @@ export default function TeacherGrades(){
         try{ msg = JSON.stringify(e.response.data) }catch{}
       }
       const key = `s:${studentId}`
-      const errMsg = msg || e?.message || 'Could not save mark'
+      const statusCode = e?.response?.status
+      const errMsg = (statusCode === 409)
+        ? 'Conflict: someone else updated this mark. Refresh to see latest.'
+        : (msg || e?.message || 'Could not save mark')
       setSaveState(prev => ({
         ...prev,
         [key]: { status: 'error', error: errMsg, updatedAt: Date.now() }
       }))
       showError('Auto-save failed', errMsg, 4000)
+
+      // On conflict, do not auto-retry; require user to reload.
+      if (statusCode === 409) {
+        return
+      }
 
       // If offline (or transient), queue and retry with exponential backoff
       try{
@@ -712,14 +755,26 @@ export default function TeacherGrades(){
       if (last && String(last.sig) === sig && String(last.raw) === String(raw)) {
         return
       }
+
+      const idemSig = `${sig}|${String(raw)}`
+      const prevIdem = saveIdempotencyRef.current[key]
+      if (!prevIdem || String(prevIdem).indexOf(idemSig) !== 0){
+        saveIdempotencyRef.current[key] = `${idemSig}|${newIdempotencyKey()}`
+      }
+      const idempotency_key = String(saveIdempotencyRef.current[key]).split('|').slice(-1)[0]
+      const if_unmodified_since = serverUpdatedAtRef.current[key] || undefined
+
       setSaveState(prev => ({
         ...prev,
         [key]: { status: 'saving', updatedAt: Date.now() }
       }))
       const item = { exam: examId, subject: subjectId, student: studentId, component: Number(compId), marks: num }
       if (out) item.out_of = out
+      if (if_unmodified_since) item.if_unmodified_since = if_unmodified_since
+      if (idempotency_key) item.idempotency_key = idempotency_key
       await saveResults([item])
       lastSavedRef.current[key] = { raw: String(raw), sig }
+      try{ delete saveIdempotencyRef.current[key] }catch{}
       setSaveState(prev => ({
         ...prev,
         [key]: { status: 'saved', updatedAt: Date.now() }
@@ -730,12 +785,19 @@ export default function TeacherGrades(){
         try{ msg = JSON.stringify(e.response.data) }catch{}
       }
       const key = `c:${compId}|s:${studentId}`
-      const errMsg = msg || e?.message || 'Could not save mark'
+      const statusCode = e?.response?.status
+      const errMsg = (statusCode === 409)
+        ? 'Conflict: someone else updated this mark. Refresh to see latest.'
+        : (msg || e?.message || 'Could not save mark')
       setSaveState(prev => ({
         ...prev,
         [key]: { status: 'error', error: errMsg, updatedAt: Date.now() }
       }))
       showError('Auto-save failed', errMsg, 4000)
+
+      if (statusCode === 409) {
+        return
+      }
 
       try{
         if (!isOnline){
@@ -1067,6 +1129,7 @@ export default function TeacherGrades(){
               const empty = {}
               students.forEach(s=>{ empty[s.id] = '' })
               setMarks(empty)
+              try{ students.forEach(s=>{ delete serverUpdatedAtRef.current[`s:${s.id}`] }) }catch{}
             } else {
               setMarks(prev => {
                 const next = { ...prev }
@@ -1078,6 +1141,9 @@ export default function TeacherGrades(){
                   if (sid != null){
                     const val = r.marks ?? r.score ?? r.value
                     if (val != null) next[sid] = normalizeStoredMark(val, outOf)
+                    const key = `s:${sid}`
+                    const updated = r.updated_at || r.updatedAt || r.last_updated_at
+                    if (updated) serverUpdatedAtRef.current[key] = String(updated)
                   }
                 })
                 return next
@@ -1128,6 +1194,7 @@ export default function TeacherGrades(){
               const blankCol = {}
               students.forEach(s=>{ blankCol[s.id] = '' })
               nextMarksAll[c.id] = blankCol
+              try{ students.forEach(s=>{ delete serverUpdatedAtRef.current[`c:${c.id}|s:${s.id}`] }) }catch{}
             } else {
               const map = {}
               students.forEach(s=>{ map[s.id] = '' })
@@ -1137,6 +1204,9 @@ export default function TeacherGrades(){
                 if (sid != null){
                   const val = r.marks ?? r.score ?? r.value
                   if (val != null) map[sid] = normalizeStoredMark(val, outOfPerComp[c.id])
+                  const key = `c:${c.id}|s:${sid}`
+                  const updated = r.updated_at || r.updatedAt || r.last_updated_at
+                  if (updated) serverUpdatedAtRef.current[key] = String(updated)
                 }
               })
               nextMarksAll[c.id] = map
@@ -1735,51 +1805,38 @@ export default function TeacherGrades(){
       </div>
 
       <div className="sticky top-2 z-30">
-        <div className="rounded-xl border border-indigo-100 bg-white/95 backdrop-blur shadow-sm px-3 py-2 flex items-start md:items-center justify-between gap-2">
-          <div className="flex flex-wrap items-center gap-2 text-xs md:text-sm">
-            <span className="px-2 py-0.5 rounded-full bg-sky-50 text-sky-700 border border-sky-200">
-              Class:
-              <strong className="ml-1">{(classes.find(c=>String(c.id)===String(selectedClass))||{}).name || selectedClass || '—'}</strong>
-            </span>
-            <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-              Subject:
-              <strong className="ml-1">{subjectDisplay || '—'}</strong>
-            </span>
-            <span className="px-2 py-0.5 rounded-full bg-violet-50 text-violet-700 border border-violet-200">
-              {entryMode === 'all' ? (
-                <>
-                  Papers:
-                  <strong className="ml-1">All</strong>
-                </>
-              ) : (
-                <>
-                  Paper:
-                  <strong className="ml-1">{componentDisplay || '—'}</strong>
-                </>
-              )}
-            </span>
-            <span className="px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
-              Exam:
-              <strong className="ml-1">{examDisplay || '—'}</strong>
-            </span>
-          </div>
-          <div className="flex items-center gap-2 flex-shrink-0">
-            {entryMode === 'all' && components.length > 0 && (
-              <div className="hidden lg:flex items-center gap-1.5 max-w-[420px] overflow-hidden">
-                {components.slice(0,6).map(c=> (
-                  <span key={c.id} className="px-2 py-0.5 rounded-full bg-gray-50 text-gray-700 border border-gray-200 text-[11px]">
-                    {c.code || c.name}
-                  </span>
-                ))}
-                {components.length > 6 && (
-                  <span className="text-[11px] text-gray-500">+{components.length - 6} more</span>
-                )}
+        <div className="rounded-2xl border border-indigo-100 bg-white/95 backdrop-blur shadow-sm px-3 py-2.5">
+          <div className="flex items-start justify-between gap-2">
+            <div className="grid grid-cols-2 md:flex md:flex-wrap gap-2 text-[11px] md:text-sm flex-1">
+              <div className="rounded-xl border border-sky-100 bg-sky-50/60 px-2.5 py-1.5">
+                <div className="text-[10px] text-sky-700 font-semibold">Class</div>
+                <div className="text-slate-900 font-semibold leading-tight truncate">
+                  {(classes.find(c=>String(c.id)===String(selectedClass))||{}).name || selectedClass || '—'}
+                </div>
               </div>
-            )}
+              <div className="rounded-xl border border-emerald-100 bg-emerald-50/60 px-2.5 py-1.5">
+                <div className="text-[10px] text-emerald-700 font-semibold">Subject</div>
+                <div className="text-slate-900 font-semibold leading-tight truncate">
+                  {subjectDisplay || '—'}
+                </div>
+              </div>
+              <div className="rounded-xl border border-violet-100 bg-violet-50/60 px-2.5 py-1.5">
+                <div className="text-[10px] text-violet-700 font-semibold">Paper</div>
+                <div className="text-slate-900 font-semibold leading-tight truncate">
+                  {entryMode === 'all' ? 'All Papers' : (componentDisplay || '—')}
+                </div>
+              </div>
+              <div className="rounded-xl border border-amber-100 bg-amber-50/60 px-2.5 py-1.5">
+                <div className="text-[10px] text-amber-700 font-semibold">Exam</div>
+                <div className="text-slate-900 font-semibold leading-tight truncate">
+                  {examDisplay || '—'}
+                </div>
+              </div>
+            </div>
             <button
               type="button"
               onClick={()=>setFormModalOpen(true)}
-              className="text-xs md:text-sm px-3 py-1.5 rounded-full bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm"
+              className="h-10 px-4 rounded-xl bg-gradient-to-r from-indigo-600 to-sky-600 text-white text-sm font-semibold shadow-sm hover:from-indigo-700 hover:to-sky-700 flex-shrink-0"
             >
               Change
             </button>
@@ -2156,7 +2213,26 @@ export default function TeacherGrades(){
           </div>
         </div>
 
+        {entryLocked && (
+          <div className="rounded-2xl border border-gray-200 bg-white shadow-sm p-4">
+            <div className="flex items-center gap-3">
+              <div className="w-5 h-5 rounded-full border-2 border-indigo-300 border-t-indigo-700 animate-spin" />
+              <div className="text-sm font-semibold text-gray-900">Preparing grade entry…</div>
+            </div>
+            <div className="mt-1 text-xs text-gray-600">
+              {studentsLoading ? 'Loading students…' : (examsLoading ? 'Loading exams…' : (marksLoading ? 'Loading saved marks…' : 'Select class, subject, and exam to begin.'))}
+            </div>
+            <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-2">
+              <div className="h-10 rounded-xl bg-gray-100 animate-pulse" />
+              <div className="h-10 rounded-xl bg-gray-100 animate-pulse" />
+              <div className="h-10 rounded-xl bg-gray-100 animate-pulse" />
+              <div className="h-10 rounded-xl bg-gray-100 animate-pulse" />
+            </div>
+          </div>
+        )}
+
         {/* Students - mobile list */}
+        {!entryLocked && (
         <div className="md:hidden -mx-1">
           <div className="mb-2 px-1 flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
@@ -2343,7 +2419,9 @@ export default function TeacherGrades(){
             </div>
           )}
         </div>
+        )}
 
+        {!entryLocked && (
         <div className="hidden md:block">
           <table className="w-full text-left text-sm">
             <thead className="teacher-grades-table-head bg-gradient-to-r from-indigo-50 to-fuchsia-50">
@@ -2476,6 +2554,7 @@ export default function TeacherGrades(){
             </tbody>
           </table>
         </div>
+        )}
 
         {/* Desktop save button */}
         <div className="hidden md:flex justify-end">

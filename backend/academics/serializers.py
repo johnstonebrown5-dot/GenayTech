@@ -449,10 +449,22 @@ class ExamResultSerializer(serializers.ModelSerializer):
     # Optional: allows teacher to specify the total marks the entered score is out of.
     # Backend will scale the stored marks to the component/exam scale.
     out_of = serializers.FloatField(required=False, allow_null=True)
+    # Optimistic concurrency + idempotency (optional)
+    if_unmodified_since = serializers.DateTimeField(required=False, allow_null=True, write_only=True)
+    idempotency_key = serializers.CharField(required=False, allow_blank=True, allow_null=True, write_only=True)
     percentage = serializers.SerializerMethodField(read_only=True)
     class Meta:
         model = ExamResult
-        fields = ['id','exam','exam_detail','student','subject','subject_detail','component','component_detail','marks','out_of','percentage']
+        fields = [
+            'id',
+            'exam','exam_detail',
+            'student',
+            'subject','subject_detail',
+            'component','component_detail',
+            'marks','out_of','percentage',
+            'updated_at','last_idempotency_key',
+            'if_unmodified_since','idempotency_key',
+        ]
 
     def validate(self, attrs):
         # Block results for non-examinable subjects
