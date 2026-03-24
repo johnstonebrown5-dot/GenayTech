@@ -2232,13 +2232,24 @@ export default function TeacherGrades(){
                       </td>
                       {components.map(c => (
                         <td key={c.id} className="px-2 py-1 text-right">
-                          <input
+                          {(() => {
+                            const k = `c:${c.id}|s:${st.id}`
+                            const ss = saveState?.[k]
+                            const stateClass = ss?.status === 'saved'
+                              ? 'border-emerald-400 ring-1 ring-emerald-200'
+                              : ss?.status === 'saving'
+                                ? 'border-amber-400 ring-1 ring-amber-200'
+                                : ss?.status === 'error'
+                                  ? 'border-yellow-400 ring-1 ring-yellow-200'
+                                  : ''
+                            return (
+                              <input
                             type="number"
                             inputMode="decimal"
                             min={0}
                             max={inputAs==='percent' ? 100 : (Number(outOfPerComp[c.id])||Number(examMeta.total_marks)||100)}
                             step="1"
-                            className={`border px-2 py-1 rounded w-20 text-right focus:ring-2 focus:ring-indigo-200 ${(invalidAll[c.id]?.[st.id]) ? 'border-red-500 bg-red-50' : ''}`}
+                            className={`border px-2 py-1 rounded w-20 text-right focus:ring-2 focus:ring-indigo-200 ${stateClass} ${(invalidAll[c.id]?.[st.id]) ? 'border-red-500 bg-red-50 ring-0' : ''}`}
                             value={inputAs==='percent' ? marksToPercent((marksAll[c.id]?.[st.id]), outOfPerComp[c.id]) : ((marksAll[c.id]?.[st.id]) || '')}
                             onChange={e=>handleMarkChangeAll(c.id, st.id, e.target.value)}
                             onBlur={()=>flushAllSave(c.id, st.id)}
@@ -2248,7 +2259,9 @@ export default function TeacherGrades(){
                                 flushAllSave(c.id, st.id)
                               }
                             }}
-                          />
+                              />
+                            )
+                          })()}
                         </td>
                       ))}
                       <td className="px-2 py-1 text-right text-[11px] text-gray-700">{toCombinedPercent(st.id)}</td>
@@ -2269,13 +2282,24 @@ export default function TeacherGrades(){
                   </div>
                   <div className="flex items-center gap-1">
                     <div className="relative">
+                      {(() => {
+                        const k = `s:${st.id}`
+                        const ss = saveState?.[k]
+                        const stateClass = ss?.status === 'saved'
+                          ? 'border-emerald-400 ring-1 ring-emerald-200'
+                          : ss?.status === 'saving'
+                            ? 'border-amber-400 ring-1 ring-amber-200'
+                            : ss?.status === 'error'
+                              ? 'border-yellow-400 ring-1 ring-yellow-200'
+                              : ''
+                        return (
                       <input
                         type="number"
                         inputMode="decimal"
                         min={0}
                         max={inputAs==='percent' ? 100 : (Number(outOf)||Number(examMeta.total_marks)||100)}
                         step="1"
-                        className={`border px-2 py-1.5 rounded-lg w-24 text-right focus:ring-2 focus:ring-indigo-200 ${invalid[st.id] ? 'border-red-500 bg-red-50' : ''}`}
+                        className={`border px-2 py-1.5 rounded-lg w-24 text-right focus:ring-2 focus:ring-indigo-200 ${stateClass} ${invalid[st.id] ? 'border-red-500 bg-red-50 ring-0' : ''}`}
                         value={inputAs==='percent' ? marksToPercent(marks[st.id], outOf) : (marks[st.id] || '')}
                         onChange={e=>handleMarkChange(st.id, e.target.value)}
                         onBlur={()=>flushSingleSave(st.id)}
@@ -2286,6 +2310,8 @@ export default function TeacherGrades(){
                           }
                         }}
                       />
+                        )
+                      })()}
                       {(() => {
                         const k = `s:${st.id}`
                         const ss = saveState?.[k]
