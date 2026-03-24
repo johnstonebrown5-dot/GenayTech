@@ -30,8 +30,14 @@ export default function TeacherGrades(){
   const [me, setMe] = useState(null)
   const { showSuccess, showError } = useNotification()
   const [invalid, setInvalid] = useState({}) // { student_id: true }
+  const [saveState, setSaveState] = useState({}) // { key: { status: 'idle'|'saving'|'saved'|'error', error?: string, updatedAt?: number } }
   const saveTimersRef = useRef({}) // { student_id: timeoutId }
   const saveTimersAllRef = useRef({}) // { `${compId}:${studentId}`: timeoutId }
+  const lastSavedRef = useRef({}) // { key: { raw: string, examId: string, subjectId: string, compId?: string } }
+  const retryTimersRef = useRef({}) // { key: timeoutId }
+  const retryCountRef = useRef({}) // { key: number }
+  const [isOnline, setIsOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true)
+  const pendingQueueRef = useRef({}) // { key: { kind:'single'|'all', studentId, compId?, raw } }
   const examsCacheRef = useRef({})
   const missingComponentWarnedRef = useRef(false)
   const [examsLoading, setExamsLoading] = useState(false)
@@ -48,6 +54,100 @@ export default function TeacherGrades(){
     try { delete examsCacheRef.current[String(selectedClass)] } catch {}
     setExamsReloadKey(v=>v+1)
   }
+
+  const autosaveQueueKey = () => [
+    'teachergrades_autosave_queue',
+    `c:${selectedClass||''}`,
+    `s:${selectedSubject||''}`,
+    `e:${selectedExamId||''}`,
+    `m:${entryMode}`,
+    entryMode==='single' ? `p:${selectedComponentId||''}` : 'all'
+  ].join('|')
+
+  const persistQueue = () => {
+    try{
+      const key = autosaveQueueKey()
+      const payload = {
+        when: Date.now(),
+        items: pendingQueueRef.current || {}
+      }
+      localStorage.setItem(key, JSON.stringify(payload))
+    }catch{}
+  }
+
+  const loadQueue = () => {
+    try{
+      const raw = localStorage.getItem(autosaveQueueKey())
+      if (!raw) return
+      const data = JSON.parse(raw)
+      if (!data || typeof data !== 'object') return
+      const items = data.items && typeof data.items === 'object' ? data.items : {}
+      pendingQueueRef.current = items
+    }catch{}
+  }
+
+  const queuePending = (key, item) => {
+    try{
+      pendingQueueRef.current[key] = item
+      setSaveState(prev => ({
+        ...prev,
+        [key]: { status: 'error', error: 'Pending (offline). Will retry automatically.', updatedAt: Date.now() }
+      }))
+      persistQueue()
+    }catch{}
+  }
+
+  const clearPending = (key) => {
+    try{
+      if (pendingQueueRef.current && pendingQueueRef.current[key]){
+        delete pendingQueueRef.current[key]
+        persistQueue()
+      }
+    }catch{}
+  }
+
+  const pendingCount = useMemo(() => {
+    try{ return Object.keys(pendingQueueRef.current || {}).length }catch{ return 0 }
+  }, [saveState, selectedClass, selectedSubject, selectedExamId, selectedComponentId, entryMode])
+
+  const flushPendingQueue = async () => {
+    if (!isOnline) return
+    const items = pendingQueueRef.current || {}
+    const keys = Object.keys(items)
+    if (!keys.length) return
+    for (const k of keys){
+      const it = items[k]
+      if (!it) continue
+      try{
+        if (it.kind === 'single') await saveSingleMarkNow(it.studentId, it.raw)
+        else await saveAllMarkNow(it.compId, it.studentId, it.raw)
+        clearPending(k)
+      }catch{}
+    }
+  }
+
+  useEffect(() => {
+    loadQueue()
+  }, [selectedClass, selectedSubject, selectedExamId, selectedComponentId, entryMode])
+
+  useEffect(() => {
+    try{
+      const onOnline = () => setIsOnline(true)
+      const onOffline = () => setIsOnline(false)
+      window.addEventListener('online', onOnline)
+      window.addEventListener('offline', onOffline)
+      return () => {
+        window.removeEventListener('online', onOnline)
+        window.removeEventListener('offline', onOffline)
+      }
+    }catch{}
+  }, [])
+
+  useEffect(() => {
+    if (isOnline) {
+      flushPendingQueue()
+    }
+  }, [isOnline])
   const reloadSavedMarks = () => setMarksReloadKey(v=>v+1)
 
   const [previewOpen, setPreviewOpen] = useState(false)
@@ -65,6 +165,14 @@ export default function TeacherGrades(){
     const e = exams.find(x=> String(x.id)===String(selectedExamId))
     return e ? String(e.name || 'Exam') : 'Exam'
   }, [exams, selectedExamId])
+
+  const autosaveSummary = useMemo(() => {
+    const vals = Object.values(saveState || {})
+    const saving = vals.filter(v => v && v.status === 'saving').length
+    const errors = vals.filter(v => v && v.status === 'error').length
+    const saved = vals.filter(v => v && v.status === 'saved').length
+    return { saving, errors, saved }
+  }, [saveState])
 
   const componentDisplay = useMemo(()=>{
     if (entryMode !== 'single') return ''
@@ -478,7 +586,7 @@ export default function TeacherGrades(){
       if (t) clearTimeout(t)
       saveTimersAllRef.current[key] = setTimeout(async () => {
         await saveAllMarkNow(compId, studentId, raw)
-      }, 600)
+      }, 250)
     }
   }
 
@@ -503,16 +611,58 @@ export default function TeacherGrades(){
         ? Math.max(0, Math.min(Number.isFinite(total) && total > 0 ? total : 100, n0))
         : NaN
       if (!examId || !subjectId || Number.isNaN(num)) return
+
+      const key = `s:${studentId}`
+      const last = lastSavedRef.current[key]
+      const sig = `${examId}|${subjectId}|${componentId || ''}`
+      if (last && String(last.sig) === sig && String(last.raw) === String(raw)) {
+        return
+      }
+      setSaveState(prev => ({
+        ...prev,
+        [key]: { status: 'saving', updatedAt: Date.now() }
+      }))
       const item = { exam: examId, subject: subjectId, student: studentId, marks: num }
       if (componentId) item.component = componentId
       if (out) item.out_of = out
       await saveResults([item])
+      lastSavedRef.current[key] = { raw: String(raw), sig }
+      retryCountRef.current[key] = 0
+      clearPending(key)
+      setSaveState(prev => ({
+        ...prev,
+        [key]: { status: 'saved', updatedAt: Date.now() }
+      }))
     }catch(e){
       let msg = e?.response?.data?.detail
       if (!msg && e?.response?.data){
         try{ msg = JSON.stringify(e.response.data) }catch{}
       }
-      showError('Auto-save failed', msg || 'Could not save mark', 4000)
+      const key = `s:${studentId}`
+      const errMsg = msg || e?.message || 'Could not save mark'
+      setSaveState(prev => ({
+        ...prev,
+        [key]: { status: 'error', error: errMsg, updatedAt: Date.now() }
+      }))
+      showError('Auto-save failed', errMsg, 4000)
+
+      // If offline (or transient), queue and retry with exponential backoff
+      try{
+        if (!isOnline){
+          queuePending(key, { kind: 'single', studentId, raw: String(raw) })
+          return
+        }
+      }catch{}
+
+      try{
+        const n = Number(retryCountRef.current[key] || 0) + 1
+        retryCountRef.current[key] = n
+        const delay = Math.min(12000, 800 * Math.pow(2, Math.min(4, n)))
+        if (retryTimersRef.current[key]) clearTimeout(retryTimersRef.current[key])
+        retryTimersRef.current[key] = setTimeout(() => {
+          try{ saveSingleMarkNow(studentId, raw) }catch{}
+        }, delay)
+      }catch{}
     }
   }
 
@@ -555,15 +705,54 @@ export default function TeacherGrades(){
         ? Math.max(0, Math.min(Number.isFinite(total) && total > 0 ? total : 100, n0))
         : NaN
       if (!examId || !subjectId || Number.isNaN(num)) return
+
+      const key = `c:${compId}|s:${studentId}`
+      const last = lastSavedRef.current[key]
+      const sig = `${examId}|${subjectId}|${compId || ''}`
+      if (last && String(last.sig) === sig && String(last.raw) === String(raw)) {
+        return
+      }
+      setSaveState(prev => ({
+        ...prev,
+        [key]: { status: 'saving', updatedAt: Date.now() }
+      }))
       const item = { exam: examId, subject: subjectId, student: studentId, component: Number(compId), marks: num }
       if (out) item.out_of = out
       await saveResults([item])
+      lastSavedRef.current[key] = { raw: String(raw), sig }
+      setSaveState(prev => ({
+        ...prev,
+        [key]: { status: 'saved', updatedAt: Date.now() }
+      }))
     }catch(e){
       let msg = e?.response?.data?.detail
       if (!msg && e?.response?.data){
         try{ msg = JSON.stringify(e.response.data) }catch{}
       }
-      showError('Auto-save failed', msg || 'Could not save mark', 4000)
+      const key = `c:${compId}|s:${studentId}`
+      const errMsg = msg || e?.message || 'Could not save mark'
+      setSaveState(prev => ({
+        ...prev,
+        [key]: { status: 'error', error: errMsg, updatedAt: Date.now() }
+      }))
+      showError('Auto-save failed', errMsg, 4000)
+
+      try{
+        if (!isOnline){
+          queuePending(key, { kind: 'all', compId, studentId, raw: String(raw) })
+          return
+        }
+      }catch{}
+
+      try{
+        const n = Number(retryCountRef.current[key] || 0) + 1
+        retryCountRef.current[key] = n
+        const delay = Math.min(12000, 800 * Math.pow(2, Math.min(4, n)))
+        if (retryTimersRef.current[key]) clearTimeout(retryTimersRef.current[key])
+        retryTimersRef.current[key] = setTimeout(() => {
+          try{ saveAllMarkNow(compId, studentId, raw) }catch{}
+        }, delay)
+      }catch{}
     }
   }
 
@@ -721,7 +910,13 @@ export default function TeacherGrades(){
         if (!mounted) return
         if (studentsRes.status === 'fulfilled'){
           const list = Array.isArray(studentsRes.value) ? studentsRes.value : []
-          const arr = list.slice().sort((a,b)=> String(a.name||'').localeCompare(String(b.name||'')) || String(a.admission_no||'').localeCompare(String(b.admission_no||'')))
+          // Safety: ensure only students belonging to the selected class are displayed.
+          const klassId = String(selectedClass)
+          const onlyThisClass = (list||[]).filter(s => {
+            const k = s?.klass ?? s?.class ?? s?.klass_id ?? s?.class_id ?? s?.klass_detail?.id ?? s?.class_detail?.id
+            return String(k || '') === klassId
+          })
+          const arr = onlyThisClass.slice().sort((a,b)=> String(a.name||'').localeCompare(String(b.name||'')) || String(a.admission_no||'').localeCompare(String(b.admission_no||'')))
           setStudents(arr)
           const init = {}
           arr.forEach(s => { init[s.id] = '' })
@@ -750,6 +945,46 @@ export default function TeacherGrades(){
     })()
     return ()=>{ mounted = false }
   }, [selectedClass, examsReloadKey])
+
+  // Flush pending debounced saves when navigating away/changing context.
+  useEffect(() => {
+    return () => {
+      try{
+        const timers = saveTimersRef.current || {}
+        Object.keys(timers).forEach(k => { try { if (timers[k]) clearTimeout(timers[k]) } catch {} })
+        saveTimersRef.current = {}
+      }catch{}
+      try{
+        const timers2 = saveTimersAllRef.current || {}
+        Object.keys(timers2).forEach(k => { try { if (timers2[k]) clearTimeout(timers2[k]) } catch {} })
+        saveTimersAllRef.current = {}
+      }catch{}
+      try{
+        const r = retryTimersRef.current || {}
+        Object.keys(r).forEach(k => { try { if (r[k]) clearTimeout(r[k]) } catch {} })
+        retryTimersRef.current = {}
+      }catch{}
+      try{
+        const rc = retryCountRef.current || {}
+        Object.keys(rc).forEach(k => { try { delete rc[k] } catch {} })
+        retryCountRef.current = {}
+      }catch{}
+    }
+  }, [selectedClass, selectedSubject, selectedExamId, selectedComponentId, entryMode])
+
+  useEffect(() => {
+    try{
+      const handler = (e) => {
+        const hasPending = Object.keys(pendingQueueRef.current || {}).length > 0
+        const hasErrors = Object.values(saveState || {}).some(v => v && v.status === 'error')
+        if (!hasPending && !hasErrors) return
+        e.preventDefault()
+        e.returnValue = ''
+      }
+      window.addEventListener('beforeunload', handler)
+      return () => window.removeEventListener('beforeunload', handler)
+    }catch{}
+  }, [saveState])
 
   // Load existing results for selected exam and subject; prefill marks (overlay, non-destructive)
   useEffect(()=>{
@@ -1080,12 +1315,14 @@ export default function TeacherGrades(){
     }
 
     // Debounced auto-save for valid inputs
-    if (!isInvalid){
+    // Save on every digit entered (debounced) to mirror admin entry behavior.
+    // Use the computed validity here (do not rely on possibly-stale state).
+    if (!isInvalid && raw !== '' && raw !== null && typeof raw !== 'undefined'){
       const t = saveTimersRef.current[studentId]
       if (t) clearTimeout(t)
       saveTimersRef.current[studentId] = setTimeout(async () => {
         await saveSingleMarkNow(studentId, raw)
-      }, 600)
+      }, 250)
     }
   }
 
@@ -1287,15 +1524,27 @@ export default function TeacherGrades(){
           const list = await fetchAll(componentId ? `${base}&component=${componentId}` : base)
           // Start from existing values; only overlay those returned by server
           const next = { ...marks }
+          const savedState = {}
           list.forEach(r=>{
             if (!r) return
             const sid = r.student ?? r.student_id ?? (r.student_detail?.id)
             if (sid != null){
               const val = r.marks ?? r.score ?? r.value
-              if (val != null) next[sid] = Math.round(Number(val))
+              if (val != null) {
+                next[sid] = Math.round(Number(val))
+                const key = `s:${sid}`
+                savedState[key] = { status: 'saved', updatedAt: Date.now() }
+                try{
+                  const sig = `${examId}|${subjectId}|${componentId || ''}`
+                  lastSavedRef.current[key] = { raw: String(val), sig }
+                }catch{}
+              }
             }
           })
           setMarks(next)
+          if (Object.keys(savedState).length){
+            setSaveState(prev => ({ ...prev, ...savedState }))
+          }
         } else {
           // refresh per component
           const fetchAll = async (url) => {
@@ -1312,6 +1561,7 @@ export default function TeacherGrades(){
             return out
           }
           const nextMarksAll = {}
+          const savedState = {}
           for (const c of components){
             const url = `/academics/exam_results/?exam=${examId}&subject=${subjectId}&component=${c.id}`
             const list = await fetchAll(url)
@@ -1321,11 +1571,20 @@ export default function TeacherGrades(){
               if (r && r.student != null){
                 const raw = r.marks
                 map[r.student] = normalizeStoredMark(raw, outOfPerComp[c.id])
+                const key = `c:${c.id}|s:${r.student}`
+                savedState[key] = { status: 'saved', updatedAt: Date.now() }
+                try{
+                  const sig = `${examId}|${subjectId}|${c.id || ''}`
+                  lastSavedRef.current[key] = { raw: String(raw), sig }
+                }catch{}
               }
             })
             nextMarksAll[c.id] = map
           }
           setMarksAll(nextMarksAll)
+          if (Object.keys(savedState).length){
+            setSaveState(prev => ({ ...prev, ...savedState }))
+          }
         }
       }catch{}
       // Clear draft after successful save
@@ -1406,6 +1665,35 @@ export default function TeacherGrades(){
           <div>
             <div className="text-lg md:text-xl font-semibold tracking-tight text-white">Input Grades</div>
           </div>
+
+        {(!isOnline || pendingCount > 0 || autosaveSummary.errors > 0) && (
+          <div className={`mt-3 rounded-xl border p-3 flex items-start justify-between gap-3 ${!isOnline ? 'bg-amber-50 border-amber-200' : (autosaveSummary.errors > 0 ? 'bg-red-50 border-red-200' : 'bg-indigo-50 border-indigo-200')}`}>
+            <div className="min-w-0">
+              <div className="text-sm font-semibold text-gray-900">
+                {!isOnline ? 'You are offline' : (autosaveSummary.errors > 0 ? 'Some marks failed to save' : 'Pending marks to save')}
+              </div>
+              <div className="text-xs text-gray-700 mt-0.5">
+                Status: <span className="font-medium">{isOnline ? 'Online' : 'Offline'}</span>
+                {'  '}| Saving: <span className="font-medium">{autosaveSummary.saving}</span>
+                {'  '}| Failed: <span className="font-medium">{autosaveSummary.errors}</span>
+                {'  '}| Pending queue: <span className="font-medium">{pendingCount}</span>
+              </div>
+              <div className="text-xs text-gray-600 mt-1">
+                Keep this page open. Autosave will retry automatically{isOnline ? '.' : ' when you reconnect.'}
+              </div>
+            </div>
+            <div className="flex-shrink-0 flex gap-2">
+              <button
+                type="button"
+                onClick={()=>flushPendingQueue()}
+                disabled={!isOnline || pendingCount === 0}
+                className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-white border border-gray-200 hover:bg-gray-50 disabled:opacity-60"
+              >
+                Retry now
+              </button>
+            </div>
+          </div>
+        )}
           <div className="hidden md:flex items-center gap-2">
             <button
               onClick={reloadSavedMarks}
@@ -1980,23 +2268,48 @@ export default function TeacherGrades(){
                     </div>
                   </div>
                   <div className="flex items-center gap-1">
-                    <input
-                      type="number"
-                      inputMode="decimal"
-                      min={0}
-                      max={inputAs==='percent' ? 100 : (Number(outOf)||Number(examMeta.total_marks)||100)}
-                      step="1"
-                      className={`border px-2 py-1.5 rounded-lg w-24 text-right focus:ring-2 focus:ring-indigo-200 ${invalid[st.id] ? 'border-red-500 bg-red-50' : ''}`}
-                      value={inputAs==='percent' ? marksToPercent(marks[st.id], outOf) : (marks[st.id] || '')}
-                      onChange={e=>handleMarkChange(st.id, e.target.value)}
-                      onBlur={()=>flushSingleSave(st.id)}
-                      onKeyDown={(e)=>{
-                        if (e.key === 'Enter'){
-                          try{ e.currentTarget?.blur?.() }catch{}
-                          flushSingleSave(st.id)
+                    <div className="relative">
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        min={0}
+                        max={inputAs==='percent' ? 100 : (Number(outOf)||Number(examMeta.total_marks)||100)}
+                        step="1"
+                        className={`border px-2 py-1.5 rounded-lg w-24 text-right focus:ring-2 focus:ring-indigo-200 ${invalid[st.id] ? 'border-red-500 bg-red-50' : ''}`}
+                        value={inputAs==='percent' ? marksToPercent(marks[st.id], outOf) : (marks[st.id] || '')}
+                        onChange={e=>handleMarkChange(st.id, e.target.value)}
+                        onBlur={()=>flushSingleSave(st.id)}
+                        onKeyDown={(e)=>{
+                          if (e.key === 'Enter'){
+                            try{ e.currentTarget?.blur?.() }catch{}
+                            flushSingleSave(st.id)
+                          }
+                        }}
+                      />
+                      {(() => {
+                        const k = `s:${st.id}`
+                        const ss = saveState?.[k]
+                        if (!ss || ss.status === 'idle') return null
+                        if (ss.status === 'saving'){
+                          return (
+                            <span className="absolute -right-5 top-1/2 -translate-y-1/2 text-gray-400" title="Saving…">
+                              <span className="inline-block h-3 w-3 rounded-full border-2 border-gray-300 border-t-indigo-500 animate-spin" />
+                            </span>
+                          )
                         }
-                      }}
-                    />
+                        if (ss.status === 'saved'){
+                          return (
+                            <span className="absolute -right-5 top-1/2 -translate-y-1/2 text-emerald-600" title="Saved">✓</span>
+                          )
+                        }
+                        if (ss.status === 'error'){
+                          return (
+                            <span className="absolute -right-5 top-1/2 -translate-y-1/2 text-red-600" title={ss.error || 'Save failed'}>!</span>
+                          )
+                        }
+                        return null
+                      })()}
+                    </div>
                     <span className="text-xs text-gray-500 w-14 text-right">{inputAs==='percent' ? '%' : toPercent(marks[st.id], outOf)}</span>
                   </div>
                 </div>
@@ -2031,23 +2344,48 @@ export default function TeacherGrades(){
                   {entryMode === 'single' ? (
                     <td className="py-2 text-right">
                       <div className="flex items-center justify-end gap-2">
-                        <input
-                          type="number"
-                          inputMode="decimal"
-                          min={0}
-                          max={inputAs==='percent' ? 100 : (Number(outOf)||Number(examMeta.total_marks)||100)}
-                          step="0.01"
-                          className={`border p-2 rounded w-28 text-right focus:ring-2 focus:ring-indigo-200 ${invalid[st.id] ? 'border-red-500 bg-red-50' : ''}`}
-                          value={inputAs==='percent' ? marksToPercent(marks[st.id], outOf) : (marks[st.id] || '')}
-                          onChange={e=>handleMarkChange(st.id, e.target.value)}
-                          onBlur={()=>flushSingleSave(st.id)}
-                          onKeyDown={(e)=>{
-                            if (e.key === 'Enter'){
-                              try{ e.currentTarget?.blur?.() }catch{}
-                              flushSingleSave(st.id)
+                        <div className="relative">
+                          <input
+                            type="number"
+                            inputMode="decimal"
+                            min={0}
+                            max={inputAs==='percent' ? 100 : (Number(outOf)||Number(examMeta.total_marks)||100)}
+                            step="0.01"
+                            className={`border p-2 rounded w-28 text-right focus:ring-2 focus:ring-indigo-200 ${invalid[st.id] ? 'border-red-500 bg-red-50' : ''}`}
+                            value={inputAs==='percent' ? marksToPercent(marks[st.id], outOf) : (marks[st.id] || '')}
+                            onChange={e=>handleMarkChange(st.id, e.target.value)}
+                            onBlur={()=>flushSingleSave(st.id)}
+                            onKeyDown={(e)=>{
+                              if (e.key === 'Enter'){
+                                try{ e.currentTarget?.blur?.() }catch{}
+                                flushSingleSave(st.id)
+                              }
+                            }}
+                          />
+                          {(() => {
+                            const k = `s:${st.id}`
+                            const ss = saveState?.[k]
+                            if (!ss || ss.status === 'idle') return null
+                            if (ss.status === 'saving'){
+                              return (
+                                <span className="absolute -right-5 top-1/2 -translate-y-1/2 text-gray-400" title="Saving…">
+                                  <span className="inline-block h-3 w-3 rounded-full border-2 border-gray-300 border-t-indigo-500 animate-spin" />
+                                </span>
+                              )
                             }
-                          }}
-                        />
+                            if (ss.status === 'saved'){
+                              return (
+                                <span className="absolute -right-5 top-1/2 -translate-y-1/2 text-emerald-600" title="Saved">✓</span>
+                              )
+                            }
+                            if (ss.status === 'error'){
+                              return (
+                                <span className="absolute -right-5 top-1/2 -translate-y-1/2 text-red-600" title={ss.error || 'Save failed'}>!</span>
+                              )
+                            }
+                            return null
+                          })()}
+                        </div>
                         <span className="text-xs text-gray-500 w-16 text-right">{inputAs==='percent' ? '%' : toPercent(marks[st.id], outOf)}</span>
                       </div>
                     </td>
@@ -2055,23 +2393,48 @@ export default function TeacherGrades(){
                     components.map(c => (
                       <td key={c.id} className="py-2 text-right">
                         <div className="flex items-center justify-end gap-2">
-                          <input
-                            type="number"
-                            inputMode="decimal"
-                            min={0}
-                            max={inputAs==='percent' ? 100 : (Number(outOfPerComp[c.id])||Number(examMeta.total_marks)||100)}
-                            step="0.01"
-                            className={`border p-2 rounded w-24 text-right focus:ring-2 focus:ring-indigo-200 ${(invalidAll[c.id]?.[st.id]) ? 'border-red-500 bg-red-50' : ''}`}
-                            value={inputAs==='percent' ? marksToPercent((marksAll[c.id]?.[st.id]), outOfPerComp[c.id]) : ((marksAll[c.id]?.[st.id]) || '')}
-                            onChange={e=>handleMarkChangeAll(c.id, st.id, e.target.value)}
-                            onBlur={()=>flushAllSave(c.id, st.id)}
-                            onKeyDown={(e)=>{
-                              if (e.key === 'Enter'){
-                                try{ e.currentTarget?.blur?.() }catch{}
-                                flushAllSave(c.id, st.id)
+                          <div className="relative">
+                            <input
+                              type="number"
+                              inputMode="decimal"
+                              min={0}
+                              max={inputAs==='percent' ? 100 : (Number(outOfPerComp[c.id])||Number(examMeta.total_marks)||100)}
+                              step="0.01"
+                              className={`border p-2 rounded w-24 text-right focus:ring-2 focus:ring-indigo-200 ${(invalidAll[c.id]?.[st.id]) ? 'border-red-500 bg-red-50' : ''}`}
+                              value={inputAs==='percent' ? marksToPercent((marksAll[c.id]?.[st.id]), outOfPerComp[c.id]) : ((marksAll[c.id]?.[st.id]) || '')}
+                              onChange={e=>handleMarkChangeAll(c.id, st.id, e.target.value)}
+                              onBlur={()=>flushAllSave(c.id, st.id)}
+                              onKeyDown={(e)=>{
+                                if (e.key === 'Enter'){
+                                  try{ e.currentTarget?.blur?.() }catch{}
+                                  flushAllSave(c.id, st.id)
+                                }
+                              }}
+                            />
+                            {(() => {
+                              const k = `c:${c.id}|s:${st.id}`
+                              const ss = saveState?.[k]
+                              if (!ss || ss.status === 'idle') return null
+                              if (ss.status === 'saving'){
+                                return (
+                                  <span className="absolute -right-5 top-1/2 -translate-y-1/2 text-gray-400" title="Saving…">
+                                    <span className="inline-block h-3 w-3 rounded-full border-2 border-gray-300 border-t-indigo-500 animate-spin" />
+                                  </span>
+                                )
                               }
-                            }}
-                          />
+                              if (ss.status === 'saved'){
+                                return (
+                                  <span className="absolute -right-5 top-1/2 -translate-y-1/2 text-emerald-600" title="Saved">✓</span>
+                                )
+                              }
+                              if (ss.status === 'error'){
+                                return (
+                                  <span className="absolute -right-5 top-1/2 -translate-y-1/2 text-red-600" title={ss.error || 'Save failed'}>!</span>
+                                )
+                              }
+                              return null
+                            })()}
+                          </div>
                           <span className="text-xs text-gray-500 w-16 text-right">{inputAs==='percent' ? '%' : toPercent((marksAll[c.id]?.[st.id]) || '', outOfPerComp[c.id])}</span>
                         </div>
                       </td>
