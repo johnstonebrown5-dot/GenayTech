@@ -248,6 +248,11 @@ export default function TeacherGrades(){
   // (Removed) Local saved snapshot fallback to honor strict matching requirement
 
   // ---------- Robust save helper ----------
+  const hasValue = (v) => {
+    // accept 0 as valid; only treat null/undefined/empty-string as missing
+    return !(v === '' || v === null || typeof v === 'undefined')
+  }
+
   const newIdempotencyKey = () => {
     try{
       if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID()
@@ -717,7 +722,7 @@ export default function TeacherGrades(){
     }catch{}
     try{
       const raw = (inputAs === 'percent') ? marksToPercent(marks?.[studentId], outOf) : (marks?.[studentId] ?? '')
-      if (raw !== '' && !invalid?.[studentId]) saveSingleMarkNow(studentId, raw)
+      if (hasValue(raw) && !invalid?.[studentId]) saveSingleMarkNow(studentId, raw)
     }catch{}
   }
 
@@ -732,7 +737,7 @@ export default function TeacherGrades(){
       const raw = (inputAs === 'percent')
         ? marksToPercent((marksAll?.[compId]?.[studentId]), outOfPerComp?.[compId])
         : ((marksAll?.[compId]?.[studentId]) ?? '')
-      if (raw !== '' && !(invalidAll?.[compId]?.[studentId])) saveAllMarkNow(compId, studentId, raw)
+      if (hasValue(raw) && !(invalidAll?.[compId]?.[studentId])) saveAllMarkNow(compId, studentId, raw)
     }catch{}
   }
 
@@ -850,6 +855,13 @@ export default function TeacherGrades(){
         setStudentsLoading(true)
         // Fetch ALL students for this class (handle pagination and varied response shapes)
         const fetchAllStudents = async () => {
+          // Fast path: class students endpoint (no pagination, lightweight serializer)
+          try{
+            const r0 = await api.get(`/academics/classes/${encodeURIComponent(selectedClass)}/students/`)
+            const d0 = r0?.data
+            if (Array.isArray(d0) && d0.length) return d0
+            if (d0 && Array.isArray(d0.results) && d0.results.length) return d0.results
+          }catch{}
           const baseUrls = [
             `/academics/students/?klass=${encodeURIComponent(selectedClass)}&page_size=200`,
             `/academics/students/?class=${encodeURIComponent(selectedClass)}&page_size=200`,
@@ -1367,7 +1379,7 @@ export default function TeacherGrades(){
     const toStore = (inputAs === 'percent') ? percentToMarks(raw, total) : String(raw)
     setMarks(m => ({ ...m, [studentId]: toStore }))
     let isInvalid = false
-    if (raw !== '' && raw !== null && typeof raw !== 'undefined'){
+    if (hasValue(raw)){
       const numCheck = (inputAs === 'percent') ? Number(String(raw).toString().replace(/%/g,'')) : Number(raw)
       const limit = (inputAs === 'percent') ? 100 : total
       if (Number.isNaN(numCheck) || numCheck < 0 || numCheck > limit){
@@ -1387,7 +1399,7 @@ export default function TeacherGrades(){
     // Debounced auto-save for valid inputs
     // Save on every digit entered (debounced) to mirror admin entry behavior.
     // Use the computed validity here (do not rely on possibly-stale state).
-    if (!isInvalid && raw !== '' && raw !== null && typeof raw !== 'undefined'){
+    if (!isInvalid && hasValue(raw)){
       const t = saveTimersRef.current[studentId]
       if (t) clearTimeout(t)
       saveTimersRef.current[studentId] = setTimeout(async () => {
