@@ -307,7 +307,7 @@ export default function App() {
     return () => { mounted = false }
   }, [])
 
-  const maintenanceBypass = pathname.startsWith('/superadmin') || pathname.startsWith('/help')
+  const maintenanceBypass = pathname.startsWith('/superadmin') || pathname.startsWith('/help') || pathname.startsWith('/login')
   if (maintenanceNotice?.enabled && !maintenanceBypass) {
     return <MaintenancePage message={maintenanceNotice?.message || maintenanceMessage} endsAt={maintenanceNotice?.ends_at} helpPath={helpCenterPath} />
   }
