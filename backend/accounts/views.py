@@ -1453,6 +1453,7 @@ def maintenance_notice(request):
     return Response({
         'enabled': bool(getattr(notice, 'enabled', False)),
         'message': getattr(notice, 'message', '') or '',
+        'ends_at': getattr(notice, 'ends_at', None),
         'updated_at': getattr(notice, 'updated_at', None),
     })
 
@@ -1518,7 +1519,24 @@ def superadmin_maintenance_notice(request):
             notice.enabled = bool(data.get('enabled'))
         if 'message' in data:
             notice.message = str(data.get('message') or '')
-        notice.save(update_fields=['enabled', 'message', 'updated_at'])
+        if 'ends_at' in data:
+            raw = data.get('ends_at')
+            if raw in (None, '', 'null'):
+                notice.ends_at = None
+            else:
+                try:
+                    dt = parse_datetime(str(raw))
+                except Exception:
+                    dt = None
+                if dt is None:
+                    return Response({'detail': 'Invalid ends_at datetime'}, status=400)
+                if timezone.is_naive(dt):
+                    try:
+                        dt = timezone.make_aware(dt, timezone.get_current_timezone())
+                    except Exception:
+                        pass
+                notice.ends_at = dt
+        notice.save(update_fields=['enabled', 'message', 'ends_at', 'updated_at'])
         try:
             if bool(notice.enabled):
                 _broadcast_maintenance_alert_to_all_schools(
@@ -1534,6 +1552,7 @@ def superadmin_maintenance_notice(request):
     return Response({
         'enabled': bool(notice.enabled),
         'message': notice.message or '',
+        'ends_at': getattr(notice, 'ends_at', None),
         'updated_at': notice.updated_at,
     })
 

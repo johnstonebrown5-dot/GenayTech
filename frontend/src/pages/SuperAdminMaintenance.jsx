@@ -7,8 +7,8 @@ export default function SuperAdminMaintenance(){
   const [error, setError] = useState('')
   const [copied, setCopied] = useState(false)
 
-  const [form, setForm] = useState({ enabled: false, message: '' })
-  const [server, setServer] = useState({ enabled: false, message: '', updated_at: null })
+  const [form, setForm] = useState({ enabled: false, message: '', ends_at: '' })
+  const [server, setServer] = useState({ enabled: false, message: '', ends_at: null, updated_at: null })
 
   const canSave = useMemo(() => true, [])
 
@@ -18,8 +18,9 @@ export default function SuperAdminMaintenance(){
     try{
       const res = await api.get('/auth/superadmin/maintenance/', { _skipGlobalLoading: true })
       const data = res?.data || {}
-      setServer({ enabled: !!data.enabled, message: data.message || '', updated_at: data.updated_at || null })
-      setForm({ enabled: !!data.enabled, message: data.message || '' })
+      setServer({ enabled: !!data.enabled, message: data.message || '', ends_at: data.ends_at || null, updated_at: data.updated_at || null })
+      const endsAtLocal = data?.ends_at ? String(data.ends_at).slice(0, 19) : ''
+      setForm({ enabled: !!data.enabled, message: data.message || '', ends_at: endsAtLocal })
     }catch(e){
       setError(e?.response?.data?.detail || e?.message || 'Failed to load maintenance notice')
     }finally{
@@ -35,10 +36,13 @@ export default function SuperAdminMaintenance(){
     setError('')
     try{
       const payload = { enabled: !!form.enabled, message: form.message || '' }
+      if (form.ends_at === '') payload.ends_at = null
+      else payload.ends_at = form.ends_at
       const res = await api.patch('/auth/superadmin/maintenance/', payload)
       const data = res?.data || {}
-      setServer({ enabled: !!data.enabled, message: data.message || '', updated_at: data.updated_at || null })
-      setForm({ enabled: !!data.enabled, message: data.message || '' })
+      setServer({ enabled: !!data.enabled, message: data.message || '', ends_at: data.ends_at || null, updated_at: data.updated_at || null })
+      const endsAtLocal = data?.ends_at ? String(data.ends_at).slice(0, 19) : ''
+      setForm({ enabled: !!data.enabled, message: data.message || '', ends_at: endsAtLocal })
       try { window.dispatchEvent(new Event('alerts:refresh')) } catch {}
     }catch(e){
       setError(e?.response?.data?.detail || e?.message || 'Failed to save maintenance notice')
@@ -53,8 +57,9 @@ export default function SuperAdminMaintenance(){
     try{
       const res = await api.patch('/auth/superadmin/maintenance/', { enabled: false }, { _skipGlobalLoading: true })
       const data = res?.data || {}
-      setServer({ enabled: !!data.enabled, message: data.message || '', updated_at: data.updated_at || null })
-      setForm((f) => ({ ...f, enabled: !!data.enabled, message: data.message || '' }))
+      setServer({ enabled: !!data.enabled, message: data.message || '', ends_at: data.ends_at || null, updated_at: data.updated_at || null })
+      const endsAtLocal = data?.ends_at ? String(data.ends_at).slice(0, 19) : ''
+      setForm((f) => ({ ...f, enabled: !!data.enabled, message: data.message || '', ends_at: endsAtLocal }))
       try { window.dispatchEvent(new Event('alerts:refresh')) } catch {}
     }catch(e){
       setError(e?.response?.data?.detail || e?.message || 'Failed to stop alert')
@@ -134,6 +139,16 @@ export default function SuperAdminMaintenance(){
             placeholder="Write the message users will see during maintenance…"
             className="mt-3 w-full rounded-2xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-200"
           />
+          <div className="mt-3">
+            <div className="text-sm font-semibold text-gray-700">Maintenance ends at</div>
+            <input
+              type="datetime-local"
+              value={form.ends_at}
+              onChange={e => setForm(f => ({ ...f, ends_at: e.target.value }))}
+              className="mt-2 w-full rounded-2xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-200"
+            />
+            <div className="mt-1 text-xs text-gray-500">Leave empty to show maintenance without a countdown.</div>
+          </div>
           <div className="mt-3 flex items-center justify-between gap-3">
             <label className="inline-flex items-center gap-2 text-sm font-semibold text-gray-700">
               <input
@@ -160,6 +175,9 @@ export default function SuperAdminMaintenance(){
           <div className="mt-3 text-sm text-gray-600">
             When enabled, non-superadmin users will see the maintenance screen with this message.
           </div>
+          {server?.ends_at && (
+            <div className="mt-3 text-xs text-gray-600">Ends at: {String(server.ends_at).slice(0, 19).replace('T', ' ')}</div>
+          )}
           <div className="mt-4 space-y-2">
             <a href="/" className="block text-sm font-semibold text-indigo-700 hover:underline">Open public site</a>
             <a href="/help" className="block text-sm font-semibold text-indigo-700 hover:underline">Open Help Center</a>

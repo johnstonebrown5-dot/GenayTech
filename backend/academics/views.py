@@ -3260,9 +3260,26 @@ class ExamViewSet(viewsets.ModelViewSet):
         except Exception:
             pass
 
-        # Per-subject performance table: Subject | Marks | Grade (using stage-wide bands when present)
-        rows = [['Subject', 'Marks', 'Grade']]
+        # Per-subject performance table: Subject | Marks | Grade | Remarks (admin-set)
+        rows = [['Subject', 'Marks', 'Grade', 'Remarks']]
         subject_percentages = st_row.get('subject_percentages') or {}
+
+        # Load remarks keyed by subject id for this student+exam (whole-subject rows only)
+        remarks_by_subject = {}
+        try:
+            remark_qs = (
+                ExamResult.objects
+                .filter(exam=exam, student_id=student_id, component__isnull=True)
+                .exclude(remarks__isnull=True)
+                .exclude(remarks='')
+                .values_list('subject_id', 'remarks')
+            )
+            for sid0, rem0 in remark_qs:
+                if sid0 is not None and rem0:
+                    remarks_by_subject[str(sid0)] = str(rem0)
+        except Exception:
+            remarks_by_subject = {}
+
         for s in subjects:
             sid = str(s['id'])
             mark = st_row['marks'].get(sid)
@@ -3272,19 +3289,21 @@ class ExamViewSet(viewsets.ModelViewSet):
                 s.get('code') or s.get('name'),
                 '' if mark is None else round(float(mark), 2),
                 grade,
+                remarks_by_subject.get(sid, ''),
             ])
         # Totals row (overall marks and average percentage for the exam)
         total = st_row.get('total', 0)
         avg = st_row.get('average', 0)
-        rows.append(['Total', total, ''])
-        rows.append(['Average', avg, _letter_from_percentage(avg)])
+        rows.append(['Total', total, '', ''])
+        rows.append(['Average', avg, _letter_from_percentage(avg), ''])
 
-        tbl = Table(rows, colWidths=[90*mm, 30*mm, 30*mm])
+        tbl = Table(rows, colWidths=[70*mm, 25*mm, 20*mm, 35*mm])
         tbl.setStyle(TableStyle([
             ('GRID',(0,0),(-1,-1),0.3, colors.lightgrey),
             ('BACKGROUND',(0,0),(-1,0), colors.whitesmoke),
             ('ALIGN',(1,1),(1,-1),'RIGHT'),
             ('ALIGN',(2,1),(2,-1),'CENTER'),
+            ('VALIGN',(0,0),(-1,-1),'TOP'),
             ('FONTNAME',(0,0),(-1,0),'Helvetica-Bold'),
             ('BOTTOMPADDING',(0,0),(-1,0),6),
         ]))
@@ -3963,8 +3982,19 @@ class ExamResultViewSet(viewsets.ModelViewSet):
                     raise ValidationError({'component': 'This subject has components. Please select a component/paper to record marks for.'})
             except Exception:
                 pass
+        # Allow out_of-only upserts (denominator updates) as long as out_of is valid.
+        marks_missing = marks in (None, '', [])
+        if marks_missing and out_of is not None:
+            try:
+                oo = float(out_of)
+            except (TypeError, ValueError):
+                raise ValidationError({'out_of': 'out_of must be a number'})
+            if oo <= 0:
+                raise ValidationError({'out_of': 'out_of must be greater than 0'})
+            # For out_of-only updates, do not require marks.
+
         # Basic marks validation
-        if exam and marks is not None:
+        if exam and marks is not None and not marks_missing:
             try:
                 m = float(marks)
             except (TypeError, ValueError):
@@ -4054,18 +4084,37 @@ class ExamResultViewSet(viewsets.ModelViewSet):
                     except Exception:
                         # If parsing/comparison fails, do not block save
                         pass
-                existing.marks = vd['marks']
-                existing.out_of = vd.get('out_of')
+                if not marks_missing:
+                    existing.marks = vd.get('marks')
+                if out_of is not None:
+                    existing.out_of = vd.get('out_of')
                 if idempotency_key:
                     existing.last_idempotency_key = str(idempotency_key)
-                    existing.save(update_fields=['marks','out_of','last_idempotency_key'])
+                    fields = ['last_idempotency_key']
+                    if not marks_missing:
+                        fields.append('marks')
+                    if out_of is not None:
+                        fields.append('out_of')
+                    existing.save(update_fields=fields)
                 else:
-                    existing.save(update_fields=['marks','out_of'])
+                    fields = []
+                    if not marks_missing:
+                        fields.append('marks')
+                    if out_of is not None:
+                        fields.append('out_of')
+                    if fields:
+                        existing.save(update_fields=fields)
                 serializer.instance = existing
                 return
 
             # Not existing: create, but protect against race with unique constraint
             try:
+                # On create, if marks missing but out_of is provided, initialize marks=0.
+                if marks_missing and out_of is not None:
+                    try:
+                        serializer.validated_data['marks'] = 0.0
+                    except Exception:
+                        pass
                 obj = serializer.save(last_idempotency_key=(str(idempotency_key) if idempotency_key else None))
                 serializer.instance = obj
                 return
@@ -4087,13 +4136,26 @@ class ExamResultViewSet(viewsets.ModelViewSet):
                         raise
                     except Exception:
                         pass
-                obj.marks = vd['marks']
-                obj.out_of = vd.get('out_of')
+                if not marks_missing:
+                    obj.marks = vd.get('marks')
+                if out_of is not None:
+                    obj.out_of = vd.get('out_of')
                 if idempotency_key:
                     obj.last_idempotency_key = str(idempotency_key)
-                    obj.save(update_fields=['marks','out_of','last_idempotency_key'])
+                    fields = ['last_idempotency_key']
+                    if not marks_missing:
+                        fields.append('marks')
+                    if out_of is not None:
+                        fields.append('out_of')
+                    obj.save(update_fields=fields)
                 else:
-                    obj.save(update_fields=['marks','out_of'])
+                    fields = []
+                    if not marks_missing:
+                        fields.append('marks')
+                    if out_of is not None:
+                        fields.append('out_of')
+                    if fields:
+                        obj.save(update_fields=fields)
                 serializer.instance = obj
 
     def perform_update(self, serializer):

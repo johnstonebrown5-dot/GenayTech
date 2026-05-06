@@ -18,7 +18,7 @@ export default function AdminEnterResults({ readOnly }){
   const [students, setStudents] = useState([])
   const [subjects, setSubjects] = useState([])
   const [selectedSubject, setSelectedSubject] = useState('') // '' means All subjects
-  const [results, setResults] = useState([]) // rows: {student, subject, component|null, marks}
+  const [results, setResults] = useState([]) // rows: {student, subject, component|null, marks, outOf?, remarks?}
   const [invalid, setInvalid] = useState({}) // { 'studentId-subjectId': true }
   const [componentsMap, setComponentsMap] = useState({}) // { subjectId: [components] }
   const [uploadOpen, setUploadOpen] = useState(false)
@@ -265,7 +265,8 @@ export default function AdminEnterResults({ readOnly }){
                   }
                 }
                 const pref = preferredOut.get(`${sub.id}-${c.id}`)
-                rows.push({ student: s.id, subject: sub.id, component: c.id, marks: Number.isFinite(marksVal) ? marksVal : '', outOf: Number.isFinite(outOf) ? outOf : (Number.isFinite(pref) ? pref : undefined) })
+                const rem = (found && (found.remarks ?? found.remark))
+                rows.push({ student: s.id, subject: sub.id, component: c.id, marks: Number.isFinite(marksVal) ? marksVal : '', outOf: Number.isFinite(outOf) ? outOf : (Number.isFinite(pref) ? pref : undefined), remarks: (rem != null ? String(rem) : '') })
               }
             } else {
               const key = `${s.id}-${sub.id}-`
@@ -283,7 +284,8 @@ export default function AdminEnterResults({ readOnly }){
                 }
               }
               const pref = preferredOut.get(`${sub.id}-`)
-              rows.push({ student: s.id, subject: sub.id, component: null, marks: Number.isFinite(marksVal) ? marksVal : '', outOf: Number.isFinite(outOf) ? outOf : (Number.isFinite(pref) ? pref : undefined) })
+              const rem = (found && (found.remarks ?? found.remark))
+              rows.push({ student: s.id, subject: sub.id, component: null, marks: Number.isFinite(marksVal) ? marksVal : '', outOf: Number.isFinite(outOf) ? outOf : (Number.isFinite(pref) ? pref : undefined), remarks: (rem != null ? String(rem) : '') })
             }
           }
         }
@@ -335,7 +337,7 @@ export default function AdminEnterResults({ readOnly }){
         .filter(r => visibleSubjectIds.includes(r.subject))
         .map(r => ({ ...r, marks: Math.round(parseFloat(r.marks)) }))
         .filter(r => !isNaN(r.marks))
-        .map(r => ({ exam: examId, student: r.student, subject: r.subject, component: r.component, marks: r.marks, out_of: r.outOf }))
+        .map(r => ({ exam: examId, student: r.student, subject: r.subject, component: r.component, marks: r.marks, out_of: r.outOf, remarks: r.remarks }))
       if (!payload.length) throw new Error('Enter at least one mark to save')
       const res = await api.post('/academics/exam_results/bulk/', { results: payload }, { timeout: 30000 })
       const failed = Number(res?.data?.failed || 0)
@@ -381,7 +383,7 @@ export default function AdminEnterResults({ readOnly }){
       const n = Math.round(parseFloat(mk))
       if (Number.isNaN(n)) return
       const key = `${row.student}-${row.subject}-${row.component ?? ''}`
-      byKey.set(key, { exam: examId, student: row.student, subject: row.subject, component: row.component, marks: n, out_of: row.outOf })
+      byKey.set(key, { exam: examId, student: row.student, subject: row.subject, component: row.component, marks: n, out_of: row.outOf, remarks: row.remarks })
     }
 
     for (const k of marksKeys){
@@ -764,6 +766,24 @@ export default function AdminEnterResults({ readOnly }){
     })
   }
 
+  const setRemarksFor = (studentId, subjectId, componentId, val) => {
+    if (isReadOnly) return
+    const sid = Number(subjectId)
+    if (!Number.isFinite(sid)) return
+    const stuId = Number(studentId)
+    if (!Number.isFinite(stuId)) return
+    const comp = componentId == null ? null : Number(componentId)
+    setResults(prev => {
+      const copy = [...prev]
+      const i = copy.findIndex(r => r.student===stuId && r.subject===sid && ((comp ?? null) === (r.component ?? null)))
+      if (i > -1) copy[i] = { ...copy[i], remarks: String(val ?? '') }
+      return copy
+    })
+    // piggyback on marks autosave by marking row as dirty
+    const key = `${stuId}-${sid}-${comp ?? ''}`
+    queueDirtyMark(key)
+  }
+
   return (
     <React.Fragment>
       <div className="space-y-4">
@@ -1013,7 +1033,7 @@ export default function AdminEnterResults({ readOnly }){
                   <th className="border px-2 py-1 text-left sticky left-0 bg-gray-50" rowSpan={2}>Student</th>
                   {visibleSubjects.map(s => {
                     const comps = componentsMap[s.id] || []
-                    const count = (Array.isArray(comps) && comps.length>0) ? comps.length + 1 : 2
+                    const count = (Array.isArray(comps) && comps.length>0) ? comps.length + 2 : 3
                     return (
                       <th key={`grp-${s.id}`} className="border px-2 py-1 text-center" colSpan={count}>{s.code}</th>
                     )
@@ -1041,6 +1061,7 @@ export default function AdminEnterResults({ readOnly }){
                             )
                           })}
                           <th key={`tot-${s.id}`} className="border px-2 py-1 text-center">Total</th>
+                          <th key={`rem-${s.id}`} className="border px-2 py-1 text-center">Remarks</th>
                         </React.Fragment>
                       )
                     }
@@ -1048,6 +1069,7 @@ export default function AdminEnterResults({ readOnly }){
                       <React.Fragment key={`single-${s.id}`}>
                         <th className="border px-2 py-1 text-center">Marks</th>
                         <th className="border px-2 py-1 text-center">Percent</th>
+                        <th className="border px-2 py-1 text-center">Remarks</th>
                       </React.Fragment>
                     )
                   })}
@@ -1083,6 +1105,7 @@ export default function AdminEnterResults({ readOnly }){
                             )
                           })}
                           <th key={`out-tot-${s.id}`} className="border px-2 py-1 text-center text-gray-400">—</th>
+                          <th key={`out-rem-${s.id}`} className="border px-2 py-1 text-center text-gray-400">—</th>
                         </React.Fragment>
                       )
                     }
@@ -1107,6 +1130,7 @@ export default function AdminEnterResults({ readOnly }){
                             onChange={e=>{ if (!isReadOnly) setOutOfFor(s.id, null, e.target.value) }}
                           />
                         </th>
+                        <th className="border px-2 py-1 text-center text-gray-400">—</th>
                         <th className="border px-2 py-1 text-center text-gray-400">—</th>
                       </React.Fragment>
                     )
@@ -1173,6 +1197,22 @@ export default function AdminEnterResults({ readOnly }){
                               )
                             })}
                             <td key={`tot-${stu.id}-${s.id}`} className="border px-1.5 py-1 text-center font-medium">{subjectPercent(stu.id, s.id)}%</td>
+                            <td key={`rem-${stu.id}-${s.id}`} className="border px-1.5 py-1 text-center">
+                              {(() => {
+                                const i0 = results.findIndex(r => r.student===stu.id && r.subject===s.id && (r.component==null))
+                                const rem = i0>-1 ? (results[i0].remarks ?? '') : ''
+                                return (
+                                  <input
+                                    type="text"
+                                    className="border px-2 py-1 rounded w-40 text-left border-gray-300 bg-white"
+                                    value={rem}
+                                    disabled={isReadOnly}
+                                    onChange={e=>{ if (!isReadOnly) setRemarksFor(stu.id, s.id, null, e.target.value) }}
+                                    placeholder="Remarks"
+                                  />
+                                )
+                              })()}
+                            </td>
                           </React.Fragment>
                         )
                       }
@@ -1224,6 +1264,22 @@ export default function AdminEnterResults({ readOnly }){
                             />
                           </td>
                           <td className="border px-1.5 py-1 text-center font-medium">{subjectPercent(stu.id, s.id)}%</td>
+                          <td className="border px-1.5 py-1 text-center">
+                            {(() => {
+                              const i0 = results.findIndex(r => r.student===stu.id && r.subject===s.id && (r.component==null))
+                              const rem = i0>-1 ? (results[i0].remarks ?? '') : ''
+                              return (
+                                <input
+                                  type="text"
+                                  className="border px-2 py-1 rounded w-40 text-left border-gray-300 bg-white"
+                                  value={rem}
+                                  disabled={isReadOnly}
+                                  onChange={e=>{ if (!isReadOnly) setRemarksFor(stu.id, s.id, null, e.target.value) }}
+                                  placeholder="Remarks"
+                                />
+                              )
+                            })()}
+                          </td>
                         </React.Fragment>
                       )
                     })}

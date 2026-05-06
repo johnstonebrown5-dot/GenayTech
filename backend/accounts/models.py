@@ -213,6 +213,7 @@ class SystemHealthEvent(models.Model):
 class MaintenanceNotice(models.Model):
     enabled = models.BooleanField(default=False)
     message = models.TextField(blank=True, default='')
+    ends_at = models.DateTimeField(null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):

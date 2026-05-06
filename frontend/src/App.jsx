@@ -237,7 +237,7 @@ export default function App() {
   const { pathname } = useLocation()
   const nav = useNavigate()
   const [blockLandscape, setBlockLandscape] = React.useState(false)
-  const [maintenanceNotice, setMaintenanceNotice] = React.useState({ loaded: false, enabled: maintenanceEnabled, message: maintenanceMessage })
+  const [maintenanceNotice, setMaintenanceNotice] = React.useState({ loaded: false, enabled: maintenanceEnabled, message: maintenanceMessage, ends_at: null })
   const hideAssistant = pathname === '/login' || pathname === '/' || pathname === '/report-issue'
   const isPublicLanding = pathname === '/'
   const prevPathRef = React.useRef(pathname)
@@ -297,6 +297,7 @@ export default function App() {
           loaded: true,
           enabled: !!data.enabled,
           message: data.message || maintenanceMessage,
+          ends_at: data.ends_at || null,
         })
       } catch {
         if (!mounted) return
@@ -306,9 +307,9 @@ export default function App() {
     return () => { mounted = false }
   }, [])
 
-  const maintenanceBypass = pathname.startsWith('/superadmin') || pathname.startsWith('/login') || pathname.startsWith('/help')
+  const maintenanceBypass = pathname.startsWith('/superadmin')
   if (maintenanceNotice?.enabled && !maintenanceBypass) {
-    return <MaintenancePage message={maintenanceNotice?.message || maintenanceMessage} helpPath={helpCenterPath} />
+    return <MaintenancePage message={maintenanceNotice?.message || maintenanceMessage} endsAt={maintenanceNotice?.ends_at} helpPath={helpCenterPath} />
   }
   return (
     <NotificationProvider>
