@@ -62,11 +62,6 @@ class Migration(migrations.Migration):
         ),
         migrations.AlterField(
             model_name='exam',
-            name='term',
-            field=models.PositiveSmallIntegerField(choices=[(1, 'Term 1'), (2, 'Term 2'), (3, 'Term 3')]),
-        ),
-        migrations.AlterField(
-            model_name='exam',
             name='total_marks',
             field=models.PositiveSmallIntegerField(default=100),
         ),
