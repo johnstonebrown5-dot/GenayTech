@@ -192,7 +192,7 @@ export default function FinanceLayout({ children }) {
                     </button>
                     <div className="flex items-center gap-3">
                         <button onClick={lock} className="px-3 py-2 rounded-lg text-sm font-medium bg-gray-800 text-white hover:bg-gray-900 transition-all duration-200 shadow-soft">Lock</button>
-                        <button onClick={logout} className="px-4 py-2 rounded-lg text-sm font-medium bg-gray-900 text-white hover:bg-gray-800 transition-all duration-200 shadow-soft">Logout</button>
+                        <button onClick={() => navigate('/sessions')} className="px-4 py-2 rounded-lg text-sm font-medium bg-gray-900 text-white hover:bg-gray-800 transition-all duration-200 shadow-soft">Logout</button>
                     </div>
                 </div>
             </header>

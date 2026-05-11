@@ -34,12 +34,12 @@ class StreamSerializer(serializers.ModelSerializer):
 class SubjectGradingBandSerializer(serializers.ModelSerializer):
     class Meta:
         model = SubjectGradingBand
-        fields = ['id','subject','grade','min','max','order']
+        fields = ['id','subject','grade','min','max','order','remarks']
 
 class StageGradingBandSerializer(serializers.ModelSerializer):
     class Meta:
         model = StageGradingBand
-        fields = ['id','school','stage','grade','min','max','order']
+        fields = ['id','school','stage','grade','min','max','order','remarks']
         extra_kwargs = {
             'school': {'read_only': True}
         }

@@ -584,7 +584,7 @@ export default function AdminLayout({ children }){
               <div className="px-4 py-3 text-sm text-gray-700">Are you sure you want to logout?</div>
               <div className="px-4 py-3 border-t border-gray-100 flex items-center justify-end gap-2">
                 <button onClick={() => setShowLogoutConfirm(false)} className="px-3 py-1.5 rounded-lg text-sm border bg-white text-gray-700 hover:bg-gray-50">Cancel</button>
-                <button onClick={() => { setShowLogoutConfirm(false); logout() }} className="px-3 py-1.5 rounded-lg text-sm bg-red-600 text-white hover:bg-red-700">Logout</button>
+                <button onClick={() => { setShowLogoutConfirm(false); navigate('/sessions') }} className="px-3 py-1.5 rounded-lg text-sm bg-red-600 text-white hover:bg-red-700">Logout</button>
               </div>
             </div>
           </div>

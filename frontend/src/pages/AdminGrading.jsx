@@ -47,21 +47,21 @@ export default function AdminGrading(){
 
   const addStageRow = () => {
     setStageEdit(true)
-    setStageBands(prev => ({ ...prev, [stageTab]: [...(prev[stageTab]||[]), { id: undefined, stage: stageTab, grade: '', min: 0, max: 0, order: (prev[stageTab]||[]).length }] }))
+    setStageBands(prev => ({ ...prev, [stageTab]: [...(prev[stageTab]||[]), { id: undefined, stage: stageTab, grade: '', min: 0, max: 0, order: (prev[stageTab]||[]).length, remarks: '' }] }))
   }
   const updateStageField = (idx, key, value) => {
     setStageEdit(true)
-    setStageBands(prev => ({ ...prev, [stageTab]: (prev[stageTab]||[]).map((b,i)=> i===idx ? { ...b, [key]: key==='grade' ? value : Number(value) } : b) }))
+    setStageBands(prev => ({ ...prev, [stageTab]: (prev[stageTab]||[]).map((b,i)=> i===idx ? { ...b, [key]: key==='grade' || key==='remarks' ? value : Number(value) } : b) }))
   }
   const saveStageRow = async (idx) => {
     const row = (stageBands[stageTab]||[])[idx]
     try{
       savingStageRef.current[idx] = true
       if (row.id){
-        const { data } = await api.patch(`/academics/stage_grading/${row.id}/`, { grade: row.grade, min: row.min, max: row.max, order: row.order })
+        const { data } = await api.patch(`/academics/stage_grading/${row.id}/`, { grade: row.grade, min: row.min, max: row.max, order: row.order, remarks: row.remarks })
         setStageBands(prev => ({ ...prev, [stageTab]: (prev[stageTab]||[]).map((b,i)=> i===idx ? data : b) }))
       }else{
-        const { data } = await api.post(`/academics/stage_grading/`, { stage: stageTab, grade: row.grade, min: row.min, max: row.max, order: row.order })
+        const { data } = await api.post(`/academics/stage_grading/`, { stage: stageTab, grade: row.grade, min: row.min, max: row.max, order: row.order, remarks: row.remarks })
         setStageBands(prev => ({ ...prev, [stageTab]: (prev[stageTab]||[]).map((b,i)=> i===idx ? data : b) }))
       }
     }finally{
@@ -91,21 +91,21 @@ export default function AdminGrading(){
 
   const addSubjectRow = () => {
     setSubjectEdit(true)
-    setSubjectBands(prev => [...prev, { id: undefined, subject: Number(subjectId), grade: '', min: 0, max: 0, order: prev.length }])
+    setSubjectBands(prev => [...prev, { id: undefined, subject: Number(subjectId), grade: '', min: 0, max: 0, order: prev.length, remarks: '' }])
   }
   const updateSubjectField = (idx, key, value) => {
     setSubjectEdit(true)
-    setSubjectBands(prev => prev.map((b,i)=> i===idx ? { ...b, [key]: key==='grade' ? value : Number(value) } : b))
+    setSubjectBands(prev => prev.map((b,i)=> i===idx ? { ...b, [key]: key==='grade' || key==='remarks' ? value : Number(value) } : b))
   }
   const saveSubjectRow = async (idx) => {
     const row = subjectBands[idx]
     try{
       savingSubRef.current[idx] = true
       if (row.id){
-        const { data } = await api.patch(`/academics/subject_grading/${row.id}/`, { grade: row.grade, min: row.min, max: row.max, order: row.order })
+        const { data } = await api.patch(`/academics/subject_grading/${row.id}/`, { grade: row.grade, min: row.min, max: row.max, order: row.order, remarks: row.remarks })
         setSubjectBands(prev => prev.map((b,i)=> i===idx ? data : b))
       }else{
-        const { data } = await api.post(`/academics/subject_grading/`, { subject: Number(subjectId), grade: row.grade, min: row.min, max: row.max, order: row.order })
+        const { data } = await api.post(`/academics/subject_grading/`, { subject: Number(subjectId), grade: row.grade, min: row.min, max: row.max, order: row.order, remarks: row.remarks })
         setSubjectBands(prev => prev.map((b,i)=> i===idx ? data : b))
       }
     }finally{
@@ -145,12 +145,13 @@ export default function AdminGrading(){
                 <th className="border px-2 py-1 text-left">Min</th>
                 <th className="border px-2 py-1 text-left">Max</th>
                 <th className="border px-2 py-1 text-left">Order</th>
+                <th className="border px-2 py-1 text-left">Remarks</th>
                 <th className="border px-2 py-1 text-left w-32"></th>
               </tr>
             </thead>
             <tbody>
               {(stageBands[stageTab]||[]).length===0 ? (
-                <tr><td className="px-2 py-2 text-gray-500" colSpan={6}>{stageLoading? 'Loading…' : 'No bands yet.'}</td></tr>
+                <tr><td className="px-2 py-2 text-gray-500" colSpan={7}>{stageLoading? 'Loading…' : 'No bands yet.'}</td></tr>
               ) : (
                 (stageBands[stageTab]||[]).map((g, idx) => (
                   <tr key={g.id || `stg-${idx}`}>
@@ -178,6 +179,11 @@ export default function AdminGrading(){
                       {stageEdit ? (
                         <input className="border p-1 rounded w-full" type="number" value={g.order ?? idx} onChange={e=>updateStageField(idx,'order',e.target.value)} />
                       ) : (g.order ?? idx)}
+                    </td>
+                    <td className="border px-2 py-1 w-40">
+                      {stageEdit ? (
+                        <input className="border p-1 rounded w-full" value={g.remarks||''} onChange={e=>updateStageField(idx,'remarks',e.target.value)} />
+                      ) : (g.remarks || '')}
                     </td>
                     <td className="border px-2 py-1 w-40">
                       {stageEdit ? (
@@ -221,12 +227,13 @@ export default function AdminGrading(){
                 <th className="border px-2 py-1 text-left">Min</th>
                 <th className="border px-2 py-1 text-left">Max</th>
                 <th className="border px-2 py-1 text-left">Order</th>
+                <th className="border px-2 py-1 text-left">Remarks</th>
                 <th className="border px-2 py-1 text-left w-32"></th>
               </tr>
             </thead>
             <tbody>
               {(!subjectId || subjectBands.length===0) ? (
-                <tr><td className="px-2 py-2 text-gray-500" colSpan={6}>{subjectLoading? 'Loading…' : (subjectId? 'No bands yet.' : 'Select a subject')}</td></tr>
+                <tr><td className="px-2 py-2 text-gray-500" colSpan={7}>{subjectLoading? 'Loading…' : (subjectId? 'No bands yet.' : 'Select a subject')}</td></tr>
               ) : (
                 subjectBands.map((g, idx) => (
                   <tr key={g.id || `sb-${idx}`}>
@@ -254,6 +261,11 @@ export default function AdminGrading(){
                       {subjectEdit ? (
                         <input className="border p-1 rounded w-full" type="number" value={g.order ?? idx} onChange={e=>updateSubjectField(idx,'order',e.target.value)} />
                       ) : (g.order ?? idx)}
+                    </td>
+                    <td className="border px-2 py-1 w-40">
+                      {subjectEdit ? (
+                        <input className="border p-1 rounded w-full" value={g.remarks||''} onChange={e=>updateSubjectField(idx,'remarks',e.target.value)} />
+                      ) : (g.remarks || '')}
                     </td>
                     <td className="border px-2 py-1 w-40">
                       {subjectEdit ? (

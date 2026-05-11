@@ -17,7 +17,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
-from .models import School, SchoolDomain, SchoolIntegrationSettings, EmailVerificationToken, DemoRequest, NonTeachingStaff, PasswordResetCode, SystemHealthEvent, MaintenanceNotice, SystemConfig
+from .models import UserSession, School, SchoolDomain, SchoolIntegrationSettings, EmailVerificationToken, DemoRequest, NonTeachingStaff, PasswordResetCode, SystemHealthEvent, MaintenanceNotice, SystemConfig
 from django.contrib.auth.hashers import make_password
 from rest_framework.exceptions import AuthenticationFailed
 from django.apps import apps as django_apps
@@ -228,6 +228,40 @@ class TokenObtainPairViewWithLogging(TokenObtainPairView):
             raise
 
         user = getattr(serializer, 'user', None)
+        # Record session with device info
+        if user:
+            try:
+                refresh_token = serializer.validated_data.get('refresh')
+                if refresh_token:
+                    from rest_framework_simplejwt.tokens import RefreshToken
+                    tok = RefreshToken(refresh_token)
+                    jti = str(tok.get('jti', ''))
+                    ua = request.META.get('HTTP_USER_AGENT', 'Unknown Device')
+                    ip = request.META.get('HTTP_X_FORWARDED_FOR', '').split(',')[0].strip() or request.META.get('REMOTE_ADDR', '')
+                    
+                    # Basic UA parsing for a cleaner device name
+                    device = 'Desktop'
+                    ua_lower = ua.lower()
+                    if 'iphone' in ua_lower or 'ipad' in ua_lower or 'android' in ua_lower:
+                        device = 'Mobile'
+                    
+                    # Try to extract browser/OS if possible or just use a truncated UA
+                    if 'chrome' in ua_lower: browser = 'Chrome'
+                    elif 'firefox' in ua_lower: browser = 'Firefox'
+                    elif 'safari' in ua_lower: browser = 'Safari'
+                    elif 'edge' in ua_lower: browser = 'Edge'
+                    else: browser = 'Browser'
+
+                    clean_device_name = f"{browser} on {device}"
+                    UserSession.objects.create(
+                        user=user,
+                        jti=jti,
+                        device_name=clean_device_name,
+                        ip_address=ip
+                    )
+            except Exception:
+                pass
+
         school_id = getattr(user, 'school_id', None) if user is not None else None
         ms = int((perf_counter() - t0) * 1000)
         q1 = None
@@ -1799,6 +1833,105 @@ def logout_all(request):
         return Response({"detail": "Logged out from all sessions", "blacklisted": count})
     except Exception as e:
         return Response({"detail": "Failed to logout all"}, status=500)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def sessions(request):
+    """List active login sessions for the current user (based on SimpleJWT refresh tokens).
+
+    Note: Access tokens are short-lived; the refresh token represents a session.
+    """
+    qs = (
+        OutstandingToken.objects
+        .filter(user=request.user)
+        .select_related('user')
+        .order_by('-created_at')
+    )
+
+    # Get current session JTI from query param (sent by frontend from refresh token)
+    current_jti = request.GET.get('current_jti', '').strip() or None
+
+    data = []
+    # Fetch device names from UserSession mapping
+    session_map = {s.jti: s.device_name for s in UserSession.objects.filter(user=request.user)}
+
+    for t in qs:
+        try:
+            is_blacklisted = BlacklistedToken.objects.filter(token=t).exists()
+        except Exception:
+            is_blacklisted = False
+        
+        if is_blacklisted:
+            continue
+
+        jti = str(getattr(t, 'jti', ''))
+        data.append({
+            'id': jti,
+            'jti': jti,
+            'created_at': getattr(t, 'created_at', None),
+            'expires_at': getattr(t, 'expires_at', None),
+            'last_login': getattr(getattr(t, 'user', None), 'last_login', None),
+            'is_current': bool(current_jti and jti == current_jti),
+            'device_name': session_map.get(jti, 'Unknown Device'),
+        })
+
+    return Response({'results': data})
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def sessions_revoke(request):
+    """Revoke (log out) a single session (refresh token) for the current user.
+
+    Body: {"jti": "..."}
+    """
+    jti = (request.data.get('jti') or '').strip()
+    if not jti:
+        return Response({'detail': 'jti is required'}, status=400)
+    try:
+        tok = OutstandingToken.objects.get(user=request.user, jti=jti)
+    except OutstandingToken.DoesNotExist:
+        return Response({'detail': 'Session not found'}, status=404)
+    try:
+        BlacklistedToken.objects.get_or_create(token=tok)
+    except Exception:
+        return Response({'detail': 'Failed to revoke session'}, status=500)
+    return Response({'detail': 'Session revoked'})
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def sessions_revoke_all(request):
+    """Revoke (log out) all sessions for the current user.
+
+    Query param: ?keep_current=1 to avoid revoking the current refresh token.
+    Body: {"refresh": "<refresh_token>"} (only needed when keep_current=1)
+    """
+    keep_current = str(request.query_params.get('keep_current', '') or '').lower() in ('1', 'true', 'yes')
+    current_jti = None
+    if keep_current:
+        refresh = (request.data.get('refresh') or '').strip()
+        if not refresh:
+            return Response({'detail': 'refresh is required when keep_current=1'}, status=400)
+        try:
+            current_jti = str(getattr(RefreshToken(refresh), 'jti', '') or '')
+        except Exception:
+            return Response({'detail': 'Invalid token'}, status=400)
+
+    tokens = OutstandingToken.objects.filter(user=request.user)
+    if keep_current and current_jti:
+        tokens = tokens.exclude(jti=current_jti)
+
+    count = 0
+    for t in tokens:
+        try:
+            BlacklistedToken.objects.get_or_create(token=t)
+            count += 1
+        except Exception:
+            pass
+
+    return Response({'detail': 'Sessions revoked', 'blacklisted': count})
 
 
 def _normalize_domain(raw: str) -> str:

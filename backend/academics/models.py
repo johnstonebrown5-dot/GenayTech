@@ -13,9 +13,9 @@ class Subject(models.Model):
         ("humanities", "Humanities"),
         ("other", "Other"),
     )
-    code = models.CharField(max_length=50, unique=True)
-    name = models.CharField(max_length=100)
-    category = models.CharField(max_length=20, choices=CATEGORY_CHOICES, default="other")
+    code = models.CharField(max_length=20, unique=True)
+    name = models.CharField(max_length=50)
+    category = models.CharField(max_length=15, choices=CATEGORY_CHOICES, default="other")
     is_priority = models.BooleanField(default=False, help_text="If true, this subject is prioritized in timetable generation.")
     is_examinable = models.BooleanField(default=True, help_text="If false, this subject is excluded from exams, results, and analytics.")
     school = models.ForeignKey('accounts.School', on_delete=models.CASCADE, null=True, blank=True)
@@ -28,11 +28,11 @@ class SubjectComponent(models.Model):
     results to be captured per component.
     """
     subject = models.ForeignKey(Subject, on_delete=models.CASCADE, related_name='components')
-    code = models.CharField(max_length=50)
-    name = models.CharField(max_length=100)
+    code = models.CharField(max_length=20)
+    name = models.CharField(max_length=50)
     max_marks = models.FloatField(null=True, blank=True, help_text="Optional max marks for this component")
     weight = models.FloatField(null=True, blank=True, help_text="Optional weight for aggregation (defaults to simple sum)")
-    order = models.IntegerField(default=0)
+    order = models.PositiveSmallIntegerField(default=0)
 
     class Meta:
         unique_together = ("subject", "code")
@@ -42,7 +42,7 @@ class SubjectComponent(models.Model):
         return f"{self.subject.code} - {self.code} ({self.name})"
 
 class Stream(models.Model):
-    name = models.CharField(max_length=100)
+    name = models.CharField(max_length=50)
     school = models.ForeignKey('accounts.School', on_delete=models.CASCADE)
 
     class Meta:
@@ -102,8 +102,8 @@ class Class(models.Model):
     The name is automatically generated from the grade level and stream name.
     Format: 'Grade X [Stream Name]' (e.g., 'Grade 1 East')
     """
-    name = models.CharField(max_length=100, blank=True, editable=False)  # Auto-generated, not editable
-    grade_level = models.CharField(max_length=20, help_text="Grade level (e.g., '1', 'Grade 1')")
+    name = models.CharField(max_length=50, blank=True, editable=False)  # Auto-generated, not editable
+    grade_level = models.CharField(max_length=15, help_text="Grade level (e.g., '1', 'Grade 1')")
     stream = models.ForeignKey(Stream, on_delete=models.PROTECT, related_name='classes')
     teacher = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, 
                               on_delete=models.SET_NULL, related_name='class_teacher')
@@ -114,7 +114,7 @@ class Class(models.Model):
         ('primary', 'Primary'),
         ('junior', 'Junior Secondary'),
     )
-    stage = models.CharField(max_length=20, choices=STAGE_CHOICES, blank=True, default='', help_text="Primary: Grades 1-6; Junior Secondary: Grades 7-9")
+    stage = models.CharField(max_length=15, choices=STAGE_CHOICES, blank=True, default='', help_text="Primary: Grades 1-6; Junior Secondary: Grades 7-9")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -247,35 +247,35 @@ class Class(models.Model):
 
 class TeacherProfile(models.Model):
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
-    subjects = models.CharField(max_length=255, blank=True)
+    subjects = models.CharField(max_length=150, blank=True)
     klass = models.ForeignKey(Class, null=True, blank=True, on_delete=models.SET_NULL)
     # Allows delegating timetable management to selected teachers
     can_manage_timetable = models.BooleanField(default=False, help_text="If true, this teacher can manage timetable data (create/update).")
-    tsc_number = models.CharField(max_length=50, null=True, blank=True, unique=True, help_text="T.S.C number")
+    tsc_number = models.CharField(max_length=30, null=True, blank=True, unique=True, help_text="T.S.C number")
 
 class Student(models.Model):
-    admission_no = models.CharField(max_length=50, unique=True)
-    name = models.CharField(max_length=255)
+    admission_no = models.CharField(max_length=30, unique=True)
+    name = models.CharField(max_length=150)
     dob = models.DateField(null=True, blank=True)
-    gender = models.CharField(max_length=20)
-    upi_number = models.CharField(max_length=50, blank=True)
-    guardian_id = models.CharField(max_length=100, blank=True)
-    guardian_name = models.CharField(max_length=255, blank=True)
-    guardian_passport_no = models.CharField(max_length=50, blank=True)
-    birth_certificate_no = models.CharField(max_length=50, blank=True)
+    gender = models.CharField(max_length=10)
+    upi_number = models.CharField(max_length=30, blank=True)
+    guardian_id = models.CharField(max_length=50, blank=True)
+    guardian_name = models.CharField(max_length=150, blank=True)
+    guardian_passport_no = models.CharField(max_length=30, blank=True)
+    birth_certificate_no = models.CharField(max_length=30, blank=True)
     klass = models.ForeignKey(Class, null=True, on_delete=models.SET_NULL)
     user = models.OneToOneField(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL)
     # Keep school for scoping when klass is null (graduated)
     school = models.ForeignKey('accounts.School', null=True, blank=True, on_delete=models.SET_NULL, related_name='students')
     # Extra personal information fields
-    passport_no = models.CharField(max_length=50, blank=True)
-    phone = models.CharField(max_length=50, blank=True)
+    passport_no = models.CharField(max_length=30, blank=True)
+    phone = models.CharField(max_length=20, blank=True)
     email = models.EmailField(blank=True)
-    address = models.CharField(max_length=255, blank=True)
+    address = models.CharField(max_length=200, blank=True)
     photo = models.ImageField(upload_to='student_photos/', null=True, blank=True)
     # Graduation status
     is_graduated = models.BooleanField(default=False)
-    graduation_year = models.IntegerField(null=True, blank=True)
+    graduation_year = models.PositiveSmallIntegerField(null=True, blank=True)
     # Boarding status
     boarding_status = models.CharField(
         max_length=10,
@@ -292,12 +292,12 @@ class TeacherDuty(models.Model):
         ('done', 'Done'),
         ('canceled', 'Canceled'),
     )
-    title = models.CharField(max_length=200)
+    title = models.CharField(max_length=150)
     description = models.TextField(blank=True)
     teacher = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='assigned_duties')
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='created_duties')
     due_date = models.DateField(null=True, blank=True)
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    status = models.CharField(max_length=15, choices=STATUS_CHOICES, default='pending')
     remind_daily = models.BooleanField(default=True)
     last_reminded_at = models.DateTimeField(null=True, blank=True)
     school = models.ForeignKey('accounts.School', null=True, blank=True, on_delete=models.SET_NULL)
@@ -324,18 +324,18 @@ class StudentClassHistory(models.Model):
     student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='class_history')
     from_class = models.ForeignKey('academics.Class', null=True, blank=True, on_delete=models.SET_NULL, related_name='history_from')
     to_class = models.ForeignKey('academics.Class', null=True, blank=True, on_delete=models.SET_NULL, related_name='history_to')
-    action = models.CharField(max_length=20, choices=ACTION_CHOICES, default='moved')
-    year = models.IntegerField(null=True, blank=True)
-    term = models.IntegerField(null=True, blank=True)
-    note = models.CharField(max_length=255, blank=True)
+    action = models.CharField(max_length=15, choices=ACTION_CHOICES, default='moved')
+    year = models.PositiveSmallIntegerField(null=True, blank=True)
+    term = models.PositiveSmallIntegerField(null=True, blank=True)
+    note = models.CharField(max_length=150, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         ordering = ['created_at', 'id']
 
 class Competency(models.Model):
-    code = models.CharField(max_length=50, unique=True)
-    title = models.CharField(max_length=255)
+    code = models.CharField(max_length=20, unique=True)
+    title = models.CharField(max_length=150)
     description = models.TextField(blank=True)
     level_scale = models.JSONField(default=list)  # ["Emerging","Developing","Proficient","Mastered"]
 
@@ -343,14 +343,14 @@ class Assessment(models.Model):
     student = models.ForeignKey(Student, on_delete=models.CASCADE)
     teacher = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True)
     competency = models.ForeignKey(Competency, on_delete=models.CASCADE)
-    level = models.CharField(max_length=50)
+    level = models.CharField(max_length=30)
     comment = models.TextField(blank=True)
     evidence = models.FileField(upload_to='evidence/', blank=True, null=True)
     date = models.DateField(auto_now_add=True)
 
 class Portfolio(models.Model):
     student = models.ForeignKey(Student, on_delete=models.CASCADE)
-    title = models.CharField(max_length=255)
+    title = models.CharField(max_length=150)
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True)
 
 class Attendance(models.Model):
@@ -361,7 +361,7 @@ class Attendance(models.Model):
     )
     student = models.ForeignKey(Student, on_delete=models.CASCADE)
     date = models.DateField()
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES)
+    status = models.CharField(max_length=15, choices=STATUS_CHOICES)
     recorded_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True)
     class Meta:
         unique_together = ("student","date")
@@ -377,8 +377,8 @@ class LessonPlan(models.Model):
     date = models.DateField()
     # New: plan scoping by academic term and week number (1-13)
     term = models.ForeignKey('Term', on_delete=models.SET_NULL, null=True, blank=True, related_name='lesson_plans')
-    week = models.IntegerField(null=True, blank=True, help_text="Week number within the term (1-13)")
-    topic = models.CharField(max_length=255)
+    week = models.PositiveSmallIntegerField(null=True, blank=True, help_text="Week number within the term (1-13)")
+    topic = models.CharField(max_length=150)
     objectives = models.TextField(blank=True)
     activities = models.TextField(blank=True)
     resources = models.TextField(blank=True)
@@ -397,12 +397,12 @@ class Exam(models.Model):
         (2, 'Term 2'),
         (3, 'Term 3'),
     )
-    name = models.CharField(max_length=100)
-    year = models.IntegerField()
-    term = models.IntegerField(choices=TERM_CHOICES)
+    name = models.CharField(max_length=50)
+    year = models.PositiveSmallIntegerField()
+    term = models.PositiveSmallIntegerField(choices=TERM_CHOICES)
     klass = models.ForeignKey(Class, on_delete=models.CASCADE)
     date = models.DateField()
-    total_marks = models.IntegerField(default=100)
+    total_marks = models.PositiveSmallIntegerField(default=100)
     # Derive school from class -> school for scoping
     published = models.BooleanField(default=False)
     published_at = models.DateTimeField(null=True, blank=True)
@@ -410,7 +410,7 @@ class Exam(models.Model):
     deleted_at = models.DateTimeField(null=True, blank=True, db_index=True)
     deleted_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='deleted_exams')
     # Snapshot the grade level at the time the exam was created to avoid issues after promotions
-    grade_level_tag = models.CharField(max_length=20, blank=True, db_index=True, help_text="Grade level at the time the exam was set (e.g., 'Grade 4')")
+    grade_level_tag = models.CharField(max_length=15, blank=True, db_index=True, help_text="Grade level at the time the exam was set (e.g., 'Grade 4')")
 
     class Meta:
         ordering = ['name', 'year', 'term', 'klass__grade_level', 'klass__stream__name', 'date', 'id']
@@ -475,10 +475,10 @@ class ExamResult(models.Model):
     marks = models.FloatField()
     # Denominator to interpret marks (per paper/subject). Optional for backward compatibility.
     out_of = models.FloatField(null=True, blank=True)
-    remarks = models.CharField(max_length=255, null=True, blank=True)
+    remarks = models.CharField(max_length=100, null=True, blank=True)
     # For optimistic concurrency + client retry idempotency.
     updated_at = models.DateTimeField(auto_now=True, db_index=True)
-    last_idempotency_key = models.CharField(max_length=80, null=True, blank=True, db_index=True)
+    last_idempotency_key = models.CharField(max_length=40, null=True, blank=True, db_index=True)
 
     class Meta:
         unique_together = ("exam","student","subject","component")
@@ -506,10 +506,11 @@ class SubjectGradingBand(models.Model):
     Example rows: (A,80,100), (B,70,79)...
     """
     subject = models.ForeignKey(Subject, on_delete=models.CASCADE, related_name='grading_bands')
-    grade = models.CharField(max_length=5)
-    min = models.IntegerField()
-    max = models.IntegerField()
-    order = models.IntegerField(default=0)
+    grade = models.CharField(max_length=3)
+    min = models.PositiveSmallIntegerField()
+    max = models.PositiveSmallIntegerField()
+    order = models.PositiveSmallIntegerField(default=0)
+    remarks = models.CharField(max_length=100, blank=True, help_text="Remark to show on report card (e.g., 'Excellent', 'Good')")
 
     class Meta:
         ordering = ["order", "-max"]
@@ -527,11 +528,12 @@ class StageGradingBand(models.Model):
         ('junior', 'Junior Secondary'),
     )
     school = models.ForeignKey('accounts.School', on_delete=models.CASCADE)
-    stage = models.CharField(max_length=20, choices=STAGE_CHOICES)
-    grade = models.CharField(max_length=5)
-    min = models.IntegerField()
-    max = models.IntegerField()
-    order = models.IntegerField(default=0)
+    stage = models.CharField(max_length=15, choices=STAGE_CHOICES)
+    grade = models.CharField(max_length=3)
+    min = models.PositiveSmallIntegerField()
+    max = models.PositiveSmallIntegerField()
+    order = models.PositiveSmallIntegerField(default=0)
+    remarks = models.CharField(max_length=100, blank=True, help_text="Remark to show on report card (e.g., 'Excellent', 'Good')")
 
     class Meta:
         ordering = ["stage", "order", "-max"]
@@ -543,7 +545,7 @@ class StageGradingBand(models.Model):
 # ===== Academic Calendar =====
 class AcademicYear(models.Model):
     school = models.ForeignKey('accounts.School', on_delete=models.CASCADE)
-    label = models.CharField(max_length=20, help_text="Display label e.g. 2024/2025")
+    label = models.CharField(max_length=10, help_text="Display label e.g. 2024/2025")
     start_date = models.DateField()
     end_date = models.DateField()
     is_current = models.BooleanField(default=False)

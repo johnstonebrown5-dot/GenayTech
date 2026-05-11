@@ -4,7 +4,7 @@ from academics.models import Student
 
 class FeeCategory(models.Model):
     """A fee category such as Tuition, Transport, Lunch, etc., scoped to a School."""
-    name = models.CharField(max_length=100)
+    name = models.CharField(max_length=50)
     description = models.TextField(blank=True)
     # If true, this category is intended for per-student assignments ("per head")
     is_special = models.BooleanField(default=False)
@@ -37,9 +37,9 @@ class ClassFee(models.Model):
     )
     fee_category = models.ForeignKey(FeeCategory, on_delete=models.CASCADE, related_name='class_fees')
     klass = models.ForeignKey('academics.Class', on_delete=models.CASCADE, related_name='class_fees')
-    amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-    year = models.IntegerField()
-    term = models.IntegerField(choices=TERM_CHOICES)
+    amount = models.DecimalField(max_digits=8, decimal_places=2, default=0)
+    year = models.PositiveSmallIntegerField()
+    term = models.PositiveSmallIntegerField(choices=TERM_CHOICES)
     due_date = models.DateField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -61,9 +61,9 @@ class StudentFee(models.Model):
     )
     fee_category = models.ForeignKey(FeeCategory, on_delete=models.CASCADE, related_name='student_fees')
     student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='student_fees')
-    amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-    year = models.IntegerField()
-    term = models.IntegerField(choices=TERM_CHOICES)
+    amount = models.DecimalField(max_digits=8, decimal_places=2, default=0)
+    year = models.PositiveSmallIntegerField()
+    term = models.PositiveSmallIntegerField(choices=TERM_CHOICES)
     due_date = models.DateField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -77,12 +77,12 @@ class StudentFee(models.Model):
 class MpesaConfig(models.Model):
     ENV_CHOICES = (('sandbox', 'Sandbox'), ('production', 'Production'))
     school = models.OneToOneField('accounts.School', on_delete=models.CASCADE, related_name='mpesa_config')
-    consumer_key = models.CharField(max_length=255)
-    consumer_secret = models.CharField(max_length=255)
-    short_code = models.CharField(max_length=20, help_text='Till or PayBill number')
-    passkey = models.CharField(max_length=255, help_text='Lipa Na Mpesa Online passkey')
+    consumer_key = models.CharField(max_length=100)
+    consumer_secret = models.CharField(max_length=100)
+    short_code = models.CharField(max_length=15, help_text='Till or PayBill number')
+    passkey = models.CharField(max_length=100, help_text='Lipa Na Mpesa Online passkey')
     callback_url = models.URLField(blank=True, help_text='Public HTTPS callback URL for STK push callbacks')
-    environment = models.CharField(max_length=12, choices=ENV_CHOICES, default='sandbox')
+    environment = models.CharField(max_length=10, choices=ENV_CHOICES, default='sandbox')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -101,18 +101,18 @@ class Invoice(models.Model):
         (3, 'Term 3'),
     )
     student = models.ForeignKey(Student, on_delete=models.CASCADE)
-    amount = models.DecimalField(max_digits=10, decimal_places=2)
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='unpaid')
+    amount = models.DecimalField(max_digits=8, decimal_places=2)
+    status = models.CharField(max_length=15, choices=STATUS_CHOICES, default='unpaid')
     category = models.ForeignKey('finance.FeeCategory', null=True, blank=True, on_delete=models.SET_NULL, related_name='invoices')
-    year = models.IntegerField(null=True, blank=True)
-    term = models.IntegerField(choices=TERM_CHOICES, null=True, blank=True)
-    mpesa_transaction_id = models.CharField(max_length=100, blank=True)
+    year = models.PositiveSmallIntegerField(null=True, blank=True)
+    term = models.PositiveSmallIntegerField(choices=TERM_CHOICES, null=True, blank=True)
+    mpesa_transaction_id = models.CharField(max_length=50, blank=True)
     due_date = models.DateField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
 class Payment(models.Model):
     invoice = models.ForeignKey(Invoice, related_name='payments', on_delete=models.CASCADE)
-    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    amount = models.DecimalField(max_digits=8, decimal_places=2)
     METHOD_CHOICES = (
         ('mpesa', 'M-Pesa'),
         ('coop', 'Co-op Lipa na M-Pesa'),
@@ -120,8 +120,8 @@ class Payment(models.Model):
         ('cash', 'Cash'),
         ('cheque', 'Cheque'),
     )
-    method = models.CharField(max_length=20, choices=METHOD_CHOICES, default='mpesa')
-    reference = models.CharField(max_length=100, blank=True)
+    method = models.CharField(max_length=10, choices=METHOD_CHOICES, default='mpesa')
+    reference = models.CharField(max_length=50, blank=True)
     attachment = models.FileField(upload_to='payment_attachments/', null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     recorded_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL)
@@ -177,20 +177,20 @@ class IncomingPayment(models.Model):
         ('manual', 'Manual'),
     )
 
-    source = models.CharField(max_length=20, choices=SOURCE_CHOICES, default='bank')
-    external_id = models.CharField(max_length=100, blank=True, help_text='Provider reference/unique id')
-    amount = models.DecimalField(max_digits=10, decimal_places=2)
-    currency = models.CharField(max_length=10, default='KES')
-    reference = models.CharField(max_length=100, blank=True, help_text='Receipt/transaction code')
+    source = models.CharField(max_length=15, choices=SOURCE_CHOICES, default='bank')
+    external_id = models.CharField(max_length=50, blank=True, help_text='Provider reference/unique id')
+    amount = models.DecimalField(max_digits=8, decimal_places=2)
+    currency = models.CharField(max_length=5, default='KES')
+    reference = models.CharField(max_length=50, blank=True, help_text='Receipt/transaction code')
     narration = models.TextField(blank=True)
-    account_ref = models.CharField(max_length=100, blank=True, help_text='Account reference passed to gateway (e.g., INV123, admission no)')
-    phone = models.CharField(max_length=50, blank=True)
-    payer_name = models.CharField(max_length=255, blank=True)
+    account_ref = models.CharField(max_length=50, blank=True, help_text='Account reference passed to gateway (e.g., INV123, admission no)')
+    phone = models.CharField(max_length=20, blank=True)
+    payer_name = models.CharField(max_length=150, blank=True)
     value_date = models.DateTimeField(null=True, blank=True)
 
     matched_student = models.ForeignKey('academics.Student', null=True, blank=True, on_delete=models.SET_NULL, related_name='incoming_payments')
     matched_invoice = models.ForeignKey('finance.Invoice', null=True, blank=True, on_delete=models.SET_NULL, related_name='incoming_matches')
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending', db_index=True)
+    status = models.CharField(max_length=15, choices=STATUS_CHOICES, default='pending', db_index=True)
     match_confidence = models.FloatField(null=True, blank=True)
     notes = models.TextField(blank=True)
 
@@ -211,7 +211,7 @@ class IncomingPayment(models.Model):
 
 class ExpenseCategory(models.Model):
     """A category for expenses, e.g., Salaries, Utilities, Supplies."""
-    name = models.CharField(max_length=100)
+    name = models.CharField(max_length=50)
     description = models.TextField(blank=True)
     school = models.ForeignKey('accounts.School', on_delete=models.CASCADE, related_name='expense_categories')
 
@@ -228,8 +228,8 @@ class Expense(models.Model):
     school = models.ForeignKey('accounts.School', on_delete=models.CASCADE, related_name='expenses')
     category = models.ForeignKey(ExpenseCategory, on_delete=models.PROTECT, related_name='expenses', null=True, blank=True)
     # Optional free-text name of the payee/vendor/supplier
-    payee = models.CharField(max_length=255, blank=True, default='')
-    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    payee = models.CharField(max_length=150, blank=True, default='')
+    amount = models.DecimalField(max_digits=8, decimal_places=2)
     description = models.TextField()
     date = models.DateField()
     attachment = models.FileField(upload_to='expense_attachments/', null=True, blank=True)
@@ -243,7 +243,7 @@ class Expense(models.Model):
 class PocketMoneyWallet(models.Model):
     """Represents a student's pocket money wallet."""
     student = models.OneToOneField('academics.Student', on_delete=models.CASCADE, related_name='pocket_money_wallet')
-    balance = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    balance = models.DecimalField(max_digits=8, decimal_places=2, default=0)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -259,7 +259,7 @@ class PocketMoneyTransaction(models.Model):
     )
     wallet = models.ForeignKey(PocketMoneyWallet, on_delete=models.CASCADE, related_name='transactions')
     transaction_type = models.CharField(max_length=10, choices=TRANSACTION_TYPE_CHOICES)
-    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    amount = models.DecimalField(max_digits=8, decimal_places=2)
     description = models.TextField(blank=True)
     recorded_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -271,25 +271,25 @@ class PocketMoneyTransaction(models.Model):
 class StaffPayroll(models.Model):
     staff = models.ForeignKey('accounts.NonTeachingStaff', on_delete=models.CASCADE, related_name='payrolls')
     school = models.ForeignKey('accounts.School', on_delete=models.CASCADE, related_name='staff_payrolls')
-    base_salary = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    base_salary = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     allowances = models.JSONField(default=list, blank=True)
     deductions = models.JSONField(default=list, blank=True)
     is_active = models.BooleanField(default=True)
     # Day of month (1-31) when payslip should be auto-generated for the active payroll
-    payout_day = models.IntegerField(null=True, blank=True)
+    payout_day = models.PositiveSmallIntegerField(null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
 
 
 class StaffPayslip(models.Model):
     staff = models.ForeignKey('accounts.NonTeachingStaff', on_delete=models.CASCADE, related_name='payslips')
     school = models.ForeignKey('accounts.School', on_delete=models.CASCADE, related_name='staff_payslips')
-    year = models.IntegerField()
-    month = models.IntegerField()
-    basic = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    year = models.PositiveSmallIntegerField()
+    month = models.PositiveSmallIntegerField()
+    basic = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     allowances = models.JSONField(default=list, blank=True)
     deductions = models.JSONField(default=list, blank=True)
-    gross_pay = models.DecimalField(max_digits=12, decimal_places=2, default=0)
-    net_pay = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    gross_pay = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    net_pay = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     notes = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 

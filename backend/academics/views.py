@@ -3016,7 +3016,7 @@ class ExamViewSet(viewsets.ModelViewSet):
                 if school:
                     qs = qs.filter(school=school)
                 qs = qs.filter(stage=stage)
-                bands = list(qs.values('grade','min','max','order'))
+                bands = list(qs.values('grade','min','max','order','remarks'))
                 # Sort by min descending so higher grades match first
                 bands.sort(key=lambda b: float(b.get('min') or -1), reverse=True)
                 return bands

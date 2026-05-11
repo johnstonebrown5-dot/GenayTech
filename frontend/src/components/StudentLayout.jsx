@@ -207,7 +207,7 @@ export default function StudentLayout({ children }){
               </div>
             )}
             <button onClick={lock} className="hidden md:inline-flex items-center px-3 py-2 rounded-xl border border-blue-600 text-sm text-blue-50 hover:bg-white/10">Lock</button>
-            <button onClick={logout} className="hidden md:inline-flex items-center px-3 py-2 rounded-xl border border-white text-sm bg-white text-blue-700 hover:bg-blue-50">Logout</button>
+            <button onClick={() => navigate('/sessions')} className="hidden md:inline-flex items-center px-3 py-2 rounded-xl border border-white text-sm bg-white text-blue-700 hover:bg-blue-50">Logout</button>
           </div>
         </div>
       </header>
@@ -345,8 +345,7 @@ export default function StudentLayout({ children }){
                 <button
                   onClick={() => {
                     setShowLogoutConfirm(false)
-                    logout()
-                    try { navigate('/login') } catch {}
+                    try { navigate('/sessions') } catch {}
                   }}
                   className="px-3 py-1.5 rounded-lg text-sm bg-red-600 text-white hover:bg-red-700"
                 >

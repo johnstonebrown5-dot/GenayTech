@@ -475,15 +475,22 @@ export default function StudentReportCardViewer({ embedded=false, hideControls=f
     if (!Number.isFinite(raw)) return '-'
     const n = Math.max(0, Math.min(100, Math.round(raw)))
     const arr = Array.isArray(bands) ? [...bands] : []
-    arr.sort((a,b)=> Number(b.min ?? -Infinity) - Number(a.min ?? -Infinity))
+    // Normalize bands to ensure min/max are numbers (API may return strings)
+    const normalizedBands = arr.map(b => ({
+      ...b,
+      min: Number(b.min),
+      max: Number(b.max),
+      grade: String(b.grade || '-')
+    }))
+    normalizedBands.sort((a,b)=> (b.min ?? -Infinity) - (a.min ?? -Infinity))
     let lowest = null
     let highest = null
-    for (const b of arr){
-      const min = Number.isFinite(Number(b.min)) ? Number(b.min) : -Infinity
-      const max = Number.isFinite(Number(b.max)) ? Number(b.max) : Infinity
-      if (!lowest || min < lowest.min) lowest = { min, grade: String(b.grade||'-') }
-      if (!highest || min > highest.min) highest = { min, grade: String(b.grade||'-') }
-      if (n >= min && n <= max) return String(b.grade||'-')
+    for (const b of normalizedBands){
+      const min = Number.isFinite(b.min) ? b.min : -Infinity
+      const max = Number.isFinite(b.max) ? b.max : Infinity
+      if (!lowest || min < lowest.min) lowest = { min, grade: b.grade }
+      if (!highest || min > highest.min) highest = { min, grade: b.grade }
+      if (n >= min && n <= max) return b.grade
     }
     if (highest && n >= highest.min) return highest.grade
     if (lowest) return lowest.grade
@@ -492,6 +499,26 @@ export default function StudentReportCardViewer({ embedded=false, hideControls=f
     if (n >= 60) return 'C'
     if (n >= 50) return 'D'
     return 'E'
+  }
+
+  // Return the matching band for a score (used for remarks lookup)
+  const bandForScore = (score, bands) => {
+    const raw = Number(score)
+    if (!Number.isFinite(raw)) return null
+    const n = Math.max(0, Math.min(100, Math.round(raw)))
+    const arr = Array.isArray(bands) ? [...bands] : []
+    const normalizedBands = arr.map(b => ({
+      ...b,
+      min: Number(b.min),
+      max: Number(b.max)
+    }))
+    normalizedBands.sort((a,b)=> (b.min ?? -Infinity) - (a.min ?? -Infinity))
+    for (const b of normalizedBands){
+      const min = Number.isFinite(b.min) ? b.min : -Infinity
+      const max = Number.isFinite(b.max) ? b.max : Infinity
+      if (n >= min && n <= max) return b
+    }
+    return null
   }
 
   const toGrade = (score, _subjectId) => {
@@ -511,9 +538,18 @@ export default function StudentReportCardViewer({ embedded=false, hideControls=f
 
   const subjectRemark = (score, subject) => {
     const n = Number(score)
+    if (!Number.isFinite(n)) {
+      const name = String(subject || '').toLowerCase()
+      return (name.includes('kis') || name.includes('swahili')) ? 'Hakuna alama' : 'No marks'
+    }
+    // Use configured band remarks if available
+    const bands = stageBands || globalBands
+    const band = bandForScore(n, bands)
+    const remark = band?.remarks?.trim()
+    if (remark) return remark
+    // Fallback to default remarks
     const name = String(subject || '').toLowerCase()
     const isKiswahili = name.includes('kis') || name.includes('swahili')
-    if (!Number.isFinite(n)) return isKiswahili ? 'Hakuna alama' : 'No marks'
     const g = String(toGrade(n, null) || 'E').toUpperCase()
     if (isKiswahili){
       if (g === 'A') return 'Bora sana'

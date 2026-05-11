@@ -3,14 +3,14 @@ from django.contrib.auth.models import AbstractUser
 from django.utils import timezone
 
 class School(models.Model):
-    name = models.CharField(max_length=255)
-    code = models.CharField(max_length=50, unique=True)
+    name = models.CharField(max_length=200)
+    code = models.CharField(max_length=30, unique=True)
     is_active = models.BooleanField(default=True)
     is_deleted = models.BooleanField(default=False, db_index=True)
     deleted_at = models.DateTimeField(null=True, blank=True, db_index=True)
     deleted_by = models.ForeignKey('accounts.User', null=True, blank=True, on_delete=models.SET_NULL, related_name='deleted_schools')
     address = models.TextField(blank=True)
-    motto = models.CharField(max_length=255, blank=True)
+    motto = models.CharField(max_length=150, blank=True)
     aim = models.TextField(blank=True)
     logo = models.ImageField(upload_to='logos/', null=True, blank=True)
     social_links = models.JSONField(default=dict, blank=True)  # {"facebook":"","twitter":"","instagram":"","youtube":"","website":""}
@@ -18,7 +18,7 @@ class School(models.Model):
     # Trial flags
     is_trial = models.BooleanField(default=True)
     trial_expires_at = models.DateTimeField(null=True, blank=True)
-    trial_student_limit = models.IntegerField(default=100)
+    trial_student_limit = models.PositiveSmallIntegerField(default=100)
     feature_flags = models.JSONField(default=dict, blank=True)  # e.g., {"pos": false, "sms": false}
     # Highly destructive admin actions (disabled/hidden by default)
     enable_fee_reset = models.BooleanField(default=False, db_index=True)
@@ -29,7 +29,7 @@ class School(models.Model):
 
 class SchoolDomain(models.Model):
     school = models.ForeignKey(School, on_delete=models.CASCADE, related_name='domains')
-    domain = models.CharField(max_length=255, unique=True)
+    domain = models.CharField(max_length=150, unique=True)
     is_primary = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -58,22 +58,22 @@ class SchoolIntegrationSettings(models.Model):
 
     school = models.OneToOneField(School, on_delete=models.CASCADE, related_name='integration_settings')
 
-    smtp_host = models.CharField(max_length=255, blank=True, default='')
-    smtp_port = models.IntegerField(default=587)
-    smtp_username = models.CharField(max_length=255, blank=True, default='')
-    smtp_password = models.CharField(max_length=255, blank=True, default='')
+    smtp_host = models.CharField(max_length=150, blank=True, default='')
+    smtp_port = models.PositiveSmallIntegerField(default=587)
+    smtp_username = models.CharField(max_length=100, blank=True, default='')
+    smtp_password = models.CharField(max_length=100, blank=True, default='')
     smtp_use_tls = models.BooleanField(default=True)
     smtp_use_ssl = models.BooleanField(default=False)
-    smtp_from_email = models.CharField(max_length=255, blank=True, default='')
+    smtp_from_email = models.CharField(max_length=150, blank=True, default='')
 
-    sms_provider = models.CharField(max_length=50, choices=SMS_PROVIDER_CHOICES, blank=True, default='textwave')
-    at_username = models.CharField(max_length=100, blank=True, default='')
-    at_api_key = models.CharField(max_length=255, blank=True, default='')
-    at_sender_id = models.CharField(max_length=50, blank=True, default='')
+    sms_provider = models.CharField(max_length=20, choices=SMS_PROVIDER_CHOICES, blank=True, default='textwave')
+    at_username = models.CharField(max_length=50, blank=True, default='')
+    at_api_key = models.CharField(max_length=100, blank=True, default='')
+    at_sender_id = models.CharField(max_length=30, blank=True, default='')
 
-    textwave_base_url = models.CharField(max_length=255, blank=True, default='')
-    textwave_api_key = models.CharField(max_length=255, blank=True, default='')
-    textwave_sender_id = models.CharField(max_length=50, blank=True, default='')
+    textwave_base_url = models.CharField(max_length=150, blank=True, default='')
+    textwave_api_key = models.CharField(max_length=100, blank=True, default='')
+    textwave_sender_id = models.CharField(max_length=30, blank=True, default='')
 
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -88,7 +88,7 @@ class User(AbstractUser):
         FINANCE = 'finance', 'Finance'
         NON_TEACHING = 'non_teaching', 'Non-Teaching Staff'
 
-    role = models.CharField(max_length=20, choices=Roles.choices)
+    role = models.CharField(max_length=15, choices=Roles.choices)
     phone = models.CharField(max_length=20, blank=True)
     school = models.ForeignKey(School, null=True, blank=True, on_delete=models.SET_NULL)
     email_verified = models.BooleanField(default=False)
@@ -100,9 +100,21 @@ class User(AbstractUser):
     deleted_by = models.ForeignKey('self', null=True, blank=True, on_delete=models.SET_NULL, related_name='deleted_users')
 
 
+class UserSession(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='sessions')
+    jti = models.CharField(max_length=64, unique=True, db_index=True)
+    device_name = models.CharField(max_length=100, blank=True, default='Unknown Device')
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    last_activity = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.user.username} - {self.device_name} ({self.jti[:8]})"
+
+
 class EmailVerificationToken(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='email_tokens')
-    token = models.CharField(max_length=128, unique=True)
+    token = models.CharField(max_length=64, unique=True)
     created_at = models.DateTimeField(auto_now_add=True)
     expires_at = models.DateTimeField()
 
@@ -116,15 +128,15 @@ class DemoRequest(models.Model):
         APPROVED = 'approved', 'Approved'
         REJECTED = 'rejected', 'Rejected'
 
-    school_name = models.CharField(max_length=255)
-    domain = models.CharField(max_length=255, blank=True, default='')
+    school_name = models.CharField(max_length=150)
+    domain = models.CharField(max_length=150, blank=True, default='')
     admin_email = models.EmailField()
-    admin_first_name = models.CharField(max_length=150, blank=True, default='')
-    admin_last_name = models.CharField(max_length=150, blank=True, default='')
+    admin_first_name = models.CharField(max_length=50, blank=True, default='')
+    admin_last_name = models.CharField(max_length=50, blank=True, default='')
     phone = models.CharField(max_length=20, blank=True, default='')
-    password_hash = models.CharField(max_length=255, blank=True, default='')
+    password_hash = models.CharField(max_length=100, blank=True, default='')
 
-    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING, db_index=True)
+    status = models.CharField(max_length=15, choices=Status.choices, default=Status.PENDING, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
 
     approved_at = models.DateTimeField(null=True, blank=True)
@@ -150,7 +162,7 @@ class PasswordResetCode(models.Model):
     code = models.CharField(max_length=6)
     created_at = models.DateTimeField(auto_now_add=True)
     expires_at = models.DateTimeField()
-    attempts = models.IntegerField(default=0)
+    attempts = models.PositiveSmallIntegerField(default=0)
     is_used = models.BooleanField(default=False)
 
     class Meta:
@@ -165,13 +177,13 @@ class PasswordResetCode(models.Model):
 class NonTeachingStaff(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='non_teaching_profile')
     school = models.ForeignKey(School, on_delete=models.CASCADE, related_name='non_teaching_staff')
-    department = models.CharField(max_length=100, blank=True)
-    position = models.CharField(max_length=100, blank=True)
-    national_id = models.CharField(max_length=50, blank=True)
-    kra_pin = models.CharField(max_length=50, blank=True)
-    nhif_no = models.CharField(max_length=50, blank=True)
-    nssf_no = models.CharField(max_length=50, blank=True)
-    address = models.CharField(max_length=255, blank=True)
+    department = models.CharField(max_length=50, blank=True)
+    position = models.CharField(max_length=50, blank=True)
+    national_id = models.CharField(max_length=30, blank=True)
+    kra_pin = models.CharField(max_length=30, blank=True)
+    nhif_no = models.CharField(max_length=30, blank=True)
+    nssf_no = models.CharField(max_length=30, blank=True)
+    address = models.CharField(max_length=200, blank=True)
     emergency_contact = models.JSONField(default=dict, blank=True)
     hire_date = models.DateField(null=True, blank=True)
     is_active = models.BooleanField(default=True)
@@ -196,9 +208,9 @@ class SystemHealthEvent(models.Model):
         PAYMENT_BANK = 'payment_bank', 'Payments (Bank)'
 
     school = models.ForeignKey(School, null=True, blank=True, on_delete=models.SET_NULL, related_name='system_health_events')
-    component = models.CharField(max_length=32, choices=Component.choices, db_index=True)
+    component = models.CharField(max_length=20, choices=Component.choices, db_index=True)
     ok = models.BooleanField(default=False, db_index=True)
-    context = models.CharField(max_length=255, blank=True, default='')
+    context = models.CharField(max_length=100, blank=True, default='')
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
 
     class Meta:
@@ -221,27 +233,27 @@ class MaintenanceNotice(models.Model):
 
 
 class SystemConfig(models.Model):
-    default_domain = models.CharField(max_length=255, blank=True, default='')
+    default_domain = models.CharField(max_length=150, blank=True, default='')
     
     # Onboarding Videos - Main/Overview
-    teacher_onboarding_video_url = models.URLField(max_length=500, blank=True, default='')
-    teacher_onboarding_video_url_mobile = models.URLField(max_length=500, blank=True, default='')
+    teacher_onboarding_video_url = models.URLField(max_length=300, blank=True, default='')
+    teacher_onboarding_video_url_mobile = models.URLField(max_length=300, blank=True, default='')
     
     # Onboarding Videos - Specific Operations
-    video_url_messages = models.URLField(max_length=500, blank=True, default='')
-    video_url_messages_mobile = models.URLField(max_length=500, blank=True, default='')
+    video_url_messages = models.URLField(max_length=300, blank=True, default='')
+    video_url_messages_mobile = models.URLField(max_length=300, blank=True, default='')
     
-    video_url_grades = models.URLField(max_length=500, blank=True, default='')
-    video_url_grades_mobile = models.URLField(max_length=500, blank=True, default='')
+    video_url_grades = models.URLField(max_length=300, blank=True, default='')
+    video_url_grades_mobile = models.URLField(max_length=300, blank=True, default='')
     
-    video_url_attendance = models.URLField(max_length=500, blank=True, default='')
-    video_url_attendance_mobile = models.URLField(max_length=500, blank=True, default='')
+    video_url_attendance = models.URLField(max_length=300, blank=True, default='')
+    video_url_attendance_mobile = models.URLField(max_length=300, blank=True, default='')
     
-    video_url_print_results = models.URLField(max_length=500, blank=True, default='')
-    video_url_print_results_mobile = models.URLField(max_length=500, blank=True, default='')
+    video_url_print_results = models.URLField(max_length=300, blank=True, default='')
+    video_url_print_results_mobile = models.URLField(max_length=300, blank=True, default='')
     
-    video_url_results = models.URLField(max_length=500, blank=True, default='')
-    video_url_results_mobile = models.URLField(max_length=500, blank=True, default='')
+    video_url_results = models.URLField(max_length=300, blank=True, default='')
+    video_url_results_mobile = models.URLField(max_length=300, blank=True, default='')
     
     updated_at = models.DateTimeField(auto_now=True)
 

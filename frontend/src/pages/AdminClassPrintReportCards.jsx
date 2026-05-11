@@ -276,11 +276,73 @@ export default function AdminClassPrintReportCards({ classIdProp = null, embedde
     return 'bg-gray-100 text-gray-700'
   }
 
+  const letterFromBands = (score, bands) => {
+    const raw = Number(score)
+    if (!Number.isFinite(raw)) return '-'
+    const n = Math.max(0, Math.min(100, Math.round(raw)))
+    const arr = Array.isArray(bands) ? [...bands] : []
+    // Normalize bands to ensure min/max are numbers (API may return strings)
+    const normalizedBands = arr.map(b => ({
+      ...b,
+      min: Number(b.min),
+      max: Number(b.max),
+      grade: String(b.grade || '-')
+    }))
+    // higher min first for overall grade mapping
+    normalizedBands.sort((a,b)=> (b.min ?? -Infinity) - (a.min ?? -Infinity))
+    let lowest = null
+    let highest = null
+    for (const b of normalizedBands){
+      const min = Number.isFinite(b.min) ? b.min : -Infinity
+      const max = Number.isFinite(b.max) ? b.max : Infinity
+      if (!lowest || min < lowest.min) lowest = { min, grade: b.grade }
+      if (!highest || min > highest.min) highest = { min, grade: b.grade }
+      if (n >= min && n <= max) return b.grade
+    }
+    if (highest && n >= highest.min) return highest.grade
+    if (lowest) return lowest.grade
+    if (n >= 80) return 'A'
+    if (n >= 70) return 'B'
+    if (n >= 60) return 'C'
+    if (n >= 50) return 'D'
+    return 'E'
+  }
+
+  // Return the matching band for a score (used for remarks and grade lookup)
+  const bandForScore = (score, bands) => {
+    const raw = Number(score)
+    if (!Number.isFinite(raw)) return null
+    const n = Math.max(0, Math.min(100, Math.round(raw)))
+    const arr = Array.isArray(bands) ? [...bands] : []
+    // Ensure min/max are treated as numbers (API may return strings)
+    const normalizedBands = arr.map(b => ({
+      ...b,
+      min: Number(b.min),
+      max: Number(b.max)
+    }))
+    normalizedBands.sort((a,b)=> (b.min ?? -Infinity) - (a.min ?? -Infinity))
+    for (const b of normalizedBands){
+      const min = Number.isFinite(b.min) ? b.min : -Infinity
+      const max = Number.isFinite(b.max) ? b.max : Infinity
+      if (n >= min && n <= max) return b
+    }
+    return null
+  }
+
   const subjectRemark = (score, subjectLabel) => {
     const n = Number(score)
+    if (!Number.isFinite(n)) {
+      const name = String(subjectLabel || '').toLowerCase()
+      return (name.includes('kis') || name.includes('swahili')) ? 'Hakuna alama' : 'No marks'
+    }
+    // Use configured band remarks if available
+    const bands = stageBands || globalBands
+    const band = bandForScore(n, bands)
+    const remark = band?.remarks?.trim()
+    if (remark) return remark
+    // Fallback to default remarks
     const name = String(subjectLabel || '').toLowerCase()
     const isKiswahili = name.includes('kis') || name.includes('swahili')
-    if (!Number.isFinite(n)) return isKiswahili ? 'Hakuna alama' : 'No marks'
     let g = 'E'
     if (n >= 80) g = 'A'
     else if (n >= 70) g = 'B'
@@ -298,31 +360,6 @@ export default function AdminClassPrintReportCards({ classIdProp = null, embedde
     if (g === 'C') return 'Good'
     if (g === 'D') return 'Fair'
     return 'Needs improvement'
-  }
-
-  const letterFromBands = (score, bands) => {
-    const raw = Number(score)
-    if (!Number.isFinite(raw)) return '-'
-    const n = Math.max(0, Math.min(100, Math.round(raw)))
-    const arr = Array.isArray(bands) ? [...bands] : []
-    // higher min first for overall grade mapping
-    arr.sort((a,b)=> Number(b.min ?? -Infinity) - Number(a.min ?? -Infinity))
-    let lowest = null
-    let highest = null
-    for (const b of arr){
-      const min = Number.isFinite(Number(b.min)) ? Number(b.min) : -Infinity
-      const max = Number.isFinite(Number(b.max)) ? Number(b.max) : Infinity
-      if (!lowest || min < lowest.min) lowest = { min, grade: String(b.grade||'-') }
-      if (!highest || min > highest.min) highest = { min, grade: String(b.grade||'-') }
-      if (n >= min && n <= max) return String(b.grade || '-')
-    }
-    if (highest && n >= highest.min) return highest.grade
-    if (lowest) return lowest.grade
-    if (n >= 80) return 'A'
-    if (n >= 70) return 'B'
-    if (n >= 60) return 'C'
-    if (n >= 50) return 'D'
-    return 'E'
   }
 
   const gradeForSubject = (_sid, score) => {

@@ -100,7 +100,7 @@ export default function SuperAdminLayout({ children }){
           <div className="h-8 w-8 rounded-xl bg-gradient-to-br from-indigo-600 to-violet-600" />
           <div className="font-extrabold tracking-tight text-slate-900">Super Admin</div>
         </div>
-        <button onClick={() => { logout(); navigate('/login') }} className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 hover:bg-slate-50">Logout</button>
+        <button onClick={() => navigate('/superadmin/sessions')} className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 hover:bg-slate-50">Logout</button>
       </div>
 
       <div className="flex w-full min-w-0">
@@ -139,7 +139,7 @@ export default function SuperAdminLayout({ children }){
               </div>
             </div>
             <button
-              onClick={() => { logout(); navigate('/login') }}
+              onClick={() => navigate('/superadmin/sessions')}
               className={`mt-3 w-full px-3 py-2 rounded-xl text-sm font-semibold border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 ${isOpen ? 'block' : 'hidden'}`}
             >
               Logout

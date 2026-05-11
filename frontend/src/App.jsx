@@ -112,6 +112,7 @@ import OneTimeLicenseDetails from './pages/OneTimeLicenseDetails'
 import PerStudentMonthlyDetails from './pages/PerStudentMonthlyDetails'
 import SuperAdminSystemConfig from './pages/SuperAdminSystemConfig'
 import SuperAdminPaymentMethods from './pages/SuperAdminPaymentMethods'
+import AccountSessions from './pages/AccountSessions'
 import NotFound from './pages/NotFound'
 import Unauthorized from './pages/Unauthorized'
 import ReAuth from './pages/ReAuth'
@@ -350,6 +351,7 @@ export default function App() {
             <Route path="/verify-email" element={<VerifyEmail />} />
             <Route path="/help" element={<ProtectedRoute roles={["admin","teacher","student","finance"]}><HelpCenter/></ProtectedRoute>} />
             <Route path="/lock" element={<ProtectedRoute roles={["admin","teacher","student","finance"]}><LockPage/></ProtectedRoute>} />
+            <Route path="/sessions" element={<ProtectedRoute roles={["admin","teacher","student","finance"]}><AccountSessions/></ProtectedRoute>} />
             <Route path="/app" element={<RoleRedirect />} />
             <Route path="/superadmin" element={<SuperuserRoute><SuperAdminLayout><Outlet/></SuperAdminLayout></SuperuserRoute>}>
               <Route index element={<SuperAdminDashboard/>} />
@@ -363,6 +365,7 @@ export default function App() {
               <Route path="system-config" element={<SuperAdminSystemConfig/>} />
               <Route path="payment-methods" element={<SuperAdminPaymentMethods/>} />
               <Route path="profile" element={<SuperAdminProfile/>} />
+              <Route path="sessions" element={<AccountSessions/>} />
             </Route>
             <Route path="/admin" element={<ProtectedRoute roles={["admin"]}><AdminLayout><Outlet/></AdminLayout></ProtectedRoute>}>
               <Route index element={<AdminDashboard/>} />
