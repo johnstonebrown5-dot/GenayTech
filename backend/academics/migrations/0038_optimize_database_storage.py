@@ -272,11 +272,6 @@ class Migration(migrations.Migration):
         ),
         migrations.AlterField(
             model_name='teacherprofile',
-            name='subjects',
-            field=models.CharField(blank=True, max_length=150),
-        ),
-        migrations.AlterField(
-            model_name='teacherprofile',
             name='tsc_number',
             field=models.CharField(blank=True, help_text='T.S.C number', max_length=30, null=True, unique=True),
         ),
