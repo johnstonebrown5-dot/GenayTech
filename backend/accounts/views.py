@@ -2378,8 +2378,12 @@ def superadmin_schools(request):
             )
             if normalized_domain or getattr(settings, 'TENANT_BASE_DOMAIN', None):
                 _create_primary_domain_for_school(school, normalized_domain)
-    except ValueError:
-        return Response({"detail": "Domain already in use"}, status=400)
+    except ValueError as e:
+        return Response({"detail": str(e) or "Domain already in use"}, status=400)
+    except IntegrityError as e:
+        return Response({"detail": f"Database constraint violated: {str(e)}"}, status=400)
+    except Exception as e:
+        return Response({"detail": f"Failed to create school: {type(e).__name__}: {str(e)}"}, status=500)
 
     return Response({'id': school.id}, status=201)
 
