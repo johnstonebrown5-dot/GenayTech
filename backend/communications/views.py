@@ -205,7 +205,7 @@ class DeliveryLogViewSet(viewsets.ReadOnlyModelViewSet):
             limit = 50
         qs = self.get_queryset()[:limit]
         ser = self.get_serializer(qs, many=True)
-        return Response(ser.data)
+        return Response(ser.data, status=status.HTTP_200_OK)
 
     @action(detail=False, methods=["post"])
     def retry(self, request):
@@ -399,7 +399,15 @@ class ArrearsMessageCampaignViewSet(viewsets.ModelViewSet):
             .first()
         )
         if not camp:
-            return Response({'detail': 'no_active_campaign'}, status=status.HTTP_404_NOT_FOUND)
+            return Response({
+                'campaign': None,
+                'status': None,
+                'expected_total': 0,
+                'processed_total': 0,
+                'percent': 0,
+                'sms': {'sent': 0, 'failed': 0},
+                'email': {'sent': 0, 'failed': 0},
+            }, status=status.HTTP_200_OK)
 
         # Compute expected_total = number_of_students * number_of_channels_selected (sms/email)
         try:
