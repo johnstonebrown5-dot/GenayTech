@@ -67,7 +67,8 @@ export default function AdminEnterResults({ readOnly }){
         // Use optimized single endpoint to load all data at once
         // No caching - always fetch fresh data from server
         const res = await api.get(`/academics/exams/${examId}/enter-data/`, { 
-          headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' }
+          headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' },
+          timeout: 60000 // Increased timeout to 60 seconds for large datasets
         })
         const data = res?.data
         if (!alive) return
