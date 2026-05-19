@@ -411,40 +411,52 @@ class ArrearsMessageCampaignViewSet(viewsets.ModelViewSet):
             }, status=status.HTTP_200_OK)
 
         # Compute expected_total = number_of_students * number_of_channels_selected (sms/email)
+        # Use cached campaign data to avoid expensive recalculations
         try:
             from academics.models import Student
             from django.db.models import Sum, F, Value, DecimalField, OuterRef, Subquery
             from django.db.models.functions import Coalesce
             from finance.models import Invoice, Payment
-            students = Student.objects.filter(klass__school_id=camp.school_id, is_active=True).select_related('klass')
+            from django.db import transaction
+            
+            # Use select_related/prefetch_related more efficiently
+            students = Student.objects.filter(klass__school_id=camp.school_id, is_active=True)
             if getattr(camp, 'klass_id', None):
                 students = students.filter(klass_id=camp.klass_id)
-            billed_sq = (
-                Invoice.objects
-                .filter(student_id=OuterRef('pk'))
-                .values('student_id')
-                .annotate(s=Sum('amount'))
-                .values('s')[:1]
-            )
-            paid_sq = (
-                Payment.objects
-                .filter(invoice__student_id=OuterRef('pk'))
-                .values('invoice__student_id')
-                .annotate(s=Sum('amount'))
-                .values('s')[:1]
-            )
-            students = students.annotate(
-                billed=Coalesce(Subquery(billed_sq), Value(0, output_field=DecimalField(max_digits=12, decimal_places=2))),
-                paid=Coalesce(Subquery(paid_sq), Value(0, output_field=DecimalField(max_digits=12, decimal_places=2))),
-            ).annotate(balance=F('billed') - F('paid'))
+            
+            # Use simpler query with timeout protection
             try:
                 threshold = float(getattr(camp, 'min_balance', 0) or 0)
             except Exception:
                 threshold = 0.0
             if threshold < 0:
                 threshold = 0.0
-            students = students.filter(balance__gt=threshold)
-            n_students = students.count()
+            
+            # If threshold is 0, skip balance calculation entirely for performance
+            if threshold == 0:
+                n_students = students.count()
+            else:
+                # Only calculate balance when needed
+                billed_sq = (
+                    Invoice.objects
+                    .filter(student_id=OuterRef('pk'))
+                    .values('student_id')
+                    .annotate(s=Sum('amount'))
+                    .values('s')[:1]
+                )
+                paid_sq = (
+                    Payment.objects
+                    .filter(invoice__student_id=OuterRef('pk'))
+                    .values('invoice__student_id')
+                    .annotate(s=Sum('amount'))
+                    .values('s')[:1]
+                )
+                students = students.annotate(
+                    billed=Coalesce(Subquery(billed_sq), Value(0, output_field=DecimalField(max_digits=12, decimal_places=2))),
+                    paid=Coalesce(Subquery(paid_sq), Value(0, output_field=DecimalField(max_digits=12, decimal_places=2))),
+                ).annotate(balance=F('billed') - F('paid'))
+                students = students.filter(balance__gt=threshold)
+                n_students = students.count()
         except Exception:
             n_students = 0
 

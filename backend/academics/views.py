@@ -4502,19 +4502,6 @@ class ExamResultViewSet(viewsets.ModelViewSet):
         with transaction.atomic():
             # Bulk create
             if to_create:
-                class Meta:
-                    unique_together = ("exam","student","subject","component")
-                    indexes = [
-                        models.Index(fields=['exam', 'student']),
-                        models.Index(fields=['exam', 'subject']),
-                        models.Index(fields=['student']),
-                        models.Index(fields=['subject']),
-                        models.Index(fields=['exam', 'student', 'subject']),
-                        models.Index(fields=['exam', 'student', 'subject', 'component']),
-                        models.Index(fields=['exam', 'updated_at']),
-                        models.Index(fields=['student', 'exam']),
-                        models.Index(fields=['exam', 'subject', 'student']),  # Optimized for enter_data query
-                    ]
                 created_objects = ExamResult.objects.bulk_create([
                     ExamResult(
                         exam=item['exam'],

@@ -491,6 +491,7 @@ class ExamResult(models.Model):
             models.Index(fields=['exam', 'student', 'subject', 'component']),
             models.Index(fields=['exam', 'updated_at']),
             models.Index(fields=['student', 'exam']),
+            models.Index(fields=['exam', 'subject', 'student']),  # Optimized for enter_data query
         ]
 
 
