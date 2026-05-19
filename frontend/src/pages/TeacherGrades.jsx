@@ -267,7 +267,11 @@ export default function TeacherGrades(){
       const res = await api.post('/academics/exam_results/bulk/', { results: rows })
       const failed = Number(res?.data?.failed || 0)
       const bulkErrors = Array.isArray(res?.data?.errors) ? res.data.errors : []
-      if (failed === 0) return { ok: true, failed: 0, errors: [] }
+      if (failed === 0) {
+        // Reload data from server to ensure consistency after successful save
+        reloadSavedMarks()
+        return { ok: true, failed: 0, errors: [] }
+      }
       // If some failed, retry only failed rows individually
       if (failed < rows.length){
         const errors = bulkErrors
@@ -307,6 +311,10 @@ export default function TeacherGrades(){
           }
         }
         const finalFailed = retryFailed
+        if (finalFailed === 0) {
+          // Reload data from server to ensure consistency after successful save
+          reloadSavedMarks()
+        }
         return { ok: finalFailed === 0, failed: finalFailed, errors: finalFailed ? errors.slice(0, 10) : [] }
       }
     } catch (e) {
@@ -341,6 +349,10 @@ export default function TeacherGrades(){
         failed++
         errors.push({ error: 'Failed to save one row.' })
       }
+    }
+    if (failed === 0) {
+      // Reload data from server to ensure consistency after successful save
+      reloadSavedMarks()
     }
     return { ok: failed === 0, failed, errors }
   }
