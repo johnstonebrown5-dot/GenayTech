@@ -488,6 +488,9 @@ class ExamResult(models.Model):
             models.Index(fields=['student']),
             models.Index(fields=['subject']),
             models.Index(fields=['exam', 'student', 'subject']),
+            models.Index(fields=['exam', 'student', 'subject', 'component']),
+            models.Index(fields=['exam', 'updated_at']),
+            models.Index(fields=['student', 'exam']),
         ]
 
 

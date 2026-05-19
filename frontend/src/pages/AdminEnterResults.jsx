@@ -64,169 +64,32 @@ export default function AdminEnterResults({ readOnly }){
       try{
         setLoading(true)
         setError('')
-        // exam
-        let e = null
-        try {
-          e = await api.get(`/academics/exams/${examId}/`)
-        } catch {
-          try {
-            e = await api.get(`/academics/exams/${examId}`)
-          } catch {}
-        }
-        // If exam detail is not accessible (teacher perms), fall back to summary (read-only view)
-        if (!e?.data){
-          try{
-            const s = await api.get(`/academics/exams/${examId}/summary/`)
-            const sx = s?.data || {}
-            const meta = sx?.exam ? {
-              id: sx.exam.id ?? examId,
-              name: sx.exam.name,
-              year: sx.exam.year,
-              term: sx.exam.term,
-              klass: sx.exam.klass,
-              total_marks: sx.exam.total_marks,
-            } : { id: examId }
-            if (alive) setExam(meta)
-          }catch{
-            // proceed with minimal meta so page can still render percentages from any accessible data
-            if (alive) setExam({ id: examId })
-          }
-        } else {
-          if (!alive) return
-          setExam(e.data)
-        }
-        // Normalize klass id from exam payload
-        const rawKlass = e?.data?.klass ?? e?.data?.class ?? e?.data?.klass_id ?? e?.data?.class_id
-        const fromExam = (typeof rawKlass === 'object' && rawKlass)
-          ? (rawKlass.id ?? rawKlass.klass ?? rawKlass.pk ?? rawKlass.ID)
-          : rawKlass
-        const overrideNum = Number(klassOverride)
-        const klassId = (Number.isFinite(overrideNum) && overrideNum > 0) ? overrideNum : fromExam
-        // Do not throw if klassId is missing – in read-only teacher mode we can still show data via summary
-        // We'll try to fill subjects/students using alternative endpoints below.
-        // class details (need subjects) + students
-        let klassObj = null
-        try {
-          const klassRes = await api.get(`/academics/classes/${encodeURIComponent(klassId)}/`)
-          klassObj = klassRes?.data || null
-        } catch {
-          try {
-            const klassRes = await api.get(`/academics/classes/${encodeURIComponent(klassId)}`)
-            klassObj = klassRes?.data || null
-          } catch {}
-        }
-        // Fallback: search class in list endpoints when direct detail is restricted
-        if (!klassObj && klassId){
-          try{
-            const list = await api.get('/academics/classes/')
-            const arr = Array.isArray(list?.data) ? list.data : (Array.isArray(list?.data?.results) ? list.data.results : [])
-            const found = arr.find(c => String(c.id) === String(klassId))
-            if (found) klassObj = found
-          }catch{}
-        }
+        // Use optimized single endpoint to load all data at once
+        const res = await api.get(`/academics/exams/${examId}/enter-data/`)
+        const data = res?.data
         if (!alive) return
-        if (!klassObj) {
-          // Fallback: try locate from my classes
-          try {
-            const mine = await api.get('/academics/classes/mine/')
-            const list = Array.isArray(mine?.data) ? mine.data : (Array.isArray(mine?.data?.results) ? mine.data.results : [])
-            klassObj = list.find(c => String(c?.id) === String(klassId)) || null
-          } catch {}
-        }
-        setKlass(klassObj || { id: klassId })
-        let subjRaw = Array.isArray(klassObj?.subjects) ? klassObj.subjects : []
-        if ((!subjRaw || !subjRaw.length) && klassId){
-          try{
-            const klassRes = await api.get(`/academics/classes/${encodeURIComponent(klassId)}/`)
-            const d = klassRes?.data
-            subjRaw = Array.isArray(d?.subjects) ? d.subjects : subjRaw
-          }catch{}
-        }
-        // Filter out non-examinable subjects from entry grid and dropdown
-        let subj = subjRaw.filter(s => s?.is_examinable !== false)
-
-        // Fallback: if class endpoints didn't include subjects (common under teacher perms), use exam summary subjects
-        if ((!subj || !subj.length) && examId){
-          try{
-            const res = await api.get(`/academics/exams/${examId}/summary/`)
-            const summarySubjects = Array.isArray(res?.data?.subjects) ? res.data.subjects : []
-            subj = summarySubjects.filter(s => s?.is_examinable !== false)
-          }catch{}
-        }
-
-        setSubjects(subj)
-
-        // Load components for each subject (to auto-include when only one exists)
-        let componentsLoadedMap = {}
-        try {
-          const entries = await Promise.all(subj.map(async (s)=>{
-            try{
-              const r = await api.get(`/academics/subject_components/?subject=${s.id}`)
-              const arr = Array.isArray(r.data) ? r.data : (Array.isArray(r?.data?.results) ? r.data.results : [])
-              return [s.id, arr]
-            } catch {
-              return [s.id, []]
-            }
-          }))
-          if (!alive) return
-          const map = {}
-          for (const [sid, arr] of entries){ map[sid] = arr }
-          componentsLoadedMap = map
-          setComponentsMap(map)
-        } catch {
-          setComponentsMap({})
-        }
-        // Load students with robust fallbacks (iterate pagination to get ALL)
-        const fetchAllPaged = async (url) => {
-          let out = []
-          let next = url
-          let guard = 0
-          while (next && guard < 100){
-            const r = await api.get(next)
-            const d = r?.data
-            if (Array.isArray(d)) { out = d; break }
-            if (d && Array.isArray(d.results)) { out = out.concat(d.results); next = d.next; guard++; continue }
-            if (d && Array.isArray(d.items)) { out = out.concat(d.items); next = d.next; guard++; continue }
-            break
-          }
-          return out
-        }
-
-        let studentsList = []
-        try {
-          studentsList = await fetchAllPaged(`/academics/students/?klass=${encodeURIComponent(klassId)}&page_size=200`)
-        } catch {}
-        if (!studentsList.length) {
-          try {
-            studentsList = await fetchAllPaged(`/academics/students/?class=${encodeURIComponent(klassId)}&page_size=200`)
-          } catch {}
-        }
-        if (!studentsList.length && klassId) {
-          try {
-            const res = await api.get(`/academics/classes/${encodeURIComponent(klassId)}/students/`)
-            studentsList = Array.isArray(res.data) ? res.data : (Array.isArray(res.data?.results) ? res.data.results : [])
-          } catch {}
-        }
-        // Final fallback: use exam summary students (only present when there are saved results)
-        if (!studentsList.length && examId){
-          try{
-            const res = await api.get(`/academics/exams/${examId}/summary/`)
-            const ss = Array.isArray(res?.data?.students) ? res.data.students : []
-            studentsList = ss
-              .filter(x => x && x.id != null)
-              .map(x => ({ id: x.id, name: x.name || String(x.id), admission_no: x.admission_no || '' }))
-          }catch{}
-        }
-        if (!alive) return
-        setStudents(studentsList)
-        // existing results (raw per-component marks) - fetch ALL pages
-        let existing = []
-        try{
-          existing = await fetchAllPaged(`/academics/exam_results/?exam=${examId}&page_size=200`)
-        }catch{}
+        
+        // Set exam data
+        setExam(data?.exam || { id: examId })
+        
+        // Set class data
+        setKlass(data?.klass || { id: data?.exam?.klass })
+        
+        // Set subjects
+        setSubjects(data?.subjects || [])
+        
+        // Set components map
+        setComponentsMap(data?.components_by_subject || {})
+        
+        // Set students
+        setStudents(data?.students || [])
+        
+        // Set existing results
+        const existing = data?.existing_results || []
+        
         // Build per-component rows (carry forward teacher-saved out_of for validation/placeholders)
         const rows = []
-        const compsBySubject = componentsLoadedMap && Object.keys(componentsLoadedMap).length ? componentsLoadedMap : (componentsMap || {})
+        const compsBySubject = data?.components_by_subject || {}
         const indexKey = (r)=>`${r?.student ?? r?.student_id}-${r?.subject ?? r?.subject_id}-${r?.component ?? r?.component_id ?? ''}`
         const existingMap = new Map()
         for (const r of existing){ existingMap.set(indexKey(r), r) }
@@ -242,6 +105,9 @@ export default function AdminEnterResults({ readOnly }){
             preferredOut.set(key, oo)
           }
         }
+
+        const subj = data?.subjects || []
+        const studentsList = data?.students || []
 
         for (const s of studentsList){
           for (const sub of subj){
@@ -259,7 +125,7 @@ export default function AdminEnterResults({ readOnly }){
                   const denom = Number.isFinite(outOf) && outOf > 0
                     ? outOf
                     : Number(c?.max_marks)
-                
+                  
                   if (Number.isFinite(marksVal) && Number.isFinite(denom) && denom > 0 && marksVal <= 100 && marksVal > denom){
                     marksVal = Math.round((marksVal / 100) * denom)
                   }
@@ -278,7 +144,7 @@ export default function AdminEnterResults({ readOnly }){
               {
                 const denom = Number.isFinite(outOf) && outOf > 0
                   ? outOf
-                  : Number(exam?.total_marks ?? 100)
+                  : Number(data?.exam?.total_marks ?? 100)
                 if (Number.isFinite(marksVal) && Number.isFinite(denom) && denom > 0 && marksVal <= 100 && marksVal > denom){
                   marksVal = Math.round((marksVal / 100) * denom)
                 }
@@ -292,7 +158,8 @@ export default function AdminEnterResults({ readOnly }){
         if (!alive) return
         setResults(rows)
       }catch(err){
-        setError(err?.response?.data?.detail || err?.message || 'Failed to load exam')
+        console.error('Failed to load exam data:', err)
+        setError(err?.response?.data?.detail || err?.message || 'Failed to load exam data')
       }finally{
         if (alive) setLoading(false)
       }

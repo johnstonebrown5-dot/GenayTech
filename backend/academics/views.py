@@ -2446,6 +2446,7 @@ class ExamViewSet(viewsets.ModelViewSet):
         )
         if use_examinable_only:
             base_res = base_res.filter(subject__is_examinable=True)
+        # Optimized query with select_related to reduce N+1 queries
         res = base_res.select_related('student', 'subject', 'component').prefetch_related('component')
         students_map = {}
         for r in res:
@@ -2860,6 +2861,80 @@ class ExamViewSet(viewsets.ModelViewSet):
             'deltas': {'mean_percentage_delta': mean_delta},
             'per_student': per_student,
             'subjects': summary.get('subjects', []),
+        })
+
+    @action(detail=True, methods=['get'], permission_classes=[permissions.IsAuthenticated], url_path='enter-data')
+    def enter_data(self, request, pk=None):
+        """Optimized endpoint for marks entry page.
+        Returns all data needed in a single call: exam, class, subjects, components, students, and existing results.
+        This eliminates multiple sequential API calls and dramatically improves loading speed.
+        """
+        exam = self.get_object()
+        user = request.user
+        
+        # Enforce school scoping for non-admins
+        if not self._is_admin(request):
+            school = getattr(user, 'school', None)
+            if school and getattr(exam.klass, 'school_id', None) not in (None, getattr(school, 'id', None)):
+                return Response({'detail': 'Exam not found.'}, status=status.HTTP_404_NOT_FOUND)
+        
+        # Teachers: allow if published or assigned to the class
+        if getattr(user, 'role', None) == 'teacher':
+            is_class_teacher = getattr(exam.klass, 'teacher_id', None) == getattr(user, 'id', None)
+            is_subject_teacher = ClassSubjectTeacher.objects.filter(klass=exam.klass, teacher=user).exists()
+            is_published = bool(getattr(exam, 'published', False)) or str(getattr(exam, 'status', '')).lower() == 'published'
+            if not (is_published or is_class_teacher or is_subject_teacher):
+                return Response({'detail': 'You do not have permission to perform this action.'}, status=status.HTTP_403_FORBIDDEN)
+        
+        # Fetch all data in parallel using optimized queries
+        klass = exam.klass
+        
+        # Get subjects (examinable only)
+        subjects = list(klass.subjects.filter(is_examinable=True).values('id', 'code', 'name'))
+        if not subjects:
+            subjects = list(klass.subjects.all().values('id', 'code', 'name'))
+        
+        # Get components for each subject
+        subject_ids = [s['id'] for s in subjects]
+        components = list(SubjectComponent.objects.filter(subject_id__in=subject_ids).values('id', 'subject_id', 'code', 'name', 'max_marks', 'weight', 'order'))
+        
+        # Group components by subject
+        components_by_subject = {}
+        for comp in components:
+            sid = comp['subject_id']
+            if sid not in components_by_subject:
+                components_by_subject[sid] = []
+            components_by_subject[sid].append(comp)
+        
+        # Get students with optimized query
+        students = list(Student.objects.filter(klass=klass, is_active=True).values('id', 'name', 'admission_no'))
+        
+        # Get existing results with optimized query
+        existing_results = list(
+            ExamResult.objects.filter(exam=exam)
+            .select_related('student', 'subject', 'component')
+            .values('id', 'student_id', 'subject_id', 'component_id', 'marks', 'out_of', 'remarks')
+        )
+        
+        return Response({
+            'exam': {
+                'id': exam.id,
+                'name': exam.name,
+                'year': exam.year,
+                'term': exam.term,
+                'date': exam.date,
+                'total_marks': exam.total_marks,
+                'published': exam.published,
+            },
+            'klass': {
+                'id': klass.id,
+                'name': klass.name,
+                'grade_level': klass.grade_level,
+            },
+            'subjects': subjects,
+            'components_by_subject': components_by_subject,
+            'students': students,
+            'existing_results': existing_results,
         })
 
     @action(detail=True, methods=['get'], permission_classes=[permissions.IsAuthenticated])
@@ -3914,7 +3989,7 @@ class ExamResultViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        qs = super().get_queryset().select_related('exam','student','subject').prefetch_related('component')
+        qs = super().get_queryset().select_related('exam','exam__klass','exam__klass__stream','student','subject','component').prefetch_related('component')
         school = getattr(getattr(self.request, 'user', None), 'school', None)
         if school:
             qs = qs.filter(exam__klass__school=school)
