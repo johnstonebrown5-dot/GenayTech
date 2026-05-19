@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('communications', '0017_add_deliverylog_indexes'),
+        ('communications', '0019_fix_duplicate_check_constraints'),
     ]
 
     operations = [
