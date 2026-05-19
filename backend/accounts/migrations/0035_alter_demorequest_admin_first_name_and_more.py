@@ -128,18 +128,8 @@ class Migration(migrations.Migration):
         ),
         migrations.AlterField(
             model_name='schoolintegrationsettings',
-            name='smtp_host',
-            field=models.CharField(blank=True, default='', max_length=150),
-        ),
-        migrations.AlterField(
-            model_name='schoolintegrationsettings',
             name='smtp_password',
             field=models.CharField(blank=True, default='', max_length=100),
-        ),
-        migrations.AlterField(
-            model_name='schoolintegrationsettings',
-            name='smtp_port',
-            field=models.PositiveSmallIntegerField(default=587),
         ),
         migrations.AlterField(
             model_name='schoolintegrationsettings',
