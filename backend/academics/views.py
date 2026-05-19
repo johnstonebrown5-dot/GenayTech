@@ -2917,8 +2917,10 @@ class ExamViewSet(viewsets.ModelViewSet):
         # Only fetch results for the subjects we have
         existing_results = list(
             ExamResult.objects.filter(exam=exam, subject_id__in=subject_ids)
+            .select_related(None)  # No joins needed, we only need IDs
             .only('id', 'student_id', 'subject_id', 'component_id', 'marks', 'out_of', 'remarks')
             .values('id', 'student_id', 'subject_id', 'component_id', 'marks', 'out_of', 'remarks')
+            .iterator(chunk_size=500)  # Process in chunks to reduce memory pressure
         )
         
         return Response({
@@ -4500,6 +4502,19 @@ class ExamResultViewSet(viewsets.ModelViewSet):
         with transaction.atomic():
             # Bulk create
             if to_create:
+                class Meta:
+                    unique_together = ("exam","student","subject","component")
+                    indexes = [
+                        models.Index(fields=['exam', 'student']),
+                        models.Index(fields=['exam', 'subject']),
+                        models.Index(fields=['student']),
+                        models.Index(fields=['subject']),
+                        models.Index(fields=['exam', 'student', 'subject']),
+                        models.Index(fields=['exam', 'student', 'subject', 'component']),
+                        models.Index(fields=['exam', 'updated_at']),
+                        models.Index(fields=['student', 'exam']),
+                        models.Index(fields=['exam', 'subject', 'student']),  # Optimized for enter_data query
+                    ]
                 created_objects = ExamResult.objects.bulk_create([
                     ExamResult(
                         exam=item['exam'],
@@ -4513,6 +4528,7 @@ class ExamResultViewSet(viewsets.ModelViewSet):
                     for item in to_create
                 ], ignore_conflicts=False)
                 successes += len(created_objects)
+# ... (rest of the code remains the same)
                 out_ids.extend([obj.id for obj in created_objects])
             
             # Bulk update
