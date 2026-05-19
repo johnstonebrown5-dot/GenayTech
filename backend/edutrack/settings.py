@@ -189,7 +189,6 @@ if USE_MYSQL or _has_mysql_creds:
                 # Strict mode for better integrity; adjust if needed
                 'init_command': "SET sql_mode='STRICT_TRANS_TABLES', wait_timeout=28800, interactive_timeout=28800",
                 'charset': 'utf8mb4',
-                # Enable connection pooling
                 'sql_mode': 'STRICT_TRANS_TABLES',
             },
             # Add query timeout to prevent long-running queries

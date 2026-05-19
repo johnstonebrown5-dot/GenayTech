@@ -203,9 +203,13 @@ class DeliveryLogViewSet(viewsets.ReadOnlyModelViewSet):
             limit = max(1, min(limit, 200))
         except Exception:
             limit = 50
-        qs = self.get_queryset()[:limit]
-        ser = self.get_serializer(qs, many=True)
-        return Response(ser.data, status=status.HTTP_200_OK)
+        try:
+            qs = self.get_queryset()[:limit]
+            ser = self.get_serializer(qs, many=True)
+            return Response(ser.data, status=status.HTTP_200_OK)
+        except Exception as e:
+            logger.error(f"Error fetching recent delivery logs: {e}")
+            return Response({'detail': 'Unable to fetch delivery logs'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     @action(detail=False, methods=["post"])
     def retry(self, request):
@@ -519,13 +523,16 @@ class MessageViewSet(viewsets.ModelViewSet):
     """
     serializer_class = MessageSerializer
     permission_classes = [permissions.IsAuthenticated]
-
     def get_queryset(self):
         user = self.request.user
         # Inbox: messages where user is a recipient
-        return Message.objects.filter(
-            recipients__user_id=user.id
-        ).select_related('sender').prefetch_related('recipients', 'recipients__user').order_by('-created_at', 'id')
+        try:
+            return Message.objects.filter(
+                recipients__user_id=user.id
+            ).select_related('sender').prefetch_related('recipients', 'recipients__user').order_by('-created_at', 'id')
+        except Exception as e:
+            logger.error(f"Error fetching messages for user {user.id}: {e}")
+            return Message.objects.none()
 
     def perform_create(self, serializer):
         # serializer handles school, sender, recipients
@@ -564,17 +571,21 @@ class MessageViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'], url_path='system')
     def system(self, request):
         """Return system-tagged messages for the current user's inbox (system_tag not null)."""
-        user = request.user
-        qs = Message.objects.filter(
-            recipients__user_id=user.id,
-            system_tag__isnull=False,
-        ).select_related('sender').prefetch_related('recipients', 'recipients__user').order_by('-created_at','id')
-        page = self.paginate_queryset(qs)
-        if page is not None:
-            ser = self.get_serializer(page, many=True)
-            return self.get_paginated_response(ser.data)
-        ser = self.get_serializer(qs, many=True)
-        return Response(ser.data)
+        user = self.request.user
+        try:
+            qs = Message.objects.filter(
+                recipients__user_id=user.id,
+                system_tag__isnull=False,
+            ).select_related('sender').prefetch_related('recipients', 'recipients__user').order_by('-created_at','id')
+            page = self.paginate_queryset(qs)
+            if page is not None:
+                ser = self.get_serializer(page, many=True)
+                return self.get_paginated_response(ser.data)
+            ser = self.get_serializer(qs, many=True)
+            return Response(ser.data)
+        except Exception as e:
+            logger.error(f"Error fetching system messages for user {user.id}: {e}")
+            return Response({'detail': 'Unable to fetch system messages'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     @action(detail=False, methods=['get'])
     def outbox(self, request):
