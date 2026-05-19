@@ -82,11 +82,6 @@ class Migration(migrations.Migration):
             field=models.CharField(blank=True, max_length=50),
         ),
         migrations.AlterField(
-            model_name='passwordresetcode',
-            name='attempts',
-            field=models.PositiveSmallIntegerField(default=0),
-        ),
-        migrations.AlterField(
             model_name='school',
             name='code',
             field=models.CharField(max_length=30, unique=True),
