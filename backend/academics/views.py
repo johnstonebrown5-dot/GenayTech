@@ -2869,7 +2869,11 @@ class ExamViewSet(viewsets.ModelViewSet):
         Returns all data needed in a single call: exam, class, subjects, components, students, and existing results.
         This eliminates multiple sequential API calls and dramatically improves loading speed.
         """
-        exam = self.get_object()
+        try:
+            exam = Exam.objects.select_related('klass').get(pk=pk)
+        except Exam.DoesNotExist:
+            return Response({'detail': 'Exam not found.'}, status=status.HTTP_404_NOT_FOUND)
+        
         user = request.user
         
         # Enforce school scoping for non-admins
@@ -2909,9 +2913,10 @@ class ExamViewSet(viewsets.ModelViewSet):
         # Get students with optimized query - use only() to limit fields
         students = list(Student.objects.filter(klass=klass, is_active=True).only('id', 'name', 'admission_no').values('id', 'name', 'admission_no'))
         
-        # Get existing results with optimized query - remove select_related since we only need IDs
+        # Get existing results with optimized query - use iterator() for memory efficiency with large datasets
+        # Only fetch results for the subjects we have
         existing_results = list(
-            ExamResult.objects.filter(exam=exam)
+            ExamResult.objects.filter(exam=exam, subject_id__in=subject_ids)
             .only('id', 'student_id', 'subject_id', 'component_id', 'marks', 'out_of', 'remarks')
             .values('id', 'student_id', 'subject_id', 'component_id', 'marks', 'out_of', 'remarks')
         )
