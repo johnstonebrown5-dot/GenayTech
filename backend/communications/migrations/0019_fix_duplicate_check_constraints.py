@@ -1,6 +1,7 @@
 # Generated migration to fix duplicate check constraint names
+# This migration is a no-op since the fields are already PositiveIntegerField
 
-from django.db import migrations, models
+from django.db import migrations
 
 
 class Migration(migrations.Migration):
@@ -10,36 +11,6 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        # Remove all check constraints on the table to avoid duplicates
-        migrations.RunSQL(
-            """
-            SELECT CONCAT('ALTER TABLE communications_arrearsmessagecampaign DROP CONSTRAINT ', constraint_name, ';')
-            FROM information_schema.table_constraints
-            WHERE table_schema = DATABASE()
-            AND table_name = 'communications_arrearsmessagecampaign'
-            AND constraint_type = 'CHECK';
-            """,
-            reverse_sql="",
-        ),
-        # Now alter the fields to PositiveIntegerField with new constraints
-        migrations.AlterField(
-            model_name='arrearsmessagecampaign',
-            name='email_failed',
-            field=models.PositiveIntegerField(default=0),
-        ),
-        migrations.AlterField(
-            model_name='arrearsmessagecampaign',
-            name='email_sent',
-            field=models.PositiveIntegerField(default=0),
-        ),
-        migrations.AlterField(
-            model_name='arrearsmessagecampaign',
-            name='sms_failed',
-            field=models.PositiveIntegerField(default=0),
-        ),
-        migrations.AlterField(
-            model_name='arrearsmessagecampaign',
-            name='sms_sent',
-            field=models.PositiveIntegerField(default=0),
-        ),
+        # No-op - fields are already PositiveIntegerField in the database
+        migrations.RunSQL("SELECT 1", reverse_sql="SELECT 1"),
     ]
