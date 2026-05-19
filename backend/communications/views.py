@@ -5,7 +5,7 @@ from rest_framework.views import APIView
 from rest_framework.parsers import JSONParser, FormParser, MultiPartParser
 from django.utils.dateparse import parse_datetime
 from django.db.models import Q
-from django.db.models import Sum, F, Value, DecimalField
+from django.db.models import Sum, F, Value, DecimalField, Count
 from django.db.models.functions import Coalesce
 from .models import Notification, Event, DeliveryLog
 from .serializers import NotificationSerializer, EventSerializer, ArrearsMessageCampaignSerializer, MessageSerializer, DeliveryLogSerializer, ServiceReviewSerializer
@@ -163,26 +163,26 @@ class DeliveryLogViewSet(viewsets.ReadOnlyModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        qs = DeliveryLog.objects.all()
+        qs = DeliveryLog.objects.select_related('school').all()
         # Scope to user's school
         if getattr(user, 'school_id', None):
             qs = qs.filter(school_id=user.school_id)
         else:
             qs = qs.none()
-            
+
         # Exclude verification logs (OTP, password reset, etc.)
         qs = qs.exclude(context__contains='type:verification')
-        
+
         # Optional channel filter
         ch = self.request.query_params.get('channel')
         if ch in ('sms','email'):
             qs = qs.filter(channel=ch)
-            
+
         # Optional status filter
         st = self.request.query_params.get('status')
         if st in [c[0] for c in DeliveryLog.Status.choices]:
             qs = qs.filter(status=st)
-            
+
         return qs.order_by('-created_at','id')
 
     @action(detail=False, methods=['get'])
@@ -395,6 +395,7 @@ class ArrearsMessageCampaignViewSet(viewsets.ModelViewSet):
         camp = (
             ArrearsMessageCampaign.objects
             .filter(school_id=school_id, status__in=[ArrearsMessageCampaign.Status.QUEUED, ArrearsMessageCampaign.Status.RUNNING])
+            .select_related('school', 'klass')
             .order_by('-created_at')
             .first()
         )
@@ -415,7 +416,7 @@ class ArrearsMessageCampaignViewSet(viewsets.ModelViewSet):
             from django.db.models import Sum, F, Value, DecimalField, OuterRef, Subquery
             from django.db.models.functions import Coalesce
             from finance.models import Invoice, Payment
-            students = Student.objects.filter(klass__school_id=camp.school_id, is_active=True)
+            students = Student.objects.filter(klass__school_id=camp.school_id, is_active=True).select_related('klass')
             if getattr(camp, 'klass_id', None):
                 students = students.filter(klass_id=camp.klass_id)
             billed_sq = (
@@ -450,12 +451,39 @@ class ArrearsMessageCampaignViewSet(viewsets.ModelViewSet):
         channels = (1 if camp.send_sms else 0) + (1 if camp.send_email else 0)
         expected_total = n_students * channels
 
-        # Processed counts via DeliveryLog context
-        dl = DeliveryLog.objects.filter(school_id=school_id, context__contains=f"campaign:{camp.id}")
-        sms_sent = dl.filter(channel='sms', ok=True).count()
-        sms_failed = dl.filter(channel='sms', ok=False).count()
-        email_sent = dl.filter(channel='email', ok=True).count()
-        email_failed = dl.filter(channel='email', ok=False).count()
+        # Processed counts via DeliveryLog context - optimized with single query
+        try:
+            dl_counts = (
+                DeliveryLog.objects
+                .filter(school_id=school_id, context__contains=f"campaign:{camp.id}")
+                .values('channel', 'ok')
+                .annotate(count=models.Count('id'))
+            )
+            
+            sms_sent = 0
+            sms_failed = 0
+            email_sent = 0
+            email_failed = 0
+            
+            for item in dl_counts:
+                if item['channel'] == 'sms':
+                    if item['ok']:
+                        sms_sent = item['count']
+                    else:
+                        sms_failed = item['count']
+                elif item['channel'] == 'email':
+                    if item['ok']:
+                        email_sent = item['count']
+                    else:
+                        email_failed = item['count']
+        except Exception:
+            # Fallback to individual counts if aggregation fails
+            dl = DeliveryLog.objects.filter(school_id=school_id, context__contains=f"campaign:{camp.id}")
+            sms_sent = dl.filter(channel='sms', ok=True).count()
+            sms_failed = dl.filter(channel='sms', ok=False).count()
+            email_sent = dl.filter(channel='email', ok=True).count()
+            email_failed = dl.filter(channel='email', ok=False).count()
+        
         processed_total = sms_sent + sms_failed + email_sent + email_failed
         percent = int((processed_total / expected_total) * 100) if expected_total > 0 else 0
 

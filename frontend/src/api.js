@@ -5,9 +5,40 @@ import axios from 'axios'
 export const backendBase = (import.meta.env.VITE_API_BASE_URL ?? '')
 const api = axios.create({
   baseURL: backendBase.replace(/\/$/, '') + '/api',
-  // Prevent the UI from hanging indefinitely on slow or unreachable networks
-  timeout: 30000,
+  // Increased timeout to 60 seconds to handle slow database queries on PythonAnywhere
+  timeout: 60000,
 })
+
+// Add retry logic for failed requests
+const MAX_RETRIES = 3
+const RETRY_DELAY = 1000
+
+async function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+async function requestWithRetry(config, retryCount = 0) {
+  try {
+    return await axios(config)
+  } catch (error) {
+    const isRetryable = (
+      error.code === 'ECONNABORTED' ||
+      error.code === 'ECONNRESET' ||
+      error.code === 'ETIMEDOUT' ||
+      error.code === 'EPIPE' ||
+      (error.response && error.response.status >= 500) ||
+      !error.response
+    )
+    
+    if (isRetryable && retryCount < MAX_RETRIES) {
+      console.warn(`Retrying request (${retryCount + 1}/${MAX_RETRIES}):`, config.url)
+      await sleep(RETRY_DELAY * (retryCount + 1)) // Exponential backoff
+      return requestWithRetry(config, retryCount + 1)
+    }
+    
+    throw error
+  }
+}
 
 api.interceptors.request.use(config => {
   const token = localStorage.getItem('access')
@@ -22,6 +53,17 @@ api.interceptors.request.use(config => {
     }
   } catch {}
   try { if (!config._skipGlobalLoading && typeof window !== 'undefined') window.dispatchEvent(new Event('api:request:start')) } catch {}
+  
+  // Add request cancellation support
+  const requestId = generateRequestId(config)
+  if (pendingRequests.has(requestId)) {
+    const controller = pendingRequests.get(requestId)
+    controller.abort()
+  }
+  const controller = new AbortController()
+  config.signal = controller.signal
+  pendingRequests.set(requestId, controller)
+  
   return config
 })
 
@@ -44,6 +86,13 @@ function redirectToLoginIfNeeded(){
     lastRedirectTs = now
     window.location.href = '/login'
   }catch{}
+}
+
+// Add request cancellation to prevent memory leaks
+const pendingRequests = new Map()
+
+function generateRequestId(config) {
+  return `${config.method}:${config.url}:${JSON.stringify(config.params || {})}:${JSON.stringify(config.data || {})}`
 }
 
 // Build low/medium/high image candidates by appending resize/quality query params.
@@ -69,20 +118,62 @@ export function imageCandidates(url){
 function onRefreshed(newToken){ while(subscribers.length) { const cb = subscribers.shift(); try{ cb(newToken) }catch{} } }
 
 api.interceptors.response.use(
-  res => { try { if (typeof window !== 'undefined') window.dispatchEvent(new Event('api:request:end')) } catch {}; return res },
+  res => { 
+    // Clean up pending request
+    try {
+      const requestId = generateRequestId(res.config)
+      pendingRequests.delete(requestId)
+    } catch {}
+    try { if (typeof window !== 'undefined') window.dispatchEvent(new Event('api:request:end')) } catch {}; 
+    return res 
+  },
   async err => {
+    // Clean up pending request
+    try {
+      const requestId = generateRequestId(err.config)
+      pendingRequests.delete(requestId)
+    } catch {}
+
     // Normalize axios timeout error into a stable, user-friendly message.
     // Many pages surface err.message directly.
     try{
       const msg = String(err?.message || '')
       const isTimeout = err?.code === 'ECONNABORTED' || /timeout\s+of\s+\d+ms\s+exceeded/i.test(msg)
+      const isNetworkError = err?.code === 'ECONNRESET' || err?.code === 'EPIPE' || err?.code === 'ETIMEDOUT'
+      
       if (isTimeout) {
         err.message = 'Request timed out. Please check your internet connection and try again.'
+      } else if (isNetworkError) {
+        err.message = 'Network error. Please check your connection and try again.'
       }
     }catch{}
     const original = err?.config
     const status = err?.response?.status
     const isAuthEndpoint = original?.url?.includes('/auth/token') || original?.url?.includes('/auth/me') || original?.url?.includes('/auth/token/refresh')
+    
+    // Retry on network errors and 5xx errors
+    if (!isAuthEndpoint && original && !original._retry) {
+      const isRetryable = (
+        err?.code === 'ECONNABORTED' ||
+        err?.code === 'ECONNRESET' ||
+        err?.code === 'ETIMEDOUT' ||
+        err?.code === 'EPIPE' ||
+        (status && status >= 500) ||
+        !status
+      )
+      
+      if (isRetryable) {
+        original._retry = true
+        try {
+          console.warn(`Retrying request due to network error:`, original.url)
+          await sleep(1000)
+          return api(original)
+        } catch (retryErr) {
+          console.error('Retry failed:', retryErr)
+        }
+      }
+    }
+    
     if (status === 401 && original && !original._retry && !isAuthEndpoint) {
       original._retry = true
       const refresh = localStorage.getItem('refresh')
@@ -95,7 +186,7 @@ api.interceptors.response.use(
       try {
         if (!isRefreshing) {
           isRefreshing = true
-          refreshPromise = axios.post(backendBase.replace(/\/$/, '') + '/api/auth/token/refresh/', { refresh })
+          refreshPromise = axios.post(backendBase.replace(/\/$/, '') + '/api/auth/token/refresh/', { refresh }, { timeout: 10000 })
             .then(r => {
               const newAccess = r?.data?.access
               if (newAccess) { localStorage.setItem('access', newAccess) }

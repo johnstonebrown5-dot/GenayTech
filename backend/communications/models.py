@@ -36,6 +36,9 @@ class DeliveryLog(models.Model):
             models.Index(fields=['created_at']),
             models.Index(fields=['channel', 'created_at']),
             models.Index(fields=['status']),
+            models.Index(fields=['school_id', 'created_at']),
+            models.Index(fields=['school_id', 'channel', 'created_at']),
+            models.Index(fields=['school_id', 'status']),
         ]
         ordering = ['-created_at', 'id']
 

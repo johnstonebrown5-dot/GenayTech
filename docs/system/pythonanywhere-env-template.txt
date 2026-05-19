@@ -1,0 +1,78 @@
+# PythonAnywhere Environment Variables Template
+# Copy this file to .env in the backend directory and fill in your values
+
+# Django Settings
+DJANGO_SECRET_KEY=generate-with-python-c-from-django.core.management.utils-import-get_random_secret_key-print-get_random_secret_key
+DEBUG=False
+ALLOWED_HOSTS=edutrack45.pythonanywhere.com,.pythonanywhere.com,genaytech.onrender.com
+CSRF_TRUSTED_ORIGINS=https://edutrack45.pythonanywhere.com,https://genaytech.onrender.com
+
+# PythonAnywhere Host
+PYTHONANYWHERE_HOST=yourusername.pythonanywhere.com
+
+# Database (MySQL on PythonAnywhere)
+USE_MYSQL=True
+MYSQL_DB=yourusername$edutrack
+MYSQL_USER=yourusername
+MYSQL_PASSWORD=your-mysql-password
+MYSQL_HOST=mysql.server
+MYSQL_PORT=3306
+MYSQL_CONN_MAX_AGE=60
+
+# CORS Settings
+CORS_ALLOW_ALL_ORIGINS=False
+CORS_ALLOWED_ORIGINS=https://genaytech.onrender.com
+
+# Email Configuration (Gmail example)
+EMAIL_HOST=smtp.gmail.com
+EMAIL_PORT=587
+EMAIL_USE_TLS=True
+EMAIL_HOST_USER=your-email@gmail.com
+EMAIL_HOST_PASSWORD=your-app-password
+DEFAULT_FROM_EMAIL=your-email@gmail.com
+SERVER_EMAIL=your-email@gmail.com
+SUPPORT_EMAIL=edutrack46@gmail.com
+
+# Frontend URL
+FRONTEND_URL=https://genaytech.onrender.com
+
+# Time Zone
+TIME_ZONE=Africa/Nairobi
+
+# S3 Storage (Optional - for static/media files)
+# Uncomment if using DigitalOcean Spaces or AWS S3
+# USE_S3=True
+# AWS_ACCESS_KEY_ID=your-access-key
+# AWS_SECRET_ACCESS_KEY=your-secret-key
+# AWS_STORAGE_BUCKET_NAME=your-bucket-name
+# AWS_S3_ENDPOINT_URL=https://nyc3.digitaloceanspaces.com
+# AWS_S3_REGION_NAME=us-east-1
+# AWS_S3_CUSTOM_DOMAIN=your-bucket-name.nyc3.digitaloceanspaces.com
+
+# Webpush (Optional - for browser notifications)
+# VAPID_PUBLIC_KEY=your-vapid-public-key
+# VAPID_PRIVATE_KEY=your-vapid-private-key
+
+# Africa's Talking SMS (Optional)
+# AT_USERNAME=your-username
+# AT_API_KEY=your-api-key
+# AT_SENDER_ID=your-sender-id
+
+# TextWave SMS (Optional)
+# TEXTWAVE_API_KEY=your-api-key
+# TEXTWAVE_SENDER_ID=your-sender-id
+
+# DRF Throttling
+DRF_THROTTLE_ANON=60/min
+DRF_THROTTLE_USER=600/min
+DRF_THROTTLE_LOGIN=10/min
+DRF_THROTTLE_PASSWORD_RESET=5/min
+DRF_THROTTLE_PUBLIC=30/min
+
+# Cookie Settings
+CSRF_COOKIE_SAMESITE=Lax
+SESSION_COOKIE_SAMESITE=Lax
+
+# Messaging
+MESSAGES_QUEUE_DELIVERY=True
+DISABLE_ACCOUNT_MESSAGING=True

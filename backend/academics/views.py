@@ -1452,6 +1452,7 @@ class ClassViewSet(viewsets.ModelViewSet):
                     .filter(exam=exam_local, student__is_active=True)
                     .filter(subject__is_examinable=True)
                     .select_related('student', 'subject')
+                    .prefetch_related('component')
                 )
                 if not results.exists():
                     return
@@ -2445,7 +2446,7 @@ class ExamViewSet(viewsets.ModelViewSet):
         )
         if use_examinable_only:
             base_res = base_res.filter(subject__is_examinable=True)
-        res = base_res.select_related('student', 'subject', 'component')
+        res = base_res.select_related('student', 'subject', 'component').prefetch_related('component')
         students_map = {}
         for r in res:
             # Skip rows with missing/non-numeric marks to avoid TypeErrors
@@ -3913,7 +3914,7 @@ class ExamResultViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        qs = super().get_queryset().select_related('exam','student','subject')
+        qs = super().get_queryset().select_related('exam','student','subject').prefetch_related('component')
         school = getattr(getattr(self.request, 'user', None), 'school', None)
         if school:
             qs = qs.filter(exam__klass__school=school)

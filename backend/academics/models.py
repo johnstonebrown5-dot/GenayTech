@@ -482,6 +482,13 @@ class ExamResult(models.Model):
 
     class Meta:
         unique_together = ("exam","student","subject","component")
+        indexes = [
+            models.Index(fields=['exam', 'student']),
+            models.Index(fields=['exam', 'subject']),
+            models.Index(fields=['student']),
+            models.Index(fields=['subject']),
+            models.Index(fields=['exam', 'student', 'subject']),
+        ]
 
 
 # ===== Class Subject Teacher Assignment =====

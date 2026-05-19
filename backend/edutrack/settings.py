@@ -181,12 +181,19 @@ if USE_MYSQL or _has_mysql_creds:
             'HOST': os.getenv('MYSQL_HOST', os.getenv('PA_MYSQL_HOST', 'mysql.server')),
             'PORT': os.getenv('MYSQL_PORT', '3306'),
             # Keep connections open for reuse; safe on PA shared MySQL
-            'CONN_MAX_AGE': int(os.getenv('MYSQL_CONN_MAX_AGE', '60')),
+            # Reduced from 60 to 30 to prevent connection exhaustion
+            'CONN_MAX_AGE': int(os.getenv('MYSQL_CONN_MAX_AGE', '30')),
+            # Add connection timeout to prevent hanging
+            'CONNECT_TIMEOUT': int(os.getenv('MYSQL_CONNECT_TIMEOUT', '10')),
             'OPTIONS': {
                 # Strict mode for better integrity; adjust if needed
-                'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
+                'init_command': "SET sql_mode='STRICT_TRANS_TABLES', wait_timeout=28800, interactive_timeout=28800",
                 'charset': 'utf8mb4',
+                # Enable connection pooling
+                'sql_mode': 'STRICT_TRANS_TABLES',
             },
+            # Add query timeout to prevent long-running queries
+            'TIMEOUT': int(os.getenv('MYSQL_QUERY_TIMEOUT', '30')),
         }
     }
 else:
@@ -228,6 +235,12 @@ REST_FRAMEWORK = {
     # Pagination: allow clients to request larger page sizes while defaulting to 50
     'DEFAULT_PAGINATION_CLASS': 'edutrack.pagination.CustomPageNumberPagination',
     'PAGE_SIZE': 50,
+    # Add request timeout to prevent hanging requests
+    'DEFAULT_RENDERER_CLASSES': (
+        'rest_framework.renderers.JSONRenderer',
+    ),
+    # Add exception handler for better error responses
+    'EXCEPTION_HANDLER': 'edutrack.exceptions.custom_exception_handler',
 }
 
 SPECTACULAR_SETTINGS = {
