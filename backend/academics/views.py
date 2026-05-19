@@ -4467,17 +4467,27 @@ class ExamResultViewSet(viewsets.ModelViewSet):
                 'remarks': remarks
             })
         
-        # Fetch existing results in bulk
+        # Fetch existing results in bulk using Q objects to avoid Cartesian product
+        from django.db.models import Q
         unique_keys = [(item['exam'].id, item['student'].id, item['subject'].id, item['component'].id if item['component'] else None) for item in validated_items]
         existing_results = {}
         if unique_keys:
-            for er in ExamResult.objects.filter(
-                exam__in=[k[0] for k in unique_keys],
-                student__in=[k[1] for k in unique_keys],
-                subject__in=[k[2] for k in unique_keys]
-            ).select_related('exam', 'student', 'subject', 'component'):
-                key = (er.exam_id, er.student_id, er.subject_id, er.component_id)
-                existing_results[key] = er
+            # Build Q objects for exact (exam, student, subject, component) combinations
+            q_objects = []
+            for exam_id, student_id, subject_id, component_id in unique_keys:
+                if component_id is not None:
+                    q_objects.append(Q(exam_id=exam_id, student_id=student_id, subject_id=subject_id, component_id=component_id))
+                else:
+                    q_objects.append(Q(exam_id=exam_id, student_id=student_id, subject_id=subject_id, component_id__isnull=True))
+            
+            # Use OR query to fetch only the exact combinations needed
+            if q_objects:
+                query = q_objects.pop()
+                for q in q_objects:
+                    query |= q
+                for er in ExamResult.objects.filter(query).select_related('exam', 'student', 'subject', 'component'):
+                    key = (er.exam_id, er.student_id, er.subject_id, er.component_id)
+                    existing_results[key] = er
         
         # Separate creates and updates
         for item in validated_items:
