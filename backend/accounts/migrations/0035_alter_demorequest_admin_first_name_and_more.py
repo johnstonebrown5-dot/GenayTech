@@ -97,11 +97,6 @@ class Migration(migrations.Migration):
             field=models.CharField(max_length=200),
         ),
         migrations.AlterField(
-            model_name='school',
-            name='trial_student_limit',
-            field=models.PositiveSmallIntegerField(default=100),
-        ),
-        migrations.AlterField(
             model_name='schooldomain',
             name='domain',
             field=models.CharField(max_length=150, unique=True),
