@@ -203,13 +203,9 @@ class DeliveryLogViewSet(viewsets.ReadOnlyModelViewSet):
             limit = max(1, min(limit, 200))
         except Exception:
             limit = 50
-        try:
-            qs = self.get_queryset()[:limit]
-            ser = self.get_serializer(qs, many=True)
-            return Response(ser.data, status=status.HTTP_200_OK)
-        except Exception as e:
-            logger.error(f"Error fetching recent delivery logs: {e}")
-            return Response({'detail': 'Unable to fetch delivery logs'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        qs = self.get_queryset()[:limit]
+        ser = self.get_serializer(qs, many=True)
+        return Response(ser.data, status=status.HTTP_200_OK)
 
     @action(detail=False, methods=["post"])
     def retry(self, request):
@@ -415,52 +411,40 @@ class ArrearsMessageCampaignViewSet(viewsets.ModelViewSet):
             }, status=status.HTTP_200_OK)
 
         # Compute expected_total = number_of_students * number_of_channels_selected (sms/email)
-        # Use cached campaign data to avoid expensive recalculations
         try:
             from academics.models import Student
             from django.db.models import Sum, F, Value, DecimalField, OuterRef, Subquery
             from django.db.models.functions import Coalesce
             from finance.models import Invoice, Payment
-            from django.db import transaction
-            
-            # Use select_related/prefetch_related more efficiently
-            students = Student.objects.filter(klass__school_id=camp.school_id, is_active=True)
+            students = Student.objects.filter(klass__school_id=camp.school_id, is_active=True).select_related('klass')
             if getattr(camp, 'klass_id', None):
                 students = students.filter(klass_id=camp.klass_id)
-            
-            # Use simpler query with timeout protection
+            billed_sq = (
+                Invoice.objects
+                .filter(student_id=OuterRef('pk'))
+                .values('student_id')
+                .annotate(s=Sum('amount'))
+                .values('s')[:1]
+            )
+            paid_sq = (
+                Payment.objects
+                .filter(invoice__student_id=OuterRef('pk'))
+                .values('invoice__student_id')
+                .annotate(s=Sum('amount'))
+                .values('s')[:1]
+            )
+            students = students.annotate(
+                billed=Coalesce(Subquery(billed_sq), Value(0, output_field=DecimalField(max_digits=12, decimal_places=2))),
+                paid=Coalesce(Subquery(paid_sq), Value(0, output_field=DecimalField(max_digits=12, decimal_places=2))),
+            ).annotate(balance=F('billed') - F('paid'))
             try:
                 threshold = float(getattr(camp, 'min_balance', 0) or 0)
             except Exception:
                 threshold = 0.0
             if threshold < 0:
                 threshold = 0.0
-            
-            # If threshold is 0, skip balance calculation entirely for performance
-            if threshold == 0:
-                n_students = students.count()
-            else:
-                # Only calculate balance when needed
-                billed_sq = (
-                    Invoice.objects
-                    .filter(student_id=OuterRef('pk'))
-                    .values('student_id')
-                    .annotate(s=Sum('amount'))
-                    .values('s')[:1]
-                )
-                paid_sq = (
-                    Payment.objects
-                    .filter(invoice__student_id=OuterRef('pk'))
-                    .values('invoice__student_id')
-                    .annotate(s=Sum('amount'))
-                    .values('s')[:1]
-                )
-                students = students.annotate(
-                    billed=Coalesce(Subquery(billed_sq), Value(0, output_field=DecimalField(max_digits=12, decimal_places=2))),
-                    paid=Coalesce(Subquery(paid_sq), Value(0, output_field=DecimalField(max_digits=12, decimal_places=2))),
-                ).annotate(balance=F('billed') - F('paid'))
-                students = students.filter(balance__gt=threshold)
-                n_students = students.count()
+            students = students.filter(balance__gt=threshold)
+            n_students = students.count()
         except Exception:
             n_students = 0
 
@@ -526,13 +510,9 @@ class MessageViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         user = self.request.user
         # Inbox: messages where user is a recipient
-        try:
-            return Message.objects.filter(
-                recipients__user_id=user.id
-            ).select_related('sender').prefetch_related('recipients', 'recipients__user').order_by('-created_at', 'id')
-        except Exception as e:
-            logger.error(f"Error fetching messages for user {user.id}: {e}")
-            return Message.objects.none()
+        return Message.objects.filter(
+            recipients__user_id=user.id
+        ).select_related('sender').prefetch_related('recipients', 'recipients__user').order_by('-created_at', 'id')
 
     def perform_create(self, serializer):
         # serializer handles school, sender, recipients
@@ -572,20 +552,16 @@ class MessageViewSet(viewsets.ModelViewSet):
     def system(self, request):
         """Return system-tagged messages for the current user's inbox (system_tag not null)."""
         user = self.request.user
-        try:
-            qs = Message.objects.filter(
-                recipients__user_id=user.id,
-                system_tag__isnull=False,
-            ).select_related('sender').prefetch_related('recipients', 'recipients__user').order_by('-created_at','id')
-            page = self.paginate_queryset(qs)
-            if page is not None:
-                ser = self.get_serializer(page, many=True)
-                return self.get_paginated_response(ser.data)
-            ser = self.get_serializer(qs, many=True)
-            return Response(ser.data)
-        except Exception as e:
-            logger.error(f"Error fetching system messages for user {user.id}: {e}")
-            return Response({'detail': 'Unable to fetch system messages'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        qs = Message.objects.filter(
+            recipients__user_id=user.id,
+            system_tag__isnull=False,
+        ).select_related('sender').prefetch_related('recipients', 'recipients__user').order_by('-created_at','id')
+        page = self.paginate_queryset(qs)
+        if page is not None:
+            ser = self.get_serializer(page, many=True)
+            return self.get_paginated_response(ser.data)
+        ser = self.get_serializer(qs, many=True)
+        return Response(ser.data)
 
     @action(detail=False, methods=['get'])
     def outbox(self, request):

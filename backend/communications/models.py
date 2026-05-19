@@ -39,7 +39,6 @@ class DeliveryLog(models.Model):
             models.Index(fields=['school_id', 'created_at']),
             models.Index(fields=['school_id', 'channel', 'created_at']),
             models.Index(fields=['school_id', 'status']),
-            models.Index(fields=['context']),  # Add index for context__contains queries
         ]
         ordering = ['-created_at', 'id']
 
