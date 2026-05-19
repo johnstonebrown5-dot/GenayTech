@@ -65,7 +65,10 @@ export default function AdminEnterResults({ readOnly }){
         setLoading(true)
         setError('')
         // Use optimized single endpoint to load all data at once
-        const res = await api.get(`/academics/exams/${examId}/enter-data/`)
+        // No caching - always fetch fresh data from server
+        const res = await api.get(`/academics/exams/${examId}/enter-data/`, { 
+          headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' }
+        })
         const data = res?.data
         if (!alive) return
         
@@ -217,6 +220,8 @@ export default function AdminEnterResults({ readOnly }){
         dirtyMarksRef.current = new Set()
         dirtyOutOfRef.current = new Set()
         setDirtyVersion(v=>v+1)
+        // Reload data from server to ensure consistency
+        setReloadKey(v=>v+1)
       }
     }catch(err){
       setError(err?.response?.data?.detail || err?.message || 'Failed to save results')
@@ -305,6 +310,8 @@ export default function AdminEnterResults({ readOnly }){
       outOfKeys.forEach(k => dirtyOutOfRef.current.delete(k))
       setStatus('saved')
       setTimeout(()=>setStatus('idle'), 1200)
+      // Reload data from server to ensure consistency after auto-save
+      setReloadKey(v=>v+1)
     }catch(err){
       const msg = err?.response?.data?.detail || err?.message || 'Auto-save failed'
       showError('Auto-save failed', msg, 4000)

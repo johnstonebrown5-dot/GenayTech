@@ -2889,14 +2889,14 @@ class ExamViewSet(viewsets.ModelViewSet):
         # Fetch all data in parallel using optimized queries
         klass = exam.klass
         
-        # Get subjects (examinable only)
-        subjects = list(klass.subjects.filter(is_examinable=True).values('id', 'code', 'name'))
+        # Get subjects (examinable only) - use only() to limit fields
+        subjects = list(klass.subjects.filter(is_examinable=True).only('id', 'code', 'name').values('id', 'code', 'name'))
         if not subjects:
-            subjects = list(klass.subjects.all().values('id', 'code', 'name'))
+            subjects = list(klass.subjects.all().only('id', 'code', 'name').values('id', 'code', 'name'))
         
-        # Get components for each subject
+        # Get components for each subject - use only() to limit fields
         subject_ids = [s['id'] for s in subjects]
-        components = list(SubjectComponent.objects.filter(subject_id__in=subject_ids).values('id', 'subject_id', 'code', 'name', 'max_marks', 'weight', 'order'))
+        components = list(SubjectComponent.objects.filter(subject_id__in=subject_ids).only('id', 'subject_id', 'code', 'name', 'max_marks', 'weight', 'order').values('id', 'subject_id', 'code', 'name', 'max_marks', 'weight', 'order'))
         
         # Group components by subject
         components_by_subject = {}
@@ -2906,13 +2906,13 @@ class ExamViewSet(viewsets.ModelViewSet):
                 components_by_subject[sid] = []
             components_by_subject[sid].append(comp)
         
-        # Get students with optimized query
-        students = list(Student.objects.filter(klass=klass, is_active=True).values('id', 'name', 'admission_no'))
+        # Get students with optimized query - use only() to limit fields
+        students = list(Student.objects.filter(klass=klass, is_active=True).only('id', 'name', 'admission_no').values('id', 'name', 'admission_no'))
         
-        # Get existing results with optimized query
+        # Get existing results with optimized query - remove select_related since we only need IDs
         existing_results = list(
             ExamResult.objects.filter(exam=exam)
-            .select_related('student', 'subject', 'component')
+            .only('id', 'student_id', 'subject_id', 'component_id', 'marks', 'out_of', 'remarks')
             .values('id', 'student_id', 'subject_id', 'component_id', 'marks', 'out_of', 'remarks')
         )
         
@@ -4262,7 +4262,7 @@ class ExamResultViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['post'], permission_classes=[IsTeacherOrAdmin], url_path='bulk')
     def bulk_upsert(self, request):
-        """Admin-only bulk upsert of exam results.
+        """Optimized bulk upsert of exam results using bulk operations.
         Payload format:
         {
           "results": [
@@ -4273,15 +4273,61 @@ class ExamResultViewSet(viewsets.ModelViewSet):
         items = request.data.get('results')
         if not isinstance(items, list):
             return Response({'detail': 'results must be an array'}, status=400)
-        successes = 0
-        errors = []
-        out_ids = []
+        
         user = getattr(request, 'user', None)
+        school = getattr(getattr(request, 'user', None), 'school', None)
+        errors = []
+        
+        # Pre-fetch all related objects in bulk to avoid N+1 queries
+        exam_ids = set()
+        student_ids = set()
+        subject_ids = set()
+        component_ids = set()
+        
         for idx, item in enumerate(items):
             if not isinstance(item, dict):
                 errors.append({'index': idx, 'error': 'Invalid item'})
                 continue
-            # Parse IDs (accept either objects or IDs)
+            try:
+                exam_id = getattr(item.get('exam'), 'id', None) or int(item.get('exam'))
+                student_id = getattr(item.get('student'), 'id', None) or int(item.get('student'))
+                subject_id = getattr(item.get('subject'), 'id', None) or int(item.get('subject'))
+                component_id = item.get('component')
+                if component_id is not None:
+                    component_id = getattr(component_id, 'id', None) or int(component_id)
+                
+                exam_ids.add(exam_id)
+                student_ids.add(student_id)
+                subject_ids.add(subject_id)
+                if component_id is not None:
+                    component_ids.add(component_id)
+            except Exception:
+                errors.append({'index': idx, 'error': {'detail': 'Invalid identifiers in payload'}})
+        
+        # Bulk fetch all related objects
+        exams = {e.id: e for e in Exam.objects.select_related('klass').filter(id__in=exam_ids)}
+        students = {s.id: s for s in Student.objects.filter(id__in=student_ids)}
+        subjects = {s.id: s for s in Subject.objects.filter(id__in=subject_ids)}
+        components = {c.id: c for c in SubjectComponent.objects.filter(id__in=component_ids)} if component_ids else {}
+        
+        # Fetch subject components for auto-assignment
+        subject_components_map = {}
+        if subject_ids:
+            for sc in SubjectComponent.objects.filter(subject_id__in=subject_ids):
+                if sc.subject_id not in subject_components_map:
+                    subject_components_map[sc.subject_id] = []
+                subject_components_map[sc.subject_id].append(sc)
+        
+        # Validate and prepare data for bulk operations
+        to_create = []
+        to_update = []
+        to_update_out_of = []
+        validated_items = []
+        
+        for idx, item in enumerate(items):
+            if not isinstance(item, dict):
+                continue
+            
             try:
                 exam_id = getattr(item.get('exam'), 'id', None) or int(item.get('exam'))
                 student_id = getattr(item.get('student'), 'id', None) or int(item.get('student'))
@@ -4291,69 +4337,65 @@ class ExamResultViewSet(viewsets.ModelViewSet):
                 if component_id is not None:
                     component_id = getattr(component_id, 'id', None) or int(component_id)
                 out_of = item.get('out_of')
+                remarks = item.get('remarks')
             except Exception:
                 errors.append({'index': idx, 'error': {'detail': 'Invalid identifiers in payload'}})
                 continue
-            # Fetch instances
-            try:
-                exam = Exam.objects.select_related('klass').get(pk=exam_id)
-                student = Student.objects.get(pk=student_id)
-                subject = Subject.objects.get(pk=subject_id)
-                component = None
-                if component_id is not None:
-                    component = SubjectComponent.objects.get(pk=component_id)
-                # Auto-assign sole component if subject has exactly one and none provided
-                if component is None:
-                    try:
-                        if subject.components.count() == 1:
-                            component = subject.components.first()
-                    except Exception:
-                        pass
-            except Exam.DoesNotExist:
+            
+            # Check if related objects exist
+            exam = exams.get(exam_id)
+            student = students.get(student_id)
+            subject = subjects.get(subject_id)
+            component = components.get(component_id) if component_id else None
+            
+            if not exam:
                 errors.append({'index': idx, 'error': {'exam': 'Not found'}})
                 continue
-            except Student.DoesNotExist:
+            if not student:
                 errors.append({'index': idx, 'error': {'student': 'Not found'}})
                 continue
-            except Subject.DoesNotExist:
+            if not subject:
                 errors.append({'index': idx, 'error': {'subject': 'Not found'}})
                 continue
-            except SubjectComponent.DoesNotExist:
+            if component_id is not None and not component:
                 errors.append({'index': idx, 'error': {'component': 'Not found'}})
                 continue
-            # Basic scope + marks validations (similar to perform_create)
-            school = getattr(getattr(request, 'user', None), 'school', None)
-            if school and exam and exam.klass.school_id != school.id:
+            
+            # Auto-assign sole component if subject has exactly one and none provided
+            if component is None and subject_id in subject_components_map:
+                comps = subject_components_map[subject_id]
+                if len(comps) == 1:
+                    component = comps[0]
+                    component_id = component.id
+            
+            # School scope validation
+            if school and exam.klass.school_id != school.id:
                 errors.append({'index': idx, 'error': {'exam': 'Exam must belong to your school'}})
                 continue
+            
             # Component belongs to subject
             if component and component.subject_id != subject.id:
                 errors.append({'index': idx, 'error': {'component': 'Component does not belong to the selected subject'}})
                 continue
-            # If the subject has components defined, require a component to be specified
-            try:
-                if subject.components.exists() and component is None:
-                    errors.append({'index': idx, 'error': {'component': 'This subject has components. Please provide a component/paper for each mark.'}})
-                    continue
-            except Exception:
-                pass
+            
+            # Require component if subject has components
+            if subject_id in subject_components_map and subject_components_map[subject_id] and component is None:
+                errors.append({'index': idx, 'error': {'component': 'This subject has components. Please provide a component/paper for each mark.'}})
+                continue
+            
             # Block non-examinable subjects
-            try:
-                if hasattr(subject, 'is_examinable') and not bool(subject.is_examinable):
-                    errors.append({'index': idx, 'error': {'subject': 'This subject is not examinable. Results cannot be recorded.'}})
-                    continue
-            except Exception:
-                pass
-            # Teacher permission: same rules as perform_create
+            if hasattr(subject, 'is_examinable') and not bool(subject.is_examinable):
+                errors.append({'index': idx, 'error': {'subject': 'This subject is not examinable. Results cannot be recorded.'}})
+                continue
+            
+            # Teacher permission check
             if user and getattr(user, 'role', None) == 'teacher' and not (user.is_staff or user.is_superuser):
-                allowed = False
-                if not allowed and exam and subject:
-                    if ClassSubjectTeacher.objects.filter(klass=exam.klass, teacher=user, subject=subject).exists():
-                        allowed = True
+                allowed = ClassSubjectTeacher.objects.filter(klass=exam.klass, teacher=user, subject=subject).exists()
                 if not allowed:
                     errors.append({'index': idx, 'error': {'detail': 'You are not assigned to this class/subject for this exam'}})
                     continue
-            # Allow out_of-only updates (no marks) to persist teacher-set denominators
+            
+            # Handle out_of-only updates
             marks_missing = marks in (None, '', [])
             if marks_missing and out_of is not None:
                 try:
@@ -4364,30 +4406,18 @@ class ExamResultViewSet(viewsets.ModelViewSet):
                 if oo <= 0:
                     errors.append({'index': idx, 'error': {'out_of': 'out_of must be greater than 0'}})
                     continue
-                try:
-                    with transaction.atomic():
-                        obj = ExamResult.objects.filter(
-                            exam=exam,
-                            student=student,
-                            subject=subject,
-                            component=component,
-                        ).first()
-                        if obj is None:
-                            errors.append({'index': idx, 'error': {'detail': 'Cannot update out_of without existing marks for this student/subject/component'}})
-                            continue
-                        obj.out_of = float(oo)
-                        obj.save(update_fields=['out_of'])
-                    successes += 1
-                    out_ids.append(obj.id)
-                except Exception as ex:
-                    errors.append({'index': idx, 'error': str(ex)})
+                to_update_out_of.append({
+                    'exam': exam, 'student': student, 'subject': subject, 'component': component,
+                    'out_of': oo, 'idx': idx
+                })
                 continue
-
+            
+            # Validate marks
             try:
                 m = float(marks)
                 if m < 0:
                     raise ValidationError({'marks': 'Marks cannot be negative'})
-                # Determine target maximum
+                
                 target_max = None
                 if component and getattr(component, 'max_marks', None) is not None:
                     target_max = float(component.max_marks)
@@ -4397,7 +4427,7 @@ class ExamResultViewSet(viewsets.ModelViewSet):
                     target_max = float(exam.total_marks)
                 else:
                     target_max = 100.0
-
+                
                 if out_of is not None:
                     try:
                         oo = float(out_of)
@@ -4407,7 +4437,6 @@ class ExamResultViewSet(viewsets.ModelViewSet):
                         raise ValidationError({'out_of': 'out_of must be greater than 0'})
                     if m > oo:
                         raise ValidationError({'marks': f'Marks cannot exceed out_of ({oo})'})
-                    # Store raw marks as entered; persist denominator for accurate percentage computation
                     out_of_to_store = float(oo)
                 else:
                     if target_max is not None and m > target_max:
@@ -4419,35 +4448,104 @@ class ExamResultViewSet(viewsets.ModelViewSet):
             except Exception:
                 errors.append({'index': idx, 'error': {'marks': 'Marks must be a number'}})
                 continue
-            # Upsert (do not overwrite existing out_of unless explicitly provided)
-            try:
-                with transaction.atomic():
+            
+            validated_items.append({
+                'idx': idx,
+                'exam': exam,
+                'student': student,
+                'subject': subject,
+                'component': component,
+                'marks': m,
+                'out_of': out_of_to_store,
+                'remarks': remarks
+            })
+        
+        # Fetch existing results in bulk
+        unique_keys = [(item['exam'].id, item['student'].id, item['subject'].id, item['component'].id if item['component'] else None) for item in validated_items]
+        existing_results = {}
+        if unique_keys:
+            for er in ExamResult.objects.filter(
+                exam__in=[k[0] for k in unique_keys],
+                student__in=[k[1] for k in unique_keys],
+                subject__in=[k[2] for k in unique_keys]
+            ).select_related('exam', 'student', 'subject', 'component'):
+                key = (er.exam_id, er.student_id, er.subject_id, er.component_id)
+                existing_results[key] = er
+        
+        # Separate creates and updates
+        for item in validated_items:
+            key = (item['exam'].id, item['student'].id, item['subject'].id, item['component'].id if item['component'] else None)
+            existing = existing_results.get(key)
+            
+            if existing:
+                to_update.append({
+                    'obj': existing,
+                    'marks': item['marks'],
+                    'out_of': item['out_of'],
+                    'remarks': item['remarks'],
+                    'idx': item['idx']
+                })
+            else:
+                to_create.append(item)
+        
+        # Perform bulk operations
+        successes = 0
+        out_ids = []
+        
+        with transaction.atomic():
+            # Bulk create
+            if to_create:
+                created_objects = ExamResult.objects.bulk_create([
+                    ExamResult(
+                        exam=item['exam'],
+                        student=item['student'],
+                        subject=item['subject'],
+                        component=item['component'],
+                        marks=item['marks'],
+                        out_of=item['out_of'] if item['out_of'] is not None else float(item['exam'].total_marks or 100.0),
+                        remarks=item['remarks']
+                    )
+                    for item in to_create
+                ], ignore_conflicts=False)
+                successes += len(created_objects)
+                out_ids.extend([obj.id for obj in created_objects])
+            
+            # Bulk update
+            if to_update:
+                for update_item in to_update:
+                    obj = update_item['obj']
+                    obj.marks = update_item['marks']
+                    if update_item['out_of'] is not None:
+                        obj.out_of = update_item['out_of']
+                    if update_item['remarks'] is not None:
+                        obj.remarks = update_item['remarks']
+                    update_fields = ['marks']
+                    if update_item['out_of'] is not None:
+                        update_fields.append('out_of')
+                    if update_item['remarks'] is not None:
+                        update_fields.append('remarks')
+                    obj.save(update_fields=update_fields)
+                    successes += 1
+                    out_ids.append(obj.id)
+            
+            # Handle out_of-only updates
+            if to_update_out_of:
+                for update_item in to_update_out_of:
                     obj = ExamResult.objects.filter(
-                        exam=exam,
-                        student=student,
-                        subject=subject,
-                        component=component,
+                        exam=update_item['exam'],
+                        student=update_item['student'],
+                        subject=update_item['subject'],
+                        component=update_item['component']
                     ).first()
-                    if obj is None:
-                        # Create: persist denominator so downstream aggregation/percentage is correct
-                        obj = ExamResult.objects.create(
-                            exam=exam,
-                            student=student,
-                            subject=subject,
-                            component=component,
-                            marks=m,
-                            out_of=(out_of_to_store if out_of_to_store is not None else float(target_max or 100.0)),
-                        )
+                    if obj:
+                        obj.out_of = update_item['out_of']
+                        obj.save(update_fields=['out_of'])
+                        successes += 1
+                        out_ids.append(obj.id)
                     else:
-                        obj.marks = m
-                        if out_of_to_store is not None:
-                            obj.out_of = out_of_to_store
-                        obj.save(update_fields=['marks'] + (['out_of'] if out_of_to_store is not None else []))
-                successes += 1
-                out_ids.append(obj.id)
-            except Exception as ex:
-                errors.append({'index': idx, 'error': str(ex)})
-        status_code = 200 if not errors else 207  # 207 Multi-Status semantic
+                        errors.append({'index': update_item['idx'], 'error': {'detail': 'Cannot update out_of without existing marks'}})
+        
+        status_code = 200 if not errors else 207
         return Response({'saved': successes, 'failed': len(errors), 'errors': errors, 'ids': out_ids}, status=status_code)
 
     @action(
