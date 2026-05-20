@@ -786,9 +786,19 @@ export default function AdminExams(){
                       <td className="p-6">
                         <div className="flex items-center justify-end gap-2">
                           <button 
-                            onClick={() => navigate(`/admin/exams/${e.id}/enter`)}
-                            className="p-2 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-600 hover:text-white transition-all shadow-sm active:scale-95"
+                            onClick={(event) => {
+                              event.preventDefault();
+                              event.stopPropagation();
+                              navigate(`/admin/exams/${e.id}/enter`);
+                            }}
+                            onTouchEnd={(event) => {
+                              event.preventDefault();
+                              event.stopPropagation();
+                              navigate(`/admin/exams/${e.id}/enter`);
+                            }}
+                            className="p-2 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-600 hover:text-white transition-all shadow-sm active:scale-95 cursor-pointer"
                             title="Enter Marks"
+                            type="button"
                           >
                             <Edit3 size={18} />
                           </button>
@@ -1102,7 +1112,22 @@ export default function AdminExams(){
                 </div>
                 <div className="shrink-0 flex items-center gap-2">
                   <button onClick={()=>{ setDayOpen(false); openEdit(ev) }} className="px-2 py-1 text-sm rounded border bg-white hover:bg-gray-50">Edit</button>
-                  <button onClick={()=>{ setDayOpen(false); navigate(`/admin/exams/${ev.id}/enter`) }} className="px-2 py-1 text-sm rounded border bg-white hover:bg-gray-50">Enter</button>
+                  <button 
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      setDayOpen(false);
+                      navigate(`/admin/exams/${ev.id}/enter`);
+                    }}
+                    onTouchEnd={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      setDayOpen(false);
+                      navigate(`/admin/exams/${ev.id}/enter`);
+                    }}
+                    className="px-2 py-1 text-sm rounded border bg-white hover:bg-gray-50 cursor-pointer"
+                    type="button"
+                  >Enter</button>
                 </div>
               </div>
             ))
