@@ -74,6 +74,20 @@ class IsAdmin(permissions.BasePermission):
             request.user.role == 'admin' or request.user.is_staff or request.user.is_superuser
         )
 
+def _is_admin_user(user):
+    return bool(user and (getattr(user, 'role', None) == 'admin' or user.is_staff or user.is_superuser))
+
+def _is_class_teacher_for(user, klass):
+    """Class-teacher check that supports both Class.teacher and TeacherProfile.klass."""
+    if not (user and getattr(user, 'role', None) == 'teacher' and klass):
+        return False
+    if getattr(klass, 'teacher_id', None) == getattr(user, 'id', None):
+        return True
+    try:
+        return TeacherProfile.objects.filter(user=user, klass=klass).exists()
+    except Exception:
+        return False
+
 class IsAdminOrTeacherReadOnly(permissions.BasePermission):
     """Allow teachers to perform safe (read-only) requests; only admins can modify.
     Additionally, a teacher with TeacherProfile.can_manage_timetable=True may modify
@@ -285,11 +299,11 @@ class ClassViewSet(viewsets.ModelViewSet):
         """
         klass = self.get_object()
         user = getattr(request, 'user', None)
-        is_admin = bool(user and (getattr(user, 'role', None) == 'admin' or user.is_staff or user.is_superuser))
+        is_admin = _is_admin_user(user)
 
         # Only the class teacher of this class (or admin/staff) can add
         if not is_admin:
-            if not (getattr(user, 'role', None) == 'teacher' and getattr(klass, 'teacher_id', None) == getattr(user, 'id', None)):
+            if not _is_class_teacher_for(user, klass):
                 return Response({'detail': 'Only the class teacher can add students to this class'}, status=status.HTTP_403_FORBIDDEN)
 
         # Collect and validate payload, then create via serializer so a linked User is created.
@@ -1279,8 +1293,11 @@ class ClassViewSet(viewsets.ModelViewSet):
         Used by the Class details > Students tab.
         """
         klass = self.get_object()
+        user = getattr(request, 'user', None)
+        if not _is_admin_user(user) and not _is_class_teacher_for(user, klass):
+            return Response({'detail': 'Only the class teacher can view students in this class'}, status=status.HTTP_403_FORBIDDEN)
         # Scope by the class directly; order by name for consistent display
-        qs = Student.objects.filter(klass=klass).order_by('name')
+        qs = Student.objects.filter(klass=klass).select_related('klass').order_by('name')
         # Use lightweight serializer for list performance
         from .serializers import StudentListSerializer
         ser = StudentListSerializer(qs, many=True, context={'request': request})
@@ -5284,7 +5301,8 @@ class StudentViewSet(viewsets.ModelViewSet):
             qs = (
                 qs.select_related('klass')
                   .only(
-                      'id','admission_no','name','dob','gender','upi_number','guardian_id','klass','is_graduated','graduation_year','photo',
+                      'id','admission_no','name','dob','gender','upi_number','guardian_id','guardian_name','guardian_passport_no','birth_certificate_no',
+                      'phone','email','address','klass','is_graduated','graduation_year','boarding_status','is_active','is_transferred','photo',
                       'klass__id','klass__name','klass__grade_level'
                   )
             )
@@ -5367,14 +5385,13 @@ class StudentViewSet(viewsets.ModelViewSet):
         student = self.get_object()
 
         user = getattr(request, 'user', None)
-        is_admin = bool(user and (getattr(user, 'role', None) == 'admin' or user.is_staff or user.is_superuser))
+        is_admin = _is_admin_user(user)
         if not is_admin:
             # Must be teacher and the assigned class teacher of this student's class
             if getattr(user, 'role', None) != 'teacher':
                 return Response({'detail': 'Not allowed'}, status=status.HTTP_403_FORBIDDEN)
-            klass_id = getattr(getattr(student, 'klass', None), 'id', None)
-            teacher_id = getattr(getattr(student, 'klass', None), 'teacher_id', None)
-            if not (klass_id and teacher_id == getattr(user, 'id', None)):
+            klass = getattr(student, 'klass', None)
+            if not _is_class_teacher_for(user, klass):
                 return Response({'detail': 'Only the class teacher can edit this student'}, status=status.HTTP_403_FORBIDDEN)
 
         # Build data allowing only specific fields
@@ -5503,14 +5520,13 @@ class StudentViewSet(viewsets.ModelViewSet):
         """
         student = self.get_object()
         user = getattr(request, 'user', None)
-        is_admin = bool(user and (getattr(user, 'role', None) == 'admin' or user.is_staff or user.is_superuser))
+        is_admin = _is_admin_user(user)
 
         if not is_admin:
             if getattr(user, 'role', None) != 'teacher':
                 return Response({'detail': 'Not allowed'}, status=status.HTTP_403_FORBIDDEN)
-            klass_id = getattr(getattr(student, 'klass', None), 'id', None)
-            teacher_id = getattr(getattr(student, 'klass', None), 'teacher_id', None)
-            if not (klass_id and teacher_id == getattr(user, 'id', None)):
+            klass = getattr(student, 'klass', None)
+            if not _is_class_teacher_for(user, klass):
                 return Response({'detail': 'Only the class teacher can reset this student password'}, status=status.HTTP_403_FORBIDDEN)
 
         try:

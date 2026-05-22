@@ -370,6 +370,7 @@ function StudentEditForm({ student, onSaved }){
     gender: student?.gender || '',
     guardian_id: student?.guardian_id || '',
     guardian_name: student?.guardian_name || '',
+    phone: student?.phone || '',
     email: student?.email || '',
     address: student?.address || '',
     boarding_status: student?.boarding_status || 'day',
@@ -382,6 +383,19 @@ function StudentEditForm({ student, onSaved }){
   const [resetError, setResetError] = useState('')
 
   const set = (k,v)=> setForm(prev => ({ ...prev, [k]: v }))
+  const errorText = (err, fallback = 'Save failed') => {
+    const data = err?.response?.data
+    if (!data) return err?.message || fallback
+    if (typeof data === 'string') return data
+    if (data.detail) return String(data.detail)
+    try{
+      return Object.entries(data)
+        .map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(', ') : String(value)}`)
+        .join('; ') || fallback
+    }catch{
+      return fallback
+    }
+  }
 
   const submit = async (e) => {
     e?.preventDefault?.()
@@ -390,7 +404,7 @@ function StudentEditForm({ student, onSaved }){
       await api.patch(`/academics/students/${student.id}/teacher-update/`, form)
       setMsg('Saved')
       onSaved?.()
-    }catch(err){ setMsg(err?.response?.data?.detail || 'Save failed') }
+    }catch(err){ setMsg(errorText(err)) }
     finally{ setSaving(false) }
   }
 
@@ -418,12 +432,14 @@ function StudentEditForm({ student, onSaved }){
       <Select label="Gender" value={form.gender||''} onChange={v=>set('gender', v)} options={[{value:'male',label:'Male'},{value:'female',label:'Female'}]} />
       <Text label="Guardian Phone" value={form.guardian_id||''} onChange={v=>set('guardian_id', v)} />
       <Text label="Guardian Name" value={form.guardian_name||''} onChange={v=>set('guardian_name', v)} />
+      <Text label="Student Phone" value={form.phone||''} onChange={v=>set('phone', v)} />
       <Text label="Email" value={form.email||''} onChange={v=>set('email', v)} />
       <Text label="Address" value={form.address||''} onChange={v=>set('address', v)} />
       <Select label="Boarding" value={form.boarding_status||'day'} onChange={v=>set('boarding_status', v)} options={[{value:'day',label:'Day'},{value:'boarding',label:'Boarding'}]} />
       <Select label="Active" value={String(form.is_active)} onChange={v=>set('is_active', v==='true')} options={[{value:'true',label:'Active'},{value:'false',label:'Inactive'}]} />
       <div className="md:col-span-3 flex items-center gap-2">
         <button type="submit" disabled={saving} className="px-3 py-1.5 rounded bg-blue-600 text-white">{saving? 'Saving...' : 'Save'}</button>
+        {msg && <span className={`text-sm ${msg === 'Saved' ? 'text-emerald-700' : 'text-red-700'}`}>{msg}</span>}
       </div>
 
       <div className="md:col-span-3 border-t border-slate-200 pt-3 mt-2">
