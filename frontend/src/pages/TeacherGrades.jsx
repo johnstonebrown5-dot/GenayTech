@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import api from '../api'
 import Modal from '../components/Modal'
 import { useNotification } from '../components/NotificationContext'
+import { fetchEnterResultsData } from '../utils/enterResultsLoader'
 
 export default function TeacherGrades(){
   const navigate = useNavigate()
@@ -1082,71 +1083,24 @@ export default function TeacherGrades(){
     ;(async ()=>{
       try{
         setMarksLoading(true)
-        // handle possible pagination or array response
-        const fetchAll = async (url) => {
-          let out = []
-          let next = url
-          let guard = 0
-          while (next && guard < 50){
-            const res = await api.get(next)
-            const data = res?.data
-            if (Array.isArray(data)) { out = data; break }
-            if (data && Array.isArray(data.results)) { out = out.concat(data.results); next = data.next; guard++; continue }
-            break
-          }
-          return out
-        }
+        const { payload } = await fetchEnterResultsData(examId, marksReloadKey, { subject: subjectId })
+        if (!alive) return
+        const allowedStudents = new Set(students.map(s => String(s.id)))
+        const allResults = Array.isArray(payload?.existing_results) ? payload.existing_results : []
+        const listFor = (componentId) => allResults.filter(r => {
+          const sid = r?.subject ?? r?.subject_id ?? r?.subject_detail?.id
+          const cid = r?.component ?? r?.component_id ?? r?.component_detail?.id
+          const studentId = r?.student ?? r?.student_id ?? r?.student_detail?.id
+          const subjectOk = String(sid || '') === String(subjectId)
+          const componentOk = componentId ? String(cid || '') === String(componentId) : true
+          const studentOk = studentId != null && allowedStudents.has(String(studentId))
+          return subjectOk && componentOk && studentOk
+        })
+        const payloadComponents = payload?.components_by_subject?.[subjectId] || payload?.components_by_subject?.[String(subjectId)] || []
+        const compsForAll = Array.isArray(components) && components.length ? components : (Array.isArray(payloadComponents) ? payloadComponents : [])
+
         if (entryMode === 'single'){
-          const urls = []
-          const base1 = `/academics/exam_results/?exam=${examId}&subject=${subjectId}`
-          urls.push(base1)
-          if (compId) urls.push(`${base1}&component=${compId}`)
-          // include class filters
-          urls.push(`/academics/exam_results/?exam=${examId}&subject=${subjectId}&klass=${selectedClass}`)
-          urls.push(`/academics/exam_results/?exam=${examId}&subject=${subjectId}&class=${selectedClass}`)
-          urls.push(`/academics/exam_results/?exam=${examId}&subject=${subjectId}&klass_id=${selectedClass}`)
-          urls.push(`/academics/exam_results/?exam=${examId}&subject=${subjectId}&class_id=${selectedClass}`)
-          if (compId){
-            urls.push(`/academics/exam_results/?exam=${examId}&subject=${subjectId}&component=${compId}&klass=${selectedClass}`)
-            urls.push(`/academics/exam_results/?exam=${examId}&subject=${subjectId}&component=${compId}&class=${selectedClass}`)
-          }
-          // alternative param names
-          const base2 = `/academics/exam_results/?exam_id=${examId}&subject_id=${subjectId}`
-          urls.push(base2)
-          if (compId) urls.push(`${base2}&component_id=${compId}`)
-          // also exam only as a last resort
-          urls.push(`/academics/exam_results/?exam=${examId}`)
-          let list = []
-          for (const u of urls){
-            try{
-              const part = await fetchAll(u)
-              if (Array.isArray(part) && part.length) { list = part; break }
-            }catch{}
-          }
-          // final fallback: exam-only then filter to current class students
-          if (!list.length){
-            try{
-              const part = await fetchAll(`/academics/exam_results/?exam=${examId}`)
-              const allowed = new Set(students.map(s=>s.id))
-              list = part.filter(r=> allowed.has((r?.student ?? r?.student_id ?? r?.student_detail?.id)))
-            }catch{}
-          }
-          // If we got rows, filter locally by selected subject/component if fields differ
-          if (list.length){
-            const subjObj = subjects.find(s=> String(s.id)===String(subjectId)) || {}
-            const subjCode = (subjObj.code||'').toLowerCase()
-            const subjName = (subjObj.name||'').toLowerCase()
-            const compIdStr = compId ? String(compId) : ''
-            list = list.filter(r => {
-              const sid = r?.subject ?? r?.subject_id ?? r?.subject_detail?.id
-              const scode = (r?.subject_code || r?.subject_detail?.code || '').toLowerCase()
-              const sname = (r?.subject_name || r?.subject_detail?.name || '').toLowerCase()
-              const comp = r?.component ?? r?.component_id ?? r?.component_detail?.id
-              const subjectOk = sid ? String(sid)===String(subjectId) : (scode? scode===subjCode : (sname? sname===subjName : true))
-              const compOk = compId ? (comp ? String(comp)===compIdStr : true) : true
-              return subjectOk && compOk
-            })
-          }
+          const list = listFor(compId || null)
           // If no matches, clear to blanks. Else overlay values.
           if (alive){
             if (!list.length){
@@ -1176,43 +1130,11 @@ export default function TeacherGrades(){
             }
           }
         } else {
-          // all mode: fetch per component
-          const comps = components
+          // all mode: use the same optimized payload and split locally per component
+          const comps = compsForAll
           const nextMarksAll = { ...(marksAll||{}) }
           for (const c of comps){
-            const urls = [
-              `/academics/exam_results/?exam=${examId}&subject=${subjectId}&component=${c.id}`,
-              `/academics/exam_results/?exam=${examId}&subject=${subjectId}&component=${c.id}&klass=${selectedClass}`,
-              `/academics/exam_results/?exam=${examId}&subject=${subjectId}&component=${c.id}&class=${selectedClass}`,
-              `/academics/exam_results/?exam_id=${examId}&subject_id=${subjectId}&component_id=${c.id}`,
-              `/academics/exam_results/?exam=${examId}&component=${c.id}`,
-            ]
-            let list = []
-            for (const u of urls){
-              try{ const part = await fetchAll(u); if (Array.isArray(part) && part.length) { list = part; break } }catch{}
-            }
-            if (!list.length){
-              try{
-                const part = await fetchAll(`/academics/exam_results/?exam=${examId}&component=${c.id}`)
-                const allowed = new Set(students.map(s=>s.id))
-                list = part.filter(r=> allowed.has((r?.student ?? r?.student_id ?? r?.student_detail?.id)))
-              }catch{}
-            }
-            // Filter locally by subject/component
-            if (list.length){
-              const subjObj = subjects.find(s=> String(s.id)===String(subjectId)) || {}
-              const subjCode = (subjObj.code||'').toLowerCase()
-              const subjName = (subjObj.name||'').toLowerCase()
-              list = list.filter(r => {
-                const sid = r?.subject ?? r?.subject_id ?? r?.subject_detail?.id
-                const scode = (r?.subject_code || r?.subject_detail?.code || '').toLowerCase()
-                const sname = (r?.subject_name || r?.subject_detail?.name || '').toLowerCase()
-                const subjectOk = sid ? String(sid)===String(subjectId) : (scode? scode===subjCode : (sname? sname===subjName : true))
-                const comp = r?.component ?? r?.component_id ?? r?.component_detail?.id
-                const compOk = comp ? String(comp)===String(c.id) : true
-                return subjectOk && compOk
-              })
-            }
+            const list = listFor(c.id)
             // Build map: if no matches for this component, set all blanks for that component
             if (!list.length){
               const blankCol = {}

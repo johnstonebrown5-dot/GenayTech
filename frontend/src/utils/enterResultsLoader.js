@@ -204,10 +204,10 @@ async function fetchEnterDataFallback(examId) {
 /**
  * Load marks entry payload; tries optimized endpoint first, then legacy multi-call fallback.
  */
-export async function fetchEnterResultsData(examId, reloadKey = 0) {
+export async function fetchEnterResultsData(examId, reloadKey = 0, extraParams = {}) {
   try {
     const res = await api.get(`/academics/exams/${examId}/enter-data/`, {
-      params: { _: reloadKey },
+      params: { ...extraParams, _: reloadKey },
       headers: { 'Cache-Control': 'no-cache', Pragma: 'no-cache' },
       timeout: 90000,
       _noDedupe: reloadKey > 0,

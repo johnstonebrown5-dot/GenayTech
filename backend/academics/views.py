@@ -2169,6 +2169,18 @@ class ExamViewSet(viewsets.ModelViewSet):
                 qs = qs.filter(Q(grade_level_tag=formatted) | (missing_tag & Q(klass__grade_level=formatted)))
             except Exception:
                 qs = qs.filter(grade_level_tag=formatted)
+        klass_id = (
+            self.request.query_params.get('klass')
+            or self.request.query_params.get('class')
+            or self.request.query_params.get('klass_id')
+            or self.request.query_params.get('class_id')
+        )
+        if klass_id:
+            qs = qs.filter(klass_id=klass_id)
+        published = self.request.query_params.get('published') or self.request.query_params.get('is_published')
+        if published is not None:
+            published_bool = str(published).strip().lower() in ('1', 'true', 'yes', 'y')
+            qs = qs.filter(published=published_bool)
         return qs
 
     @action(detail=False, methods=['get'], permission_classes=[IsTeacherOrAdmin], url_path='by-name')
@@ -2898,6 +2910,9 @@ class ExamViewSet(viewsets.ModelViewSet):
             subjects = list(klass.subjects.filter(is_examinable=True).only('id', 'code', 'name').values('id', 'code', 'name'))
             if not subjects:
                 subjects = list(klass.subjects.all().only('id', 'code', 'name').values('id', 'code', 'name'))
+            requested_subject = request.query_params.get('subject') or request.query_params.get('subject_id')
+            if requested_subject:
+                subjects = [s for s in subjects if str(s.get('id')) == str(requested_subject)]
 
             subject_ids = [s['id'] for s in subjects]
             components_by_subject = {}
@@ -2921,11 +2936,15 @@ class ExamViewSet(viewsets.ModelViewSet):
 
             existing_results = []
             if subject_ids:
+                results_qs = ExamResult.objects.filter(exam=exam, subject_id__in=subject_ids)
+                requested_component = request.query_params.get('component') or request.query_params.get('component_id')
+                if requested_component:
+                    results_qs = results_qs.filter(component_id=requested_component)
                 existing_results = list(
-                    ExamResult.objects.filter(exam=exam, subject_id__in=subject_ids)
-                    .only('id', 'student_id', 'subject_id', 'component_id', 'marks', 'out_of', 'remarks')
+                    results_qs
+                    .only('id', 'student_id', 'subject_id', 'component_id', 'marks', 'out_of', 'remarks', 'updated_at')
                     .order_by('student_id', 'subject_id', 'component_id')
-                    .values('id', 'student_id', 'subject_id', 'component_id', 'marks', 'out_of', 'remarks')
+                    .values('id', 'student_id', 'subject_id', 'component_id', 'marks', 'out_of', 'remarks', 'updated_at')
                 )
 
             return Response({
