@@ -4,6 +4,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth'
 import { useLock } from './LockProvider'
 import api from '../api'
+import { canRunAuthenticatedPoll, handlePollAuthError } from '../utils/authPoll'
 import FloatingDeliveryLog from './FloatingDeliveryLog'
 
 const navItems = [
