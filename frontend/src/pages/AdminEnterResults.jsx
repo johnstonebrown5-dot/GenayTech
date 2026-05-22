@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useNavigate, useLocation } from 'react-router-dom'
-import api from '../api'
+import api, { isCanceledRequest } from '../api'
 import { useNotification } from '../components/NotificationContext'
 
 export default function AdminEnterResults({ readOnly }){
@@ -60,6 +60,11 @@ export default function AdminEnterResults({ readOnly }){
 
   useEffect(()=>{
     let alive = true
+    if (!Number.isFinite(examId) || examId <= 0) {
+      setLoading(false)
+      setError('Invalid exam. Go back and open marks entry from the exams list.')
+      return () => { alive = false }
+    }
     ;(async ()=>{
       try{
         setLoading(true)
@@ -67,6 +72,7 @@ export default function AdminEnterResults({ readOnly }){
         // Use optimized single endpoint to load all data at once
         // No caching - always fetch fresh data from server
         const res = await api.get(`/academics/exams/${examId}/enter-data/`, { 
+          params: { _: reloadKey },
           headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' },
           timeout: 60000 // Increased timeout to 60 seconds for large datasets
         })
@@ -162,6 +168,7 @@ export default function AdminEnterResults({ readOnly }){
         if (!alive) return
         setResults(rows)
       }catch(err){
+        if (!alive || isCanceledRequest(err)) return
         console.error('Failed to load exam data:', err)
         setError(err?.response?.data?.detail || err?.message || 'Failed to load exam data')
       }finally{

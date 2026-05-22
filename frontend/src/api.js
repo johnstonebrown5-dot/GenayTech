@@ -27,7 +27,7 @@ async function requestWithRetry(config, retryCount = 0) {
       error.code === 'ETIMEDOUT' ||
       error.code === 'EPIPE' ||
       (error.response && error.response.status >= 500) ||
-      !error.response
+      (!error.response && !isCanceledRequest(error))
     )
     
     if (isRetryable && retryCount < MAX_RETRIES) {
@@ -54,16 +54,13 @@ api.interceptors.request.use(config => {
   } catch {}
   try { if (!config._skipGlobalLoading && typeof window !== 'undefined') window.dispatchEvent(new Event('api:request:start')) } catch {}
   
-  // Add request cancellation support
+  // Attach abort controller for explicit cancellation (e.g. unmount); do not abort duplicates.
   const requestId = generateRequestId(config)
-  if (pendingRequests.has(requestId)) {
-    const controller = pendingRequests.get(requestId)
-    controller.abort()
-  }
   const controller = new AbortController()
   config.signal = controller.signal
+  config._requestId = requestId
   pendingRequests.set(requestId, controller)
-  
+
   return config
 })
 
@@ -88,11 +85,21 @@ function redirectToLoginIfNeeded(){
   }catch{}
 }
 
-// Add request cancellation to prevent memory leaks
+// Track in-flight requests; dedupe identical GETs by sharing the promise (no abort).
 const pendingRequests = new Map()
+const inflightGetPromises = new Map()
 
 function generateRequestId(config) {
   return `${config.method}:${config.url}:${JSON.stringify(config.params || {})}:${JSON.stringify(config.data || {})}`
+}
+
+export function isCanceledRequest(err) {
+  if (!err) return false
+  if (err?.code === 'ERR_CANCELED') return true
+  const name = String(err?.name || '')
+  if (name === 'CanceledError' || name === 'AbortError') return true
+  const msg = String(err?.message || '').toLowerCase()
+  return msg === 'canceled' || msg.includes('aborted')
 }
 
 // Build low/medium/high image candidates by appending resize/quality query params.
@@ -134,6 +141,11 @@ api.interceptors.response.use(
       pendingRequests.delete(requestId)
     } catch {}
 
+    if (isCanceledRequest(err)) {
+      try { if (typeof window !== 'undefined') window.dispatchEvent(new Event('api:request:end')) } catch {}
+      return Promise.reject(err)
+    }
+
     // Normalize axios timeout error into a stable, user-friendly message.
     // Many pages surface err.message directly.
     try{
@@ -159,7 +171,7 @@ api.interceptors.response.use(
         err?.code === 'ETIMEDOUT' ||
         err?.code === 'EPIPE' ||
         (status && status >= 500) ||
-        !status
+        (!status && !isCanceledRequest(err))
       )
       
       if (isRetryable) {
@@ -212,6 +224,21 @@ api.interceptors.response.use(
     return Promise.reject(err)
   }
 )
+
+// Deduplicate identical GETs so remounts/StrictMode don't abort and surface false network errors.
+const originalGet = api.get.bind(api)
+api.get = function dedupedGet(url, config) {
+  const merged = { method: 'get', url, ...(config || {}) }
+  const requestId = generateRequestId(merged)
+  if (inflightGetPromises.has(requestId)) {
+    return inflightGetPromises.get(requestId)
+  }
+  const promise = originalGet(url, config).finally(() => {
+    inflightGetPromises.delete(requestId)
+  })
+  inflightGetPromises.set(requestId, promise)
+  return promise
+}
 
 export default api
 
