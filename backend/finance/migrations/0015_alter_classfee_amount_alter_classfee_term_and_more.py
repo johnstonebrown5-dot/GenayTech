@@ -2,6 +2,18 @@
 
 from django.db import migrations, models
 
+from edutrack.mysql_migration import drop_checks_for_app_models
+
+_FINANCE_MODELS = (
+    'classfee', 'expense', 'expensecategory', 'feecategory', 'incomingpayment', 'invoice',
+    'mpesaconfig', 'payment', 'pocketmoneytransaction', 'pocketmoneywallet', 'staffpayroll',
+    'staffpayslip', 'studentfee',
+)
+
+
+def drop_mysql_checks_forward(apps, schema_editor):
+    drop_checks_for_app_models(apps, schema_editor, 'finance', _FINANCE_MODELS)
+
 
 class Migration(migrations.Migration):
 
@@ -10,6 +22,7 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
+        migrations.RunPython(drop_mysql_checks_forward, migrations.RunPython.noop),
         migrations.AlterField(
             model_name='classfee',
             name='amount',

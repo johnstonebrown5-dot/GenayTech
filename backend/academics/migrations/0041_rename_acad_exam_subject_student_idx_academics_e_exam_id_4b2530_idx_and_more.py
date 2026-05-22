@@ -2,6 +2,18 @@
 
 from django.db import migrations, models
 
+from edutrack.mysql_migration import drop_checks_for_app_models
+
+_ACADEMICS_MODELS = (
+    'academicyear', 'assessment', 'attendance', 'class', 'competency', 'exam', 'examresult',
+    'lessonplan', 'portfolio', 'stagegradingband', 'stream', 'student', 'studentclasshistory',
+    'subject', 'subjectcomponent', 'subjectgradingband', 'teacherduty', 'teacherprofile',
+)
+
+
+def drop_mysql_checks_forward(apps, schema_editor):
+    drop_checks_for_app_models(apps, schema_editor, 'academics', _ACADEMICS_MODELS)
+
 
 class Migration(migrations.Migration):
 
@@ -10,6 +22,7 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
+        migrations.RunPython(drop_mysql_checks_forward, migrations.RunPython.noop),
         migrations.RenameIndex(
             model_name='examresult',
             new_name='academics_e_exam_id_4b2530_idx',

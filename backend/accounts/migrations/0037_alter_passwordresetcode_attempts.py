@@ -1,35 +1,18 @@
 # Fixes MySQL error 3822: duplicate CHECK constraint when altering attempts field.
-# Safe to re-run if a previous migrate attempt partially applied the constraint.
 
 from django.db import migrations, models
 
-
-def _drop_attempts_check_constraints(schema_editor):
-    if schema_editor.connection.vendor != 'mysql':
-        return
-    table = 'accounts_passwordresetcode'
-    with schema_editor.connection.cursor() as cursor:
-        cursor.execute(
-            """
-            SELECT CONSTRAINT_NAME
-            FROM information_schema.TABLE_CONSTRAINTS
-            WHERE TABLE_SCHEMA = DATABASE()
-              AND TABLE_NAME = %s
-              AND CONSTRAINT_TYPE = 'CHECK'
-              AND CONSTRAINT_NAME LIKE %s
-            """,
-            [table, '%attempts%'],
-        )
-        for (name,) in cursor.fetchall():
-            cursor.execute(f'ALTER TABLE `{table}` DROP CHECK `{name}`')
+from edutrack.mysql_migration import drop_mysql_check_constraints_for_column
 
 
 def drop_attempts_check_constraints_forward(apps, schema_editor):
-    _drop_attempts_check_constraints(schema_editor)
+    drop_mysql_check_constraints_for_column(
+        schema_editor, 'accounts_passwordresetcode', 'attempts'
+    )
 
 
 def drop_attempts_check_constraints_backward(apps, schema_editor):
-    _drop_attempts_check_constraints(schema_editor)
+    drop_attempts_check_constraints_forward(apps, schema_editor)
 
 
 class Migration(migrations.Migration):
@@ -39,10 +22,7 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.RunPython(
-            drop_attempts_check_constraints_forward,
-            drop_attempts_check_constraints_backward,
-        ),
+        migrations.RunPython(drop_attempts_check_constraints_forward, migrations.RunPython.noop),
         migrations.AlterField(
             model_name='passwordresetcode',
             name='attempts',

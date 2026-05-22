@@ -2,6 +2,17 @@
 
 from django.db import migrations, models
 
+from edutrack.mysql_migration import drop_checks_for_app_models
+
+_COMMUNICATIONS_MODELS = (
+    'arrearsmessagecampaign', 'deliveryjob', 'deliverylog', 'event', 'message',
+    'notification', 'servicereview',
+)
+
+
+def drop_mysql_checks_forward(apps, schema_editor):
+    drop_checks_for_app_models(apps, schema_editor, 'communications', _COMMUNICATIONS_MODELS)
+
 
 class Migration(migrations.Migration):
 
@@ -10,6 +21,7 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
+        migrations.RunPython(drop_mysql_checks_forward, migrations.RunPython.noop),
         migrations.RenameIndex(
             model_name='deliverylog',
             new_name='communicati_school__d4dbf1_idx',
