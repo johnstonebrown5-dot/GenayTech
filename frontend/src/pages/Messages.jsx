@@ -603,20 +603,26 @@ export default function Messages(){
   }, [conversation.length])
 
   return (
-    <div className="messages-page mx-auto max-w-6xl w-full h-[calc(100vh-5rem)] bg-white md:bg-white md:border md:rounded-2xl overflow-hidden flex md:shadow-card">
+    <div className="messages-page mx-auto max-w-6xl w-full h-[calc(100vh-5rem)] bg-slate-50 md:bg-white md:border md:rounded-2xl overflow-hidden flex md:shadow-card">
       {/* Left: Users list */}
-      <aside className={`w-full sm:w-80 border-r flex-col md:bg-white overflow-hidden ${activeUser || viewTab === 'system' ? 'hidden sm:flex' : 'flex'}`}>
-        <div className="flex flex-col p-4 border-b bg-white sticky top-0 z-20">
-          <h1 className="text-xl font-bold text-slate-900 mb-4">Messages</h1>
-          <div className="flex p-1 bg-slate-100 rounded-xl flex-wrap gap-1">
+      <aside className={`w-full sm:w-80 border-r border-white/80 flex-col bg-slate-50 md:bg-white overflow-hidden ${activeUser || viewTab === 'system' ? 'hidden sm:flex' : 'flex'}`}>
+        <div className="flex flex-col p-3 sm:p-4 border-b border-white/80 bg-white/90 backdrop-blur-xl sticky top-0 z-20 shadow-sm">
+          <div className="relative mb-3 overflow-hidden rounded-2xl border border-indigo-100 bg-gradient-to-br from-white via-indigo-50/80 to-sky-50 p-3">
+            <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_right,rgba(79,70,229,0.09)_1px,transparent_1px),linear-gradient(to_bottom,rgba(79,70,229,0.09)_1px,transparent_1px)] bg-[size:22px_22px]" />
+            <div className="relative">
+              <div className="text-[10px] font-black uppercase tracking-widest text-indigo-600">Communication</div>
+              <h1 className="mt-1 text-xl font-black tracking-tight text-slate-950">Messages</h1>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 p-1 bg-slate-100 rounded-2xl gap-1 shadow-inner">
             <button
               onClick={() => setViewTab('chats')}
-              className={`flex-1 min-w-[120px] px-3 py-2 text-sm font-medium rounded-lg transition-all ${viewTab === 'chats' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+              className={`px-3 py-2 text-[11px] font-black rounded-xl transition-all ${viewTab === 'chats' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'text-slate-500 hover:text-slate-700 hover:bg-white'}`}
             >
               <div className="flex items-center justify-center gap-2">
                 <span>Personal</span>
                 {chatsUnread > 0 && (
-                  <span className="text-[10px] bg-blue-600 text-white rounded-full px-1.5 py-0.5 min-w-[18px] text-center">
+                  <span className="text-[10px] bg-white text-indigo-600 rounded-full px-1.5 py-0.5 min-w-[18px] text-center">
                     {chatsUnread > 99 ? '99+' : chatsUnread}
                   </span>
                 )}
@@ -624,12 +630,12 @@ export default function Messages(){
             </button>
             <button
               onClick={() => setViewTab('system')}
-              className={`flex-1 min-w-[120px] px-3 py-2 text-sm font-medium rounded-lg transition-all ${viewTab === 'system' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+              className={`px-3 py-2 text-[11px] font-black rounded-xl transition-all ${viewTab === 'system' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'text-slate-500 hover:text-slate-700 hover:bg-white'}`}
             >
               <div className="flex items-center justify-center gap-2">
                 <span>System</span>
                 {systemUnread > 0 && (
-                  <span className="text-[10px] bg-blue-600 text-white rounded-full px-1.5 py-0.5 min-w-[18px] text-center">
+                  <span className="text-[10px] bg-white text-indigo-600 rounded-full px-1.5 py-0.5 min-w-[18px] text-center">
                     {systemUnread > 99 ? '99+' : systemUnread}
                   </span>
                 )}
@@ -639,7 +645,7 @@ export default function Messages(){
             {isAdmin && (
               <button
                 onClick={() => { setActiveUser(null); setViewTab('role') }}
-                className={`flex-1 min-w-[120px] px-3 py-2 text-sm font-medium rounded-lg transition-all ${viewTab === 'role' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                className={`px-3 py-2 text-[11px] font-black rounded-xl transition-all ${viewTab === 'role' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'text-slate-500 hover:text-slate-700 hover:bg-white'}`}
               >
                 <div className="flex items-center justify-center gap-2">
                   <span>User Roles</span>
@@ -650,7 +656,7 @@ export default function Messages(){
             {isAdmin && (
               <button
                 onClick={() => { setActiveUser(null); setViewTab('broadcast') }}
-                className={`flex-1 min-w-[120px] px-3 py-2 text-sm font-medium rounded-lg transition-all ${viewTab === 'broadcast' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                className={`px-3 py-2 text-[11px] font-black rounded-xl transition-all ${viewTab === 'broadcast' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'text-slate-500 hover:text-slate-700 hover:bg-white'}`}
               >
                 <div className="flex items-center justify-center gap-2">
                   <span>Broadcast</span>
@@ -660,27 +666,27 @@ export default function Messages(){
           </div>
         </div>
         
-        <div className="p-3 border-b bg-white">
+        <div className="p-3 border-b border-white/80 bg-slate-50">
           <div className="relative">
             <input
               value={query}
               onChange={e => setQuery(e.target.value)}
               placeholder="Search conversations..."
               autoComplete="off"
-              className="w-full border border-slate-200 rounded-xl pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 transition-all bg-slate-50"
+              className="h-11 w-full border border-white/80 rounded-2xl pl-10 pr-3 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-300 transition-all bg-white shadow-lg shadow-slate-200/60"
             />
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 absolute left-3 top-2.5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 absolute left-3.5 top-3.5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto bg-white">
+        <div className="flex-1 overflow-y-auto bg-slate-50">
           {isAdmin && (viewTab === 'role' || viewTab === 'broadcast') && (
-            <div className="p-2 border-b bg-slate-50">
+            <div className="p-2 border-b border-white/80 bg-slate-50">
               <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
-                <button onClick={() => setViewTab('role')} className={`whitespace-nowrap px-3 py-1.5 rounded-lg text-xs font-medium border ${viewTab === 'role' ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-white border-slate-200 text-slate-600'}`}>Role Msg</button>
-                <button onClick={() => setViewTab('broadcast')} className={`whitespace-nowrap px-3 py-1.5 rounded-lg text-xs font-medium border ${viewTab === 'broadcast' ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-white border-slate-200 text-slate-600'}`}>Broadcast</button>
+                <button onClick={() => setViewTab('role')} className={`whitespace-nowrap px-3 py-1.5 rounded-xl text-xs font-black border ${viewTab === 'role' ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg shadow-indigo-200' : 'bg-white border-slate-200 text-slate-600'}`}>Role Msg</button>
+                <button onClick={() => setViewTab('broadcast')} className={`whitespace-nowrap px-3 py-1.5 rounded-xl text-xs font-black border ${viewTab === 'broadcast' ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg shadow-indigo-200' : 'bg-white border-slate-200 text-slate-600'}`}>Broadcast</button>
               </div>
             </div>
           )}
@@ -725,40 +731,40 @@ export default function Messages(){
                   <button
                     key={u.id}
                     onClick={()=>{ setActiveUser(u); setViewTab('chats') }}
-                    className={`messages-user-row w-full text-left px-3 py-2 border-b hover:bg-gray-50 md:rounded-xl md:mx-2 md:my-1 md:border md:border-gray-100 md:hover:border-gray-200 md:hover:bg-gray-50/80 ${isActive? 'messages-user-row--active bg-blue-50 md:border-blue-200':''}`}
+                    className={`messages-user-row w-[calc(100%-1rem)] mx-2 my-2 text-left rounded-2xl border px-3 py-3 transition-all ${isActive? 'messages-user-row--active border-indigo-200 bg-indigo-50 shadow-lg shadow-indigo-100/70':'border-white/80 bg-white shadow-sm hover:border-indigo-100 hover:shadow-lg hover:shadow-slate-200/70'}`}
                   >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 rounded-full overflow-hidden bg-gray-100 flex items-center justify-center text-xs text-gray-600">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex min-w-0 items-center gap-2.5">
+                        <div className="w-9 h-9 rounded-2xl overflow-hidden bg-gradient-to-br from-indigo-500 to-blue-600 flex items-center justify-center text-xs font-black text-white shadow-md shadow-indigo-100 shrink-0">
                           {avatarUrl(u) ? (
                             <img src={avatarUrl(u)} alt={displayFullName(u)} className="w-full h-full object-cover" />
                           ) : (
                             <span>{initials(u)}</span>
                           )}
                         </div>
-                        <span className={`w-2 h-2 rounded-full ${online? 'bg-emerald-500':'bg-gray-300'}`}></span>
-                        <div className="flex items-center gap-2">
-                          <div className="font-medium text-sm">{displayFullName(u)}</div>
-                          <span className={`text-[10px] px-1.5 py-0.5 rounded-full border ${roleBadgeClass(u.role)}`}>{roleLabelMap[u.role] || u.role}</span>
+                        <span className={`w-2 h-2 rounded-full shrink-0 ${online? 'bg-emerald-500':'bg-gray-300'}`}></span>
+                        <div className="flex min-w-0 items-center gap-1.5">
+                          <div className="truncate text-sm font-black text-slate-900">{displayFullName(u)}</div>
+                          <span className={`shrink-0 text-[9px] px-1.5 py-0.5 rounded-full border font-bold ${roleBadgeClass(u.role)}`}>{roleLabelMap[u.role] || u.role}</span>
                         </div>
                       </div>
                       {unread>0 && (
-                        <span className="text-[10px] bg-blue-600 text-white rounded-full px-2 py-0.5">{unread}</span>
+                        <span className="text-[10px] bg-indigo-600 text-white rounded-full px-2 py-0.5 font-black shadow-sm">{unread}</span>
                       )}
                     </div>
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="text-xs text-gray-500 truncate">
+                    <div className="mt-1 flex items-center justify-between gap-2 pl-12">
+                      <div className="text-xs text-slate-500 truncate">
                         {typing ? <span className="text-emerald-600">typing…</span> : (lastText || <span className="italic text-gray-400">No messages</span>)}
                       </div>
                       {lastTime && (
-                        <span className="text-[10px] text-gray-400 whitespace-nowrap">{fmtTime(lastTime)}</span>
+                        <span className="text-[10px] font-bold text-slate-400 whitespace-nowrap">{fmtTime(lastTime)}</span>
                       )}
                     </div>
                   </button>
                 )
               })}
               {!loadingUsers && sortedUsers.length===0 && (
-                <div className="p-3 text-sm text-gray-500">No messages yet. Add users to start messaging.</div>
+                <div className="m-3 rounded-2xl border border-dashed border-slate-200 bg-white p-6 text-center text-sm font-semibold text-slate-500 shadow-sm">No messages yet. Add users to start messaging.</div>
               )}
             </div>
           )}

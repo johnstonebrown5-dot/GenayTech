@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import AppLogo from '../components/AppLogo'
 import { Link } from 'react-router-dom'
 import { motion, AnimatePresence, useReducedMotion, useScroll, useTransform } from 'framer-motion'
@@ -20,7 +20,13 @@ import {
   ArrowRight,
   Mail,
   Phone,
-  LayoutDashboard
+  LayoutDashboard,
+  FileText,
+  Receipt,
+  CalendarDays,
+  School,
+  UserRoundCheck,
+  Send
 } from 'lucide-react'
 
 // Animation variants
@@ -176,7 +182,6 @@ export default function LandingPage() {
   const prefersReducedMotion = useReducedMotion()
   const { scrollY } = useScroll()
   const heroParallaxY = useTransform(scrollY, [0, 700], [0, 18])
-  const [heroSlide, setHeroSlide] = useState(0)
   const whatsappNumber = '+254796031071'
   const whatsappLink = `https://wa.me/${whatsappNumber.replace('+', '')}`
 
@@ -261,11 +266,137 @@ export default function LandingPage() {
     }
   ]
 
-  const heroImages = useMemo(() => ([
-    new URL('../../images/pexels-akelaphotography-448877.jpg', import.meta.url).href,
-    new URL('../../images/pexels-gabby-k-6289065.jpg', import.meta.url).href,
-    new URL('../../images/pexels-kwakugriffn-14554003.jpg', import.meta.url).href
-  ]), [])
+  const audience = [
+    'School owners',
+    'Admins',
+    'Teachers',
+    'Finance offices',
+    'Parents',
+    'Students'
+  ]
+
+  const proofStats = [
+    { value: 'One', label: 'secure dashboard' },
+    { value: '5+', label: 'school workflows' },
+    { value: '24/7', label: 'cloud access' },
+    { value: '99%', label: 'service availability' }
+  ]
+
+  const workflows = [
+    {
+      title: 'Enter marks and generate report cards',
+      desc: 'Teachers capture scores while admins review, publish, and print reports.',
+      icon: FileText,
+      color: 'text-indigo-700',
+      bg: 'bg-indigo-50'
+    },
+    {
+      title: 'Track fees, balances, and receipts',
+      desc: 'Finance teams see invoices, payments, arrears, and class fee status clearly.',
+      icon: Receipt,
+      color: 'text-emerald-700',
+      bg: 'bg-emerald-50'
+    },
+    {
+      title: 'Send parent messages fast',
+      desc: 'Reach parents with fee updates, announcements, and school communication.',
+      icon: Send,
+      color: 'text-amber-700',
+      bg: 'bg-amber-50'
+    },
+    {
+      title: 'Manage classes, subjects, and timetables',
+      desc: 'Keep teachers, students, lessons, and schedules organized in one place.',
+      icon: CalendarDays,
+      color: 'text-sky-700',
+      bg: 'bg-sky-50'
+    }
+  ]
+
+  const DashboardPreview = ({ compact = false }) => (
+    <div className={`rounded-[1.75rem] border border-slate-200 bg-white shadow-2xl shadow-slate-900/15 overflow-hidden ${compact ? '' : 'ring-1 ring-white/60'}`}>
+      <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50 px-4 py-3">
+        <div className="flex items-center gap-2">
+          <span className="h-3 w-3 rounded-full bg-rose-400" />
+          <span className="h-3 w-3 rounded-full bg-amber-400" />
+          <span className="h-3 w-3 rounded-full bg-emerald-400" />
+        </div>
+        <div className="text-[11px] font-bold text-slate-500">Genay School Dashboard</div>
+      </div>
+      <div className="grid grid-cols-[72px_1fr] min-h-[340px] bg-slate-50">
+        <div className="bg-slate-950 px-3 py-4">
+          <div className="mb-5 flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-600 text-white">
+            <School size={18} />
+          </div>
+          <div className="space-y-3">
+            {['bg-indigo-400', 'bg-slate-700', 'bg-slate-700', 'bg-slate-700', 'bg-slate-700'].map((c, i) => (
+              <div key={i} className={`h-8 rounded-xl ${c}`} />
+            ))}
+          </div>
+        </div>
+        <div className="p-4 sm:p-5">
+          <div className="mb-4 flex items-start justify-between gap-3">
+            <div>
+              <div className="text-xs font-bold uppercase tracking-widest text-indigo-600">Today</div>
+              <div className="mt-1 text-xl font-black text-slate-900">School overview</div>
+            </div>
+            <div className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">Live</div>
+          </div>
+          <div className="grid grid-cols-3 gap-2 sm:gap-3">
+            {[
+              ['Students', '842'],
+              ['Fees paid', '76%'],
+              ['Reports', 'Ready']
+            ].map(([label, value]) => (
+              <div key={label} className="rounded-2xl border border-slate-100 bg-white p-3">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{label}</div>
+                <div className="mt-2 text-lg font-black text-slate-900">{value}</div>
+              </div>
+            ))}
+          </div>
+          <div className="mt-4 grid gap-3 lg:grid-cols-[1.1fr_0.9fr]">
+            <div className="rounded-2xl border border-slate-100 bg-white p-4">
+              <div className="mb-3 flex items-center justify-between">
+                <div className="text-sm font-black text-slate-900">Marks entry</div>
+                <div className="text-[11px] font-bold text-indigo-600">Term 2</div>
+              </div>
+              <div className="space-y-2">
+                {[
+                  ['Mathematics', '88%'],
+                  ['English', '74%'],
+                  ['Science', '81%']
+                ].map(([label, value]) => (
+                  <div key={label} className="grid grid-cols-[1fr_48px] items-center gap-3">
+                    <div className="h-2 rounded-full bg-slate-100">
+                      <div className="h-2 rounded-full bg-indigo-500" style={{ width: value }} />
+                    </div>
+                    <div className="text-right text-xs font-bold text-slate-600">{value}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="rounded-2xl border border-slate-100 bg-white p-4">
+              <div className="mb-3 text-sm font-black text-slate-900">Recent actions</div>
+              <div className="space-y-2">
+                {[
+                  ['Fee receipt sent', Receipt],
+                  ['Report cards ready', FileText],
+                  ['Parent SMS queued', MessageSquare]
+                ].map(([label, Icon]) => (
+                  <div key={label} className="flex items-center gap-2 rounded-xl bg-slate-50 px-2.5 py-2">
+                    <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-white text-indigo-600">
+                      <Icon size={14} />
+                    </span>
+                    <span className="text-xs font-semibold text-slate-600">{label}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
 
   const borderPalettes = [
     'border-blue-200',
@@ -279,13 +410,53 @@ export default function LandingPage() {
     'border-slate-300'
   ]
 
-  useEffect(() => {
-    if (prefersReducedMotion) return
-    const id = window.setInterval(() => {
-      setHeroSlide((s) => (s + 1) % heroImages.length)
-    }, 4500)
-    return () => window.clearInterval(id)
-  }, [prefersReducedMotion, heroImages.length])
+  const featureCardStyles = [
+    {
+      shell: 'bg-gradient-to-br from-white via-blue-50/70 to-white',
+      glow: 'bg-blue-500/15',
+      pill: 'border-blue-100 bg-blue-50 text-blue-700'
+    },
+    {
+      shell: 'bg-gradient-to-br from-white via-indigo-50/70 to-white',
+      glow: 'bg-indigo-500/15',
+      pill: 'border-indigo-100 bg-indigo-50 text-indigo-700'
+    },
+    {
+      shell: 'bg-gradient-to-br from-white via-emerald-50/70 to-white',
+      glow: 'bg-emerald-500/15',
+      pill: 'border-emerald-100 bg-emerald-50 text-emerald-700'
+    },
+    {
+      shell: 'bg-gradient-to-br from-white via-amber-50/70 to-white',
+      glow: 'bg-amber-500/15',
+      pill: 'border-amber-100 bg-amber-50 text-amber-700'
+    },
+    {
+      shell: 'bg-gradient-to-br from-white via-rose-50/70 to-white',
+      glow: 'bg-rose-500/15',
+      pill: 'border-rose-100 bg-rose-50 text-rose-700'
+    },
+    {
+      shell: 'bg-gradient-to-br from-white via-purple-50/70 to-white',
+      glow: 'bg-purple-500/15',
+      pill: 'border-purple-100 bg-purple-50 text-purple-700'
+    },
+    {
+      shell: 'bg-gradient-to-br from-white via-cyan-50/70 to-white',
+      glow: 'bg-cyan-500/15',
+      pill: 'border-cyan-100 bg-cyan-50 text-cyan-700'
+    },
+    {
+      shell: 'bg-gradient-to-br from-white via-teal-50/70 to-white',
+      glow: 'bg-teal-500/15',
+      pill: 'border-teal-100 bg-teal-50 text-teal-700'
+    },
+    {
+      shell: 'bg-gradient-to-br from-white via-slate-50 to-white',
+      glow: 'bg-slate-500/15',
+      pill: 'border-slate-200 bg-slate-50 text-slate-700'
+    }
+  ]
 
   return (
     <div className="min-h-screen bg-slate-50/30 selection:bg-indigo-100 selection:text-indigo-900">
@@ -381,54 +552,13 @@ export default function LandingPage() {
       </nav>
 
       {/* Hero Section */}
-      <section id="hero" className="relative pt-32 pb-20 lg:pt-48 lg:pb-32 overflow-hidden">
-        {/* Mobile background carousel */}
-        <div className="absolute inset-0 lg:hidden">
-          {prefersReducedMotion ? (
-            <div
-              className="absolute inset-0 bg-center bg-cover"
-              style={{ backgroundImage: `url('${heroImages[0]}')` }}
-            />
-          ) : (
-            <AnimatePresence mode="sync" initial={false}>
-              <motion.div
-                key={heroSlide}
-                className="absolute inset-0 bg-center bg-cover will-change-transform"
-                style={{ backgroundImage: `url('${heroImages[heroSlide]}')` }}
-                initial={{ opacity: 0, scale: 1.06 }}
-                animate={{ opacity: 1, scale: 1.0 }}
-                exit={{ opacity: 0, scale: 1.02 }}
-                transition={{ opacity: { duration: 0.9, ease: 'easeInOut' }, scale: { duration: 4.6, ease: 'easeOut' } }}
-              />
-            </AnimatePresence>
-          )}
-          <div className="absolute inset-0 bg-slate-950/45" />
-          <div className="absolute inset-0 bg-gradient-to-b from-white/55 via-white/25 to-white/70" />
-        </div>
-
-        {/* Desktop background carousel */}
-        <div className="absolute inset-0 hidden lg:block">
-          {prefersReducedMotion ? (
-            <div
-              className="absolute inset-0 bg-right bg-cover"
-              style={{ backgroundImage: `url('${heroImages[0]}')` }}
-            />
-          ) : (
-            <AnimatePresence mode="sync" initial={false}>
-              <motion.div
-                key={heroSlide}
-                className="absolute inset-0 bg-right bg-cover will-change-transform"
-                style={{ backgroundImage: `url('${heroImages[heroSlide]}')` }}
-                initial={{ opacity: 0, scale: 1.04 }}
-                animate={{ opacity: 1, scale: 1.0 }}
-                exit={{ opacity: 0, scale: 1.02 }}
-                transition={{ opacity: { duration: 0.9, ease: 'easeInOut' }, scale: { duration: 5.2, ease: 'easeOut' } }}
-              />
-            </AnimatePresence>
-          )}
-          <div className="absolute inset-0 bg-slate-950/25" />
-          <div className="absolute inset-0 bg-gradient-to-r from-white/95 via-white/85 to-white/40" />
-        </div>
+      <section id="hero" className="relative pt-24 pb-14 sm:pt-32 sm:pb-20 lg:pt-48 lg:pb-32 overflow-hidden">
+        {/* Squared background */}
+        <div className="absolute inset-0 bg-gradient-to-br from-white via-indigo-50/80 to-sky-50" />
+        <div aria-hidden="true" className="absolute inset-0 bg-tech-grid opacity-100" />
+        <div aria-hidden="true" className="absolute inset-0 bg-[linear-gradient(to_right,rgba(79,70,229,0.18)_1px,transparent_1px),linear-gradient(to_bottom,rgba(79,70,229,0.18)_1px,transparent_1px)] bg-[size:32px_32px]" />
+        <div aria-hidden="true" className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(79,70,229,0.16),transparent_28%),radial-gradient(circle_at_82%_28%,rgba(14,165,233,0.14),transparent_30%),radial-gradient(circle_at_72%_82%,rgba(16,185,129,0.12),transparent_28%)]" />
+        <div aria-hidden="true" className="absolute inset-0 bg-gradient-to-b from-white/75 via-white/40 to-white/90" />
 
         {/* Abstract background elements */}
         <div className="absolute top-0 left-1/2 -z-10 h-[1000px] w-[1000px] -translate-x-1/2 [mask-image:radial-gradient(closest-side,white,transparent)]">
@@ -443,19 +573,19 @@ export default function LandingPage() {
               variants={staggerContainer}
               className="max-w-2xl relative z-10"
             >
-              <div className="lg:rounded-none lg:bg-transparent lg:backdrop-blur-0 lg:ring-0 lg:shadow-none lg:p-0">
-              <motion.div variants={heroFlyInRight} className="inline-flex items-center gap-2 rounded-full bg-indigo-50/90 px-4 py-1.5 text-sm font-semibold text-indigo-700 ring-1 ring-inset ring-indigo-700/10 mb-6">
+              <div className="rounded-[1.75rem] bg-white/60 p-4 shadow-xl shadow-indigo-950/5 ring-1 ring-white/70 backdrop-blur-sm sm:rounded-none sm:bg-transparent sm:p-0 sm:shadow-none sm:ring-0 sm:backdrop-blur-0 lg:rounded-none lg:bg-transparent lg:backdrop-blur-0 lg:ring-0 lg:shadow-none lg:p-0">
+              <motion.div variants={heroFlyInRight} className="inline-flex max-w-full items-center gap-2 rounded-full bg-indigo-50/90 px-3 py-1.5 text-[11px] sm:px-4 sm:text-sm font-semibold text-indigo-700 ring-1 ring-inset ring-indigo-700/10 mb-5 sm:mb-6">
                 <Zap size={14} className="fill-indigo-700" />
-                <span>All-in-one School Management</span>
+                <span className="truncate">All-in-one School Management</span>
               </motion.div>
               
-              <motion.h1 variants={heroFlyInUp} className="text-4xl lg:text-6xl font-extrabold tracking-tight text-slate-900 leading-[1.1]">
+              <motion.h1 variants={heroFlyInUp} className="text-[2.35rem] sm:text-4xl lg:text-6xl font-extrabold tracking-tight text-slate-900 leading-[1.02] sm:leading-[1.1]">
                 Run your school <br />
                 <span className="text-indigo-600">smarter</span> with Genay Technologies
               </motion.h1>
               
-              <div className="mt-6 w-full rounded-2xl bg-white/55 backdrop-blur-sm ring-1 ring-white/30 p-4 sm:p-0 sm:bg-transparent sm:backdrop-blur-0 sm:ring-0 lg:bg-transparent lg:p-0">
-                <motion.p variants={heroFlyInUp} className="text-base lg:text-lg leading-relaxed text-slate-700 sm:text-slate-600">
+              <div className="mt-5 sm:mt-6 w-full rounded-2xl bg-white/50 backdrop-blur-sm ring-1 ring-white/40 p-3.5 sm:p-0 sm:bg-transparent sm:backdrop-blur-0 sm:ring-0 lg:bg-transparent lg:p-0">
+                <motion.p variants={heroFlyInUp} className="text-[13px] sm:text-base lg:text-lg leading-relaxed text-slate-700 sm:text-slate-600">
                   A modern, end-to-end platform for schools to manage{' '}
                   <motion.span
                     className="font-semibold text-slate-900 sm:text-slate-800"
@@ -500,15 +630,15 @@ export default function LandingPage() {
                 </motion.p>
               </div>
               
-              <motion.div variants={heroFlyInUp} className="mt-10 flex flex-wrap gap-4">
+              <motion.div variants={heroFlyInUp} className="mt-7 sm:mt-10 grid grid-cols-2 gap-3 sm:flex sm:flex-wrap sm:gap-4">
                 <MotionLink
                   to="/app"
                   whileHover={prefersReducedMotion ? undefined : { y: -2, scale: 1.01 }}
                   whileTap={prefersReducedMotion ? undefined : { scale: 0.98 }}
                   transition={prefersReducedMotion ? undefined : { type: 'spring', stiffness: 420, damping: 25 }}
-                  className={`group px-5 py-3 text-sm sm:px-8 sm:py-4 sm:text-lg ${btnPrimary}`}
+                  className={`group px-4 py-3 text-xs sm:px-8 sm:py-4 sm:text-lg ${btnPrimary}`}
                 >
-                  Get Started
+                  Request Demo
                   <ArrowRight size={18} className="transition-transform group-hover:translate-x-1 sm:hidden" />
                   <ArrowRight size={20} className="transition-transform group-hover:translate-x-1 hidden sm:block" />
                 </MotionLink>
@@ -517,13 +647,13 @@ export default function LandingPage() {
                   whileHover={prefersReducedMotion ? undefined : { y: -2 }}
                   whileTap={prefersReducedMotion ? undefined : { scale: 0.99 }}
                   transition={prefersReducedMotion ? undefined : { type: 'spring', stiffness: 420, damping: 25 }}
-                  className={`px-5 py-3 text-sm sm:px-8 sm:py-4 sm:text-lg ${btnSecondary}`}
+                  className={`px-4 py-3 text-xs sm:px-8 sm:py-4 sm:text-lg ${btnSecondary}`}
                 >
                   View Pricing
                 </motion.a>
               </motion.div>
               
-              <motion.div variants={heroFlyInUp} className="mt-10 sm:mt-12 flex flex-wrap items-center gap-x-4 sm:gap-x-8 gap-y-2 sm:gap-y-3 border-t border-slate-200 pt-6 sm:pt-8">
+              <motion.div variants={heroFlyInUp} className="mt-7 sm:mt-12 grid grid-cols-3 gap-2 border-t border-slate-200/80 pt-5 sm:flex sm:flex-wrap sm:items-center sm:gap-x-8 sm:gap-y-3 sm:pt-8">
                 {[
                   { label: 'Secure', color: 'bg-emerald-500', Icon: ShieldCheck, delay: 0 },
                   { label: 'Reliable', color: 'bg-indigo-500', Icon: Users, delay: 0.1 },
@@ -533,7 +663,7 @@ export default function LandingPage() {
                     key={label}
                     variants={descriptorVariant}
                     transition={{ duration: 0.5, delay }}
-                    className="flex items-center gap-1.5 sm:gap-2"
+                    className="justify-center rounded-full bg-white/60 px-2 py-1.5 ring-1 ring-slate-200/70 flex items-center gap-1.5 sm:bg-transparent sm:px-0 sm:py-0 sm:ring-0 sm:gap-2"
                   >
                     <motion.div
                       aria-hidden="true"
@@ -562,7 +692,7 @@ export default function LandingPage() {
                       <Icon size={12} className="sm:hidden" />
                       <Icon size={14} className="hidden sm:block" />
                     </motion.span>
-                    <span className="text-[11px] sm:text-sm font-semibold text-slate-500 uppercase tracking-wide">{label}</span>
+                    <span className="text-[9px] sm:text-sm font-semibold text-slate-500 uppercase tracking-wide">{label}</span>
                   </motion.div>
                 ))}
               </motion.div>
@@ -610,6 +740,76 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* Product Evidence Section */}
+      <section className="bg-white py-12 sm:py-20 border-y border-slate-100">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="grid gap-8 sm:gap-10 lg:grid-cols-[0.95fr_1.05fr] lg:items-center">
+            <LazySection>
+              <div className="max-w-xl">
+                <h2 className="text-[11px] sm:text-sm font-bold text-indigo-600 uppercase tracking-[0.2em] mb-3 sm:mb-4">Product Preview</h2>
+                <h3 className="text-2xl font-extrabold tracking-tight text-slate-900 sm:text-4xl">
+                  See the school operating system behind the promise
+                </h3>
+                <p className="mt-4 sm:mt-5 text-sm sm:text-base leading-relaxed text-slate-600">
+                  Genay Technologies brings academics, fees, exams, messages, students, and reports into one practical workspace for daily school operations.
+                </p>
+                <div className="mt-5 sm:mt-6 flex flex-wrap gap-2">
+                  {audience.map((item) => (
+                    <span key={item} className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-bold text-slate-700">
+                      {item}
+                    </span>
+                  ))}
+                </div>
+                <div className="mt-6 sm:mt-8 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  {proofStats.map((stat) => (
+                    <div key={stat.label} className="rounded-2xl border border-slate-200 bg-white p-3 sm:p-4 shadow-sm">
+                      <div className="text-xl sm:text-2xl font-black text-slate-900">{stat.value}</div>
+                      <div className="mt-1 text-xs font-semibold text-slate-500">{stat.label}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </LazySection>
+            <LazySection>
+              <div className="max-h-[520px] overflow-hidden rounded-[1.75rem] sm:max-h-none sm:overflow-visible">
+              <DashboardPreview />
+              </div>
+            </LazySection>
+          </div>
+        </div>
+      </section>
+
+      {/* Workflow Section */}
+      <section className="bg-slate-50 py-14 sm:py-20">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="mb-10 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div className="max-w-2xl">
+              <h2 className="text-sm font-bold text-indigo-600 uppercase tracking-[0.2em] mb-4">Daily Workflows</h2>
+              <h3 className="text-3xl font-extrabold tracking-tight text-slate-900 sm:text-4xl">
+                Built around the work schools repeat every week
+              </h3>
+            </div>
+            <Link to="/trial" className={`px-5 py-3 text-sm sm:px-6 sm:py-3.5 sm:text-base ${btnPrimary}`}>
+              Book Demo
+              <ArrowRight size={18} />
+            </Link>
+          </div>
+          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+            {workflows.map((item) => (
+              <LazySection key={item.title}>
+                <div className="h-full rounded-3xl border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:shadow-xl hover:shadow-slate-900/10">
+                  <div className={`mb-5 flex h-12 w-12 items-center justify-center rounded-2xl ${item.bg} ${item.color}`}>
+                    <item.icon size={24} />
+                  </div>
+                  <h4 className="text-base font-black text-slate-900">{item.title}</h4>
+                  <p className="mt-3 text-sm leading-relaxed text-slate-600">{item.desc}</p>
+                </div>
+              </LazySection>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* Stats/Compare Section */}
       <section className="bg-white py-12 border-y border-slate-100">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
@@ -652,34 +852,62 @@ export default function LandingPage() {
       </section>
 
       {/* Features Grid */}
-      <section id="features" className="py-24 lg:py-32 bg-slate-50">
+      <section id="features" className="relative overflow-hidden py-24 lg:py-32 bg-gradient-to-b from-slate-50 via-white to-slate-50">
+        <div aria-hidden="true" className="absolute inset-0 bg-tech-grid opacity-70" />
+        <div aria-hidden="true" className="absolute left-1/2 top-10 h-64 w-[42rem] -translate-x-1/2 rounded-full bg-indigo-100/50 blur-3xl" />
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="text-center max-w-3xl mx-auto mb-20">
-            <h2 className="text-sm font-bold text-indigo-600 uppercase tracking-[0.2em] mb-4">Core Modules</h2>
+          <div className="relative text-center max-w-3xl mx-auto mb-20">
+            <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-indigo-100 bg-white/80 px-4 py-2 text-xs font-black uppercase tracking-[0.2em] text-indigo-600 shadow-sm">
+              <Zap size={14} />
+              Core Modules
+            </div>
             <h3 className="text-4xl font-extrabold text-slate-900 tracking-tight sm:text-5xl">
               Everything you need to manage a modern school
             </h3>
             <p className="mt-6 text-lg text-slate-600">
               Powerful modules designed for Administrators, Teachers, Finance teams, Students, and Parents.
             </p>
+            <div className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-4">
+              {['Academics', 'Finance', 'Messaging', 'Analytics'].map((item) => (
+                <div key={item} className="rounded-2xl border border-slate-200 bg-white/85 px-4 py-3 text-sm font-black text-slate-700 shadow-sm">
+                  {item}
+                </div>
+              ))}
+            </div>
           </div>
           
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-8">
+          <div className="relative grid sm:grid-cols-2 lg:grid-cols-3 gap-8">
             {features.map((f, idx) => {
               const isExpanded = expandedFeature === idx
+              const cardStyle = featureCardStyles[idx % featureCardStyles.length]
               return (
                 <LazySection key={f.title}>
-                  <div className={`group relative h-full rounded-3xl border ${borderPalettes[idx % borderPalettes.length]} bg-white p-6 sm:p-8 shadow-lg shadow-slate-900/10 transition-all hover:border-indigo-100 hover:shadow-2xl hover:shadow-indigo-500/20 flex flex-col`}>
-                    <div className={`mb-6 flex h-14 w-14 items-center justify-center rounded-2xl ${f.bg} ${f.color} transition-transform group-hover:scale-110 group-hover:rotate-3`}>
-                      <f.icon size={28} />
+                  <div className={`group relative h-full overflow-hidden rounded-3xl border ${borderPalettes[idx % borderPalettes.length]} ${cardStyle.shell} p-6 sm:p-8 shadow-lg shadow-slate-900/10 transition-all duration-300 hover:-translate-y-1.5 hover:border-indigo-100 hover:shadow-2xl hover:shadow-indigo-500/20 flex flex-col`}>
+                    <div aria-hidden="true" className={`absolute -right-12 -top-12 h-36 w-36 rounded-full ${cardStyle.glow} blur-3xl transition-transform duration-500 group-hover:scale-125`} />
+                    <div aria-hidden="true" className="absolute inset-x-6 top-0 h-1 rounded-b-full bg-gradient-to-r from-transparent via-indigo-400/70 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+                    <div className="relative flex h-full flex-col">
+                      <div className="mb-6 flex items-start justify-between gap-4">
+                        <div className={`flex h-14 w-14 items-center justify-center rounded-2xl ${f.bg} ${f.color} ring-1 ring-white/80 shadow-sm transition-transform group-hover:scale-110 group-hover:rotate-3`}>
+                          <f.icon size={28} />
+                        </div>
+                        <span className={`rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-widest ${cardStyle.pill}`}>
+                          Module {idx + 1}
+                        </span>
+                      </div>
+                    <h4 className="text-lg sm:text-xl font-black text-slate-900 mb-2.5 sm:mb-3">{f.title}</h4>
+                    <p className="text-sm sm:text-base text-slate-600 leading-relaxed mb-5">{f.desc}</p>
+                    <div className="mb-5 flex flex-wrap gap-2">
+                      {['Fast setup', 'Role access', 'Reports'].slice(0, idx % 3 + 1).map((tag) => (
+                        <span key={tag} className="rounded-full bg-white/70 px-2.5 py-1 text-[11px] font-bold text-slate-500 ring-1 ring-slate-200/70">
+                          {tag}
+                        </span>
+                      ))}
                     </div>
-                    <h4 className="text-lg sm:text-xl font-bold text-slate-900 mb-2.5 sm:mb-3">{f.title}</h4>
-                    <p className="text-sm sm:text-base text-slate-600 leading-relaxed mb-4">{f.desc}</p>
                     
                     <div className="mt-auto">
                       <button 
                         onClick={() => setExpandedFeature(isExpanded ? null : idx)}
-                        className="text-sm font-bold text-indigo-600 hover:text-indigo-700 flex items-center gap-1 transition-colors"
+                        className="inline-flex items-center gap-2 rounded-full bg-white/80 px-3 py-2 text-sm font-bold text-indigo-600 ring-1 ring-indigo-100 transition-colors hover:bg-indigo-50 hover:text-indigo-700"
                       >
                         {isExpanded ? 'Read Less' : 'Read More'}
                         <motion.span
@@ -706,6 +934,7 @@ export default function LandingPage() {
                         )}
                       </AnimatePresence>
                     </div>
+                    </div>
                   </div>
                 </LazySection>
               );
@@ -716,32 +945,56 @@ export default function LandingPage() {
 
       {/* Advantages Section */}
       <section id="advantages" className="relative py-16 sm:py-20 lg:py-32 overflow-hidden">
-        <div className="absolute inset-0 bg-slate-900" />
-        <div className="absolute inset-0 bg-gradient-to-br from-indigo-900/50 to-purple-900/50" />
+        <div className="absolute inset-0 bg-[#171143]" />
+        <div aria-hidden="true" className="absolute inset-0 bg-[linear-gradient(to_right,rgba(255,255,255,0.075)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.075)_1px,transparent_1px)] bg-[size:44px_44px]" />
+        <div aria-hidden="true" className="absolute inset-0 bg-[radial-gradient(circle_at_18%_28%,rgba(99,102,241,0.34),transparent_30%),radial-gradient(circle_at_82%_20%,rgba(14,165,233,0.18),transparent_28%),radial-gradient(circle_at_70%_90%,rgba(168,85,247,0.24),transparent_30%)]" />
+        <div aria-hidden="true" className="absolute inset-0 bg-gradient-to-b from-slate-950/30 via-transparent to-slate-950/40" />
         
         <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="grid lg:grid-cols-2 gap-12 lg:gap-20 items-center">
             <LazySection>
-              <h2 className="text-sm font-bold text-indigo-400 uppercase tracking-[0.2em] mb-4">Why Us</h2>
-              <h3 className="text-2xl sm:text-4xl font-extrabold text-white tracking-tight lg:text-5xl mb-5 sm:mb-8">
+              <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-4 py-2 text-xs font-black uppercase tracking-[0.2em] text-indigo-200 backdrop-blur">
+                <ShieldCheck size={15} />
+                Why Us
+              </div>
+              <h3 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight lg:text-5xl mb-4">
                 The Genay Technologies Advantage
               </h3>
-              <div className="space-y-3 sm:space-y-6">
+              <p className="mb-7 max-w-xl text-sm sm:text-base leading-relaxed text-indigo-100/80">
+                A focused operating system for schools that need fewer spreadsheets, faster decisions, and cleaner communication between departments.
+              </p>
+              <div className="overflow-hidden rounded-[1.75rem] border border-white/15 bg-white shadow-2xl shadow-indigo-950/30">
+                <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50 px-4 py-3">
+                  <div className="flex items-center gap-2">
+                    <span className="h-3 w-3 rounded-full bg-rose-400" />
+                    <span className="h-3 w-3 rounded-full bg-amber-400" />
+                    <span className="h-3 w-3 rounded-full bg-emerald-400" />
+                  </div>
+                  <div className="text-[11px] font-bold text-slate-500">Advantage Overview</div>
+                </div>
+                <div className="grid gap-3 p-4 sm:p-5">
                 {[
-                  'Single source of truth for all student & academic data.',
-                  'Automated billing and receipts reduce manual overhead.',
-                  'Streamlined parent communication via digital statements.',
-                  'Dynamic lesson planning and automated scheduling.',
-                  'Real-time academic performance tracking with analytics.',
-                  'Integrated school wallet for secure cashless transactions.'
-                ].map((text, i) => (
-                  <div key={i} className="flex gap-4 items-start">
-                    <div className="mt-1 flex-shrink-0 flex h-6 w-6 items-center justify-center rounded-full bg-indigo-500/20 text-indigo-400">
-                      <Check size={14} strokeWidth={3} />
+                  ['Student data', 'Single source of truth for all student and academic records.'],
+                  ['Finance', 'Automated billing and receipts reduce manual overhead.'],
+                  ['Parents', 'Streamlined parent communication via digital statements.'],
+                  ['Timetable', 'Dynamic lesson planning and automated scheduling.'],
+                  ['Performance', 'Real-time academic performance tracking with analytics.'],
+                  ['Wallet', 'Integrated school wallet for secure cashless transactions.']
+                ].map(([label, text], i) => (
+                  <div key={label} className="group grid grid-cols-[36px_1fr_auto] items-center gap-3 rounded-2xl border border-slate-100 bg-slate-50/80 px-3.5 py-3 transition hover:border-indigo-100 hover:bg-indigo-50/50">
+                    <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white text-indigo-600 shadow-sm ring-1 ring-slate-200">
+                      <span className="text-xs font-black">{String(i + 1).padStart(2, '0')}</span>
                     </div>
-                    <p className="text-sm sm:text-lg text-slate-300 font-medium leading-relaxed">{text}</p>
+                    <div className="min-w-0">
+                      <div className="text-[11px] font-black uppercase tracking-widest text-indigo-600">{label}</div>
+                      <p className="mt-1 text-sm font-semibold leading-relaxed text-slate-700">{text}</p>
+                    </div>
+                    <div className="hidden h-8 w-8 items-center justify-center rounded-full bg-emerald-50 text-emerald-600 ring-1 ring-emerald-100 sm:flex">
+                      <Check size={15} strokeWidth={3} />
+                    </div>
                   </div>
                 ))}
+                </div>
               </div>
               
               <div className="mt-10 sm:mt-12 grid grid-cols-1 sm:flex sm:flex-wrap gap-3 sm:gap-4">
@@ -756,21 +1009,38 @@ export default function LandingPage() {
             </LazySection>
 
             <LazySection>
-              <div className="relative">
-                <div className="aspect-[4/3] sm:aspect-square w-full max-w-sm sm:max-w-lg mx-auto rounded-[2.25rem] sm:rounded-[3rem] bg-indigo-500/10 border border-white/10 backdrop-blur-sm p-8 sm:p-12 flex flex-col items-center justify-center text-center">
-                  <motion.div 
-                    animate={{ scale: [1, 1.1, 1] }}
-                    transition={{ duration: 3, repeat: Infinity }}
-                    className="text-6xl sm:text-8xl font-black text-white mb-3 sm:mb-4"
-                  >
-                    99.9%
-                  </motion.div>
-                  <div className="text-xl sm:text-2xl font-bold text-indigo-300 mb-2 uppercase tracking-widest">Uptime</div>
-                  <div className="text-sm sm:text-base text-slate-400 max-w-xs">Built on reliable cloud infrastructure for zero interruptions.</div>
+              <div className="relative mx-auto max-w-lg">
+                <div className="overflow-hidden rounded-[1.75rem] border border-white/15 bg-white shadow-2xl shadow-indigo-950/30">
+                  <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50 px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      <span className="h-3 w-3 rounded-full bg-rose-400" />
+                      <span className="h-3 w-3 rounded-full bg-amber-400" />
+                      <span className="h-3 w-3 rounded-full bg-emerald-400" />
+                    </div>
+                    <div className="text-[11px] font-bold text-slate-500">System Status</div>
+                  </div>
+                  <div className="grid gap-3 p-4 sm:p-5">
+                      {[
+                        ['Uptime', '99.9% service availability for daily school operations.'],
+                        ['Security', 'Enterprise secure access with role-based permissions.'],
+                        ['Reports', 'Fast report cards and performance views for school teams.'],
+                        ['Live data', 'Current records across academics, finance, and communication.']
+                      ].map(([label, text], i) => (
+                        <div key={label} className="group grid grid-cols-[36px_1fr_auto] items-center gap-3 rounded-2xl border border-slate-100 bg-slate-50/80 px-3.5 py-3 transition hover:border-indigo-100 hover:bg-indigo-50/50">
+                          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white text-indigo-600 shadow-sm ring-1 ring-slate-200">
+                            <span className="text-xs font-black">{String(i + 1).padStart(2, '0')}</span>
+                          </div>
+                          <div className="min-w-0">
+                            <div className="text-[11px] font-black uppercase tracking-widest text-indigo-600">{label}</div>
+                            <p className="mt-1 text-sm font-semibold leading-relaxed text-slate-700">{text}</p>
+                          </div>
+                          <div className="hidden h-8 w-8 items-center justify-center rounded-full bg-emerald-50 text-emerald-600 ring-1 ring-emerald-100 sm:flex">
+                            <Check size={15} strokeWidth={3} />
+                          </div>
+                        </div>
+                      ))}
+                  </div>
                 </div>
-                {/* Decorative particles */}
-                <div className="absolute top-0 right-0 h-24 w-24 bg-indigo-500/20 blur-3xl rounded-full" />
-                <div className="absolute bottom-0 left-0 h-32 w-32 bg-purple-500/20 blur-3xl rounded-full" />
               </div>
             </LazySection>
           </div>
@@ -790,10 +1060,10 @@ export default function LandingPage() {
             </p>
           </div>
 
-          <div className="grid md:grid-cols-2 gap-8 max-w-5xl mx-auto">
+          <div className="grid md:grid-cols-2 xl:grid-cols-4 gap-6 max-w-7xl mx-auto">
             {/* Plan 1 */}
             <LazySection>
-              <div className="relative flex flex-col h-full rounded-[2.25rem] sm:rounded-[2.5rem] bg-white p-6 sm:p-10 shadow-2xl shadow-slate-900/10 ring-1 ring-slate-200 transition-all hover:-translate-y-2 hover:shadow-2xl hover:shadow-indigo-500/20">
+              <div className="relative flex flex-col h-full rounded-[2.25rem] sm:rounded-[2.5rem] bg-white p-6 sm:p-8 shadow-2xl shadow-slate-900/10 ring-1 ring-slate-200 transition-all hover:-translate-y-2 hover:shadow-2xl hover:shadow-indigo-500/20">
                 <div className="mb-5 sm:mb-8">
                   <h4 className="text-sm sm:text-lg font-bold text-slate-900">Per Student Monthly</h4>
                   <div className="mt-2.5 sm:mt-4 flex items-baseline gap-1">
@@ -821,8 +1091,66 @@ export default function LandingPage() {
 
             {/* Plan 2 */}
             <LazySection>
-              <div className="relative flex flex-col h-full rounded-[2.25rem] sm:rounded-[2.5rem] bg-indigo-600 p-6 sm:p-10 shadow-2xl shadow-indigo-900/40 transition-all hover:-translate-y-2 hover:shadow-2xl hover:shadow-indigo-900/50">
-                <div className="absolute top-0 right-10 -translate-y-1/2 rounded-full bg-amber-400 px-4 py-1 text-xs font-black uppercase tracking-widest text-slate-900">
+              <div className="relative flex flex-col h-full rounded-[2.25rem] sm:rounded-[2.5rem] bg-white p-6 sm:p-8 shadow-2xl shadow-slate-900/10 ring-1 ring-slate-200 transition-all hover:-translate-y-2 hover:shadow-2xl hover:shadow-emerald-500/20">
+                <div className="absolute top-0 right-8 -translate-y-1/2 rounded-full bg-emerald-100 px-4 py-1 text-xs font-black uppercase tracking-widest text-emerald-800">
+                  Popular
+                </div>
+                <div className="mb-5 sm:mb-8">
+                  <h4 className="text-sm sm:text-lg font-bold text-slate-900">Termly School Plan</h4>
+                  <div className="mt-2.5 sm:mt-4 flex items-baseline gap-1">
+                    <span className="text-2xl sm:text-4xl font-black text-slate-900">KSh 80</span>
+                    <span className="text-[11px] sm:text-sm text-slate-500 font-medium">/ student / term</span>
+                  </div>
+                  <p className="mt-2.5 sm:mt-4 text-xs sm:text-base text-slate-600">Best for schools that prefer billing around academic terms.</p>
+                </div>
+                
+                <ul className="space-y-2.5 sm:space-y-4 mb-7 sm:mb-10 flex-1">
+                  {['Term-based invoicing', 'Exam and report card tools', 'Parent communication', 'Finance summaries', 'Teacher access included'].map((f) => (
+                    <li key={f} className="flex gap-3 text-slate-600">
+                      <Check size={16} className="text-emerald-600 flex-shrink-0 mt-0.5 sm:hidden" />
+                      <Check size={18} className="text-emerald-600 flex-shrink-0 mt-0.5 hidden sm:block" />
+                      <span className="text-[11px] sm:text-sm font-medium">{f}</span>
+                    </li>
+                  ))}
+                </ul>
+                
+                <a href={whatsappLink} target="_blank" rel="noreferrer" className={`w-full py-3 sm:py-4 text-sm sm:text-lg text-center ${btnSecondary}`}>
+                  Discuss Plan
+                </a>
+              </div>
+            </LazySection>
+
+            {/* Plan 3 */}
+            <LazySection>
+              <div className="relative flex flex-col h-full rounded-[2.25rem] sm:rounded-[2.5rem] bg-slate-950 p-6 sm:p-8 shadow-2xl shadow-slate-900/30 ring-1 ring-slate-800 transition-all hover:-translate-y-2 hover:shadow-2xl hover:shadow-slate-900/50">
+                <div className="mb-5 sm:mb-8 text-white">
+                  <h4 className="text-sm sm:text-lg font-bold">Enterprise Monthly</h4>
+                  <div className="mt-2.5 sm:mt-4 flex items-baseline gap-1">
+                    <span className="text-2xl sm:text-4xl font-black">Custom</span>
+                  </div>
+                  <p className="mt-2.5 sm:mt-4 text-xs sm:text-base text-white/75">For multi-branch schools or institutions needing tailored support.</p>
+                </div>
+                
+                <ul className="space-y-2.5 sm:space-y-4 mb-7 sm:mb-10 flex-1">
+                  {['Multi-school setup', 'Advanced user permissions', 'Priority onboarding', 'Custom reports', 'Dedicated support channel'].map((f) => (
+                    <li key={f} className="flex gap-3 text-white/85">
+                      <Check size={16} className="text-sky-300 flex-shrink-0 mt-0.5 sm:hidden" />
+                      <Check size={18} className="text-sky-300 flex-shrink-0 mt-0.5 hidden sm:block" />
+                      <span className="text-[11px] sm:text-sm font-medium">{f}</span>
+                    </li>
+                  ))}
+                </ul>
+                
+                <a href="mailto:EduTrack46@gmail.com" className={`w-full py-3 sm:py-4 text-sm sm:text-lg text-center ${btnInverse}`}>
+                  Contact Sales
+                </a>
+              </div>
+            </LazySection>
+
+            {/* Plan 4 */}
+            <LazySection>
+              <div className="relative flex flex-col h-full rounded-[2.25rem] sm:rounded-[2.5rem] bg-indigo-600 p-6 sm:p-8 shadow-2xl shadow-indigo-900/40 transition-all hover:-translate-y-2 hover:shadow-2xl hover:shadow-indigo-900/50">
+                <div className="absolute top-0 right-8 -translate-y-1/2 rounded-full bg-amber-400 px-4 py-1 text-xs font-black uppercase tracking-widest text-slate-900">
                   Best Value
                 </div>
                 
@@ -855,50 +1183,113 @@ export default function LandingPage() {
       </section>
 
       {/* Contact Section */}
-      <section id="contact" className="relative py-24 lg:py-32 bg-slate-900 overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-r from-indigo-900/50 to-transparent" />
+      <section id="contact" className="relative py-24 lg:py-32 bg-slate-950 overflow-hidden">
+        <div aria-hidden="true" className="absolute inset-0 bg-[linear-gradient(to_right,rgba(255,255,255,0.06)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.06)_1px,transparent_1px)] bg-[size:44px_44px]" />
+        <div aria-hidden="true" className="absolute inset-0 bg-[radial-gradient(circle_at_18%_28%,rgba(79,70,229,0.34),transparent_30%),radial-gradient(circle_at_82%_20%,rgba(14,165,233,0.20),transparent_28%),radial-gradient(circle_at_70%_86%,rgba(168,85,247,0.24),transparent_32%)]" />
+        <div aria-hidden="true" className="absolute inset-0 bg-gradient-to-b from-slate-950/20 via-slate-950/45 to-slate-950" />
         <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="grid lg:grid-cols-2 items-center gap-10 lg:gap-0">
-            <div className="py-12 lg:py-20">
-                <h3 className="text-4xl font-extrabold text-white tracking-tight mb-6">
-                  Ready to transform your school?
-                </h3>
-                <p className="text-lg text-slate-300 mb-10">
-                  Book a free demo today and see how Genay Technologies can streamline your operations and improve learning outcomes.
-                </p>
-                
-                <div className="space-y-6 mb-12">
-                  <a href="mailto:EduTrack46@gmail.com" className="flex items-center gap-4 text-indigo-300 hover:text-white transition-colors">
-                    <div className="h-10 w-10 flex items-center justify-center rounded-xl bg-white/10">
+          <div className="grid lg:grid-cols-[0.95fr_1.05fr] items-center gap-10 lg:gap-16">
+            <div className="py-6 lg:py-12">
+              <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-4 py-2 text-xs font-black uppercase tracking-[0.2em] text-indigo-200 backdrop-blur">
+                <MessageSquare size={15} />
+                Book a Demo
+              </div>
+              <h3 className="text-4xl sm:text-5xl font-extrabold text-white tracking-tight mb-6">
+                Ready to transform your school?
+              </h3>
+              <p className="text-lg leading-relaxed text-slate-300 mb-8 max-w-xl">
+                See how Genay Technologies can streamline marks, fees, messages, reports, and daily school operations from one secure workspace.
+              </p>
+
+              <div className="mb-9 grid gap-3 sm:grid-cols-2">
+                <a href="mailto:EduTrack46@gmail.com" className="group rounded-2xl border border-white/10 bg-white/[0.08] p-4 backdrop-blur transition hover:bg-white/[0.12] hover:border-indigo-300/30">
+                  <div className="flex items-center gap-3">
+                    <div className="h-11 w-11 flex items-center justify-center rounded-2xl bg-white/10 text-indigo-200 ring-1 ring-white/10">
                       <Mail size={20} />
                     </div>
-                    <span className="font-semibold">EduTrack46@gmail.com</span>
-                  </a>
-                  <a href="tel:+254796031071" className="flex items-center gap-4 text-indigo-300 hover:text-white transition-colors">
-                    <div className="h-10 w-10 flex items-center justify-center rounded-xl bg-white/10">
+                    <div className="min-w-0">
+                      <div className="text-[11px] font-black uppercase tracking-widest text-indigo-200/80">Email</div>
+                      <div className="truncate text-sm font-bold text-white group-hover:text-indigo-100">EduTrack46@gmail.com</div>
+                    </div>
+                  </div>
+                </a>
+                <a href="tel:+254796031071" className="group rounded-2xl border border-white/10 bg-white/[0.08] p-4 backdrop-blur transition hover:bg-white/[0.12] hover:border-indigo-300/30">
+                  <div className="flex items-center gap-3">
+                    <div className="h-11 w-11 flex items-center justify-center rounded-2xl bg-white/10 text-indigo-200 ring-1 ring-white/10">
                       <Phone size={20} />
                     </div>
-                    <span className="font-semibold">0796 031 071</span>
-                  </a>
-                </div>
-                
-                <div className="flex flex-wrap gap-4">
-                  <Link to="/trial" className={`px-6 py-3.5 text-base sm:px-8 sm:py-4 sm:text-lg ${btnPrimary}`}>
-                    Request Demo
-                  </Link>
-                  <Link to="/login" className={`px-6 py-3.5 text-base sm:px-8 sm:py-4 sm:text-lg ${btnInverse}`}>
-                    Sign In
-                  </Link>
-                </div>
+                    <div className="min-w-0">
+                      <div className="text-[11px] font-black uppercase tracking-widest text-indigo-200/80">Phone</div>
+                      <div className="truncate text-sm font-bold text-white group-hover:text-indigo-100">0796 031 071</div>
+                    </div>
+                  </div>
+                </a>
+              </div>
+
+              <div className="mb-10 grid grid-cols-3 gap-3">
+                {[
+                  ['Demo', 'Free'],
+                  ['Setup', 'Guided'],
+                  ['Support', 'Direct']
+                ].map(([top, bottom]) => (
+                  <div key={top} className="rounded-2xl border border-white/10 bg-white/[0.07] px-3 py-3 text-center backdrop-blur">
+                    <div className="text-sm font-black text-white">{top}</div>
+                    <div className="mt-1 text-[11px] font-bold uppercase tracking-wider text-indigo-200/70">{bottom}</div>
+                  </div>
+                ))}
+              </div>
+              
+              <div className="flex flex-wrap gap-4">
+                <Link to="/trial" className={`px-6 py-3.5 text-base sm:px-8 sm:py-4 sm:text-lg ${btnPrimary}`}>
+                  Request Demo
+                  <ArrowRight size={20} />
+                </Link>
+                <a href={whatsappLink} target="_blank" rel="noreferrer" className={`px-6 py-3.5 text-base sm:px-8 sm:py-4 sm:text-lg ${btnInverse}`}>
+                  <MessageSquare size={20} />
+                  WhatsApp
+                </a>
+              </div>
             </div>
 
-            <div className="hidden lg:block h-full min-h-[520px] relative overflow-hidden rounded-[2.5rem]">
-              <div className="absolute inset-0 bg-indigo-600/20 backdrop-blur-[2px]" />
-              <img 
-                src={new URL('../../images/pexels-gabby-k-6289065.jpg', import.meta.url).href} 
-                className="w-full h-full object-cover" 
-                alt="Contact background" 
-              />
+            <div className="relative">
+              <div aria-hidden="true" className="absolute -inset-4 rounded-[3rem] bg-indigo-500/20 blur-3xl" />
+              <div className="relative overflow-hidden rounded-[2rem] border border-white/15 bg-white shadow-2xl shadow-indigo-950/40">
+                <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50 px-4 py-3">
+                  <div className="flex items-center gap-2">
+                    <span className="h-3 w-3 rounded-full bg-rose-400" />
+                    <span className="h-3 w-3 rounded-full bg-amber-400" />
+                    <span className="h-3 w-3 rounded-full bg-emerald-400" />
+                  </div>
+                  <div className="text-[11px] font-bold text-slate-500">Demo Request</div>
+                </div>
+                <div className="p-5 sm:p-7">
+                  <div className="mb-5 flex items-start justify-between gap-4">
+                    <div>
+                      <div className="text-xs font-black uppercase tracking-[0.2em] text-indigo-600">Implementation path</div>
+                      <div className="mt-1 text-2xl font-black text-slate-900">From demo to launch</div>
+                    </div>
+                    <div className="rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1.5 text-xs font-black text-emerald-700">Ready</div>
+                  </div>
+                  <div className="grid gap-3">
+                    {[
+                      ['01', 'Book demo', 'Share your school size, modules, and current workflow.'],
+                      ['02', 'Configure setup', 'Classes, users, subjects, fees, and permissions are prepared.'],
+                      ['03', 'Train teams', 'Admins, teachers, and finance users learn the daily workflows.'],
+                      ['04', 'Go live', 'Start managing marks, payments, messages, and reports.']
+                    ].map(([num, title, desc]) => (
+                      <div key={title} className="grid grid-cols-[42px_1fr] gap-3 rounded-2xl border border-slate-100 bg-slate-50/80 px-4 py-3">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-indigo-600 shadow-sm ring-1 ring-slate-200">
+                          <span className="text-xs font-black">{num}</span>
+                        </div>
+                        <div>
+                          <div className="text-sm font-black text-slate-900">{title}</div>
+                          <div className="mt-1 text-xs font-semibold leading-relaxed text-slate-600">{desc}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -938,4 +1329,3 @@ export default function LandingPage() {
     </div>
   )
 }
-

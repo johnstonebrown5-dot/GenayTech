@@ -351,11 +351,24 @@ export default function AdminDashboard(){
 
   return (
     <React.Fragment>
-      <div className="p-3 sm:p-4 md:p-6 lg:p-8 w-full space-y-6 md:space-y-8 [@media(max-height:800px)]:space-y-4 [@media(max-height:800px)]:p-4 [@media(max-height:720px)]:space-y-3 [@media(max-height:720px)]:p-3" style={{ fontSize: '60%' }}>
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Dashboard</h1>
-            <p className="text-gray-600 mt-1">Welcome back! Here's what's happening with your school.</p>
+      <div className="p-3 sm:p-4 md:p-6 lg:p-8 w-full space-y-5 md:space-y-8 [@media(max-height:800px)]:space-y-4 [@media(max-height:800px)]:p-4 [@media(max-height:720px)]:space-y-3 [@media(max-height:720px)]:p-3">
+        <div className="relative overflow-hidden rounded-3xl border border-white/70 bg-gradient-to-br from-white via-indigo-50/80 to-sky-50 p-4 shadow-xl shadow-slate-900/5 sm:bg-transparent sm:border-0 sm:shadow-none sm:p-0">
+          <div aria-hidden="true" className="absolute inset-0 bg-[linear-gradient(to_right,rgba(79,70,229,0.10)_1px,transparent_1px),linear-gradient(to_bottom,rgba(79,70,229,0.10)_1px,transparent_1px)] bg-[size:28px_28px] sm:hidden" />
+          <div className="relative flex items-start justify-between gap-3">
+            <div>
+              <div className="mb-2 inline-flex items-center gap-1.5 rounded-full border border-indigo-100 bg-white/80 px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-indigo-700 sm:hidden">
+                Live overview
+              </div>
+              <h1 className="text-2xl sm:text-2xl font-black tracking-tight text-gray-900">Dashboard</h1>
+              <p className="mt-1 max-w-xs text-xs leading-relaxed text-gray-600 sm:max-w-none sm:text-base">Welcome back. Here is what's happening with your school.</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => navigate('/admin/reports')}
+              className="hidden sm:inline-flex rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-bold text-gray-700 shadow-sm hover:bg-gray-50"
+            >
+              View reports
+            </button>
           </div>
         </div>
 
@@ -371,17 +384,22 @@ export default function AdminDashboard(){
           <React.Fragment>
             {/* Mobile: horizontal auto-advancing carousel */}
             <div className="sm:hidden">
-              <div ref={sliderRef} className="flex gap-4 overflow-x-auto snap-x snap-mandatory scroll-smooth pb-1">
+              <div ref={sliderRef} className="flex gap-3 overflow-x-auto snap-x snap-mandatory scroll-smooth pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                 {statCards.map(cfg => (
                   <button
                     key={cfg.title}
                     type="button"
                     onClick={() => navigate(cfg.to)}
-                    className="snap-center shrink-0 w-full text-left focus:outline-none"
+                    className="snap-center shrink-0 w-[86vw] text-left focus:outline-none"
                     aria-label={`Open ${cfg.title}`}
                   >
                     <StatCard {...cfg} />
                   </button>
+                ))}
+              </div>
+              <div className="mt-2 flex justify-center gap-1.5">
+                {statCards.map((cfg, idx) => (
+                  <span key={cfg.title} className={`h-1.5 rounded-full transition-all ${idx === activeSlide ? 'w-5 bg-indigo-600' : 'w-1.5 bg-slate-300'}`} />
                 ))}
               </div>
             </div>
@@ -402,18 +420,22 @@ export default function AdminDashboard(){
             </div>
 
             {/* Quick Actions */}
-            <div className="relative overflow-hidden rounded-2xl shadow-elevated p-5 text-white bg-gradient-to-r from-blue-700 via-blue-600 to-sky-500">
+            <div className="relative overflow-hidden rounded-3xl shadow-elevated p-4 sm:p-5 text-white bg-gradient-to-br from-indigo-700 via-blue-600 to-sky-500">
               {/* subtle top-right glow */}
-              <div className="pointer-events-none absolute -top-8 right-0 w-40 h-40 rounded-full bg-white/20 blur-2 opacity-20" />
-              <div className="flex items-center justify-between mb-3">
-                <h2 className="text-base font-semibold tracking-tight">Quick Actions</h2>
-                <span className="text-xs/5 bg-white/15 border border-white/20 px-2 py-1 rounded-full hidden sm:inline">Fast shortcuts</span>
+              <div className="pointer-events-none absolute -top-8 right-0 w-40 h-40 rounded-full bg-white/25 blur-2 opacity-30" />
+              <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_right,rgba(255,255,255,0.10)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.10)_1px,transparent_1px)] bg-[size:30px_30px]" />
+              <div className="relative flex items-center justify-between mb-4">
+                <div>
+                  <h2 className="text-base sm:text-lg font-black tracking-tight">Quick Actions</h2>
+                  <p className="mt-0.5 text-[11px] font-semibold text-white/70 sm:hidden">Common admin tasks</p>
+                </div>
+                <span className="text-xs/5 bg-white/15 border border-white/20 px-2 py-1 rounded-full">Fast shortcuts</span>
               </div>
               {/* On very small screens, allow horizontal scrolling for easier access */}
-              <div className="flex gap-3 overflow-x-auto sm:overflow-visible sm:grid sm:grid-cols-3 lg:grid-cols-6">
+              <div className="relative grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
                 <button
                   onClick={() => handleQuickAction('addStudent')}
-                  className="group min-w-[140px] sm:min-w-0 rounded-xl border border-white/20 bg-white/10 hover:bg-white/20 backdrop-blur-md p-3 text-center transition-all duration-200 hover:-translate-y-0.5 shadow-soft"
+                  className="group rounded-2xl border border-white/20 bg-white/12 hover:bg-white/20 backdrop-blur-md p-3 text-center transition-all duration-200 hover:-translate-y-0.5 shadow-soft"
                   aria-label="Add Student"
                 >
                   <div className="mx-auto mb-2 w-9 h-9 rounded-lg bg-white/20 flex items-center justify-center text-lg">➕</div>
@@ -421,7 +443,7 @@ export default function AdminDashboard(){
                 </button>
                 <button
                   onClick={() => handleQuickAction('addTeacher')}
-                  className="group min-w-[140px] sm:min-w-0 rounded-xl border border-white/20 bg-white/10 hover:bg-white/20 backdrop-blur-md p-3 text-center transition-all duration-200 hover:-translate-y-0.5 shadow-soft"
+                  className="group rounded-2xl border border-white/20 bg-white/12 hover:bg-white/20 backdrop-blur-md p-3 text-center transition-all duration-200 hover:-translate-y-0.5 shadow-soft"
                   aria-label="Add Teacher"
                 >
                   <div className="mx-auto mb-2 w-9 h-9 rounded-lg bg-white/20 flex items-center justify-center text-lg">👨‍🏫</div>
@@ -429,7 +451,7 @@ export default function AdminDashboard(){
                 </button>
                 <button
                   onClick={() => handleQuickAction('createExam')}
-                  className="group min-w-[140px] sm:min-w-0 rounded-xl border border-white/20 bg-white/10 hover:bg-white/20 backdrop-blur-md p-3 text-center transition-all duration-200 hover:-translate-y-0.5 shadow-soft"
+                  className="group rounded-2xl border border-white/20 bg-white/12 hover:bg-white/20 backdrop-blur-md p-3 text-center transition-all duration-200 hover:-translate-y-0.5 shadow-soft"
                   aria-label="Create Exam"
                 >
                   <div className="mx-auto mb-2 w-9 h-9 rounded-lg bg-white/20 flex items-center justify-center text-lg">📝</div>
@@ -437,7 +459,7 @@ export default function AdminDashboard(){
                 </button>
                 <button
                   onClick={() => handleQuickAction('viewReports')}
-                  className="group min-w-[140px] sm:min-w-0 rounded-xl border border-white/20 bg-white/10 hover:bg-white/20 backdrop-blur-md p-3 text-center transition-all duration-200 hover:-translate-y-0.5 shadow-soft"
+                  className="group rounded-2xl border border-white/20 bg-white/12 hover:bg-white/20 backdrop-blur-md p-3 text-center transition-all duration-200 hover:-translate-y-0.5 shadow-soft"
                   aria-label="View Reports"
                 >
                   <div className="mx-auto mb-2 w-9 h-9 rounded-lg bg-white/20 flex items-center justify-center text-lg">📊</div>
@@ -445,7 +467,7 @@ export default function AdminDashboard(){
                 </button>
                 <button
                   onClick={() => handleQuickAction('schoolSettings')}
-                  className="group min-w-[140px] sm:min-w-0 rounded-xl border border-white/20 bg-white/10 hover:bg-white/20 backdrop-blur-md p-3 text-center transition-all duration-200 hover:-translate-y-0.5 shadow-soft"
+                  className="group rounded-2xl border border-white/20 bg-white/12 hover:bg-white/20 backdrop-blur-md p-3 text-center transition-all duration-200 hover:-translate-y-0.5 shadow-soft"
                   aria-label="School Settings"
                 >
                   <div className="mx-auto mb-2 w-9 h-9 rounded-lg bg-white/20 flex items-center justify-center text-lg">🏫</div>
@@ -453,7 +475,7 @@ export default function AdminDashboard(){
                 </button>
                 <button
                   onClick={() => handleQuickAction('userManagement')}
-                  className="group min-w-[140px] sm:min-w-0 rounded-xl border border-white/20 bg-white/10 hover:bg-white/20 backdrop-blur-md p-3 text-center transition-all duration-200 hover:-translate-y-0.5 shadow-soft"
+                  className="group rounded-2xl border border-white/20 bg-white/12 hover:bg-white/20 backdrop-blur-md p-3 text-center transition-all duration-200 hover:-translate-y-0.5 shadow-soft"
                   aria-label="User Management"
                 >
                   <div className="mx-auto mb-2 w-9 h-9 rounded-lg bg-white/20 flex items-center justify-center text-lg">👥</div>
@@ -463,10 +485,13 @@ export default function AdminDashboard(){
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div className="bg-white rounded-2xl shadow-card border border-gray-200 p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-base font-semibold text-gray-900">Finance Overview</h2>
-                  <div className="flex items-center gap-2">
+              <div className="bg-white rounded-3xl shadow-card border border-gray-200 p-4 sm:p-6">
+                <div className="flex items-start justify-between gap-3 mb-4">
+                  <div>
+                    <h2 className="text-base sm:text-lg font-black text-gray-900">Finance Overview</h2>
+                    <p className="mt-0.5 text-xs text-gray-500 sm:hidden">Collections, billing, and balances</p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
                     <span className={`text-[11px] px-2 py-0.5 rounded-full border ${
                       (stats?.trends?.feesCollected ?? 0) > 0
                         ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
@@ -483,27 +508,27 @@ export default function AdminDashboard(){
                 </div>
 
                 {/* KPI Row */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-5">
-                  <div className="flex items-start gap-3 p-4 rounded-xl border border-emerald-100 bg-emerald-50/60 w-full max-w-full">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-5">
+                  <div className="flex items-start gap-3 p-4 rounded-2xl border border-emerald-100 bg-emerald-50/70 w-full max-w-full shadow-sm">
                     <div className="w-10 h-10 rounded-lg bg-emerald-500 text-white flex items-center justify-center text-xl">💰</div>
                     <div className="min-w-0 max-w-full">
-                      <div className="text-xs text-emerald-700 font-medium">Collected</div>
+                      <div className="text-xs text-emerald-700 font-black">Collected</div>
                       <div className="text-[10px] uppercase tracking-wide text-gray-600">KES</div>
                       <div className="text-base sm:text-lg font-bold text-gray-900 leading-tight whitespace-normal break-words">{stats.fees.collected.toLocaleString()}</div>
                     </div>
                   </div>
-                  <div className="flex items-start gap-3 p-4 rounded-xl border border-gray-200 bg-gray-50 w-full max-w-full">
+                  <div className="flex items-start gap-3 p-4 rounded-2xl border border-slate-200 bg-slate-50 w-full max-w-full shadow-sm">
                     <div className="w-10 h-10 rounded-lg bg-gray-600 text-white flex items-center justify-center text-xl">📄</div>
                     <div className="min-w-0 max-w-full">
-                      <div className="text-xs text-gray-700 font-medium">Total Billed</div>
+                      <div className="text-xs text-gray-700 font-black">Total Billed</div>
                       <div className="text-[10px] uppercase tracking-wide text-gray-600">KES</div>
                       <div className="text-base sm:text-lg font-bold text-gray-900 leading-tight whitespace-normal break-words">{stats.fees.total.toLocaleString()}</div>
                     </div>
                   </div>
-                  <div className="flex items-start gap-3 p-4 rounded-xl border border-rose-100 bg-rose-50/60 w-full max-w-full">
+                  <div className="flex items-start gap-3 p-4 rounded-2xl border border-rose-100 bg-rose-50/70 w-full max-w-full shadow-sm">
                     <div className="w-10 h-10 rounded-lg bg-rose-500 text-white flex items-center justify-center text-xl">⚠️</div>
                     <div className="min-w-0 max-w-full">
-                      <div className="text-xs text-rose-700 font-medium">Outstanding</div>
+                      <div className="text-xs text-rose-700 font-black">Outstanding</div>
                       <div className="text-[10px] uppercase tracking-wide text-gray-600">KES</div>
                       <div className="text-base sm:text-lg font-bold text-gray-900 leading-tight whitespace-normal break-words">{stats.fees.outstanding.toLocaleString()}</div>
                     </div>
@@ -516,7 +541,7 @@ export default function AdminDashboard(){
                     <span>Collection Rate</span>
                     <span className="font-semibold text-gray-800">{stats.fees.collectionRate}%</span>
                   </div>
-                  <div className="h-2 rounded-full bg-gray-100 overflow-hidden">
+                  <div className="h-2.5 rounded-full bg-gray-100 overflow-hidden">
                     <div className="h-full bg-gradient-to-r from-emerald-500 to-emerald-600 rounded-full" style={{width: `${Math.min(100, Math.max(0, Number(stats.fees.collectionRate)||0))}%`}} />
                   </div>
                   <div className="mt-2 text-xs text-gray-500">Invoices: {stats.fees.invoices} • Paid: {stats.fees.paidInvoices}</div>

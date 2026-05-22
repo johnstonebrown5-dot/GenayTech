@@ -2128,7 +2128,10 @@ export default function TeacherGrades(){
           <div className="mb-3 rounded-lg border border-indigo-200 bg-indigo-50/40 shadow-sm p-3">
             <div className="flex items-center gap-3">
               <div className="w-5 h-5 rounded-full border-2 border-indigo-300 border-t-indigo-700 animate-spin" />
-              <div className="text-sm font-medium text-indigo-900">Loading saved marks…</div>
+              <div>
+                <div className="text-sm font-medium text-indigo-900">Loading saved marks…</div>
+                <div className="text-xs text-indigo-700">This page takes long sometimes.</div>
+              </div>
             </div>
             <div className="mt-2 h-2 w-2/3 rounded bg-indigo-100 animate-pulse" />
           </div>

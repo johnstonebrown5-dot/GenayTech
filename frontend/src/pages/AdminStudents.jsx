@@ -619,25 +619,28 @@ export default function AdminStudents(){
   }
 
   return (
-    <div className="min-h-screen bg-gray-50/50 pb-20 text-left">
-      <div className="bg-white border-b border-gray-200 sticky top-0 z-30">
-        <div className="max-w-[1600px] mx-auto px-6 py-6">
+    <div className="min-h-screen bg-slate-50 pb-20 text-left">
+      <div className="sticky top-0 z-30 border-b border-white/70 bg-white/85 backdrop-blur-xl">
+        <div className="max-w-[1600px] mx-auto px-4 sm:px-6 py-4 sm:py-6">
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-            <div className="text-left">
-              <div className="flex items-center gap-2 text-indigo-600 mb-1">
-                <Users size={20} />
-                <span className="text-sm font-bold uppercase tracking-wider">Student Directory</span>
+            <div className="relative overflow-hidden rounded-[1.75rem] border border-indigo-100 bg-gradient-to-br from-white via-indigo-50/80 to-sky-50 p-4 shadow-sm sm:rounded-none sm:border-0 sm:bg-transparent sm:p-0 sm:shadow-none">
+              <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_right,rgba(79,70,229,0.10)_1px,transparent_1px),linear-gradient(to_bottom,rgba(79,70,229,0.10)_1px,transparent_1px)] bg-[size:22px_22px] sm:hidden" />
+              <div className="relative">
+                <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-indigo-100 bg-white/80 px-3 py-1 text-indigo-700 shadow-sm sm:border-0 sm:bg-transparent sm:px-0 sm:py-0 sm:shadow-none">
+                  <Users size={18} />
+                  <span className="text-[11px] sm:text-sm font-black uppercase tracking-wider">Student Directory</span>
+                </div>
+                <h1 className="text-2xl sm:text-3xl font-black text-gray-950 tracking-tight">
+                  Manage <span className="text-indigo-600">Students</span>
+                </h1>
+                <p className="mt-1 max-w-sm text-sm sm:text-base text-slate-600 font-semibold">Manage and organize your student records</p>
               </div>
-              <h1 className="text-3xl font-black text-gray-900 tracking-tight">
-                Manage <span className="text-indigo-600">Students</span>
-              </h1>
-              <p className="text-gray-500 mt-1 font-medium">Manage and organize your student records</p>
             </div>
 
-            <div className="flex flex-col sm:flex-row items-center gap-3">
+            <div className="grid grid-cols-2 sm:flex sm:flex-row items-center gap-2 sm:gap-3">
               <button
                 onClick={() => setShowAddStudent(true)}
-                className="h-12 px-6 rounded-2xl bg-indigo-600 text-white font-black hover:bg-indigo-700 transition-all flex items-center gap-2 shadow-lg shadow-indigo-200 active:scale-95 w-full sm:w-auto"
+                className="col-span-2 sm:col-span-1 h-12 px-6 rounded-2xl bg-gradient-to-r from-indigo-600 to-blue-600 text-white font-black hover:from-indigo-700 hover:to-blue-700 transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-200 active:scale-95 w-full sm:w-auto"
               >
                 <UserPlus size={18} />
                 Enroll Student
@@ -645,7 +648,7 @@ export default function AdminStudents(){
               <button
                 onClick={handlePrint}
                 disabled={exporting}
-                className="h-12 px-5 rounded-2xl bg-white border-2 border-gray-100 text-gray-700 font-black hover:border-gray-900 hover:text-gray-900 transition-all flex items-center gap-2 shadow-sm disabled:opacity-60 w-full sm:w-auto"
+                className="h-12 px-5 rounded-2xl bg-white border border-slate-200 text-slate-700 font-black hover:border-gray-900 hover:text-gray-900 transition-all flex items-center justify-center gap-2 shadow-sm disabled:opacity-60 w-full sm:w-auto"
               >
                 <Printer size={18} />
                 Print
@@ -653,7 +656,7 @@ export default function AdminStudents(){
               <button
                 onClick={handleDownload}
                 disabled={exporting}
-                className="h-12 px-5 rounded-2xl bg-emerald-600 text-white font-black hover:bg-emerald-700 transition-all flex items-center gap-2 shadow-lg shadow-emerald-200 active:scale-95 disabled:opacity-60 w-full sm:w-auto"
+                className="h-12 px-5 rounded-2xl bg-emerald-600 text-white font-black hover:bg-emerald-700 transition-all flex items-center justify-center gap-2 shadow-lg shadow-emerald-200 active:scale-95 disabled:opacity-60 w-full sm:w-auto"
               >
                 <Download size={18} />
                 Download
@@ -663,7 +666,7 @@ export default function AdminStudents(){
         </div>
       </div>
 
-      <div className="max-w-[1600px] mx-auto px-6 py-8 space-y-8">
+      <div className="max-w-[1600px] mx-auto px-4 sm:px-6 py-5 sm:py-8 space-y-5 sm:space-y-8">
 
         {/* Stats Cards */}
         {(() => {
@@ -773,16 +776,17 @@ export default function AdminStudents(){
           onClick={()=> setShowAddStudent(true)}
           aria-label="Enroll student"
           title="Enroll student"
-          className="md:hidden fixed right-4 bottom-24 z-40 px-3 py-1.5 rounded-full text-xs font-semibold bg-blue-600 text-white shadow-soft"
+          className="md:hidden fixed right-4 bottom-24 z-40 inline-flex h-12 items-center gap-2 rounded-full bg-gray-950 px-4 text-xs font-black uppercase tracking-wider text-white shadow-xl shadow-slate-400/40"
         >
-          + Enroll
+          <UserPlus size={16} />
+          Enroll
         </button>
 
-        <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm p-6">
+        <div className="rounded-[1.75rem] sm:rounded-[2.5rem] border border-white/80 bg-white/95 p-3 shadow-xl shadow-slate-200/70 sm:p-6">
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-            <div className="inline-flex w-full max-w-md rounded-full bg-gray-100 p-1 shadow-inner">
+            <div className="inline-flex w-full max-w-md rounded-2xl sm:rounded-full bg-slate-100 p-1 shadow-inner">
               <button
-                className={`flex-1 h-10 px-4 rounded-full text-[10px] font-black uppercase tracking-widest border transition-all flex items-center justify-center gap-2 ${
+                className={`flex-1 h-10 px-2 sm:px-4 rounded-xl sm:rounded-full text-[9px] sm:text-[10px] font-black uppercase tracking-widest border transition-all flex items-center justify-center gap-1.5 sm:gap-2 ${
                   tab==='active'
                     ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
                     : 'bg-transparent text-gray-700 border-transparent hover:bg-white'
@@ -793,7 +797,7 @@ export default function AdminStudents(){
                 Active
               </button>
               <button
-                className={`flex-1 h-10 px-4 rounded-full text-[10px] font-black uppercase tracking-widest border transition-all flex items-center justify-center gap-2 ${
+                className={`flex-1 h-10 px-2 sm:px-4 rounded-xl sm:rounded-full text-[9px] sm:text-[10px] font-black uppercase tracking-widest border transition-all flex items-center justify-center gap-1.5 sm:gap-2 ${
                   tab==='graduated'
                     ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
                     : 'bg-transparent text-gray-700 border-transparent hover:bg-white'
@@ -804,7 +808,7 @@ export default function AdminStudents(){
                 Graduated
               </button>
               <button
-                className={`flex-1 h-10 px-4 rounded-full text-[10px] font-black uppercase tracking-widest border transition-all flex items-center justify-center gap-2 ${
+                className={`flex-1 h-10 px-2 sm:px-4 rounded-xl sm:rounded-full text-[9px] sm:text-[10px] font-black uppercase tracking-widest border transition-all flex items-center justify-center gap-1.5 sm:gap-2 ${
                   tab==='inactive'
                     ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
                     : 'bg-transparent text-gray-700 border-transparent hover:bg-white'
@@ -816,20 +820,20 @@ export default function AdminStudents(){
               </button>
             </div>
 
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full lg:w-auto">
-              <div className="relative w-full sm:w-[340px]">
+            <div className="grid grid-cols-2 sm:flex sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 w-full lg:w-auto">
+              <div className="relative col-span-2 w-full sm:w-[340px]">
                 <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input
                   type="text"
                   placeholder="Search students..."
                   value={searchDraft}
                   onChange={(e) => setSearchDraft(e.target.value)}
-                  className="h-11 w-full bg-gray-50 border-2 border-gray-100 rounded-2xl pl-11 pr-4 text-sm font-semibold focus:border-indigo-500 transition-all outline-none"
+                  className="h-12 w-full bg-slate-50 border border-slate-200 rounded-2xl pl-11 pr-4 text-sm font-semibold focus:border-indigo-500 focus:bg-white transition-all outline-none"
                 />
               </div>
               <button
                 onClick={()=> setSearchTerm(searchDraft)}
-                className="h-11 px-6 rounded-2xl bg-gray-900 text-white font-black text-[10px] uppercase tracking-widest shadow-lg hover:bg-gray-800 transition-all active:scale-95 flex items-center gap-2 justify-center"
+                className="h-12 px-4 sm:px-6 rounded-2xl bg-gray-950 text-white font-black text-[10px] uppercase tracking-widest shadow-lg hover:bg-gray-800 transition-all active:scale-95 flex items-center gap-2 justify-center"
               >
                 <Search size={16} />
                 Search
@@ -837,7 +841,7 @@ export default function AdminStudents(){
               <button
                 type="button"
                 onClick={()=> setShowFilters(v=>!v)}
-                className={`h-11 px-5 rounded-2xl border-2 font-black text-[10px] uppercase tracking-widest transition-all flex items-center gap-2 justify-center ${showFilters ? 'bg-indigo-600 text-white border-indigo-600 shadow-lg shadow-indigo-200' : 'bg-white text-gray-700 border-gray-100 hover:border-gray-900 hover:text-gray-900 shadow-sm'}`}
+                className={`h-12 px-4 sm:px-5 rounded-2xl border font-black text-[10px] uppercase tracking-widest transition-all flex items-center gap-2 justify-center ${showFilters ? 'bg-indigo-600 text-white border-indigo-600 shadow-lg shadow-indigo-200' : 'bg-white text-gray-700 border-slate-200 hover:border-gray-900 hover:text-gray-900 shadow-sm'}`}
               >
                 <SlidersHorizontal size={16} />
                 Filters
@@ -846,7 +850,7 @@ export default function AdminStudents(){
                 <button
                   type="button"
                   onClick={()=>{ setFilterGrade(''); setFilterClass(''); setFilterGender(''); setSearchTerm(''); setSearchDraft('') }}
-                  className="h-11 px-5 rounded-2xl bg-white border-2 border-gray-100 text-gray-600 font-black text-[10px] uppercase tracking-widest hover:border-rose-200 hover:text-rose-600 transition-all flex items-center gap-2 justify-center"
+                  className="col-span-2 sm:col-span-1 h-12 px-5 rounded-2xl bg-white border border-gray-100 text-gray-600 font-black text-[10px] uppercase tracking-widest hover:border-rose-200 hover:text-rose-600 transition-all flex items-center gap-2 justify-center"
                 >
                   <X size={16} />
                   Clear
@@ -856,14 +860,14 @@ export default function AdminStudents(){
           </div>
 
           {showFilters && (
-            <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="mt-4 sm:mt-6 grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4 rounded-3xl border border-slate-100 bg-slate-50/80 p-3 sm:border-0 sm:bg-transparent sm:p-0">
               {tab==='active' && (
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Grade</label>
                   <select
                     value={filterGrade}
                     onChange={(e)=>{ setFilterGrade(e.target.value); setFilterClass('') }}
-                    className="h-11 w-full bg-gray-50 border-2 border-gray-100 rounded-2xl px-4 text-sm font-semibold focus:border-indigo-500 transition-all outline-none"
+                    className="h-11 w-full bg-white border border-slate-200 rounded-2xl px-4 text-sm font-semibold focus:border-indigo-500 transition-all outline-none"
                   >
                     <option value="">All Grades</option>
                     {gradeOptions.map(g => (
@@ -878,7 +882,7 @@ export default function AdminStudents(){
                   <select
                     value={filterClass}
                     onChange={(e)=>setFilterClass(e.target.value)}
-                    className="h-11 w-full bg-gray-50 border-2 border-gray-100 rounded-2xl px-4 text-sm font-semibold focus:border-indigo-500 transition-all outline-none"
+                    className="h-11 w-full bg-white border border-slate-200 rounded-2xl px-4 text-sm font-semibold focus:border-indigo-500 transition-all outline-none"
                   >
                     <option value="">All Classes</option>
                     {classOptions.map(c => (
@@ -892,89 +896,12 @@ export default function AdminStudents(){
                 <select
                   value={filterGender}
                   onChange={(e)=>setFilterGender(e.target.value)}
-                  className="h-11 w-full bg-gray-50 border-2 border-gray-100 rounded-2xl px-4 text-sm font-semibold focus:border-indigo-500 transition-all outline-none"
+                  className="h-11 w-full bg-white border border-slate-200 rounded-2xl px-4 text-sm font-semibold focus:border-indigo-500 transition-all outline-none"
                 >
                   <option value="">All Genders</option>
                   <option value="Male">Male</option>
                   <option value="Female">Female</option>
                 </select>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Mobile toolbar */}
-        <div className="sm:hidden space-y-2">
-          <div className="rounded-2xl border border-gray-200 bg-white/90 backdrop-blur-xl supports-[backdrop-filter]:bg-white/70 shadow-card p-2.5">
-            <div className="flex items-center gap-2">
-              <div className="relative flex-1">
-                <input
-                  type="text"
-                  placeholder="Search students..."
-                  value={searchDraft}
-                  onChange={(e) => setSearchDraft(e.target.value)}
-                  className="pl-10 pr-3 h-10 text-sm border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent w-full bg-white"
-                />
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                  </svg>
-                </div>
-              </div>
-              <button
-                onClick={()=> setSearchTerm(searchDraft)}
-                className="inline-flex items-center justify-center h-10 px-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-4.35-4.35m1.35-4.65a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-              </button>
-              <button
-                onClick={()=> setShowFilters(v=>!v)}
-                className="inline-flex items-center justify-center h-10 px-3 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-xs font-semibold"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 4h18M6 12h12m-9 8h6"/></svg>
-              </button>
-            </div>
-          </div>
-          {showFilters && (
-            <div className="p-3 rounded-xl border border-gray-200 bg-white/90 backdrop-blur-xl supports-[backdrop-filter]:bg-white/70 space-y-2">
-              {tab==='active' && (
-                <div className="flex items-center gap-2">
-                  <select
-                    value={filterGrade}
-                    onChange={(e)=>{ setFilterGrade(e.target.value); setFilterClass('') }}
-                    className="flex-1 px-2.5 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  >
-                    <option value="">All Grades</option>
-                    {gradeOptions.map(g => (
-                      <option key={g} value={g}>Grade {g}</option>
-                    ))}
-                  </select>
-                  <select
-                    value={filterClass}
-                    onChange={(e)=>setFilterClass(e.target.value)}
-                    className="flex-1 px-2.5 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  >
-                    <option value="">All Classes</option>
-                    {classOptions.map(c => (
-                      <option key={c.id} value={c.id}>{c.name} {c.grade_level ? `- ${c.grade_level}` : ''}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
-              <div className="flex items-center gap-2">
-                <select
-                  value={filterGender}
-                  onChange={(e)=>setFilterGender(e.target.value)}
-                  className="flex-1 px-2.5 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="">All Genders</option>
-                  <option value="Male">Male</option>
-                  <option value="Female">Female</option>
-                </select>
-                <button
-                  onClick={()=>{ setFilterGrade(''); setFilterClass(''); setFilterGender(''); setSearchTerm(''); setSearchDraft('') }}
-                  className="px-2.5 py-1.5 text-sm border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
-                >Clear</button>
               </div>
             </div>
           )}
@@ -983,21 +910,22 @@ export default function AdminStudents(){
         {/* Mobile Card List */}
         <div className="sm:hidden space-y-3">
           {isLoading ? (
-            <div className="bg-white/90 backdrop-blur-xl border border-gray-200 rounded-2xl p-3 shadow-card">Loading students...</div>
+            <div className="rounded-[1.5rem] border border-white/80 bg-white p-4 text-sm font-semibold text-slate-600 shadow-lg shadow-slate-200/70">Loading students...</div>
           ) : filteredStudents.length === 0 ? (
-            <div className="bg-white/90 backdrop-blur-xl border border-gray-200 rounded-2xl p-6 text-center text-gray-600">No students found</div>
+            <div className="rounded-[1.5rem] border border-white/80 bg-white p-6 text-center text-sm font-semibold text-slate-600 shadow-lg shadow-slate-200/70">No students found</div>
           ) : (
             filteredStudents.map((s) => (
-              <div key={s.id} className="relative overflow-hidden rounded-2xl border border-gray-200 bg-white/90 backdrop-blur-xl supports-[backdrop-filter]:bg-white/70 shadow-card p-3">
+              <div key={s.id} className="relative overflow-hidden rounded-[1.5rem] border border-white/80 bg-white p-3.5 shadow-lg shadow-slate-200/70">
+                <div className="pointer-events-none absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-indigo-500 via-sky-500 to-emerald-500" />
                 <div className="flex items-start gap-3">
                   <input
                     type="checkbox"
                     checked={selectedSet.has(s.id)}
                     onChange={()=> toggleSelectStudent(s.id)}
                     aria-label={`Select ${s.name}`}
-                    className="mt-1"
+                    className="mt-2 h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
                   />
-                  <div className="h-10 w-10 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-semibold text-xs shadow-soft shrink-0">
+                  <div className="h-11 w-11 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-black text-xs shadow-lg shadow-indigo-200 shrink-0">
                     {s.name.split(' ').map(n => n[0]).join('').toUpperCase()}
                   </div>
                   <div className="min-w-0 flex-1">
@@ -1015,31 +943,31 @@ export default function AdminStudents(){
                       </div>
                       <Link
                         to={`/admin/students/${s.id}`}
-                        className="shrink-0 inline-flex items-center justify-center h-9 px-3 text-xs font-semibold rounded-xl bg-indigo-100 text-indigo-700 hover:bg-indigo-200"
+                        className="shrink-0 inline-flex items-center justify-center h-9 px-3 text-xs font-black rounded-xl bg-slate-950 text-white hover:bg-slate-800"
                       >
                         View
                       </Link>
                     </div>
-                    <div className="mt-2 flex items-center justify-between gap-2">
-                      <div className="min-w-0 text-xs text-gray-600 truncate">
+                    <div className="mt-2 grid grid-cols-3 gap-1.5">
+                      <div className="col-span-3 min-w-0 rounded-2xl bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-600 truncate">
                         {s.klass_detail?.name || s.klass || 'Not Assigned'}
                       </div>
                       <button
                         onClick={()=>handleAction(s, 'deactivate')}
-                        className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-full border text-[11px] font-medium transition-all ${s.is_active ? 'border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100' : 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'}`}
+                        className={`inline-flex items-center justify-center gap-1 rounded-xl border px-2 py-2 text-[10px] font-black transition-all ${s.is_active ? 'border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100' : 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'}`}
                       >
                         <span className={`w-1.5 h-1.5 rounded-full ${s.is_active ? 'bg-amber-500' : 'bg-emerald-500'}`}></span>
                         {s.is_active ? 'Deactivate' : 'Activate'}
                       </button>
                       <button
                         onClick={()=>handleAction(s, 'transfer')}
-                        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full border border-blue-200 bg-blue-50 text-blue-700 text-[11px] font-medium hover:bg-blue-100 transition-all"
+                        className="inline-flex items-center justify-center gap-1 rounded-xl border border-blue-200 bg-blue-50 px-2 py-2 text-[10px] font-black text-blue-700 hover:bg-blue-100 transition-all"
                       >
                         ✈️ Transfer
                       </button>
                       <button
                         onClick={()=>handleAction(s, 'delete')}
-                        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full border border-rose-200 bg-rose-50 text-rose-700 text-[11px] font-medium hover:bg-rose-100 transition-all"
+                        className="inline-flex items-center justify-center gap-1 rounded-xl border border-rose-200 bg-rose-50 px-2 py-2 text-[10px] font-black text-rose-700 hover:bg-rose-100 transition-all"
                       >
                         🗑️ Delete
                       </button>

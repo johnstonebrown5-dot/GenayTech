@@ -333,77 +333,80 @@ export default function AdminTeachers(){
   }
 
   return (
-    <div className="min-h-screen bg-gray-50/50 pb-20 text-left">
+    <div className="min-h-screen bg-slate-50 pb-20 text-left">
       {/* Header Section */}
-      <div className="bg-white border-b border-gray-200 sticky top-0 z-30">
-        <div className="max-w-[1600px] mx-auto px-4 sm:px-6 py-5 sm:py-6">
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 text-left">
-            <div className="text-left">
-              <div className="flex items-center gap-2 text-indigo-600 mb-1">
-                <Users size={20} />
-                <span className="text-sm font-bold uppercase tracking-wider">Academic Staff</span>
+      <div className="sticky top-0 z-30 border-b border-white/70 bg-white/85 backdrop-blur-xl">
+        <div className="max-w-[1600px] mx-auto px-3 sm:px-6 py-3 sm:py-6">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 sm:gap-6 text-left">
+            <div className="relative overflow-hidden rounded-2xl border border-indigo-100 bg-gradient-to-br from-white via-indigo-50/80 to-violet-50 p-3 shadow-sm sm:rounded-none sm:border-0 sm:bg-transparent sm:p-0 sm:shadow-none">
+              <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_right,rgba(79,70,229,0.10)_1px,transparent_1px),linear-gradient(to_bottom,rgba(79,70,229,0.10)_1px,transparent_1px)] bg-[size:22px_22px] sm:hidden" />
+              <div className="relative text-left">
+                <div className="mb-1.5 inline-flex items-center gap-1.5 rounded-full border border-indigo-100 bg-white/80 px-2.5 py-0.5 text-indigo-700 shadow-sm sm:border-0 sm:bg-transparent sm:px-0 sm:py-0 sm:shadow-none">
+                  <Users size={15} />
+                  <span className="text-[10px] sm:text-sm font-black uppercase tracking-wider">Academic Staff</span>
+                </div>
+                <h1 className="text-xl sm:text-3xl font-black text-gray-950 tracking-tight">
+                  Manage <span className="text-indigo-600">Teachers</span>
+                </h1>
+                <p className="mt-0.5 max-w-sm text-xs sm:text-base text-slate-600 font-semibold">Create accounts, assign subjects, and manage the directory</p>
               </div>
-              <h1 className="text-3xl font-black text-gray-900 tracking-tight">
-                Manage <span className="text-indigo-600">Teachers</span>
-              </h1>
-              <p className="text-gray-500 mt-1 font-medium">Create accounts, assign subjects, and manage the directory</p>
             </div>
 
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4">
-              <Link to="/admin/subjects" className="h-12 px-6 rounded-2xl bg-white border-2 border-gray-100 text-gray-700 font-black hover:border-gray-900 hover:text-gray-900 transition-all flex items-center justify-center gap-2 shadow-sm w-full sm:w-auto">
-                <BookOpen size={18} />
+            <div className="grid grid-cols-1 sm:flex sm:flex-row items-stretch sm:items-center gap-2 sm:gap-4">
+              <Link to="/admin/subjects" className="h-10 sm:h-12 px-4 sm:px-6 rounded-xl sm:rounded-2xl bg-white border border-slate-200 text-slate-700 font-black text-xs sm:text-sm hover:border-gray-900 hover:text-gray-900 transition-all flex items-center justify-center gap-2 shadow-sm w-full sm:w-auto">
+                <BookOpen size={16} />
                 Subjects
               </Link>
               <button 
                 onClick={()=>setShowAssign(true)}
-                className="h-12 px-6 rounded-2xl bg-indigo-600 text-white font-black hover:bg-indigo-700 transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-200 active:scale-95 w-full sm:w-auto"
+                className="h-10 sm:h-12 px-4 sm:px-6 rounded-xl sm:rounded-2xl bg-gradient-to-r from-indigo-600 to-blue-600 text-white font-black text-xs sm:text-sm hover:from-indigo-700 hover:to-blue-700 transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-200 active:scale-95 w-full sm:w-auto"
               >
-                <ClipboardCheck size={18} />
+                <ClipboardCheck size={16} />
                 Assign Subjects & Class
               </button>
             </div>
           </div>
 
           {/* Stats Bar */}
-          <div className="mt-6 sm:mt-8">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 md:gap-4">
-              <div className="bg-gray-50/50 p-4 rounded-2xl border border-gray-100 flex items-center gap-4 text-left">
-              <div className="w-12 h-12 rounded-xl bg-indigo-100 text-indigo-600 flex items-center justify-center shadow-sm">
-                <Users size={24} />
+          <div className="mt-3 sm:mt-8">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-4 md:gap-4">
+              <div className="bg-white p-2.5 sm:p-4 rounded-xl sm:rounded-2xl border border-white/80 shadow-md sm:shadow-lg shadow-slate-200/70 flex items-center gap-2.5 sm:gap-4 text-left">
+              <div className="w-8 h-8 sm:w-12 sm:h-12 rounded-lg sm:rounded-xl bg-indigo-100 text-indigo-600 flex items-center justify-center shadow-sm">
+                <Users size={18} className="sm:w-6 sm:h-6" />
               </div>
               <div>
-                <div className="text-2xl font-black text-gray-900 leading-none">{activeTeachersCount}</div>
-                <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-1">Active Teachers</div>
+                <div className="text-lg sm:text-2xl font-black text-gray-900 leading-none">{activeTeachersCount}</div>
+                <div className="text-[8px] sm:text-[10px] font-black text-gray-400 uppercase tracking-widest mt-0.5 sm:mt-1">Active Teachers</div>
               </div>
               </div>
-              <div className="bg-gray-50/50 p-4 rounded-2xl border border-gray-100 flex items-center gap-4 text-left">
-              <div className="w-12 h-12 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center shadow-sm">
-                <UserCheck size={24} />
-              </div>
-              <div>
-                <div className="text-2xl font-black text-gray-900 leading-none">{assignedTeachersCount}</div>
-                <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-1">Assigned</div>
-              </div>
-              </div>
-              <div className="bg-gray-50/50 p-4 rounded-2xl border border-gray-100 flex items-center gap-4 text-left">
-              <div className="w-12 h-12 rounded-xl bg-fuchsia-100 text-fuchsia-600 flex items-center justify-center shadow-sm">
-                <BookOpen size={24} />
+              <div className="bg-white p-2.5 sm:p-4 rounded-xl sm:rounded-2xl border border-white/80 shadow-md sm:shadow-lg shadow-slate-200/70 flex items-center gap-2.5 sm:gap-4 text-left">
+              <div className="w-8 h-8 sm:w-12 sm:h-12 rounded-lg sm:rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center shadow-sm">
+                <UserCheck size={18} className="sm:w-6 sm:h-6" />
               </div>
               <div>
-                <div className="text-2xl font-black text-gray-900 leading-none">{coveredSubjectsCount}</div>
-                <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-1">Subjects Covered</div>
+                <div className="text-lg sm:text-2xl font-black text-gray-900 leading-none">{assignedTeachersCount}</div>
+                <div className="text-[8px] sm:text-[10px] font-black text-gray-400 uppercase tracking-widest mt-0.5 sm:mt-1">Assigned</div>
               </div>
               </div>
-              <div className="bg-gray-900 p-4 rounded-2xl shadow-xl flex items-center justify-between group text-left">
+              <div className="bg-white p-2.5 sm:p-4 rounded-xl sm:rounded-2xl border border-white/80 shadow-md sm:shadow-lg shadow-slate-200/70 flex items-center gap-2.5 sm:gap-4 text-left">
+              <div className="w-8 h-8 sm:w-12 sm:h-12 rounded-lg sm:rounded-xl bg-fuchsia-100 text-fuchsia-600 flex items-center justify-center shadow-sm">
+                <BookOpen size={18} className="sm:w-6 sm:h-6" />
+              </div>
+              <div>
+                <div className="text-lg sm:text-2xl font-black text-gray-900 leading-none">{coveredSubjectsCount}</div>
+                <div className="text-[8px] sm:text-[10px] font-black text-gray-400 uppercase tracking-widest mt-0.5 sm:mt-1">Subjects Covered</div>
+              </div>
+              </div>
+              <div className="bg-gray-950 p-2.5 sm:p-4 rounded-xl sm:rounded-2xl shadow-lg sm:shadow-xl flex items-center justify-between group text-left">
               <div className="text-left">
-                <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Status</div>
+                <div className="text-[8px] sm:text-[10px] font-black text-gray-400 uppercase tracking-widest mb-0.5 sm:mb-1">Status</div>
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                  <span className="text-xs font-black text-white uppercase tracking-wider">Active Directory</span>
+                  <span className="text-[9px] sm:text-xs font-black text-white uppercase tracking-wider">Active Directory</span>
                 </div>
               </div>
-              <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center text-white">
-                <CheckCircle2 size={20} />
+              <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl bg-white/10 flex items-center justify-center text-white">
+                <CheckCircle2 size={16} className="sm:w-5 sm:h-5" />
               </div>
               </div>
             </div>
@@ -411,64 +414,65 @@ export default function AdminTeachers(){
         </div>
       </div>
 
-      <div className="max-w-[1600px] mx-auto px-4 sm:px-6 py-6 sm:py-8 text-left">
+      <div className="max-w-[1600px] mx-auto px-3 sm:px-6 py-3 sm:py-8 text-left">
         {/* Quick Actions Card */}
-        <div className="bg-white rounded-[2rem] p-5 sm:p-8 border-2 border-gray-100 shadow-sm mb-8 sm:mb-12 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-5 sm:gap-8 group overflow-hidden relative">
-          <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-50 rounded-full -mr-32 -mt-32 opacity-50 group-hover:scale-110 transition-transform duration-700" />
+        <div className="bg-white rounded-2xl sm:rounded-[2rem] p-3 sm:p-8 border border-white/80 shadow-lg sm:shadow-xl shadow-slate-200/70 mb-4 sm:mb-12 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 sm:gap-8 group overflow-hidden relative">
+          <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_right,rgba(79,70,229,0.07)_1px,transparent_1px),linear-gradient(to_bottom,rgba(79,70,229,0.07)_1px,transparent_1px)] bg-[size:24px_24px]" />
+          <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-50 rounded-full -mr-32 -mt-32 opacity-70 group-hover:scale-110 transition-transform duration-700" />
           <div className="relative z-10 text-left w-full md:w-auto">
-            <div className="flex items-center gap-3 mb-4 text-left">
-              <div className="w-14 h-14 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
-                <UserPlus size={28} />
+            <div className="flex items-center gap-2.5 sm:gap-3 mb-2 sm:mb-4 text-left">
+              <div className="w-10 h-10 sm:w-14 sm:h-14 rounded-xl sm:rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0 shadow-sm">
+                <UserPlus size={22} className="sm:w-7 sm:h-7" />
               </div>
               <div className="text-left">
-                <h2 className="text-xl font-black text-gray-900 tracking-tight">Onboard Faculty</h2>
-                <p className="text-sm font-medium text-gray-500 italic">Add new teacher users and set their initial access</p>
+                <h2 className="text-base sm:text-xl font-black text-gray-900 tracking-tight">Onboard Faculty</h2>
+                <p className="text-[11px] sm:text-sm font-semibold text-slate-500 italic">Add teacher users and access</p>
               </div>
             </div>
           </div>
-          <div className="relative z-10 flex flex-col sm:flex-row gap-4 w-full md:w-auto">
+          <div className="relative z-10 grid grid-cols-1 sm:flex sm:flex-row gap-2 sm:gap-4 w-full md:w-auto">
             <button 
               onClick={()=>setShowCreateUser(true)}
-              className="h-12 px-8 rounded-2xl bg-white border-2 border-gray-100 text-gray-700 font-black text-xs uppercase tracking-widest hover:border-indigo-600 hover:text-indigo-600 transition-all flex items-center justify-center gap-2 shadow-sm w-full sm:w-auto"
+              className="h-10 sm:h-12 px-5 sm:px-8 rounded-xl sm:rounded-2xl bg-white border border-slate-200 text-gray-700 font-black text-[10px] sm:text-xs uppercase tracking-widest hover:border-indigo-600 hover:text-indigo-600 transition-all flex items-center justify-center gap-2 shadow-sm w-full sm:w-auto"
             >
-              <Plus size={18} /> Create User
+              <Plus size={16} /> Create User
             </button>
             <button 
               onClick={()=>setShowAssign(true)}
-              className="h-12 px-8 rounded-2xl bg-indigo-600 text-white font-black text-xs uppercase tracking-widest hover:bg-indigo-700 transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-200 active:scale-95 w-full sm:w-auto"
+              className="h-10 sm:h-12 px-5 sm:px-8 rounded-xl sm:rounded-2xl bg-gradient-to-r from-indigo-600 to-blue-600 text-white font-black text-[10px] sm:text-xs uppercase tracking-widest hover:from-indigo-700 hover:to-blue-700 transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-200 active:scale-95 w-full sm:w-auto"
             >
-              <ClipboardCheck size={18} /> Assign Now
+              <ClipboardCheck size={16} /> Assign Now
             </button>
           </div>
         </div>
 
         {/* Directory Card */}
-        <div className="bg-white rounded-[2.5rem] shadow-sm border border-gray-100 overflow-hidden text-left">
-          <div className="p-8 border-b border-gray-50 flex flex-col lg:flex-row lg:items-center justify-between gap-6 bg-gradient-to-r from-gray-50/50 to-white text-left">
-            <div className="flex items-center gap-4 text-left">
-              <div className="w-12 h-12 rounded-2xl bg-gray-100 text-gray-600 flex items-center justify-center shadow-sm">
-                <LayoutGrid size={24} />
+        <div className="bg-white rounded-2xl sm:rounded-[2.5rem] shadow-lg sm:shadow-xl shadow-slate-200/70 border border-white/80 overflow-hidden text-left">
+          <div className="p-3 sm:p-8 border-b border-gray-50 flex flex-col lg:flex-row lg:items-center justify-between gap-3 sm:gap-6 bg-gradient-to-r from-slate-50 to-white text-left">
+            <div className="flex items-center gap-3 sm:gap-4 text-left">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-gray-100 text-gray-600 flex items-center justify-center shadow-sm">
+                <LayoutGrid size={20} className="sm:w-6 sm:h-6" />
               </div>
               <div className="text-left">
-                <h2 className="text-xl font-black text-gray-900 tracking-tight">Teachers Directory</h2>
-                <p className="text-xs font-medium text-gray-500 italic uppercase tracking-widest text-left">Global Staff Listing</p>
+                <h2 className="text-base sm:text-xl font-black text-gray-900 tracking-tight">Teachers Directory</h2>
+                <p className="text-[10px] sm:text-xs font-medium text-gray-500 italic uppercase tracking-widest text-left">Global Staff Listing</p>
               </div>
 
             </div>
 
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4 w-full lg:w-auto">
+            <div className="grid grid-cols-1 sm:flex sm:flex-row items-stretch sm:items-center gap-2 sm:gap-4 w-full lg:w-auto">
               <div className="relative group w-full sm:w-64">
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-indigo-500 transition-colors" size={18} />
                 <input 
                   value={search} 
                   onChange={e=>setSearch(e.target.value)}
                   placeholder="Search staff..."
-                  className="h-12 w-full bg-gray-50 border-2 border-gray-100 rounded-2xl pl-11 pr-4 text-sm font-bold focus:border-indigo-500 transition-all outline-none"
+                  className="h-10 sm:h-12 w-full bg-white border border-slate-200 rounded-xl sm:rounded-2xl pl-11 pr-4 text-sm font-bold focus:border-indigo-500 transition-all outline-none"
                 />
               </div>
               <button 
                 onClick={() => setShowFilters(!showFilters)}
-                className={`h-12 px-6 rounded-2xl border-2 transition-all flex items-center justify-center gap-2 font-black text-xs uppercase tracking-widest w-full sm:w-auto ${showFilters ? 'bg-indigo-50 border-indigo-200 text-indigo-600 shadow-sm' : 'bg-white border-gray-100 text-gray-600 hover:border-gray-200'}`}
+                className={`h-10 sm:h-12 px-5 sm:px-6 rounded-xl sm:rounded-2xl border transition-all flex items-center justify-center gap-2 font-black text-[10px] sm:text-xs uppercase tracking-widest w-full sm:w-auto ${showFilters ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg shadow-indigo-200' : 'bg-white border-slate-200 text-gray-600 hover:border-gray-900'}`}
               >
                 <Filter size={18} />
                 Filters
@@ -478,7 +482,7 @@ export default function AdminTeachers(){
           </div>
 
           {showFilters && (
-            <div className="p-8 bg-gray-50 border-b border-gray-100 grid grid-cols-1 md:grid-cols-3 gap-6 animate-in slide-in-from-top-4 duration-300 text-left">
+            <div className="p-3 sm:p-8 bg-slate-50 border-b border-gray-100 grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-6 animate-in slide-in-from-top-4 duration-300 text-left">
               <div className="space-y-1.5 text-left">
                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Subject Expertise</label>
                 <select 
@@ -517,23 +521,24 @@ export default function AdminTeachers(){
           )}
 
           <div className="p-0 text-left">
-            <div className="md:hidden p-4 sm:p-6 grid gap-3">
+            <div className="md:hidden p-3 sm:p-6 grid gap-3">
               {loading ? (
                 Array.from({ length: 5 }).map((_, i) => (
-                  <div key={i} className="p-4 rounded-2xl border border-gray-100 bg-gray-50 animate-pulse">
+                  <div key={i} className="p-4 rounded-[1.5rem] border border-white/80 bg-slate-50 animate-pulse shadow-sm">
                     <div className="h-10 bg-white/70 rounded-xl" />
                   </div>
                 ))
               ) : filteredTeachers.length === 0 ? (
-                <div className="py-10 text-center text-gray-500">No staff records</div>
+                <div className="rounded-[1.5rem] border border-dashed border-slate-200 bg-slate-50 py-10 text-center text-sm font-semibold text-slate-500">No staff records</div>
               ) : (
                 filteredTeachers.map(t => {
                   const subj = (t.subjects || '').split(',').map(s => s.trim()).filter(Boolean)
                   return (
-                    <div key={t.id || `u-${t.user?.id}`} className="p-4 rounded-[2rem] border border-gray-100 bg-white shadow-sm">
+                    <div key={t.id || `u-${t.user?.id}`} className="relative overflow-hidden p-3.5 rounded-[1.5rem] border border-white/80 bg-white shadow-lg shadow-slate-200/70">
+                      <div className="pointer-events-none absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-indigo-500 via-violet-500 to-sky-500" />
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex items-center gap-3 min-w-0">
-                          <div className="w-11 h-11 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-black shrink-0">
+                          <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-indigo-500 to-blue-600 text-white flex items-center justify-center font-black shrink-0 shadow-lg shadow-indigo-200">
                             {(t.user?.first_name?.[0] || t.user?.username?.[0] || '?').toUpperCase()}
                           </div>
                           <div className="min-w-0">
@@ -544,7 +549,7 @@ export default function AdminTeachers(){
                           </div>
                         </div>
                         {t.klass_detail?.name ? (
-                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black bg-emerald-50 text-emerald-600 border border-emerald-100 uppercase tracking-wider shrink-0">
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black bg-emerald-50 text-emerald-600 border border-emerald-100 uppercase tracking-wider shrink-0">
                             <CheckCircle2 size={12} />
                             {t.klass_detail.name}
                           </span>
@@ -553,7 +558,7 @@ export default function AdminTeachers(){
                         )}
                       </div>
 
-                      <div className="mt-3 flex flex-wrap gap-1.5">
+                      <div className="mt-3 flex flex-wrap gap-1.5 rounded-2xl bg-slate-50 p-2">
                         {subj.length ? subj.slice(0, 6).map((s, idx) => (
                           <span key={idx} className="px-2.5 py-1 rounded-lg text-[10px] font-black bg-purple-50 text-purple-600 border border-purple-100 uppercase tracking-wider">
                             {s}
@@ -566,11 +571,11 @@ export default function AdminTeachers(){
                         )}
                       </div>
 
-                      <div className="mt-4 flex items-center gap-2">
+                      <div className="mt-3 flex items-center gap-2">
                         <button
                           type="button"
                           onClick={()=>openQuickAssign(t)}
-                          className="flex-1 h-11 rounded-2xl bg-white border-2 border-gray-100 text-indigo-600 font-black text-[10px] uppercase tracking-widest hover:border-indigo-600 transition-all active:scale-95"
+                          className="flex-1 h-11 rounded-2xl bg-slate-950 text-white font-black text-[10px] uppercase tracking-widest hover:bg-slate-800 transition-all active:scale-95"
                         >
                           Edit Subjects
                         </button>
@@ -578,7 +583,7 @@ export default function AdminTeachers(){
                           <button
                             type="button"
                             onClick={()=>openRelease(t)}
-                            className="h-11 w-11 rounded-2xl bg-white border-2 border-gray-100 text-gray-300 hover:text-rose-600 hover:border-rose-600 transition-all active:scale-95"
+                            className="h-11 w-11 rounded-2xl bg-white border border-rose-100 text-rose-500 hover:text-white hover:bg-rose-600 hover:border-rose-600 transition-all active:scale-95"
                             title="Release Staff"
                           >
                             <X size={18} className="mx-auto" />
