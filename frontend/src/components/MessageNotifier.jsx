@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import api from '../api'
+import { canRunAuthenticatedPoll, handlePollAuthError } from '../utils/authPoll'
 import { useNotification } from './NotificationContext'
 import { useAuth } from '../auth'
 import { useLock } from './LockProvider'
@@ -45,6 +46,7 @@ export default function MessageNotifier(){
 
     let mounted = true
     const tick = async () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return
       try {
         const res = await api.get('/communications/alerts/banner/', { _skipGlobalLoading: true })
         const data = res?.data || {}
@@ -72,7 +74,7 @@ export default function MessageNotifier(){
   }, [locked])
 
   useEffect(()=>{
-    if(!user || locked) return
+    if(!canRunAuthenticatedPoll(user, locked)) return
     // initialize last seen from storage
     try{
       if(chatKey){ lastChatTsRef.current = localStorage.getItem(chatKey) || null }
@@ -80,10 +82,18 @@ export default function MessageNotifier(){
       if(bannerDismissKey){ setDismissedBannerId(localStorage.getItem(bannerDismissKey) || null) }
     }catch{}
 
+    let stopped = false
+    const stop = () => {
+      stopped = true
+      if (timerRef.current) clearInterval(timerRef.current)
+    }
+
     const tick = async()=>{
+      if (stopped || !canRunAuthenticatedPoll(user, locked)) return
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return
       try{
         // Inbox (direct messages to me)
-        const inb = await api.get('/communications/messages/')
+        const inb = await api.get('/communications/messages/', { _skipGlobalLoading: true })
         const inbox = Array.isArray(inb.data) ? inb.data : (inb.data?.results||[])
         // Determine newest timestamp
         const latest = inbox.reduce((max, m)=>{
@@ -128,11 +138,13 @@ export default function MessageNotifier(){
           lastChatTsRef.current = latest
           try{ if(chatKey) localStorage.setItem(chatKey, latest) }catch{}
         }
-      }catch{}
+      }catch(err){
+        if (handlePollAuthError(err, stop)) return
+      }
 
       try{
         // System messages (role/broadcast)
-        const sys = await api.get('/communications/messages/system/')
+        const sys = await api.get('/communications/messages/system/', { _skipGlobalLoading: true })
         const systemMessages = Array.isArray(sys.data) ? sys.data : (sys.data?.results||[])
 
         // Banner: show latest broadcast Alert message (created via Django admin)
@@ -199,13 +211,22 @@ export default function MessageNotifier(){
           lastSystemTsRef.current = latestSys
           try{ if(sysKey) localStorage.setItem(sysKey, latestSys) }catch{}
         }
-      }catch{}
+      }catch(err){
+        if (handlePollAuthError(err, stop)) return
+      }
     }
 
-    // immediate tick, then interval
+    const onSessionExpired = () => stop()
+    try { window.addEventListener('auth:session-expired', onSessionExpired) } catch {}
+
+    // immediate tick, then interval (15s — was 10s; reduces SIGPIPE noise on server)
     tick()
-    timerRef.current = setInterval(tick, 10000)
-    return ()=> { if(timerRef.current) clearInterval(timerRef.current) }
+    timerRef.current = setInterval(tick, 15000)
+    return ()=> {
+      stopped = true
+      if(timerRef.current) clearInterval(timerRef.current)
+      try { window.removeEventListener('auth:session-expired', onSessionExpired) } catch {}
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id, locked])
 

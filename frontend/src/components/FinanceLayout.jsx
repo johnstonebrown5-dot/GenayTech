@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth';
 import { useLock } from './LockProvider';
 import api from '../api';
+import { canRunAuthenticatedPoll, handlePollAuthError } from '../utils/authPoll';
 import FloatingDeliveryLog from './FloatingDeliveryLog';
 
 const navItems = [
@@ -48,7 +49,13 @@ export default function FinanceLayout({ children }) {
 
     // Poll unread messages
     useEffect(() => {
+        if (!canRunAuthenticatedPoll(user, false)) return;
         let mounted = true;
+        let intervalId = null;
+        const stop = () => {
+            mounted = false;
+            if (intervalId) clearInterval(intervalId);
+        };
         const computeUnread = (arr) => {
             const myId = user?.id;
             if (!Array.isArray(arr) || !myId) return 0;
@@ -59,11 +66,15 @@ export default function FinanceLayout({ children }) {
             }, 0);
         };
         const load = async () => {
+            if (!mounted || !canRunAuthenticatedPoll(user, false)) return;
+            if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return
             try {
                 const [inb, sys] = await Promise.allSettled([
-                    api.get('/communications/messages/'),
-                    api.get('/communications/messages/system/'),
+                    api.get('/communications/messages/', { _skipGlobalLoading: true }),
+                    api.get('/communications/messages/system/', { _skipGlobalLoading: true }),
                 ]);
+                if (inb.status === 'rejected' && handlePollAuthError(inb.reason, stop)) return;
+                if (sys.status === 'rejected' && handlePollAuthError(sys.reason, stop)) return;
                 const inboxList = inb.status === 'fulfilled' ? (Array.isArray(inb.value.data) ? inb.value.data : (inb.value.data?.results || [])) : [];
                 const sysList = sys.status === 'fulfilled' ? (Array.isArray(sys.value.data) ? sys.value.data : (sys.value.data?.results || [])) : [];
                 const total = computeUnread(inboxList) + computeUnread(sysList);
@@ -77,13 +88,19 @@ export default function FinanceLayout({ children }) {
                     const candidate = latest && latestBody && !dismissedIds.includes(latest.id) ? latest : null;
                     setBroadcastBanner(candidate);
                 }
-            } catch {
+            } catch (err) {
+                if (handlePollAuthError(err, stop)) return;
                 if (mounted) { setUnreadCount(0); setBroadcastUnread(0); setBroadcastBanner(null); }
             }
         };
+        const onSessionExpired = () => stop();
+        try { window.addEventListener('auth:session-expired', onSessionExpired); } catch {}
         load();
-        const id = setInterval(load, 15000);
-        return () => { mounted = false; clearInterval(id); };
+        intervalId = setInterval(load, 20000);
+        return () => {
+            stop();
+            try { window.removeEventListener('auth:session-expired', onSessionExpired); } catch {}
+        };
     }, [user, dismissedIds]);
 
     useEffect(() => {

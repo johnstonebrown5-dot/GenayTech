@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useNavigate, useLocation } from 'react-router-dom'
-import api, { isCanceledRequest } from '../api'
+import api, { isCanceledRequest, getApiErrorMessage } from '../api'
 import { useNotification } from '../components/NotificationContext'
+import { buildResultsRows, fetchEnterResultsData } from '../utils/enterResultsLoader'
 
 export default function AdminEnterResults({ readOnly }){
   const { id } = useParams()
@@ -30,13 +31,20 @@ export default function AdminEnterResults({ readOnly }){
   const isReadOnly = Boolean(readOnly) || (new URLSearchParams(location.search).get('readonly') === '1')
   const klassOverride = new URLSearchParams(location.search).get('klass')
   const [reloadKey, setReloadKey] = useState(0)
+  const [refreshing, setRefreshing] = useState(false)
 
   const dirtyMarksRef = useRef(new Set())
   const dirtyOutOfRef = useRef(new Set())
-  const [dirtyVersion, setDirtyVersion] = useState(0)
   const autoSaveTimerRef = useRef(null)
   const autoSaveInFlightRef = useRef(false)
   const autoSavePendingRef = useRef(false)
+  const loadGenerationRef = useRef(0)
+  const hasLoadedOnceRef = useRef(false)
+  const [dirtyVersion, setDirtyVersion] = useState(0)
+
+  useEffect(() => {
+    hasLoadedOnceRef.current = false
+  }, [examId])
 
   useEffect(()=>{
     const t = setTimeout(()=>{
@@ -60,119 +68,53 @@ export default function AdminEnterResults({ readOnly }){
 
   useEffect(()=>{
     let alive = true
+    const loadGen = ++loadGenerationRef.current
+
     if (!Number.isFinite(examId) || examId <= 0) {
+      hasLoadedOnceRef.current = false
       setLoading(false)
+      setRefreshing(false)
       setError('Invalid exam. Go back and open marks entry from the exams list.')
       return () => { alive = false }
     }
+
+    const isRefresh = hasLoadedOnceRef.current && reloadKey > 0
     ;(async ()=>{
       try{
-        setLoading(true)
+        if (!isRefresh) {
+          setLoading(true)
+        } else {
+          setRefreshing(true)
+        }
         setError('')
-        // Use optimized single endpoint to load all data at once
-        // No caching - always fetch fresh data from server
-        const res = await api.get(`/academics/exams/${examId}/enter-data/`, { 
-          params: { _: reloadKey },
-          headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' },
-          timeout: 60000 // Increased timeout to 60 seconds for large datasets
-        })
-        const data = res?.data
-        if (!alive) return
-        
-        // Set exam data
+
+        const { payload, source } = await fetchEnterResultsData(examId, reloadKey)
+        const isCurrent = () => alive && loadGenerationRef.current === loadGen
+        if (!isCurrent()) return
+
+        const data = payload
         setExam(data?.exam || { id: examId })
-        
-        // Set class data
         setKlass(data?.klass || { id: data?.exam?.klass })
-        
-        // Set subjects
         setSubjects(data?.subjects || [])
-        
-        // Set components map
         setComponentsMap(data?.components_by_subject || {})
-        
-        // Set students
         setStudents(data?.students || [])
-        
-        // Set existing results
-        const existing = data?.existing_results || []
-        
-        // Build per-component rows (carry forward teacher-saved out_of for validation/placeholders)
-        const rows = []
-        const compsBySubject = data?.components_by_subject || {}
-        const indexKey = (r)=>`${r?.student ?? r?.student_id}-${r?.subject ?? r?.subject_id}-${r?.component ?? r?.component_id ?? ''}`
-        const existingMap = new Map()
-        for (const r of existing){ existingMap.set(indexKey(r), r) }
 
-        // Preferred out_of per subject/component based on any existing result (teacher-saved)
-        const preferredOut = new Map() // key: `${subjectId}-${componentId||''}` => number
-        for (const r of existing){
-          const sid = r?.subject ?? r?.subject_id
-          const cid = r?.component ?? r?.component_id ?? ''
-          const oo = Number(r?.out_of)
-          const key = `${sid}-${cid}`
-          if (sid && Number.isFinite(oo) && oo > 0 && !preferredOut.has(key)){
-            preferredOut.set(key, oo)
-          }
-        }
-
-        const subj = data?.subjects || []
-        const studentsList = data?.students || []
-
-        for (const s of studentsList){
-          for (const sub of subj){
-            const comps = compsBySubject[sub.id] || []
-            if (Array.isArray(comps) && comps.length>0){
-              for (const c of comps){
-                const key = `${s.id}-${sub.id}-${c.id}`
-                const found = existingMap.get(key)
-                const mk = Number(found?.marks)
-                const outOf = (found && Number(found?.out_of))
-                let marksVal = Number.isFinite(mk) ? mk : NaN
-                // Normalize percent-looking values saved earlier.
-                // Prefer explicit outOf, otherwise fall back to component max_marks when available.
-                {
-                  const denom = Number.isFinite(outOf) && outOf > 0
-                    ? outOf
-                    : Number(c?.max_marks)
-                  
-                  if (Number.isFinite(marksVal) && Number.isFinite(denom) && denom > 0 && marksVal <= 100 && marksVal > denom){
-                    marksVal = Math.round((marksVal / 100) * denom)
-                  }
-                }
-                const pref = preferredOut.get(`${sub.id}-${c.id}`)
-                const rem = (found && (found.remarks ?? found.remark))
-                rows.push({ student: s.id, subject: sub.id, component: c.id, marks: Number.isFinite(marksVal) ? marksVal : '', outOf: Number.isFinite(outOf) ? outOf : (Number.isFinite(pref) ? pref : undefined), remarks: (rem != null ? String(rem) : '') })
-              }
-            } else {
-              const key = `${s.id}-${sub.id}-`
-              const found = existingMap.get(key)
-              const mk = Number(found?.marks)
-              const outOf = (found && Number(found?.out_of))
-              let marksVal = Number.isFinite(mk) ? mk : NaN
-              // Normalize using explicit outOf or fallback to exam total when only a single component exists
-              {
-                const denom = Number.isFinite(outOf) && outOf > 0
-                  ? outOf
-                  : Number(data?.exam?.total_marks ?? 100)
-                if (Number.isFinite(marksVal) && Number.isFinite(denom) && denom > 0 && marksVal <= 100 && marksVal > denom){
-                  marksVal = Math.round((marksVal / 100) * denom)
-                }
-              }
-              const pref = preferredOut.get(`${sub.id}-`)
-              const rem = (found && (found.remarks ?? found.remark))
-              rows.push({ student: s.id, subject: sub.id, component: null, marks: Number.isFinite(marksVal) ? marksVal : '', outOf: Number.isFinite(outOf) ? outOf : (Number.isFinite(pref) ? pref : undefined), remarks: (rem != null ? String(rem) : '') })
-            }
-          }
-        }
-        if (!alive) return
+        const rows = buildResultsRows(data, isCurrent)
+        if (!isCurrent() || rows === null) return
         setResults(rows)
+        hasLoadedOnceRef.current = true
+        if (source === 'fallback') {
+          console.info('Marks entry loaded via fallback API calls')
+        }
       }catch(err){
-        if (!alive || isCanceledRequest(err)) return
+        if (!alive || loadGenerationRef.current !== loadGen || isCanceledRequest(err)) return
         console.error('Failed to load exam data:', err)
-        setError(err?.response?.data?.detail || err?.message || 'Failed to load exam data')
+        setError(getApiErrorMessage(err, 'Failed to load exam data'))
       }finally{
-        if (alive) setLoading(false)
+        if (alive && loadGenerationRef.current === loadGen) {
+          setLoading(false)
+          setRefreshing(false)
+        }
       }
     })()
     return ()=>{ alive = false }
@@ -232,7 +174,9 @@ export default function AdminEnterResults({ readOnly }){
         setReloadKey(v=>v+1)
       }
     }catch(err){
-      setError(err?.response?.data?.detail || err?.message || 'Failed to save results')
+      if (!isCanceledRequest(err)) {
+        setError(getApiErrorMessage(err, 'Failed to save results'))
+      }
       setStatus('idle')
     }finally{
       setSaving(false)
@@ -318,8 +262,7 @@ export default function AdminEnterResults({ readOnly }){
       outOfKeys.forEach(k => dirtyOutOfRef.current.delete(k))
       setStatus('saved')
       setTimeout(()=>setStatus('idle'), 1200)
-      // Reload data from server to ensure consistency after auto-save
-      setReloadKey(v=>v+1)
+      // Avoid full page reload on auto-save (large exams can freeze weak devices)
     }catch(err){
       const msg = err?.response?.data?.detail || err?.message || 'Auto-save failed'
       showError('Auto-save failed', msg, 4000)
@@ -674,9 +617,17 @@ export default function AdminEnterResults({ readOnly }){
           <h1 className="text-lg sm:text-2xl font-bold text-gray-900 leading-snug break-words">{title}</h1>
         </div>
         {error && (
-          <div className="bg-red-50 text-red-700 border border-red-200 rounded-lg px-3 py-2 text-sm">
-            {error}
+          <div className="bg-red-50 text-red-700 border border-red-200 rounded-lg px-3 py-2 text-sm flex flex-wrap items-center justify-between gap-2">
+            <span>{error}</span>
+            <button
+              type="button"
+              className="px-3 py-1.5 rounded-lg border border-red-300 bg-white text-red-800 text-sm shrink-0"
+              onClick={()=>setReloadKey(v=>v+1)}
+            >Retry</button>
           </div>
+        )}
+        {refreshing && !loading && (
+          <div className="text-xs text-gray-600">Refreshing marks…</div>
         )}
         <div className="sticky top-0 z-10 bg-white/90 backdrop-blur supports-[backdrop-filter]:bg-white/70 rounded-lg border border-gray-200 px-3 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-2 min-w-0 w-full sm:w-auto">
@@ -890,11 +841,11 @@ export default function AdminEnterResults({ readOnly }){
             )}
           </div>
         )}
-        {loading && (
+        {(loading || (refreshing && !results.length)) && (
           <div className="rounded-xl border border-gray-200 bg-white shadow-card p-6">
             <div className="flex items-center gap-3">
               <div className="w-5 h-5 rounded-full border-2 border-gray-300 border-t-indigo-600 animate-spin" />
-              <div className="text-sm font-medium text-gray-700">Loading marks…</div>
+              <div className="text-sm font-medium text-gray-700">{refreshing ? 'Refreshing marks…' : 'Loading marks…'}</div>
             </div>
             <div className="mt-4 grid gap-2">
               <div className="h-3 w-2/3 rounded bg-gray-100 animate-pulse" />
@@ -903,7 +854,7 @@ export default function AdminEnterResults({ readOnly }){
             </div>
           </div>
         )}
-        {!loading && (
+        {!loading && !(refreshing && !results.length) && (
           <div className="bg-white rounded-xl shadow-card border border-gray-200 p-3 overflow-auto max-h-[70vh] md:max-h-[75vh]">
             <div className="text-xs text-gray-500 mb-2">Legend: <span className="px-1 rounded bg-rose-50 border border-rose-200">Missing/0</span> • <span className="px-1 rounded border border-red-300">Out of range</span></div>
             {appliedStudentSearch && displayStudents.length === 0 && (

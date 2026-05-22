@@ -21,14 +21,7 @@ async function requestWithRetry(config, retryCount = 0) {
   try {
     return await axios(config)
   } catch (error) {
-    const isRetryable = (
-      error.code === 'ECONNABORTED' ||
-      error.code === 'ECONNRESET' ||
-      error.code === 'ETIMEDOUT' ||
-      error.code === 'EPIPE' ||
-      (error.response && error.response.status >= 500) ||
-      (!error.response && !isCanceledRequest(error))
-    )
+    const isRetryable = isRetryableRequestError(error)
     
     if (isRetryable && retryCount < MAX_RETRIES) {
       console.warn(`Retrying request (${retryCount + 1}/${MAX_RETRIES}):`, config.url)
@@ -67,8 +60,82 @@ api.interceptors.request.use(config => {
 // Simple refresh token flow on 401
 let isRefreshing = false
 let refreshPromise = null
+let sessionExpired = false
 const subscribers = []
 function subscribeTokenRefresh(cb){ subscribers.push(cb) }
+
+export function isSessionExpired() {
+  return sessionExpired
+}
+
+export function markSessionExpired() {
+  sessionExpired = true
+  try {
+    if (typeof window !== 'undefined') window.dispatchEvent(new Event('auth:session-expired'))
+  } catch {}
+}
+
+export function clearSessionExpired() {
+  sessionExpired = false
+}
+
+export function clearAuthStorage() {
+  try {
+    localStorage.removeItem('access')
+    localStorage.removeItem('refresh')
+    localStorage.removeItem('user_data')
+    localStorage.removeItem('auth_user_id')
+  } catch {}
+}
+
+/** Decode JWT exp (seconds) without verifying signature — used only for client refresh timing. */
+export function isAccessTokenExpired(token, bufferMs = 60_000) {
+  try {
+    const raw = String(token || '').split('.')[1]
+    if (!raw) return true
+    const payload = JSON.parse(atob(raw.replace(/-/g, '+').replace(/_/g, '/')))
+    const exp = Number(payload?.exp)
+    if (!Number.isFinite(exp)) return true
+    return Date.now() >= exp * 1000 - bufferMs
+  } catch {
+    return true
+  }
+}
+
+function persistTokens(data) {
+  const newAccess = data?.access
+  const newRefresh = data?.refresh
+  if (newAccess) localStorage.setItem('access', newAccess)
+  if (newRefresh) localStorage.setItem('refresh', newRefresh)
+  if (newAccess || newRefresh) {
+    clearSessionExpired()
+    try {
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('auth:tokens-updated'))
+      }
+    } catch {}
+  }
+}
+
+/** Refresh access (and rotated refresh) token. Required when ROTATE_REFRESH_TOKENS is enabled on backend. */
+export async function refreshAccessToken() {
+  const refresh = localStorage.getItem('refresh')
+  if (!refresh) throw new Error('No refresh token')
+  const r = await axios.post(
+    backendBase.replace(/\/$/, '') + '/api/auth/token/refresh/',
+    { refresh },
+    { timeout: 10000 }
+  )
+  persistTokens(r?.data || {})
+  const access = r?.data?.access
+  if (!access) throw new Error('Refresh returned no access token')
+  return access
+}
+
+export function isUnauthorizedError(err) {
+  const status = err?.response?.status
+  return status === 401 || status === 403
+}
 
 // Guarded redirect to login to avoid reload loops when already on the login page
 let lastRedirectTs = 0
@@ -100,6 +167,40 @@ export function isCanceledRequest(err) {
   if (name === 'CanceledError' || name === 'AbortError') return true
   const msg = String(err?.message || '').toLowerCase()
   return msg === 'canceled' || msg.includes('aborted')
+}
+
+/** True for unreachable host / CORS — retrying usually does not help. */
+export function isHardNetworkFailure(err) {
+  if (!err || isCanceledRequest(err)) return false
+  if (err?.code === 'ERR_NETWORK') return true
+  const msg = String(err?.message || '').toLowerCase()
+  return msg === 'network error' || msg.includes('network error')
+}
+
+export function isRetryableRequestError(err) {
+  if (!err || isCanceledRequest(err) || isHardNetworkFailure(err)) return false
+  const status = err?.response?.status
+  return (
+    err?.code === 'ECONNABORTED' ||
+    err?.code === 'ECONNRESET' ||
+    err?.code === 'ETIMEDOUT' ||
+    err?.code === 'EPIPE' ||
+    (status && status >= 500)
+  )
+}
+
+export function getApiErrorMessage(err, fallback = 'Something went wrong') {
+  if (!err) return fallback
+  if (isCanceledRequest(err)) return ''
+  const data = err?.response?.data
+  if (typeof data === 'string' && data.trim()) return data
+  if (data?.detail) return String(data.detail)
+  if (data?.message) return String(data.message)
+  if (isHardNetworkFailure(err)) {
+    return 'Cannot reach the server. Check your internet connection, then refresh the page. If this persists, clear the app cache or reinstall the PWA.'
+  }
+  if (err?.message) return String(err.message)
+  return fallback
 }
 
 // Build low/medium/high image candidates by appending resize/quality query params.
@@ -165,14 +266,7 @@ api.interceptors.response.use(
     
     // Retry on network errors and 5xx errors
     if (!isAuthEndpoint && original && !original._retry) {
-      const isRetryable = (
-        err?.code === 'ECONNABORTED' ||
-        err?.code === 'ECONNRESET' ||
-        err?.code === 'ETIMEDOUT' ||
-        err?.code === 'EPIPE' ||
-        (status && status >= 500) ||
-        (!status && !isCanceledRequest(err))
-      )
+      const isRetryable = isRetryableRequestError(err)
       
       if (isRetryable) {
         original._retry = true
@@ -189,8 +283,9 @@ api.interceptors.response.use(
     if (status === 401 && original && !original._retry && !isAuthEndpoint) {
       original._retry = true
       const refresh = localStorage.getItem('refresh')
-      if (!refresh) {
-        try { localStorage.removeItem('access'); localStorage.removeItem('refresh') } catch {}
+      if (!refresh || sessionExpired) {
+        clearAuthStorage()
+        markSessionExpired()
         redirectToLoginIfNeeded()
         try { if (typeof window !== 'undefined') window.dispatchEvent(new Event('api:request:error')) } catch {}
         return Promise.reject(err)
@@ -198,13 +293,19 @@ api.interceptors.response.use(
       try {
         if (!isRefreshing) {
           isRefreshing = true
-          refreshPromise = axios.post(backendBase.replace(/\/$/, '') + '/api/auth/token/refresh/', { refresh }, { timeout: 10000 })
-            .then(r => {
-              const newAccess = r?.data?.access
-              if (newAccess) { localStorage.setItem('access', newAccess) }
-              isRefreshing = false; onRefreshed(newAccess); return newAccess
+          refreshPromise = refreshAccessToken()
+            .then((newAccess) => {
+              isRefreshing = false
+              onRefreshed(newAccess)
+              return newAccess
             })
-            .catch(e => { isRefreshing = false; try { localStorage.removeItem('access'); localStorage.removeItem('refresh') } catch {}; redirectToLoginIfNeeded(); throw e })
+            .catch((e) => {
+              isRefreshing = false
+              clearAuthStorage()
+              markSessionExpired()
+              redirectToLoginIfNeeded()
+              throw e
+            })
         }
         const newTok = await refreshPromise
         return new Promise(resolve => {
@@ -229,6 +330,9 @@ api.interceptors.response.use(
 const originalGet = api.get.bind(api)
 api.get = function dedupedGet(url, config) {
   const merged = { method: 'get', url, ...(config || {}) }
+  if (config?._noDedupe) {
+    return originalGet(url, config)
+  }
   const requestId = generateRequestId(merged)
   if (inflightGetPromises.has(requestId)) {
     return inflightGetPromises.get(requestId)

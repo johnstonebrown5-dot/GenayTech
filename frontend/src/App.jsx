@@ -135,7 +135,10 @@ function ProtectedRoute({ children, roles, ownerRole }) {
     return `/${r}`
   }
   
-  // If we have a user, show children immediately even if background loading is happening
+  if (loading) return <div className="p-8 flex items-center justify-center min-h-screen">
+    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+  </div>
+
   if (user) {
     if (!roles) return children
     const isAdminAccess = roles.includes('admin') && (user?.is_superuser || user?.is_staff || user?.role === 'admin')
@@ -147,26 +150,18 @@ function ProtectedRoute({ children, roles, ownerRole }) {
       return children
     }
     if ((user?.is_superuser || user?.is_staff) && roles.includes('admin')) return children
-    // If user is authenticated but not allowed here, redirect to their allowed home.
     return <Navigate to={roleHome(user)} state={{ from: location.pathname }} replace />
   }
 
-  // Only show loading if we are actually fetching the user for the first time and have no cache
-  if (loading) return <div className="p-8 flex items-center justify-center min-h-screen">
-    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-  </div>
-  
   return <Navigate to="/login" />
 }
 
 function PublicOnlyRoute({ children }) {
   const { user, loading } = useAuth()
-  // If we already know the user, do not show the login page.
-  if (user) return <Navigate to="/app" replace />
-  // While bootstrapping a session from cached token/user, avoid flashing login.
   if (loading) return <div className="p-8 flex items-center justify-center min-h-screen">
     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
   </div>
+  if (user) return <Navigate to="/app" replace />
   return children
 }
 

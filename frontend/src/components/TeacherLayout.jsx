@@ -4,6 +4,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth'
 import { useLock } from './LockProvider'
 import api from '../api'
+import { canRunAuthenticatedPoll, handlePollAuthError } from '../utils/authPoll'
 import { teacherQueries } from '../utils/teacherQueries'
 import TeacherOnboardingTour from './TeacherOnboardingTour'
 
@@ -168,8 +169,16 @@ export default function TeacherLayout({ children }){
 
   // Poll unread messages (inbox + system)
   useEffect(() => {
+    if (!canRunAuthenticatedPoll(user, false)) return
     let mounted = true
+    let intervalId = null
+    const stop = () => {
+      mounted = false
+      if (intervalId) clearInterval(intervalId)
+    }
     const load = async () => {
+      if (!mounted || !canRunAuthenticatedPoll(user, false)) return
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return
       try {
         const cacheKey = user?.id != null ? `unread_info:${String(user.id)}` : ''
         const cachedInfo = cacheKey ? teacherQueries.cache.get(cacheKey) : null
@@ -183,13 +192,19 @@ export default function TeacherLayout({ children }){
           const candidate = latest && latestBody && !dismissedIds.includes(latest.id) ? latest : null
           setBroadcastBanner(candidate)
         }
-      } catch {
+      } catch (err) {
+        if (handlePollAuthError(err, stop)) return
         if (mounted) { setUnreadCount(0); setBroadcastUnread(0); setBroadcastBanner(null) }
       }
     }
+    const onSessionExpired = () => stop()
+    try { window.addEventListener('auth:session-expired', onSessionExpired) } catch {}
     load()
-    const id = setInterval(load, 15000)
-    return () => { mounted = false; clearInterval(id) }
+    intervalId = setInterval(load, 20000)
+    return () => {
+      stop()
+      try { window.removeEventListener('auth:session-expired', onSessionExpired) } catch {}
+    }
   }, [user, dismissedIds])
 
   // Decide if user is a class teacher to show Attendance

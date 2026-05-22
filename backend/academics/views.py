@@ -2869,80 +2869,91 @@ class ExamViewSet(viewsets.ModelViewSet):
         Returns all data needed in a single call: exam, class, subjects, components, students, and existing results.
         This eliminates multiple sequential API calls and dramatically improves loading speed.
         """
+        import logging
+        logger = logging.getLogger(__name__)
         try:
-            exam = Exam.objects.select_related('klass').get(pk=pk)
-        except Exam.DoesNotExist:
-            return Response({'detail': 'Exam not found.'}, status=status.HTTP_404_NOT_FOUND)
-        
-        user = request.user
-        
-        # Enforce school scoping for non-admins
-        if not self._is_admin(request):
-            school = getattr(user, 'school', None)
-            if school and getattr(exam.klass, 'school_id', None) not in (None, getattr(school, 'id', None)):
+            try:
+                exam = Exam.objects.select_related('klass').get(pk=pk)
+            except Exam.DoesNotExist:
                 return Response({'detail': 'Exam not found.'}, status=status.HTTP_404_NOT_FOUND)
-        
-        # Teachers: allow if published or assigned to the class
-        if getattr(user, 'role', None) == 'teacher':
-            is_class_teacher = getattr(exam.klass, 'teacher_id', None) == getattr(user, 'id', None)
-            is_subject_teacher = ClassSubjectTeacher.objects.filter(klass=exam.klass, teacher=user).exists()
-            is_published = bool(getattr(exam, 'published', False)) or str(getattr(exam, 'status', '')).lower() == 'published'
-            if not (is_published or is_class_teacher or is_subject_teacher):
-                return Response({'detail': 'You do not have permission to perform this action.'}, status=status.HTTP_403_FORBIDDEN)
-        
-        # Fetch all data in parallel using optimized queries
-        klass = exam.klass
-        
-        # Get subjects (examinable only) - use only() to limit fields
-        subjects = list(klass.subjects.filter(is_examinable=True).only('id', 'code', 'name').values('id', 'code', 'name'))
-        if not subjects:
-            subjects = list(klass.subjects.all().only('id', 'code', 'name').values('id', 'code', 'name'))
-        
-        # Get components for each subject - use only() to limit fields
-        subject_ids = [s['id'] for s in subjects]
-        components = list(SubjectComponent.objects.filter(subject_id__in=subject_ids).only('id', 'subject_id', 'code', 'name', 'max_marks', 'weight', 'order').values('id', 'subject_id', 'code', 'name', 'max_marks', 'weight', 'order'))
-        
-        # Group components by subject
-        components_by_subject = {}
-        for comp in components:
-            sid = comp['subject_id']
-            if sid not in components_by_subject:
-                components_by_subject[sid] = []
-            components_by_subject[sid].append(comp)
-        
-        # Get students with optimized query - use only() to limit fields
-        students = list(Student.objects.filter(klass=klass, is_active=True).only('id', 'name', 'admission_no').values('id', 'name', 'admission_no'))
-        
-        # Get existing results with optimized query - use iterator() for memory efficiency with large datasets
-        # Only fetch results for the subjects we have
-        existing_results = list(
-            ExamResult.objects.filter(exam=exam, subject_id__in=subject_ids)
-            .select_related(None)  # No joins needed, we only need IDs
-            .only('id', 'student_id', 'subject_id', 'component_id', 'marks', 'out_of', 'remarks')
-            .values('id', 'student_id', 'subject_id', 'component_id', 'marks', 'out_of', 'remarks')
-            .iterator(chunk_size=500)  # Process in chunks to reduce memory pressure
-        )
-        
-        return Response({
-            'exam': {
-                'id': exam.id,
-                'name': exam.name,
-                'year': exam.year,
-                'term': exam.term,
-                'date': exam.date,
-                'total_marks': exam.total_marks,
-                'published': exam.published,
-            },
-            'klass': {
-                'id': klass.id,
-                'name': klass.name,
-                'grade_level': klass.grade_level,
-            },
-            'subjects': subjects,
-            'components_by_subject': components_by_subject,
-            'students': students,
-            'existing_results': existing_results,
-        })
+
+            user = request.user
+
+            # Enforce school scoping for non-admins
+            if not self._is_admin(request):
+                school = getattr(user, 'school', None)
+                if school and getattr(exam.klass, 'school_id', None) not in (None, getattr(school, 'id', None)):
+                    return Response({'detail': 'Exam not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+            # Teachers: allow if published or assigned to the class
+            if getattr(user, 'role', None) == 'teacher':
+                is_class_teacher = getattr(exam.klass, 'teacher_id', None) == getattr(user, 'id', None)
+                is_subject_teacher = ClassSubjectTeacher.objects.filter(klass=exam.klass, teacher=user).exists()
+                is_published = bool(getattr(exam, 'published', False)) or str(getattr(exam, 'status', '')).lower() == 'published'
+                if not (is_published or is_class_teacher or is_subject_teacher):
+                    return Response({'detail': 'You do not have permission to perform this action.'}, status=status.HTTP_403_FORBIDDEN)
+
+            klass = exam.klass
+
+            subjects = list(klass.subjects.filter(is_examinable=True).only('id', 'code', 'name').values('id', 'code', 'name'))
+            if not subjects:
+                subjects = list(klass.subjects.all().only('id', 'code', 'name').values('id', 'code', 'name'))
+
+            subject_ids = [s['id'] for s in subjects]
+            components_by_subject = {}
+            if subject_ids:
+                components = list(
+                    SubjectComponent.objects.filter(subject_id__in=subject_ids)
+                    .only('id', 'subject_id', 'code', 'name', 'max_marks', 'weight', 'order')
+                    .order_by('subject_id', 'order', 'id')
+                    .values('id', 'subject_id', 'code', 'name', 'max_marks', 'weight', 'order')
+                )
+                for comp in components:
+                    sid = comp['subject_id']
+                    components_by_subject.setdefault(sid, []).append(comp)
+
+            students = list(
+                Student.objects.filter(klass=klass, is_active=True)
+                .only('id', 'name', 'admission_no')
+                .order_by('name', 'id')
+                .values('id', 'name', 'admission_no')
+            )
+
+            existing_results = []
+            if subject_ids:
+                existing_results = list(
+                    ExamResult.objects.filter(exam=exam, subject_id__in=subject_ids)
+                    .only('id', 'student_id', 'subject_id', 'component_id', 'marks', 'out_of', 'remarks')
+                    .order_by('student_id', 'subject_id', 'component_id')
+                    .values('id', 'student_id', 'subject_id', 'component_id', 'marks', 'out_of', 'remarks')
+                )
+
+            return Response({
+                'exam': {
+                    'id': exam.id,
+                    'name': exam.name,
+                    'year': exam.year,
+                    'term': exam.term,
+                    'date': exam.date,
+                    'total_marks': exam.total_marks,
+                    'published': exam.published,
+                },
+                'klass': {
+                    'id': klass.id,
+                    'name': klass.name,
+                    'grade_level': klass.grade_level,
+                },
+                'subjects': subjects,
+                'components_by_subject': components_by_subject,
+                'students': students,
+                'existing_results': existing_results,
+            })
+        except Exception as exc:
+            logger.exception('enter_data failed for exam %s', pk)
+            return Response(
+                {'detail': 'Failed to load marks data. Please try again.'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
     @action(detail=True, methods=['get'], permission_classes=[permissions.IsAuthenticated])
     def summary(self, request, pk=None):
