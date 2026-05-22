@@ -30,6 +30,23 @@ def ensure_examresult_index_forward(apps, schema_editor):
     )
 
 
+_EXAMRESULT_ADDED_INDEXES = (
+    (None, 'academics_e_exam_id_93c253_idx', ['exam', 'student']),
+    (None, 'academics_e_exam_id_c350fc_idx', ['exam', 'subject']),
+    (None, 'academics_e_student_304068_idx', ['student']),
+    (None, 'academics_e_subject_0d8e26_idx', ['subject']),
+    (None, 'academics_e_exam_id_035b16_idx', ['exam', 'student', 'subject']),
+    (None, 'academics_e_exam_id_550e77_idx', ['exam', 'student', 'subject', 'component']),
+    (None, 'academics_e_exam_id_ac0049_idx', ['exam', 'updated_at']),
+    (None, 'academics_e_student_ad659b_idx', ['student', 'exam']),
+)
+
+
+def ensure_examresult_added_indexes_forward(apps, schema_editor):
+    ExamResult = apps.get_model('academics', 'examresult')
+    ensure_indexes_renamed_or_created(schema_editor, ExamResult, _EXAMRESULT_ADDED_INDEXES)
+
+
 class Migration(migrations.Migration):
 
     dependencies = [
@@ -53,52 +70,52 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='academicyear',
             name='label',
-            field=models.CharField(help_text='Display label e.g. 2024/2025', max_length=10),
+            field=models.CharField(help_text='Display label e.g. 2024/2025', max_length=20),
         ),
         migrations.AlterField(
             model_name='assessment',
             name='level',
-            field=models.CharField(max_length=30),
+            field=models.CharField(max_length=50),
         ),
         migrations.AlterField(
             model_name='attendance',
             name='status',
-            field=models.CharField(choices=[('present', 'Present'), ('absent', 'Absent'), ('late', 'Late')], max_length=15),
+            field=models.CharField(choices=[('present', 'Present'), ('absent', 'Absent'), ('late', 'Late')], max_length=20),
         ),
         migrations.AlterField(
             model_name='class',
             name='grade_level',
-            field=models.CharField(help_text="Grade level (e.g., '1', 'Grade 1')", max_length=15),
+            field=models.CharField(help_text="Grade level (e.g., '1', 'Grade 1')", max_length=20),
         ),
         migrations.AlterField(
             model_name='class',
             name='name',
-            field=models.CharField(blank=True, editable=False, max_length=50),
+            field=models.CharField(blank=True, editable=False, max_length=100),
         ),
         migrations.AlterField(
             model_name='class',
             name='stage',
-            field=models.CharField(blank=True, choices=[('primary', 'Primary'), ('junior', 'Junior Secondary')], default='', help_text='Primary: Grades 1-6; Junior Secondary: Grades 7-9', max_length=15),
+            field=models.CharField(blank=True, choices=[('primary', 'Primary'), ('junior', 'Junior Secondary')], default='', help_text='Primary: Grades 1-6; Junior Secondary: Grades 7-9', max_length=20),
         ),
         migrations.AlterField(
             model_name='competency',
             name='code',
-            field=models.CharField(max_length=20, unique=True),
+            field=models.CharField(max_length=50, unique=True),
         ),
         migrations.AlterField(
             model_name='competency',
             name='title',
-            field=models.CharField(max_length=150),
+            field=models.CharField(max_length=255),
         ),
         migrations.AlterField(
             model_name='exam',
             name='grade_level_tag',
-            field=models.CharField(blank=True, db_index=True, help_text="Grade level at the time the exam was set (e.g., 'Grade 4')", max_length=15),
+            field=models.CharField(blank=True, db_index=True, help_text="Grade level at the time the exam was set (e.g., 'Grade 4')", max_length=20),
         ),
         migrations.AlterField(
             model_name='exam',
             name='name',
-            field=models.CharField(max_length=50),
+            field=models.CharField(max_length=100),
         ),
         migrations.AlterField(
             model_name='exam',
@@ -118,17 +135,17 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='examresult',
             name='last_idempotency_key',
-            field=models.CharField(blank=True, db_index=True, max_length=40, null=True),
+            field=models.CharField(blank=True, db_index=True, max_length=80, null=True),
         ),
         migrations.AlterField(
             model_name='examresult',
             name='remarks',
-            field=models.CharField(blank=True, max_length=100, null=True),
+            field=models.CharField(blank=True, max_length=255, null=True),
         ),
         migrations.AlterField(
             model_name='lessonplan',
             name='topic',
-            field=models.CharField(max_length=150),
+            field=models.CharField(max_length=255),
         ),
         migrations.AlterField(
             model_name='lessonplan',
@@ -138,12 +155,12 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='portfolio',
             name='title',
-            field=models.CharField(max_length=150),
+            field=models.CharField(max_length=255),
         ),
         migrations.AlterField(
             model_name='stagegradingband',
             name='grade',
-            field=models.CharField(max_length=3),
+            field=models.CharField(max_length=5),
         ),
         migrations.AlterField(
             model_name='stagegradingband',
@@ -163,32 +180,32 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='stagegradingband',
             name='stage',
-            field=models.CharField(choices=[('primary', 'Primary'), ('junior', 'Junior Secondary')], max_length=15),
+            field=models.CharField(choices=[('primary', 'Primary'), ('junior', 'Junior Secondary')], max_length=20),
         ),
         migrations.AlterField(
             model_name='stream',
             name='name',
-            field=models.CharField(max_length=50),
+            field=models.CharField(max_length=100),
         ),
         migrations.AlterField(
             model_name='student',
             name='address',
-            field=models.CharField(blank=True, max_length=200),
+            field=models.CharField(blank=True, max_length=255),
         ),
         migrations.AlterField(
             model_name='student',
             name='admission_no',
-            field=models.CharField(max_length=30, unique=True),
+            field=models.CharField(max_length=50, unique=True),
         ),
         migrations.AlterField(
             model_name='student',
             name='birth_certificate_no',
-            field=models.CharField(blank=True, max_length=30),
+            field=models.CharField(blank=True, max_length=50),
         ),
         migrations.AlterField(
             model_name='student',
             name='gender',
-            field=models.CharField(max_length=10),
+            field=models.CharField(max_length=20),
         ),
         migrations.AlterField(
             model_name='student',
@@ -198,47 +215,47 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='student',
             name='guardian_id',
-            field=models.CharField(blank=True, max_length=50),
+            field=models.CharField(blank=True, max_length=100),
         ),
         migrations.AlterField(
             model_name='student',
             name='guardian_name',
-            field=models.CharField(blank=True, max_length=150),
+            field=models.CharField(blank=True, max_length=255),
         ),
         migrations.AlterField(
             model_name='student',
             name='guardian_passport_no',
-            field=models.CharField(blank=True, max_length=30),
+            field=models.CharField(blank=True, max_length=50),
         ),
         migrations.AlterField(
             model_name='student',
             name='name',
-            field=models.CharField(max_length=150),
+            field=models.CharField(max_length=255),
         ),
         migrations.AlterField(
             model_name='student',
             name='passport_no',
-            field=models.CharField(blank=True, max_length=30),
+            field=models.CharField(blank=True, max_length=50),
         ),
         migrations.AlterField(
             model_name='student',
             name='phone',
-            field=models.CharField(blank=True, max_length=20),
+            field=models.CharField(blank=True, max_length=50),
         ),
         migrations.AlterField(
             model_name='student',
             name='upi_number',
-            field=models.CharField(blank=True, max_length=30),
+            field=models.CharField(blank=True, max_length=50),
         ),
         migrations.AlterField(
             model_name='studentclasshistory',
             name='action',
-            field=models.CharField(choices=[('assigned', 'Assigned'), ('promoted', 'Promoted'), ('moved', 'Moved'), ('graduated', 'Graduated'), ('unassigned', 'Unassigned')], default='moved', max_length=15),
+            field=models.CharField(choices=[('assigned', 'Assigned'), ('promoted', 'Promoted'), ('moved', 'Moved'), ('graduated', 'Graduated'), ('unassigned', 'Unassigned')], default='moved', max_length=20),
         ),
         migrations.AlterField(
             model_name='studentclasshistory',
             name='note',
-            field=models.CharField(blank=True, max_length=150),
+            field=models.CharField(blank=True, max_length=255),
         ),
         migrations.AlterField(
             model_name='studentclasshistory',
@@ -253,27 +270,27 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='subject',
             name='category',
-            field=models.CharField(choices=[('language', 'Language'), ('science', 'Science'), ('arts', 'Arts'), ('humanities', 'Humanities'), ('other', 'Other')], default='other', max_length=15),
+            field=models.CharField(choices=[('language', 'Language'), ('science', 'Science'), ('arts', 'Arts'), ('humanities', 'Humanities'), ('other', 'Other')], default='other', max_length=20),
         ),
         migrations.AlterField(
             model_name='subject',
             name='code',
-            field=models.CharField(max_length=20, unique=True),
+            field=models.CharField(max_length=50, unique=True),
         ),
         migrations.AlterField(
             model_name='subject',
             name='name',
-            field=models.CharField(max_length=50),
+            field=models.CharField(max_length=100),
         ),
         migrations.AlterField(
             model_name='subjectcomponent',
             name='code',
-            field=models.CharField(max_length=20),
+            field=models.CharField(max_length=50),
         ),
         migrations.AlterField(
             model_name='subjectcomponent',
             name='name',
-            field=models.CharField(max_length=50),
+            field=models.CharField(max_length=100),
         ),
         migrations.AlterField(
             model_name='subjectcomponent',
@@ -283,7 +300,7 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='subjectgradingband',
             name='grade',
-            field=models.CharField(max_length=3),
+            field=models.CharField(max_length=5),
         ),
         migrations.AlterField(
             model_name='subjectgradingband',
@@ -303,53 +320,60 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='teacherduty',
             name='status',
-            field=models.CharField(choices=[('pending', 'Pending'), ('done', 'Done'), ('canceled', 'Canceled')], default='pending', max_length=15),
+            field=models.CharField(choices=[('pending', 'Pending'), ('done', 'Done'), ('canceled', 'Canceled')], default='pending', max_length=20),
         ),
         migrations.AlterField(
             model_name='teacherduty',
             name='title',
-            field=models.CharField(max_length=150),
+            field=models.CharField(max_length=200),
         ),
         migrations.AlterField(
             model_name='teacherprofile',
             name='subjects',
-            field=models.CharField(blank=True, max_length=150),
+            field=models.CharField(blank=True, max_length=255),
         ),
         migrations.AlterField(
             model_name='teacherprofile',
             name='tsc_number',
-            field=models.CharField(blank=True, help_text='T.S.C number', max_length=30, null=True, unique=True),
+            field=models.CharField(blank=True, help_text='T.S.C number', max_length=50, null=True, unique=True),
         ),
-        migrations.AddIndex(
-            model_name='examresult',
-            index=models.Index(fields=['exam', 'student'], name='academics_e_exam_id_93c253_idx'),
-        ),
-        migrations.AddIndex(
-            model_name='examresult',
-            index=models.Index(fields=['exam', 'subject'], name='academics_e_exam_id_c350fc_idx'),
-        ),
-        migrations.AddIndex(
-            model_name='examresult',
-            index=models.Index(fields=['student'], name='academics_e_student_304068_idx'),
-        ),
-        migrations.AddIndex(
-            model_name='examresult',
-            index=models.Index(fields=['subject'], name='academics_e_subject_0d8e26_idx'),
-        ),
-        migrations.AddIndex(
-            model_name='examresult',
-            index=models.Index(fields=['exam', 'student', 'subject'], name='academics_e_exam_id_035b16_idx'),
-        ),
-        migrations.AddIndex(
-            model_name='examresult',
-            index=models.Index(fields=['exam', 'student', 'subject', 'component'], name='academics_e_exam_id_550e77_idx'),
-        ),
-        migrations.AddIndex(
-            model_name='examresult',
-            index=models.Index(fields=['exam', 'updated_at'], name='academics_e_exam_id_ac0049_idx'),
-        ),
-        migrations.AddIndex(
-            model_name='examresult',
-            index=models.Index(fields=['student', 'exam'], name='academics_e_student_ad659b_idx'),
+        migrations.SeparateDatabaseAndState(
+            state_operations=[
+                migrations.AddIndex(
+                    model_name='examresult',
+                    index=models.Index(fields=['exam', 'student'], name='academics_e_exam_id_93c253_idx'),
+                ),
+                migrations.AddIndex(
+                    model_name='examresult',
+                    index=models.Index(fields=['exam', 'subject'], name='academics_e_exam_id_c350fc_idx'),
+                ),
+                migrations.AddIndex(
+                    model_name='examresult',
+                    index=models.Index(fields=['student'], name='academics_e_student_304068_idx'),
+                ),
+                migrations.AddIndex(
+                    model_name='examresult',
+                    index=models.Index(fields=['subject'], name='academics_e_subject_0d8e26_idx'),
+                ),
+                migrations.AddIndex(
+                    model_name='examresult',
+                    index=models.Index(fields=['exam', 'student', 'subject'], name='academics_e_exam_id_035b16_idx'),
+                ),
+                migrations.AddIndex(
+                    model_name='examresult',
+                    index=models.Index(fields=['exam', 'student', 'subject', 'component'], name='academics_e_exam_id_550e77_idx'),
+                ),
+                migrations.AddIndex(
+                    model_name='examresult',
+                    index=models.Index(fields=['exam', 'updated_at'], name='academics_e_exam_id_ac0049_idx'),
+                ),
+                migrations.AddIndex(
+                    model_name='examresult',
+                    index=models.Index(fields=['student', 'exam'], name='academics_e_student_ad659b_idx'),
+                ),
+            ],
+            database_operations=[
+                migrations.RunPython(ensure_examresult_added_indexes_forward, migrations.RunPython.noop),
+            ],
         ),
     ]

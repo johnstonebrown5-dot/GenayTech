@@ -26,7 +26,7 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='classfee',
             name='amount',
-            field=models.DecimalField(decimal_places=2, default=0, max_digits=8),
+            field=models.DecimalField(decimal_places=2, default=0, max_digits=10),
         ),
         migrations.AlterField(
             model_name='classfee',
@@ -41,82 +41,82 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='expense',
             name='amount',
-            field=models.DecimalField(decimal_places=2, max_digits=8),
+            field=models.DecimalField(decimal_places=2, max_digits=10),
         ),
         migrations.AlterField(
             model_name='expense',
             name='payee',
-            field=models.CharField(blank=True, default='', max_length=150),
+            field=models.CharField(blank=True, default='', max_length=255),
         ),
         migrations.AlterField(
             model_name='expensecategory',
             name='name',
-            field=models.CharField(max_length=50),
+            field=models.CharField(max_length=100),
         ),
         migrations.AlterField(
             model_name='feecategory',
             name='name',
-            field=models.CharField(max_length=50),
+            field=models.CharField(max_length=100),
         ),
         migrations.AlterField(
             model_name='incomingpayment',
             name='account_ref',
-            field=models.CharField(blank=True, help_text='Account reference passed to gateway (e.g., INV123, admission no)', max_length=50),
+            field=models.CharField(blank=True, help_text='Account reference passed to gateway (e.g., INV123, admission no)', max_length=100),
         ),
         migrations.AlterField(
             model_name='incomingpayment',
             name='amount',
-            field=models.DecimalField(decimal_places=2, max_digits=8),
+            field=models.DecimalField(decimal_places=2, max_digits=10),
         ),
         migrations.AlterField(
             model_name='incomingpayment',
             name='currency',
-            field=models.CharField(default='KES', max_length=5),
+            field=models.CharField(default='KES', max_length=10),
         ),
         migrations.AlterField(
             model_name='incomingpayment',
             name='external_id',
-            field=models.CharField(blank=True, help_text='Provider reference/unique id', max_length=50),
+            field=models.CharField(blank=True, help_text='Provider reference/unique id', max_length=100),
         ),
         migrations.AlterField(
             model_name='incomingpayment',
             name='payer_name',
-            field=models.CharField(blank=True, max_length=150),
+            field=models.CharField(blank=True, max_length=255),
         ),
         migrations.AlterField(
             model_name='incomingpayment',
             name='phone',
-            field=models.CharField(blank=True, max_length=20),
+            field=models.CharField(blank=True, max_length=50),
         ),
         migrations.AlterField(
             model_name='incomingpayment',
             name='reference',
-            field=models.CharField(blank=True, help_text='Receipt/transaction code', max_length=50),
+            field=models.CharField(blank=True, help_text='Receipt/transaction code', max_length=100),
         ),
         migrations.AlterField(
             model_name='incomingpayment',
             name='source',
-            field=models.CharField(choices=[('coop', 'Co-op'), ('mpesa', 'M-Pesa'), ('bank', 'Bank'), ('manual', 'Manual')], default='bank', max_length=15),
+            field=models.CharField(choices=[('coop', 'Co-op'), ('mpesa', 'M-Pesa'), ('bank', 'Bank'), ('manual', 'Manual')], default='bank', max_length=20),
         ),
         migrations.AlterField(
             model_name='incomingpayment',
             name='status',
-            field=models.CharField(choices=[('pending', 'Pending'), ('matched', 'Matched (Student identified)'), ('reconciled', 'Reconciled (Applied to invoices)'), ('ignored', 'Ignored')], db_index=True, default='pending', max_length=15),
+            field=models.CharField(choices=[('pending', 'Pending'), ('matched', 'Matched (Student identified)'), ('reconciled', 'Reconciled (Applied to invoices)'), ('ignored', 'Ignored')], db_index=True, default='pending', max_length=20),
         ),
         migrations.AlterField(
             model_name='invoice',
             name='amount',
-            field=models.DecimalField(decimal_places=2, max_digits=8),
+            field=models.DecimalField(decimal_places=2, max_digits=10),
         ),
         migrations.AlterField(
             model_name='invoice',
             name='mpesa_transaction_id',
-            field=models.CharField(blank=True, max_length=50),
+            field=models.CharField(blank=True, max_length=100),
         ),
         migrations.AlterField(
             model_name='invoice',
             name='status',
-            field=models.CharField(choices=[('paid', 'Paid'), ('unpaid', 'Unpaid'), ('partial', 'Partial')], default='unpaid', max_length=15),
+            field=models.CharField(choices=[('paid', 'Paid'), ('unpaid', 'Unpaid'), ('partial', 'Partial')], default='unpaid', max_length=20),
         ),
         migrations.AlterField(
             model_name='invoice',
@@ -131,57 +131,57 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='mpesaconfig',
             name='consumer_key',
-            field=models.CharField(max_length=100),
+            field=models.CharField(max_length=255),
         ),
         migrations.AlterField(
             model_name='mpesaconfig',
             name='consumer_secret',
-            field=models.CharField(max_length=100),
+            field=models.CharField(max_length=255),
         ),
         migrations.AlterField(
             model_name='mpesaconfig',
             name='environment',
-            field=models.CharField(choices=[('sandbox', 'Sandbox'), ('production', 'Production')], default='sandbox', max_length=10),
+            field=models.CharField(choices=[('sandbox', 'Sandbox'), ('production', 'Production')], default='sandbox', max_length=12),
         ),
         migrations.AlterField(
             model_name='mpesaconfig',
             name='passkey',
-            field=models.CharField(help_text='Lipa Na Mpesa Online passkey', max_length=100),
+            field=models.CharField(help_text='Lipa Na Mpesa Online passkey', max_length=255),
         ),
         migrations.AlterField(
             model_name='mpesaconfig',
             name='short_code',
-            field=models.CharField(help_text='Till or PayBill number', max_length=15),
+            field=models.CharField(help_text='Till or PayBill number', max_length=20),
         ),
         migrations.AlterField(
             model_name='payment',
             name='amount',
-            field=models.DecimalField(decimal_places=2, max_digits=8),
+            field=models.DecimalField(decimal_places=2, max_digits=10),
         ),
         migrations.AlterField(
             model_name='payment',
             name='method',
-            field=models.CharField(choices=[('mpesa', 'M-Pesa'), ('coop', 'Co-op Lipa na M-Pesa'), ('bank', 'Bank'), ('cash', 'Cash'), ('cheque', 'Cheque')], default='mpesa', max_length=10),
+            field=models.CharField(choices=[('mpesa', 'M-Pesa'), ('coop', 'Co-op Lipa na M-Pesa'), ('bank', 'Bank'), ('cash', 'Cash'), ('cheque', 'Cheque')], default='mpesa', max_length=20),
         ),
         migrations.AlterField(
             model_name='payment',
             name='reference',
-            field=models.CharField(blank=True, max_length=50),
+            field=models.CharField(blank=True, max_length=100),
         ),
         migrations.AlterField(
             model_name='pocketmoneytransaction',
             name='amount',
-            field=models.DecimalField(decimal_places=2, max_digits=8),
+            field=models.DecimalField(decimal_places=2, max_digits=10),
         ),
         migrations.AlterField(
             model_name='pocketmoneywallet',
             name='balance',
-            field=models.DecimalField(decimal_places=2, default=0, max_digits=8),
+            field=models.DecimalField(decimal_places=2, default=0, max_digits=10),
         ),
         migrations.AlterField(
             model_name='staffpayroll',
             name='base_salary',
-            field=models.DecimalField(decimal_places=2, default=0, max_digits=10),
+            field=models.DecimalField(decimal_places=2, default=0, max_digits=12),
         ),
         migrations.AlterField(
             model_name='staffpayroll',
@@ -191,12 +191,12 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='staffpayslip',
             name='basic',
-            field=models.DecimalField(decimal_places=2, default=0, max_digits=10),
+            field=models.DecimalField(decimal_places=2, default=0, max_digits=12),
         ),
         migrations.AlterField(
             model_name='staffpayslip',
             name='gross_pay',
-            field=models.DecimalField(decimal_places=2, default=0, max_digits=10),
+            field=models.DecimalField(decimal_places=2, default=0, max_digits=12),
         ),
         migrations.AlterField(
             model_name='staffpayslip',
@@ -206,7 +206,7 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='staffpayslip',
             name='net_pay',
-            field=models.DecimalField(decimal_places=2, default=0, max_digits=10),
+            field=models.DecimalField(decimal_places=2, default=0, max_digits=12),
         ),
         migrations.AlterField(
             model_name='staffpayslip',
@@ -216,7 +216,7 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='studentfee',
             name='amount',
-            field=models.DecimalField(decimal_places=2, default=0, max_digits=8),
+            field=models.DecimalField(decimal_places=2, default=0, max_digits=10),
         ),
         migrations.AlterField(
             model_name='studentfee',

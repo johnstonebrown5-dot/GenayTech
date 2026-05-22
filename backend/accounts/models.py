@@ -58,7 +58,7 @@ class SchoolIntegrationSettings(models.Model):
 
     school = models.OneToOneField(School, on_delete=models.CASCADE, related_name='integration_settings')
 
-    smtp_host = models.CharField(max_length=150, blank=True, default='')
+    smtp_host = models.CharField(max_length=255, blank=True, default='')
     smtp_port = models.PositiveSmallIntegerField(default=587)
     smtp_username = models.CharField(max_length=100, blank=True, default='')
     smtp_password = models.CharField(max_length=100, blank=True, default='')

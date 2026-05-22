@@ -5,7 +5,7 @@ class Notification(models.Model):
     TYPE_CHOICES = (("in_app","In-App"),("sms","SMS"),("email","Email"))
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     message = models.TextField()
-    type = models.CharField(max_length=15, choices=TYPE_CHOICES, default='in_app')
+    type = models.CharField(max_length=20, choices=TYPE_CHOICES, default='in_app')
     date = models.DateTimeField(auto_now_add=True)
     read = models.BooleanField(default=False)
 
@@ -23,12 +23,12 @@ class DeliveryLog(models.Model):
 
     school = models.ForeignKey('accounts.School', null=True, blank=True, on_delete=models.SET_NULL, related_name='delivery_logs')
     channel = models.CharField(max_length=10, choices=Channel.choices)
-    recipient = models.CharField(max_length=150)
+    recipient = models.CharField(max_length=255)
     ok = models.BooleanField(default=False)
-    status = models.CharField(max_length=15, choices=Status.choices, default=Status.PENDING)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
     message_snippet = models.TextField(blank=True, default='')
     error = models.TextField(blank=True, default='')
-    context = models.CharField(max_length=50, blank=True, default='', help_text='e.g., message:123, campaign:45, type:verification')
+    context = models.CharField(max_length=100, blank=True, default='', help_text='e.g., message:123, campaign:45, type:verification')
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -59,14 +59,14 @@ class Event(models.Model):
     )
 
     school = models.ForeignKey('accounts.School', on_delete=models.CASCADE, related_name='events')
-    title = models.CharField(max_length=150)
+    title = models.CharField(max_length=255)
     description = models.TextField(blank=True)
-    location = models.CharField(max_length=150, blank=True)
+    location = models.CharField(max_length=255, blank=True)
     start = models.DateTimeField()
     end = models.DateTimeField()
     all_day = models.BooleanField(default=False)
-    audience = models.CharField(max_length=15, choices=AUDIENCE_CHOICES, default='all')
-    visibility = models.CharField(max_length=15, choices=VISIBILITY_CHOICES, default='internal')
+    audience = models.CharField(max_length=20, choices=AUDIENCE_CHOICES, default='all')
+    visibility = models.CharField(max_length=20, choices=VISIBILITY_CHOICES, default='internal')
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -91,12 +91,12 @@ class ArrearsMessageCampaign(models.Model):
     # Optional filter by class
     klass = models.ForeignKey('academics.Class', null=True, blank=True, on_delete=models.SET_NULL)
     # Only include students whose balance is greater than or equal to this
-    min_balance = models.DecimalField(max_digits=8, decimal_places=2, default=0)
+    min_balance = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     # Delivery channels
     send_in_app = models.BooleanField(default=True)
     send_sms = models.BooleanField(default=False)
     send_email = models.BooleanField(default=False)
-    email_subject = models.CharField(max_length=150, blank=True, default='')
+    email_subject = models.CharField(max_length=255, blank=True, default='')
     # Aggregate counters
     sent_count = models.PositiveIntegerField(default=0)
     # Per-channel counters for reporting
@@ -112,7 +112,7 @@ class ArrearsMessageCampaign(models.Model):
         FAILED = 'failed', 'Failed'
         CANCELED = 'canceled', 'Canceled'
 
-    status = models.CharField(max_length=15, choices=Status.choices, default=Status.QUEUED)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.QUEUED)
     started_at = models.DateTimeField(null=True, blank=True)
     finished_at = models.DateTimeField(null=True, blank=True)
     error_message = models.TextField(blank=True, default='')
@@ -131,11 +131,11 @@ class ArrearsMessageCampaign(models.Model):
 class ServiceReview(models.Model):
     school = models.ForeignKey('accounts.School', null=True, blank=True, on_delete=models.SET_NULL, related_name='service_reviews')
     user = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='service_reviews')
-    name = models.CharField(max_length=50, blank=True, default='')
+    name = models.CharField(max_length=120, blank=True, default='')
     email = models.EmailField(blank=True, default='')
     rating = models.PositiveSmallIntegerField(help_text='1-5')
     comment = models.TextField(blank=True, default='')
-    page_url = models.CharField(max_length=300, blank=True, default='')
+    page_url = models.CharField(max_length=500, blank=True, default='')
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -180,11 +180,11 @@ class Message(models.Model):
     send_email = models.BooleanField(default=True)
     # Targeting
     audience = models.CharField(max_length=10, choices=Audience.choices, default=Audience.USERS)
-    recipient_role = models.CharField(max_length=15, choices=Roles.choices, null=True, blank=True)
+    recipient_role = models.CharField(max_length=20, choices=Roles.choices, null=True, blank=True)
     # Threading
     reply_to = models.ForeignKey('self', null=True, blank=True, on_delete=models.SET_NULL, related_name='replies')
     # Optional tag for system-generated messages to ease frontend filtering
-    system_tag = models.CharField(max_length=20, null=True, blank=True, db_index=True)
+    system_tag = models.CharField(max_length=30, null=True, blank=True, db_index=True)
     is_broadcast = models.BooleanField(default=False, db_index=True)
 
     class Meta:
@@ -216,7 +216,7 @@ class DeliveryJob(models.Model):
         FAILED = 'failed', 'Failed'
 
     message = models.OneToOneField(Message, on_delete=models.CASCADE, related_name='delivery_job')
-    status = models.CharField(max_length=15, choices=Status.choices, default=Status.PENDING, db_index=True)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING, db_index=True)
     attempts = models.PositiveSmallIntegerField(default=0)
     max_attempts = models.PositiveSmallIntegerField(default=10)
     next_run_at = models.DateTimeField(null=True, blank=True, db_index=True)

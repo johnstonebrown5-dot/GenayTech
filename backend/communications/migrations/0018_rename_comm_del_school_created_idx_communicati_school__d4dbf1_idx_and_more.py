@@ -69,12 +69,12 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='arrearsmessagecampaign',
             name='email_subject',
-            field=models.CharField(blank=True, default='', max_length=150),
+            field=models.CharField(blank=True, default='', max_length=255),
         ),
         migrations.AlterField(
             model_name='arrearsmessagecampaign',
             name='min_balance',
-            field=models.DecimalField(decimal_places=2, default=0, max_digits=8),
+            field=models.DecimalField(decimal_places=2, default=0, max_digits=10),
         ),
         migrations.AlterField(
             model_name='arrearsmessagecampaign',
@@ -94,7 +94,7 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='arrearsmessagecampaign',
             name='status',
-            field=models.CharField(choices=[('queued', 'Queued'), ('running', 'Running'), ('completed', 'Completed'), ('failed', 'Failed'), ('canceled', 'Canceled')], default='queued', max_length=15),
+            field=models.CharField(choices=[('queued', 'Queued'), ('running', 'Running'), ('completed', 'Completed'), ('failed', 'Failed'), ('canceled', 'Canceled')], default='queued', max_length=20),
         ),
         migrations.AlterField(
             model_name='deliveryjob',
@@ -109,66 +109,66 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='deliveryjob',
             name='status',
-            field=models.CharField(choices=[('pending', 'Pending'), ('running', 'Running'), ('completed', 'Completed'), ('failed', 'Failed')], db_index=True, default='pending', max_length=15),
+            field=models.CharField(choices=[('pending', 'Pending'), ('running', 'Running'), ('completed', 'Completed'), ('failed', 'Failed')], db_index=True, default='pending', max_length=20),
         ),
         migrations.AlterField(
             model_name='deliverylog',
             name='context',
-            field=models.CharField(blank=True, default='', help_text='e.g., message:123, campaign:45, type:verification', max_length=50),
+            field=models.CharField(blank=True, default='', help_text='e.g., message:123, campaign:45, type:verification', max_length=100),
         ),
         migrations.AlterField(
             model_name='deliverylog',
             name='recipient',
-            field=models.CharField(max_length=150),
+            field=models.CharField(max_length=255),
         ),
         migrations.AlterField(
             model_name='deliverylog',
             name='status',
-            field=models.CharField(choices=[('sent', 'Sent'), ('failed', 'Failed'), ('queued', 'Queued'), ('pending', 'Pending')], default='pending', max_length=15),
+            field=models.CharField(choices=[('sent', 'Sent'), ('failed', 'Failed'), ('queued', 'Queued'), ('pending', 'Pending')], default='pending', max_length=20),
         ),
         migrations.AlterField(
             model_name='event',
             name='audience',
-            field=models.CharField(choices=[('all', 'All'), ('students', 'Students'), ('teachers', 'Teachers'), ('parents', 'Parents'), ('staff', 'Staff')], default='all', max_length=15),
+            field=models.CharField(choices=[('all', 'All'), ('students', 'Students'), ('teachers', 'Teachers'), ('parents', 'Parents'), ('staff', 'Staff')], default='all', max_length=20),
         ),
         migrations.AlterField(
             model_name='event',
             name='location',
-            field=models.CharField(blank=True, max_length=150),
+            field=models.CharField(blank=True, max_length=255),
         ),
         migrations.AlterField(
             model_name='event',
             name='title',
-            field=models.CharField(max_length=150),
+            field=models.CharField(max_length=255),
         ),
         migrations.AlterField(
             model_name='event',
             name='visibility',
-            field=models.CharField(choices=[('public', 'Public'), ('internal', 'Internal')], default='internal', max_length=15),
+            field=models.CharField(choices=[('public', 'Public'), ('internal', 'Internal')], default='internal', max_length=20),
         ),
         migrations.AlterField(
             model_name='message',
             name='recipient_role',
-            field=models.CharField(blank=True, choices=[('admin', 'Admin'), ('teacher', 'Teacher'), ('student', 'Student'), ('finance', 'Finance')], max_length=15, null=True),
+            field=models.CharField(blank=True, choices=[('admin', 'Admin'), ('teacher', 'Teacher'), ('student', 'Student'), ('finance', 'Finance')], max_length=20, null=True),
         ),
         migrations.AlterField(
             model_name='message',
             name='system_tag',
-            field=models.CharField(blank=True, db_index=True, max_length=20, null=True),
+            field=models.CharField(blank=True, db_index=True, max_length=30, null=True),
         ),
         migrations.AlterField(
             model_name='notification',
             name='type',
-            field=models.CharField(choices=[('in_app', 'In-App'), ('sms', 'SMS'), ('email', 'Email')], default='in_app', max_length=15),
+            field=models.CharField(choices=[('in_app', 'In-App'), ('sms', 'SMS'), ('email', 'Email')], default='in_app', max_length=20),
         ),
         migrations.AlterField(
             model_name='servicereview',
             name='name',
-            field=models.CharField(blank=True, default='', max_length=50),
+            field=models.CharField(blank=True, default='', max_length=120),
         ),
         migrations.AlterField(
             model_name='servicereview',
             name='page_url',
-            field=models.CharField(blank=True, default='', max_length=300),
+            field=models.CharField(blank=True, default='', max_length=500),
         ),
     ]
