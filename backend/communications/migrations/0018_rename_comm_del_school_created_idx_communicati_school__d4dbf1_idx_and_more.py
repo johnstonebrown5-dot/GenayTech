@@ -2,7 +2,7 @@
 
 from django.db import migrations, models
 
-from edutrack.mysql_migration import drop_checks_for_app_models
+from edutrack.mysql_migration import drop_checks_for_app_models, ensure_indexes_renamed_or_created
 
 _COMMUNICATIONS_MODELS = (
     'arrearsmessagecampaign', 'deliveryjob', 'deliverylog', 'event', 'message',
@@ -14,6 +14,18 @@ def drop_mysql_checks_forward(apps, schema_editor):
     drop_checks_for_app_models(apps, schema_editor, 'communications', _COMMUNICATIONS_MODELS)
 
 
+_DELIVERYLOG_INDEX_RENAMES = (
+    ('comm_del_school_created_idx', 'communicati_school__d4dbf1_idx', ['school_id', 'created_at']),
+    ('comm_del_school_channel_created_idx', 'communicati_school__c0961e_idx', ['school_id', 'channel', 'created_at']),
+    ('comm_del_school_status_idx', 'communicati_school__129895_idx', ['school_id', 'status']),
+)
+
+
+def ensure_deliverylog_indexes_forward(apps, schema_editor):
+    DeliveryLog = apps.get_model('communications', 'deliverylog')
+    ensure_indexes_renamed_or_created(schema_editor, DeliveryLog, _DELIVERYLOG_INDEX_RENAMES)
+
+
 class Migration(migrations.Migration):
 
     dependencies = [
@@ -22,20 +34,27 @@ class Migration(migrations.Migration):
 
     operations = [
         migrations.RunPython(drop_mysql_checks_forward, migrations.RunPython.noop),
-        migrations.RenameIndex(
-            model_name='deliverylog',
-            new_name='communicati_school__d4dbf1_idx',
-            old_name='comm_del_school_created_idx',
-        ),
-        migrations.RenameIndex(
-            model_name='deliverylog',
-            new_name='communicati_school__c0961e_idx',
-            old_name='comm_del_school_channel_created_idx',
-        ),
-        migrations.RenameIndex(
-            model_name='deliverylog',
-            new_name='communicati_school__129895_idx',
-            old_name='comm_del_school_status_idx',
+        migrations.SeparateDatabaseAndState(
+            state_operations=[
+                migrations.RenameIndex(
+                    model_name='deliverylog',
+                    new_name='communicati_school__d4dbf1_idx',
+                    old_name='comm_del_school_created_idx',
+                ),
+                migrations.RenameIndex(
+                    model_name='deliverylog',
+                    new_name='communicati_school__c0961e_idx',
+                    old_name='comm_del_school_channel_created_idx',
+                ),
+                migrations.RenameIndex(
+                    model_name='deliverylog',
+                    new_name='communicati_school__129895_idx',
+                    old_name='comm_del_school_status_idx',
+                ),
+            ],
+            database_operations=[
+                migrations.RunPython(ensure_deliverylog_indexes_forward, migrations.RunPython.noop),
+            ],
         ),
         migrations.AlterField(
             model_name='arrearsmessagecampaign',

@@ -2,7 +2,7 @@
 
 from django.db import migrations, models
 
-from edutrack.mysql_migration import drop_checks_for_app_models
+from edutrack.mysql_migration import drop_checks_for_app_models, ensure_indexes_renamed_or_created
 
 _ACADEMICS_MODELS = (
     'academicyear', 'assessment', 'attendance', 'class', 'competency', 'exam', 'examresult',
@@ -15,6 +15,21 @@ def drop_mysql_checks_forward(apps, schema_editor):
     drop_checks_for_app_models(apps, schema_editor, 'academics', _ACADEMICS_MODELS)
 
 
+def ensure_examresult_index_forward(apps, schema_editor):
+    ExamResult = apps.get_model('academics', 'examresult')
+    ensure_indexes_renamed_or_created(
+        schema_editor,
+        ExamResult,
+        [
+            (
+                'acad_exam_subject_student_idx',
+                'academics_e_exam_id_4b2530_idx',
+                ['exam', 'subject', 'student'],
+            ),
+        ],
+    )
+
+
 class Migration(migrations.Migration):
 
     dependencies = [
@@ -23,10 +38,17 @@ class Migration(migrations.Migration):
 
     operations = [
         migrations.RunPython(drop_mysql_checks_forward, migrations.RunPython.noop),
-        migrations.RenameIndex(
-            model_name='examresult',
-            new_name='academics_e_exam_id_4b2530_idx',
-            old_name='acad_exam_subject_student_idx',
+        migrations.SeparateDatabaseAndState(
+            state_operations=[
+                migrations.RenameIndex(
+                    model_name='examresult',
+                    new_name='academics_e_exam_id_4b2530_idx',
+                    old_name='acad_exam_subject_student_idx',
+                ),
+            ],
+            database_operations=[
+                migrations.RunPython(ensure_examresult_index_forward, migrations.RunPython.noop),
+            ],
         ),
         migrations.AlterField(
             model_name='academicyear',

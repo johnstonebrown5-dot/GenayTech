@@ -45,6 +45,38 @@ def _drop_checks(schema_editor, table_name, constraint_name_like=None):
             cursor.execute(f'ALTER TABLE `{table_name}` DROP CHECK `{name}`')
 
 
+def _existing_index_names(schema_editor, table_name):
+    """Return set of index names on a table."""
+    connection = schema_editor.connection
+    with connection.cursor() as cursor:
+        constraints = connection.introspection.get_constraints(cursor, table_name)
+    return {name for name, info in constraints.items() if info.get('index')}
+
+
+def ensure_indexes_renamed_or_created(schema_editor, model, renames):
+    """
+    For each (old_name, new_name, fields): rename if old exists, else create new if missing.
+    renames: iterable of (old_name, new_name, fields_list)
+    """
+    from django.db.models import Index
+
+    table = model._meta.db_table
+    existing = _existing_index_names(schema_editor, table)
+
+    for old_name, new_name, fields in renames:
+        if new_name in existing:
+            continue
+        if old_name in existing:
+            old_index = Index(fields=fields, name=old_name)
+            new_index = Index(fields=fields, name=new_name)
+            schema_editor.rename_index(model, old_index, new_index)
+            existing.discard(old_name)
+            existing.add(new_name)
+        else:
+            schema_editor.add_index(model, Index(fields=fields, name=new_name))
+            existing.add(new_name)
+
+
 def drop_checks_for_app_models(apps, schema_editor, app_label, model_names):
     """Drop all CHECK constraints on the DB tables for the given models."""
     if schema_editor.connection.vendor != 'mysql':
