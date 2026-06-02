@@ -371,7 +371,7 @@ export default function AdminClassPrintReportCards({ classIdProp = null, embedde
 
   return (
     <React.Fragment>
-    <div className="p-4">
+    <div className="teacher-reportcards-reference p-4">
       <style>{`
         @page { size: A4 portrait; margin: 10mm; }
         @media print {

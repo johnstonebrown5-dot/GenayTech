@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
+import { CalendarDays, ChevronDown, LayoutGrid, Printer } from 'lucide-react'
 import { useAuth } from '../auth'
 import api, { toAbsoluteUrl } from '../api'
 
@@ -303,13 +304,29 @@ export default function TeacherTimetable() {
   }, [periods])
 
   return (
-    <div className="px-4 sm:px-6 lg:px-8 py-6">
-      {/* Print styles */}
+    <div className="teacher-phone-screen teacher-timetable-screen">
+      <div className="teacher-phone-status" aria-hidden>
+        <span>9:41</span>
+        <span>▮▮▮  Wi-Fi  ▰</span>
+      </div>
+
+      <div className="teacher-screen-title">
+        <h1>Your Timetable</h1>
+        <div className="teacher-title-actions">
+          <button type="button" onClick={()=>window.print()} aria-label="Print timetable">
+            <Printer className="h-5 w-5" />
+          </button>
+        </div>
+      </div>
+      {teacherName ? (
+        <div className="-mt-3 mb-4 text-[13px] font-bold text-gray-600 truncate">{teacherName}</div>
+      ) : null}
+
       <style>{`
         @media print {
           @page { size: A4 landscape; margin: 10mm; }
           body * { visibility: hidden; }
-          #print-area, #print-area * { visibility: visible; }
+          #print-area, #print-area * { visibility: visible; box-shadow: none !important; }
           #print-area { position: absolute; left: 0; top: 0; width: 100%; }
           .no-print { display: none !important; }
           .print-header h1 { font-size: 18px; }
@@ -317,118 +334,121 @@ export default function TeacherTimetable() {
         }
       `}</style>
 
-      <div className="mb-4 rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
-        <div className="p-3 sm:p-4 bg-gradient-to-r from-sky-50 via-white to-indigo-50">
-          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-600 to-sky-500 text-white flex items-center justify-center shadow-sm">
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3M3 11h18M5 5h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2z" />
-                  </svg>
-                </div>
-                <div className="min-w-0">
-                  <h1 className="text-xl sm:text-2xl font-extrabold text-gray-900 leading-tight">Your Timetable</h1>
-                  <div className="text-xs sm:text-sm text-gray-600 truncate">
-                    {teacherName ? teacherName : ''}
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-3 flex flex-wrap items-center gap-2 text-xs sm:text-sm">
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200">
-                  <span aria-hidden className="text-[11px]">⏱</span>
-                  <span className="font-semibold">Term</span>
-                  <span className="text-emerald-700">{plan?.term_detail?.name || (currentTerm ? (`T${currentTerm?.number||''}`) : (currentYear?.terms?.find(t=>t.is_current)?.name || ''))}</span>
+      <div className="rounded-2xl border border-gray-100 bg-white shadow-card p-4 mb-5">
+        <div className="flex items-start gap-3">
+          <div className="shrink-0 w-11 h-11 rounded-2xl bg-gradient-to-br from-indigo-600 to-sky-500 text-white grid place-items-center shadow-soft">
+            <CalendarDays className="h-5 w-5" />
+          </div>
+          <div className="min-w-0">
+            <div className="text-[14px] font-extrabold tracking-tight text-gray-900">Current schedule</div>
+            <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] font-extrabold">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200">
+                <span>Term</span>
+                <span className="text-emerald-700">{plan?.term_detail?.name || (currentTerm ? (`T${currentTerm?.number||''}`) : (currentYear?.terms?.find(t=>t.is_current)?.name || ''))}</span>
+              </span>
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-50 text-amber-800 border border-amber-200">
+                <span>Year</span>
+                <span className="text-amber-700">{plan?.term_detail?.academic_year_label || currentYear?.label || ''}</span>
+              </span>
+              {plan?.name ? (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-800 border border-indigo-200">
+                  <span>Plan</span>
+                  <span className="text-indigo-700">{plan.name}</span>
                 </span>
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-50 text-amber-800 border border-amber-200">
-                  <span aria-hidden className="text-[11px]">📅</span>
-                  <span className="font-semibold">Year</span>
-                  <span className="text-amber-700">{plan?.term_detail?.academic_year_label || currentYear?.label || ''}</span>
-                </span>
-                {plan?.name ? (
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-sky-50 text-sky-800 border border-sky-200">
-                    <span aria-hidden className="text-[11px]">🧩</span>
-                    <span className="font-semibold">Plan</span>
-                    <span className="text-sky-700">{plan.name}</span>
-                  </span>
-                ) : null}
-              </div>
-            </div>
-
-            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-2">
-              <div className="hidden sm:flex items-center gap-2">
-                <select value={selectedClassId||''} onChange={(e)=>setSelectedClassId(e.target.value? Number(e.target.value): null)} className="rounded-xl border-gray-300 px-3 py-2 text-sm bg-white min-w-[180px] focus:ring-2 focus:ring-indigo-200">
-                  <option value="">Select class</option>
-                  {(teacherClasses.length? teacherClasses : classList).map(c=> (<option key={c.id} value={c.id}>{c.name}</option>))}
-                </select>
-                <button
-                  disabled={!selectedClassId}
-                  onClick={()=>{ if(selectedClassId){ const url = `/admin/timetable/class?classId=${selectedClassId}${plan?`&planId=${plan.id}`:''}`; navigate(url) } }}
-                  className="px-3 py-2 rounded-xl text-white bg-gradient-to-r from-indigo-600 to-purple-600 text-sm font-semibold shadow-sm disabled:opacity-50"
-                >Class View</button>
-                <button
-                  onClick={()=>{ navigate('/teacher/block-timetable') }}
-                  className="px-3 py-2 rounded-xl text-white bg-gradient-to-r from-sky-500 to-blue-600 text-sm font-semibold shadow-sm"
-                >Block View</button>
-              </div>
-              <button className="px-4 py-2 rounded-xl text-white bg-gradient-to-r from-amber-500 to-orange-600 text-sm font-semibold shadow-sm" onClick={()=>window.print()}>
-                Print
-              </button>
+              ) : null}
             </div>
           </div>
+        </div>
 
-          <div className="sm:hidden mt-3 grid grid-cols-2 gap-2">
+        <div className="mt-4 space-y-3">
+          <button
+            type="button"
+            className="w-full min-h-[44px] rounded-2xl bg-gradient-to-r from-amber-500 to-orange-600 text-white text-sm font-extrabold shadow-elevated"
+            onClick={()=>window.print()}
+          >
+            Print
+          </button>
+
+          <div className="grid grid-cols-2 gap-3">
             <button
               type="button"
               onClick={()=>{ navigate('/teacher/block-timetable') }}
-              className="px-3 py-2 rounded-xl text-white bg-gradient-to-r from-sky-500 to-blue-600 text-sm font-semibold shadow-sm"
+              className="min-h-[44px] rounded-2xl bg-gradient-to-r from-sky-500 to-blue-600 text-white text-sm font-extrabold shadow-card inline-flex items-center justify-center gap-2"
             >
+              <LayoutGrid className="h-4 w-4" />
               Block View
+            </button>
+            <div className="relative">
+              <select
+                value={selectedClassId||''}
+                onChange={(e)=>setSelectedClassId(e.target.value? Number(e.target.value): null)}
+                className="w-full min-h-[44px] rounded-2xl border border-gray-200 bg-white shadow-card px-3 pr-10 text-sm font-extrabold text-gray-900 focus-soft"
+                aria-label="Pick class"
+              >
+                <option value="">Pick Class</option>
+                {(teacherClasses.length? teacherClasses : classList).map(c=> (<option key={c.id} value={c.id}>{c.name}</option>))}
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+            </div>
+          </div>
+
+          <div className="hidden sm:flex items-center gap-2">
+            <button
+              disabled={!selectedClassId}
+              onClick={()=>{ if(selectedClassId){ const url = `/admin/timetable/class?classId=${selectedClassId}${plan?`&planId=${plan.id}`:''}`; navigate(url) } }}
+              className="flex-1 min-h-[44px] rounded-2xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white text-sm font-extrabold shadow-card disabled:opacity-50"
+            >
+              Class View
             </button>
             <button
               type="button"
-              onClick={()=>{
-                const next = (teacherClasses.length? teacherClasses : classList)?.[0]
-                if (next?.id) setSelectedClassId(next.id)
-              }}
-              className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-slate-800 text-sm font-semibold shadow-sm"
+              onClick={()=> setRefreshTick(t=>t+1)}
+              className="min-h-[44px] rounded-2xl border border-gray-200 bg-white text-gray-900 text-sm font-extrabold shadow-card px-4"
             >
-              Pick Class
+              Refresh
             </button>
           </div>
         </div>
       </div>
 
       <div id="print-area">
-        {/* Print header with school branding */}
-        <div className="print-header mb-4 flex flex-col items-center gap-2 text-center">
-          {school?.logo_url && (
-            <img src={toAbsoluteUrl(school.logo_url)} alt="School Logo" className="h-12 w-12 object-contain mx-auto" />
-          )}
-          <div className="min-w-0">
-            <h1 className="font-extrabold text-gray-900 leading-tight">{school?.name || ''}</h1>
-            {school?.motto && <p className="text-gray-600 italic leading-tight">{school.motto}</p>}
+        <div className="print-header mb-4 rounded-2xl border border-gray-100 bg-white shadow-card p-4">
+          <div className="flex items-center gap-3">
+            {school?.logo_url ? (
+              <img src={toAbsoluteUrl(school.logo_url)} alt="School Logo" className="h-12 w-12 object-contain" />
+            ) : (
+              <div className="h-12 w-12 rounded-2xl bg-gray-100" />
+            )}
+            <div className="min-w-0">
+              <h1 className="font-extrabold text-gray-900 leading-tight truncate">{school?.name || ''}</h1>
+              {school?.motto ? <p className="text-gray-600 italic leading-tight truncate">{school.motto}</p> : null}
+            </div>
+          </div>
+          <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] font-extrabold text-gray-700">
+            <span className="inline-flex items-center rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1">
+              Teacher: <span className="ml-1 text-gray-900">{teacherName || '—'}</span>
+            </span>
+            <span className="inline-flex items-center rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1">
+              Term: <span className="ml-1 text-gray-900">{plan?.term_detail?.name || (currentTerm ? (`T${currentTerm?.number||''}`) : (currentYear?.terms?.find(t=>t.is_current)?.name || ''))}</span>
+            </span>
+            <span className="inline-flex items-center rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1">
+              Year: <span className="ml-1 text-gray-900">{plan?.term_detail?.academic_year_label || currentYear?.label || ''}</span>
+            </span>
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-8 mb-3 text-[15px]">
-          <div>Teacher: <span className="font-bold text-lg">{teacherName || '—'}</span></div>
-          <div>Term: <span className="font-semibold">{plan?.term_detail?.name || (currentTerm ? (`T${currentTerm?.number||''}`) : (currentYear?.terms?.find(t=>t.is_current)?.name || ''))}</span></div>
-          <div>Year: <span className="font-semibold">{plan?.term_detail?.academic_year_label || currentYear?.label || ''}</span></div>
-        </div>
         {loading? (
-          <div className="text-gray-500">Loading…</div>
+          <div className="teacher-reference-card">Loading…</div>
         ) : (
-          <div className="a4-sheet bg-white rounded-lg border border-gray-200 shadow-sm mx-auto min-h-[60vh] flex flex-col">
-            <div className="overflow-x-auto -mx-2 px-2">
+          <div className="a4-sheet bg-white rounded-2xl border border-gray-100 shadow-card mx-auto min-h-[60vh] flex flex-col overflow-hidden">
+            <div className="overflow-x-auto">
               <table className="w-full min-w-[800px] md:min-w-0 table-fixed text-[11px] md:text-[12px] border-collapse">
                 <thead>
-                  <tr className="bg-blue-50/60">
-                    <th className="px-2 py-5 text-left text-gray-700 w-20 uppercase tracking-wide sticky left-0 z-20 bg-blue-50/60">Day</th>
+                  <tr className="bg-gray-50">
+                    <th className="px-2 py-4 text-left text-gray-700 w-20 uppercase tracking-wide sticky left-0 z-20 bg-gray-50">Day</th>
                     {displayPeriods.map(p=> {
                       const isNow = p.period_index===currentPeriodIndex
                       return (
-                      <th key={`h-${p.period_index}`} className={`px-2 py-5 text-center font-semibold ${isNow? 'text-emerald-800 bg-emerald-50 ring-1 ring-emerald-300':'text-gray-800'}`}>
+                      <th key={`h-${p.period_index}`} className={`px-2 py-4 text-center font-semibold ${isNow? 'text-emerald-800 bg-emerald-50 ring-1 ring-emerald-300':'text-gray-800'}`}>
                         {p.kind==='lesson'? `Lesson ${p.period_index}` : (p.label||p.kind.toUpperCase())}
                       </th>)
                     })}
@@ -439,21 +459,21 @@ export default function TeacherTimetable() {
                     const isToday = d===currentDay
                     return (
                     <tr key={`d-${d}`} className="border-t">
-                      <td className={`px-2 py-5 font-semibold uppercase align-middle sticky left-0 z-10 ${isToday? 'text-emerald-800 bg-emerald-50 ring-1 ring-emerald-300':'text-gray-900 bg-gray-50'}`}>{dayNames[d]}</td>
+                      <td className={`px-2 py-4 font-semibold uppercase align-middle sticky left-0 z-10 ${isToday? 'text-emerald-800 bg-emerald-50 ring-1 ring-emerald-300':'text-gray-900 bg-gray-50'}`}>{dayNames[d]}</td>
                       {displayPeriods.map(p=>{
                         if(p.kind==='break' || p.kind==='lunch'){
                           const isNow = p.period_index===currentPeriodIndex && isToday
                           const bg = isNow ? 'bg-emerald-200 text-emerald-900' : (p.kind==='break'? 'bg-amber-200 text-amber-900' : 'bg-yellow-200 text-yellow-900')
-                          return <td key={`c-${d}-${p.period_index}`} className={`px-2 py-5 text-center font-bold align-middle ${bg}`}>{(p.label||p.kind||'').toString().toUpperCase()}</td>
+                          return <td key={`c-${d}-${p.period_index}`} className={`px-2 py-4 text-center font-bold align-middle ${bg}`}>{(p.label||p.kind||'').toString().toUpperCase()}</td>
                         }
                         const entries = periods.length? cellEntries(d, p.period_index) : []
                         if(entries.length===0){
                           const isNow = p.period_index===currentPeriodIndex && isToday
-                          return <td key={`c-${d}-${p.period_index}`} className={`px-2 py-5 text-center align-middle ${isNow? 'bg-emerald-50 text-emerald-700 font-medium':'text-gray-400'}`}>—</td>
+                          return <td key={`c-${d}-${p.period_index}`} className={`px-2 py-4 text-center align-middle ${isNow? 'bg-emerald-50 text-emerald-700 font-medium':'text-gray-400'}`}>—</td>
                         }
                         const isNow = p.period_index===currentPeriodIndex && isToday
                         return (
-                          <td key={`c-${d}-${p.period_index}`} className={`px-2 py-5 text-center align-middle ${isNow? 'bg-emerald-50 ring-1 ring-emerald-200':''}`}>
+                          <td key={`c-${d}-${p.period_index}`} className={`px-2 py-4 text-center align-middle ${isNow? 'bg-emerald-50 ring-1 ring-emerald-200':''}`}>
                             {entries.map((txt, idx)=> (
                               <div key={idx} className="leading-tight text-gray-900">{txt}</div>
                             ))}

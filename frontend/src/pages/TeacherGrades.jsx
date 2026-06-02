@@ -1,5 +1,24 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import {
+  BarChart3,
+  BookOpen,
+  ClipboardCheck,
+  Clock3,
+  CircleX,
+  Filter,
+  FileText,
+  GraduationCap,
+  CheckCircle2,
+  ChevronDown,
+  CalendarDays,
+  PencilLine,
+  Save,
+  Search as SearchIcon,
+  SlidersHorizontal,
+  TrendingUp,
+  Users as UsersIcon,
+} from 'lucide-react'
 import api from '../api'
 import Modal from '../components/Modal'
 import { useNotification } from '../components/NotificationContext'
@@ -39,6 +58,9 @@ export default function TeacherGrades(){
   const saveIdempotencyRef = useRef({}) // { key: string } stable per-(key,value) idempotency key
   const retryTimersRef = useRef({}) // { key: timeoutId }
   const retryCountRef = useRef({}) // { key: number }
+  const outOfSyncTimerRef = useRef(null)
+  const lastOutOfSyncedRef = useRef({ key: '', out: '' })
+  const outOfTouchedRef = useRef(false)
   const [isOnline, setIsOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true)
   const pendingQueueRef = useRef({}) // { key: { kind:'single'|'all', studentId, compId?, raw } }
   const examsCacheRef = useRef({})
@@ -195,6 +217,10 @@ export default function TeacherGrades(){
     if (!c) return 'Paper'
     return c.code ? `${c.code} - ${c.name}` : String(c.name || 'Paper')
   }, [entryMode, selectedComponentId, components])
+  const classDisplay = useMemo(()=>{
+    const c = classes.find(x=> String(x.id)===String(selectedClass))
+    return c ? String(c.name || 'Class') : 'Class'
+  }, [classes, selectedClass])
 
   // Student search
   const [searchQuery, setSearchQuery] = useState('')
@@ -269,8 +295,6 @@ export default function TeacherGrades(){
       const failed = Number(res?.data?.failed || 0)
       const bulkErrors = Array.isArray(res?.data?.errors) ? res.data.errors : []
       if (failed === 0) {
-        // Reload data from server to ensure consistency after successful save
-        reloadSavedMarks()
         return { ok: true, failed: 0, errors: [] }
       }
       // If some failed, retry only failed rows individually
@@ -312,10 +336,6 @@ export default function TeacherGrades(){
           }
         }
         const finalFailed = retryFailed
-        if (finalFailed === 0) {
-          // Reload data from server to ensure consistency after successful save
-          reloadSavedMarks()
-        }
         return { ok: finalFailed === 0, failed: finalFailed, errors: finalFailed ? errors.slice(0, 10) : [] }
       }
     } catch (e) {
@@ -350,10 +370,6 @@ export default function TeacherGrades(){
         failed++
         errors.push({ error: 'Failed to save one row.' })
       }
-    }
-    if (failed === 0) {
-      // Reload data from server to ensure consistency after successful save
-      reloadSavedMarks()
     }
     return { ok: failed === 0, failed, errors }
   }
@@ -403,6 +419,29 @@ export default function TeacherGrades(){
     if (sumOut <= 0) return ''
     return `${Math.round((sumMarks / sumOut) * 1000) / 10}%`
   }
+  const mobileOverview = useMemo(() => {
+    const list = Array.isArray(students) ? students : []
+    const values = list.map(st => {
+      if (entryMode === 'single'){
+        const raw = marks?.[st.id]
+        const value = Number(raw)
+        const out = Number(outOf || examMeta.total_marks || 100)
+        if (!Number.isFinite(value) || !Number.isFinite(out) || out <= 0) return null
+        return Math.max(0, Math.min(100, (value / out) * 100))
+      }
+      const combined = String(toCombinedPercent(st.id) || '').replace('%', '')
+      const value = Number(combined)
+      return Number.isFinite(value) ? value : null
+    }).filter(v => v !== null)
+    const average = values.length ? Math.round(values.reduce((a,b)=>a+b, 0) / values.length) : 0
+    const highest = values.length ? Math.round(Math.max(...values)) : 0
+    return { total: list.length, graded: values.length, average, highest }
+  }, [students, marks, marksAll, outOf, outOfPerComp, examMeta.total_marks, entryMode, components])
+
+  const pendingStudents = Math.max(0, (mobileOverview?.total || 0) - (mobileOverview?.graded || 0))
+  const outOfDisplay = Number(outOf) || Number(examMeta.total_marks) || 100
+  const termLabel = examMeta?.term ? `Term ${examMeta.term}` : '—'
+  const yearLabel = examMeta?.year ? `${examMeta.year}-${Number(examMeta.year) + 1}` : '—'
 
   // Upload UI state
   const [uploadFile, setUploadFile] = useState(null)
@@ -1190,7 +1229,7 @@ export default function TeacherGrades(){
         const merged = { ...defaults, ...(saved||{}) }
         setOutOfPerComp(merged)
         const firstOut = first ? (merged[first.id] ?? defaults[first.id]) : (Number(examMeta.total_marks)||100)
-        setOutOf(String(firstOut))
+        if (!outOfTouchedRef.current) setOutOf(String(firstOut))
         const emptyMarksAll = {}
         const emptyInvalidAll = {}
         for (const c of arr){
@@ -1205,7 +1244,7 @@ export default function TeacherGrades(){
       }catch{
         setComponents([])
         setSelectedComponentId('')
-        setOutOf(String(Number(examMeta.total_marks)||100))
+        if (!outOfTouchedRef.current) setOutOf(String(Number(examMeta.total_marks)||100))
         setOutOfPerComp({})
         setMarksAll({})
         setInvalidAll({})
@@ -1220,12 +1259,12 @@ export default function TeacherGrades(){
     const comp = components.find(c => String(c.id)===String(selectedComponentId))
     if (!comp){
       const fallback = Number(examMeta.total_marks)||100
-      setOutOf(String(fallback))
+      if (!outOfTouchedRef.current) setOutOf(String(fallback))
       return
     }
     const saved = loadOutOfPrefs()
     const val = (saved && saved[comp.id] != null) ? Number(saved[comp.id]) : (comp.max_marks != null ? Number(comp.max_marks) : (Number(examMeta.total_marks)||100))
-    setOutOf(String(val))
+    if (!outOfTouchedRef.current) setOutOf(String(val))
     missingComponentWarnedRef.current = false
   }, [selectedComponentId, examMeta.total_marks])
 
@@ -1256,6 +1295,52 @@ export default function TeacherGrades(){
       saveOutOfPrefs(current)
     }
   }, [outOf, selectedComponentId, selectedClass, selectedSubject, selectedExamId])
+
+  useEffect(()=>{
+    if (!selectedExamId || !selectedSubject) return
+    if (entryMode !== 'single') return
+    const out = Number(outOf)
+    if (!Number.isFinite(out) || out <= 0) return
+    const subjectHasComponents = Array.isArray(components) && components.length > 0
+    if (subjectHasComponents && !selectedComponentId) return
+    const key = `${selectedExamId}|${selectedSubject}|${selectedComponentId||''}|single`
+    if (String(lastOutOfSyncedRef.current?.key||'') === key && String(lastOutOfSyncedRef.current?.out||'') === String(out)) return
+    if (outOfSyncTimerRef.current) clearTimeout(outOfSyncTimerRef.current)
+    outOfSyncTimerRef.current = setTimeout(async () => {
+      try{
+        const examId = Number(selectedExamId)
+        const subjectId = Number(selectedSubject)
+        const componentId = selectedComponentId ? Number(selectedComponentId) : undefined
+        if (!examId || !subjectId) return
+        const payload = (students || [])
+          .map(s => {
+            const v = Number(marks?.[s.id])
+            if (!Number.isFinite(v)) return null
+            const item = { exam: examId, subject: subjectId, student: s.id, marks: Math.round(v), out_of: out }
+            if (componentId) item.component = componentId
+            return item
+          })
+          .filter(Boolean)
+        if (payload.length === 0){
+          lastOutOfSyncedRef.current = { key, out }
+          return
+        }
+        await saveResults(payload)
+        const savedState = {}
+        payload.forEach(r => {
+          const k = r.component ? `c:${r.component}|s:${r.student}` : `s:${r.student}`
+          savedState[k] = { status: 'saved', updatedAt: Date.now() }
+        })
+        if (Object.keys(savedState).length){
+          setSaveState(prev => ({ ...prev, ...savedState }))
+        }
+        lastOutOfSyncedRef.current = { key, out }
+      }catch{}
+    }, 650)
+    return () => {
+      if (outOfSyncTimerRef.current) clearTimeout(outOfSyncTimerRef.current)
+    }
+  }, [outOf, selectedExamId, selectedSubject, selectedComponentId, entryMode, components])
 
   // Re-validate all marks when outOf changes and notify immediately if any exceed
   useEffect(()=>{
@@ -1446,7 +1531,9 @@ export default function TeacherGrades(){
     }catch{}
   }, [students, selectedClass, selectedSubject, selectedExamId])
 
-  const submit = async () => {
+  const submit = async (event) => {
+    event?.preventDefault?.()
+    event?.stopPropagation?.()
     setSaving(true)
     setError('')
     setMessage('')
@@ -1519,90 +1606,14 @@ export default function TeacherGrades(){
         setMessage('Some grades could not be saved.')
         showError('Partial save', `${failed} failed. ${detail}${errs.length>3?' ...':''}`, 6000)
       }
-      // Refresh marks from server to reflect canonical values
-      try{
-        if (entryMode === 'single'){
-          const componentId = selectedComponentId ? Number(selectedComponentId) : undefined
-          const base = `/academics/exam_results/?exam=${examId}&subject=${subjectId}`
-          const fetchAll = async (url) => {
-            let out = []
-            let next = url
-            let guard = 0
-            while (next && guard < 50){
-              const res = await api.get(next)
-              const data = res?.data
-              if (Array.isArray(data)) { out = data; break }
-              if (data && Array.isArray(data.results)) { out = out.concat(data.results); next = data.next; guard++; continue }
-              break
-            }
-            return out
-          }
-          const list = await fetchAll(componentId ? `${base}&component=${componentId}` : base)
-          // Start from existing values; only overlay those returned by server
-          const next = { ...marks }
-          const savedState = {}
-          list.forEach(r=>{
-            if (!r) return
-            const sid = r.student ?? r.student_id ?? (r.student_detail?.id)
-            if (sid != null){
-              const val = r.marks ?? r.score ?? r.value
-              if (val != null) {
-                next[sid] = Math.round(Number(val))
-                const key = `s:${sid}`
-                savedState[key] = { status: 'saved', updatedAt: Date.now() }
-                try{
-                  const sig = `${examId}|${subjectId}|${componentId || ''}`
-                  lastSavedRef.current[key] = { raw: String(val), sig }
-                }catch{}
-              }
-            }
-          })
-          setMarks(next)
-          if (Object.keys(savedState).length){
-            setSaveState(prev => ({ ...prev, ...savedState }))
-          }
-        } else {
-          // refresh per component
-          const fetchAll = async (url) => {
-            let out = []
-            let next = url
-            let guard = 0
-            while (next && guard < 50){
-              const res = await api.get(next)
-              const data = res?.data
-              if (Array.isArray(data)) { out = data; break }
-              if (data && Array.isArray(data.results)) { out = out.concat(data.results); next = data.next; guard++; continue }
-              break
-            }
-            return out
-          }
-          const nextMarksAll = {}
-          const savedState = {}
-          for (const c of components){
-            const url = `/academics/exam_results/?exam=${examId}&subject=${subjectId}&component=${c.id}`
-            const list = await fetchAll(url)
-            const map = {}
-            students.forEach(s=>{ map[s.id] = '' })
-            list.forEach(r=>{
-              if (r && r.student != null){
-                const raw = r.marks
-                map[r.student] = normalizeStoredMark(raw, outOfPerComp[c.id])
-                const key = `c:${c.id}|s:${r.student}`
-                savedState[key] = { status: 'saved', updatedAt: Date.now() }
-                try{
-                  const sig = `${examId}|${subjectId}|${c.id || ''}`
-                  lastSavedRef.current[key] = { raw: String(raw), sig }
-                }catch{}
-              }
-            })
-            nextMarksAll[c.id] = map
-          }
-          setMarksAll(nextMarksAll)
-          if (Object.keys(savedState).length){
-            setSaveState(prev => ({ ...prev, ...savedState }))
-          }
-        }
-      }catch{}
+      const savedState = {}
+      payload.forEach(r => {
+        const key = r.component ? `c:${r.component}|s:${r.student}` : `s:${r.student}`
+        savedState[key] = { status: 'saved', updatedAt: Date.now() }
+      })
+      if (Object.keys(savedState).length){
+        setSaveState(prev => ({ ...prev, ...savedState }))
+      }
       // Clear draft after successful save
       try { localStorage.removeItem(draftKey()) } catch {}
     }catch(e){
@@ -1673,125 +1684,403 @@ export default function TeacherGrades(){
   }
 
   return (
-    <div className="teacher-grades-page px-2 md:px-4 lg:px-6 py-1 md:py-4 space-y-2 md:space-y-4 max-w-6xl mx-auto pb-24 md:pb-0 min-h-screen">
-      {/* Header */}
-      <div className="hidden md:block relative overflow-hidden rounded-2xl border border-gray-200 bg-gradient-to-r from-indigo-500 via-indigo-600 to-sky-500 shadow-md">
-        <div className="pointer-events-none absolute -right-16 -top-16 h-40 w-40 rounded-full bg-white/15 blur-2" />
-        <div className="p-2 md:p-4 flex items-center justify-between gap-2 md:gap-3">
-          <div>
-            <div className="text-lg md:text-xl font-semibold tracking-tight text-white">Input Grades</div>
-          </div>
-
-        {(!isOnline || pendingCount > 0 || autosaveSummary.errors > 0) && (
-          <div className={`mt-3 rounded-xl border p-3 flex items-start justify-between gap-3 ${!isOnline ? 'bg-amber-50 border-amber-200' : (autosaveSummary.errors > 0 ? 'bg-red-50 border-red-200' : 'bg-indigo-50 border-indigo-200')}`}>
+    <div className="teacher-grades-page teacher-phone-form px-2 md:px-6 lg:px-8 py-2 md:py-8 space-y-2 md:space-y-6 max-w-7xl mx-auto pb-24 md:pb-10 min-h-screen bg-gradient-to-b from-[#fbfcff] to-[#f7f8ff]">
+      <section className="hidden md:block">
+        <div className="rounded-[28px] border border-white/60 bg-white/80 backdrop-blur shadow-[0_24px_60px_rgba(43,39,86,0.10)] p-8">
+          <div className="flex items-start justify-between gap-6">
             <div className="min-w-0">
-              <div className="text-sm font-semibold text-gray-900">
-                {!isOnline ? 'You are offline' : (autosaveSummary.errors > 0 ? 'Some marks failed to save' : 'Pending marks to save')}
-              </div>
-              <div className="text-xs text-gray-700 mt-0.5">
-                Status: <span className="font-medium">{isOnline ? 'Online' : 'Offline'}</span>
-                {'  '}| Saving: <span className="font-medium">{autosaveSummary.saving}</span>
-                {'  '}| Failed: <span className="font-medium">{autosaveSummary.errors}</span>
-                {'  '}| Pending queue: <span className="font-medium">{pendingCount}</span>
-              </div>
-              <div className="text-xs text-gray-600 mt-1">
-                Keep this page open. Autosave will retry automatically{isOnline ? '.' : ' when you reconnect.'}
+              <div className="text-sm font-semibold text-slate-500">Welcome back, Teacher!</div>
+              <div className="mt-1 flex items-center gap-4">
+                <h1 className="text-3xl font-extrabold tracking-tight text-slate-900 truncate">{classDisplay || '—'}</h1>
+                <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100 text-sm font-bold">
+                  <UsersIcon className="h-4 w-4" />
+                  {mobileOverview.total}
+                </span>
               </div>
             </div>
-            <div className="flex-shrink-0 flex gap-2">
+            <button
+              type="button"
+              onClick={()=>setFormModalOpen(true)}
+              className="inline-flex items-center gap-2.5 px-5 h-12 rounded-xl bg-gradient-to-r from-indigo-600 to-sky-600 text-white font-bold shadow-sm hover:from-indigo-700 hover:to-sky-700"
+            >
+              <PencilLine className="h-5 w-5" />
+              Edit Assessment
+            </button>
+          </div>
+
+          <div className="mt-6 grid grid-cols-4 gap-4">
+            <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+              <div className="flex items-center gap-3">
+                <span className="grid place-items-center h-11 w-11 rounded-2xl bg-blue-50 text-blue-600">
+                  <FileText className="h-5 w-5" />
+                </span>
+                <div className="min-w-0">
+                  <div className="text-xs font-semibold text-slate-500">Paper</div>
+                  <div className="text-sm font-extrabold text-slate-900 truncate">{entryMode === 'all' ? 'All Papers' : (componentDisplay || 'Whole Subjects')}</div>
+                </div>
+              </div>
+            </div>
+            <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+              <div className="flex items-center gap-3">
+                <span className="grid place-items-center h-11 w-11 rounded-2xl bg-orange-50 text-orange-600">
+                  <ClipboardCheck className="h-5 w-5" />
+                </span>
+                <div className="min-w-0">
+                  <div className="text-xs font-semibold text-slate-500">Exam</div>
+                  <div className="text-sm font-extrabold text-slate-900 truncate">{examDisplay || '—'}</div>
+                </div>
+              </div>
+            </div>
+            <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+              <div className="flex items-center gap-3">
+                <span className="grid place-items-center h-11 w-11 rounded-2xl bg-emerald-50 text-emerald-600">
+                  <CalendarDays className="h-5 w-5" />
+                </span>
+                <div className="min-w-0">
+                  <div className="text-xs font-semibold text-slate-500">Term</div>
+                  <div className="text-sm font-extrabold text-slate-900 truncate">{termLabel}</div>
+                </div>
+              </div>
+            </div>
+            <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+              <div className="flex items-center gap-3">
+                <span className="grid place-items-center h-11 w-11 rounded-2xl bg-violet-50 text-violet-600">
+                  <CalendarDays className="h-5 w-5" />
+                </span>
+                <div className="min-w-0">
+                  <div className="text-xs font-semibold text-slate-500">Year</div>
+                  <div className="text-sm font-extrabold text-slate-900 truncate">{yearLabel}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-6 grid grid-cols-[1fr_180px] gap-4">
+            <div className="rounded-2xl border border-slate-100 bg-white shadow-sm px-5 h-14 flex items-center gap-3">
+              <SearchIcon className="h-5 w-5 text-slate-400" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={e=>setSearchQuery(e.target.value)}
+                placeholder="Search student by name or ID..."
+                className="flex-1 bg-transparent outline-none text-sm font-semibold text-slate-900 placeholder:text-slate-400"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={()=>setFormModalOpen(true)}
+              className="rounded-2xl border border-slate-100 bg-white shadow-sm h-14 px-5 flex items-center justify-center gap-2 text-sm font-bold text-slate-700 hover:bg-slate-50"
+            >
+              <Filter className="h-5 w-5 text-slate-500" />
+              Filters
+            </button>
+          </div>
+
+          <div className="mt-6 grid grid-cols-4 gap-4">
+            <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+              <div className="flex items-center gap-3">
+                <span className="grid place-items-center h-11 w-11 rounded-2xl bg-violet-50 text-violet-600">
+                  <UsersIcon className="h-5 w-5" />
+                </span>
+                <div>
+                  <div className="text-lg font-extrabold text-slate-900">{mobileOverview.total}</div>
+                  <div className="text-xs font-semibold text-slate-500">Total Students</div>
+                </div>
+              </div>
+            </div>
+            <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+              <div className="flex items-center gap-3">
+                <span className="grid place-items-center h-11 w-11 rounded-2xl bg-blue-50 text-blue-600">
+                  <ClipboardCheck className="h-5 w-5" />
+                </span>
+                <div>
+                  <div className="text-lg font-extrabold text-slate-900">{mobileOverview.graded}</div>
+                  <div className="text-xs font-semibold text-slate-500">Graded</div>
+                </div>
+              </div>
+            </div>
+            <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+              <div className="flex items-center gap-3">
+                <span className="grid place-items-center h-11 w-11 rounded-2xl bg-orange-50 text-orange-600">
+                  <BarChart3 className="h-5 w-5" />
+                </span>
+                <div>
+                  <div className="text-lg font-extrabold text-slate-900">{mobileOverview.average ? `${mobileOverview.average}` : '–'}</div>
+                  <div className="text-xs font-semibold text-slate-500">Class Average</div>
+                </div>
+              </div>
+            </div>
+            <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+              <div className="flex items-center gap-3">
+                <span className="grid place-items-center h-11 w-11 rounded-2xl bg-emerald-50 text-emerald-600">
+                  <TrendingUp className="h-5 w-5" />
+                </span>
+                <div>
+                  <div className="text-lg font-extrabold text-slate-900">{mobileOverview.highest ? `${mobileOverview.highest}` : '–'}</div>
+                  <div className="text-xs font-semibold text-slate-500">Highest Score</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {error && <div className="mt-6 bg-red-50 text-red-700 p-3 rounded-xl border border-red-200">{error}</div>}
+          {message && <div className="mt-6 bg-emerald-50 text-emerald-700 p-3 rounded-xl border border-emerald-200">{message}</div>}
+
+          {entryLocked && (
+            <div className="mt-8 rounded-2xl border border-slate-100 bg-white shadow-sm p-6">
+              <div className="flex items-center gap-3">
+                <div className="w-5 h-5 rounded-full border-2 border-indigo-300 border-t-indigo-700 animate-spin" />
+                <div className="text-sm font-bold text-slate-900">Preparing grade entry…</div>
+              </div>
+              <div className="mt-1 text-sm text-slate-500">
+                {studentsLoading ? 'Loading students…' : (examsLoading ? 'Loading exams…' : (marksLoading ? 'Loading saved marks…' : 'Select class, subject, and exam to begin.'))}
+              </div>
+              <div className="mt-5 grid grid-cols-2 gap-3">
+                <div className="h-12 rounded-xl bg-slate-100 animate-pulse" />
+                <div className="h-12 rounded-xl bg-slate-100 animate-pulse" />
+                <div className="h-12 rounded-xl bg-slate-100 animate-pulse" />
+                <div className="h-12 rounded-xl bg-slate-100 animate-pulse" />
+              </div>
+            </div>
+          )}
+
+          {!entryLocked && (
+            <div className="mt-8 rounded-2xl border border-slate-100 bg-white shadow-sm overflow-hidden">
+              <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+                <div className="text-lg font-extrabold text-slate-900">Enter Marks</div>
+                <div className="flex items-center gap-3">
+                  <div className="text-sm font-semibold text-slate-500">Out of</div>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    min={1}
+                    step="1"
+                    value={outOf}
+                    onChange={e=>{ outOfTouchedRef.current = true; setOutOf(e.target.value) }}
+                    className="h-11 w-24 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-300"
+                  />
+                  <button
+                    type="button"
+                    onClick={submit}
+                    disabled={saving || !canSubmit}
+                    className="h-11 px-4 rounded-xl bg-indigo-600 text-white font-bold inline-flex items-center gap-2 hover:bg-indigo-700 disabled:opacity-60"
+                  >
+                    <Save className="h-4 w-4" />
+                    Save All
+                  </button>
+                </div>
+              </div>
+              <div className="overflow-auto">
+                <table className="min-w-full text-sm">
+                  <thead className="bg-slate-50 text-slate-500 text-xs font-extrabold tracking-wider">
+                    <tr>
+                      <th className="px-6 py-3 text-left w-12">#</th>
+                      <th className="px-6 py-3 text-left">STUDENT</th>
+                      <th className="px-6 py-3 text-left w-44">ID</th>
+                      {entryMode === 'single' ? (
+                        <th className="px-6 py-3 text-left w-52">MARKS (0 - {outOfDisplay})</th>
+                      ) : (
+                        <>
+                          {components.map(c => (
+                            <th key={c.id} className="px-6 py-3 text-right">{c.code}</th>
+                          ))}
+                          <th className="px-6 py-3 text-right w-28">%</th>
+                        </>
+                      )}
+                      <th className="px-6 py-3 text-left w-44">STATUS</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {sortedStudents.map((st, idx) => {
+                      const avatar = String(st?.name || '?')
+                        .split(' ')
+                        .filter(Boolean)
+                        .slice(0, 2)
+                        .map(s => s[0])
+                        .join('')
+                        .toUpperCase()
+                      const hue = (Number(st?.id || idx) * 47) % 360
+                      const hasValue = entryMode === 'single'
+                        ? !isNaN(parseFloat(marks?.[st.id]))
+                        : String(toCombinedPercent(st.id) || '').trim() !== ''
+                      const hasInvalid = entryMode === 'single'
+                        ? Boolean(invalid?.[st.id])
+                        : Boolean(Object.values(invalidAll || {}).some(col => col?.[st.id]))
+                      const key = entryMode === 'single' ? `s:${st.id}` : `s:${st.id}`
+                      const ss = saveState?.[key]
+                      const graded = hasValue && !hasInvalid && ss?.status !== 'saving' && ss?.status !== 'error'
+                      const statusTone = graded ? 'text-emerald-600' : 'text-amber-600'
+                      return (
+                        <tr key={st.id} className="bg-white">
+                          <td className="px-6 py-4 text-slate-500 font-semibold">{idx + 1}</td>
+                          <td className="px-6 py-4">
+                            <div className="flex items-center gap-3 min-w-0">
+                              <div
+                                className="h-10 w-10 rounded-full grid place-items-center text-sm font-extrabold text-white"
+                                style={{ background: `hsl(${hue} 70% 68%)` }}
+                              >
+                                {avatar || '?'}
+                              </div>
+                              <div className="min-w-0">
+                                <div className="font-extrabold text-slate-900 truncate">{st.name}</div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 text-slate-500 font-semibold">{st.admission_no || '—'}</td>
+                          {entryMode === 'single' ? (
+                            <td className="px-6 py-4">
+                              <input
+                                type="number"
+                                inputMode="decimal"
+                                min={0}
+                                max={inputAs==='percent' ? 100 : outOfDisplay}
+                                step="1"
+                                value={inputAs==='percent' ? marksToPercent(marks?.[st.id], outOf) : (marks?.[st.id] || '')}
+                                onChange={e=>handleMarkChange(st.id, e.target.value)}
+                                onBlur={()=>flushSingleSave(st.id)}
+                                onKeyDown={(e)=>{
+                                  if (e.key === 'Enter'){
+                                    try{ e.currentTarget?.blur?.() }catch{}
+                                    flushSingleSave(st.id)
+                                  }
+                                }}
+                                className={`h-11 w-32 rounded-xl border px-3 text-sm font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-300 ${invalid?.[st.id] ? 'border-red-400 bg-red-50' : 'border-slate-200 bg-white'}`}
+                                placeholder="Enter marks"
+                              />
+                            </td>
+                          ) : (
+                            <>
+                              {components.map(c => (
+                                <td key={c.id} className="px-6 py-4 text-right">
+                                  <input
+                                    type="number"
+                                    inputMode="decimal"
+                                    min={0}
+                                    max={inputAs==='percent' ? 100 : (Number(outOfPerComp[c.id])||Number(examMeta.total_marks)||100)}
+                                    step="1"
+                                    value={inputAs==='percent' ? marksToPercent((marksAll?.[c.id]?.[st.id]), outOfPerComp[c.id]) : ((marksAll?.[c.id]?.[st.id]) || '')}
+                                    onChange={e=>handleMarkChangeAll(c.id, st.id, e.target.value)}
+                                    onBlur={()=>flushAllSave(c.id, st.id)}
+                                    onKeyDown={(e)=>{
+                                      if (e.key === 'Enter'){
+                                        try{ e.currentTarget?.blur?.() }catch{}
+                                        flushAllSave(c.id, st.id)
+                                      }
+                                    }}
+                                    className={`h-11 w-24 rounded-xl border px-3 text-sm font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-300 text-right ${(invalidAll?.[c.id]?.[st.id]) ? 'border-red-400 bg-red-50' : 'border-slate-200 bg-white'}`}
+                                  />
+                                </td>
+                              ))}
+                              <td className="px-6 py-4 text-right font-bold text-slate-700">{toCombinedPercent(st.id) || '—'}</td>
+                            </>
+                          )}
+                          <td className="px-6 py-4">
+                            <div className={`inline-flex items-center gap-2 font-bold ${statusTone}`}>
+                              {graded ? <CheckCircle2 className="h-5 w-5" /> : <Clock3 className="h-5 w-5" />}
+                              {graded ? 'Graded' : 'Pending'}
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <div className="px-6 py-4 bg-violet-50/50 border-t border-slate-100">
+                <button type="button" className="w-full h-12 rounded-xl bg-white border border-slate-200 text-indigo-700 font-bold inline-flex items-center justify-center gap-2 hover:bg-slate-50">
+                  Load more students
+                  <ChevronDown className="h-5 w-5" />
+                </button>
+              </div>
+            </div>
+          )}
+
+          <div className="mt-6 rounded-2xl border border-slate-100 bg-white shadow-sm px-6 py-4 flex items-center justify-between">
+            <div className="text-sm font-semibold text-slate-500">
+              Total Students: <span className="text-slate-900 font-extrabold">{mobileOverview.total}</span>
+              <span className="mx-3 text-slate-300">|</span>
+              <span className="text-emerald-600 font-extrabold">Graded: {mobileOverview.graded}</span>
+              <span className="mx-3 text-slate-300">|</span>
+              <span className="text-amber-600 font-extrabold">Pending: {pendingStudents}</span>
+            </div>
+            <div className="flex items-center gap-3">
               <button
                 type="button"
-                onClick={()=>flushPendingQueue()}
-                disabled={!isOnline || pendingCount === 0}
-                className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-white border border-gray-200 hover:bg-gray-50 disabled:opacity-60"
+                onClick={openPreview}
+                disabled={!selectedExamId}
+                className="h-11 px-5 rounded-xl bg-white border border-slate-200 text-indigo-700 font-bold inline-flex items-center gap-2 hover:bg-slate-50 disabled:opacity-60"
               >
-                Retry now
+                Preview
+              </button>
+              <button
+                type="button"
+                onClick={submit}
+                disabled={saving || !canSubmit}
+                className="h-11 px-5 rounded-xl bg-indigo-600 text-white font-bold inline-flex items-center gap-2 hover:bg-indigo-700 disabled:opacity-60"
+              >
+                Save Grades
               </button>
             </div>
           </div>
-        )}
-          <div className="hidden md:flex items-center gap-2">
-            <button
-              onClick={reloadSavedMarks}
-              type="button"
-              className="group inline-flex items-center gap-2 text-xs md:text-sm pl-2.5 pr-3 py-1.5 rounded-full bg-gradient-to-r from-white/95 to-white/80 text-indigo-700 border border-white/70 shadow-sm hover:from-white hover:to-white hover:shadow transition-colors"
-              aria-label="Refresh Sheet"
-            >
-              <svg className="h-3.5 w-3.5 text-indigo-600 group-hover:animate-spin-slow" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M3.5 10a6.5 6.5 0 1111.04 4.62l1.22 1.22a.75.75 0 01-1.06 1.06l-2.7-2.7a.75.75 0 01-.22-.53V9.5a.75.75 0 011.5 0v2.74A5 5 0 105 10a.75.75 0 01-1.5 0z"/></svg>
-              Refresh Sheet
-            </button>
-            <button
-              type="button"
-              onClick={()=>setFormModalOpen(true)}
-              className="text-xs md:text-sm px-3 py-1.5 rounded-full bg-white/90 text-indigo-700 border border-white/70 shadow-sm whitespace-nowrap max-w-[50vw] overflow-hidden text-ellipsis hover:bg-white"
-              aria-label="Change exam and subject"
-            >
-              {subjectDisplay} • {examDisplay}
-            </button>
-          </div>
-          <div className="md:hidden flex items-center gap-1.5">
-            <button
-              onClick={reloadSavedMarks}
-              className="group inline-flex items-center gap-1.5 text-[11px] pl-2.5 pr-3 py-1.5 rounded-full bg-white text-indigo-700 border border-indigo-200 shadow-sm hover:bg-indigo-50/50 transition-colors"
-              aria-label="Refresh Sheet"
-            >
-              <svg className="h-3.5 w-3.5 text-indigo-600 group-hover:animate-spin-slow" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M3.5 10a6.5 6.5 0 1111.04 4.62l1.22 1.22a.75.75 0 01-1.06 1.06l-2.7-2.7a.75.75 0 01-.22-.53V9.5a.75.75 0 011.5 0v2.74A5 5 0 105 10a.75.75 0 01-1.5 0z"/></svg>
-              Refresh
-            </button>
-            <button
-              type="button"
-              onClick={()=>setFormModalOpen(true)}
-              className="text-[11px] px-2.5 py-1.5 rounded-full bg-white text-indigo-700 border border-indigo-200 shadow-sm whitespace-nowrap max-w-[45vw] overflow-hidden text-ellipsis hover:bg-indigo-50/50"
-              aria-label="Change exam and subject"
-            >
-              {subjectDisplay} • {examDisplay}
-            </button>
-          </div>
         </div>
-      </div>
+      </section>
 
-      <div className="sticky top-2 z-30">
-        <div className="rounded-2xl border border-indigo-100 bg-white/95 backdrop-blur shadow-sm px-3 py-2.5">
-          <div className="flex items-start justify-between gap-2">
-            <div className="grid grid-cols-2 md:flex md:flex-wrap gap-2 text-[11px] md:text-sm flex-1">
-              <div className="rounded-xl border border-sky-100 bg-sky-50/60 px-2.5 py-1.5">
-                <div className="text-[10px] text-sky-700 font-semibold">Class</div>
-                <div className="text-slate-900 font-semibold leading-tight truncate">
-                  {(classes.find(c=>String(c.id)===String(selectedClass))||{}).name || selectedClass || '—'}
-                </div>
-              </div>
-              <div className="rounded-xl border border-emerald-100 bg-emerald-50/60 px-2.5 py-1.5">
-                <div className="text-[10px] text-emerald-700 font-semibold">Subject</div>
-                <div className="text-slate-900 font-semibold leading-tight truncate">
-                  {subjectDisplay || '—'}
-                </div>
-              </div>
-              <div className="rounded-xl border border-violet-100 bg-violet-50/60 px-2.5 py-1.5">
-                <div className="text-[10px] text-violet-700 font-semibold">Paper</div>
-                <div className="text-slate-900 font-semibold leading-tight truncate">
-                  {entryMode === 'all' ? 'All Papers' : (componentDisplay || '—')}
-                </div>
-              </div>
-              <div className="rounded-xl border border-amber-100 bg-amber-50/60 px-2.5 py-1.5">
-                <div className="text-[10px] text-amber-700 font-semibold">Exam</div>
-                <div className="text-slate-900 font-semibold leading-tight truncate">
-                  {examDisplay || '—'}
-                </div>
-              </div>
+      <section className="teacher-grades-mobile-reference md:hidden">
+        <div className="teacher-grades-hero-card">
+          <div className="teacher-grade-hero-grid">
+            <div className="teacher-grade-hero-item">
+              <span className="purple"><GraduationCap className="h-5 w-5" /></span>
+              <small>Class</small>
+              <strong>{classDisplay}</strong>
             </div>
-            <button
-              type="button"
-              onClick={()=>setFormModalOpen(true)}
-              className="h-10 px-4 rounded-xl bg-gradient-to-r from-indigo-600 to-sky-600 text-white text-sm font-semibold shadow-sm hover:from-indigo-700 hover:to-sky-700 flex-shrink-0"
-            >
-              Change
-            </button>
+            <div className="teacher-grade-hero-item">
+              <span className="green"><BookOpen className="h-5 w-5" /></span>
+              <small>Subject</small>
+              <strong>{subjectDisplay}</strong>
+            </div>
+            <div className="teacher-grade-hero-item">
+              <span className="blue"><FileText className="h-5 w-5" /></span>
+              <small>Paper</small>
+              <strong>{entryMode === 'all' ? 'All Papers' : (componentDisplay || 'Whole Subject')}</strong>
+            </div>
+            <div className="teacher-grade-hero-item">
+              <span className="orange"><ClipboardCheck className="h-5 w-5" /></span>
+              <small>Exam</small>
+              <strong>{examDisplay}</strong>
+            </div>
           </div>
+          <button type="button" onClick={()=>setFormModalOpen(true)} className="teacher-grade-change">
+            <PencilLine className="h-5 w-5" />
+            Change
+          </button>
         </div>
-      </div>
 
-      {error && <div className="bg-red-50 text-red-700 p-3 rounded border border-red-200">{error}</div>}
-      {message && <div className="bg-green-50 text-green-700 p-3 rounded border border-green-200">{message}</div>}
+        <div className="teacher-grade-search-row">
+          <label>
+            <SearchIcon className="h-5 w-5" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={e=>setSearchQuery(e.target.value)}
+              placeholder="Search student by name or admission"
+            />
+          </label>
+          <button type="button" onClick={()=>setFormModalOpen(true)} aria-label="Filter grade options">
+            <SlidersHorizontal className="h-5 w-5" />
+          </button>
+        </div>
+
+        <h2 className="teacher-grade-section-title">Overview</h2>
+        <div className="teacher-grade-overview-grid">
+          <div className="violet"><UsersIcon className="h-5 w-5" /><strong>{mobileOverview.total}</strong><span>Total Students</span></div>
+          <div className="blue"><ClipboardCheck className="h-5 w-5" /><strong>{mobileOverview.graded}</strong><span>Graded</span></div>
+          <div className="orange"><BarChart3 className="h-5 w-5" /><strong>{mobileOverview.average}%</strong><span>Class Average</span></div>
+          <div className="green"><TrendingUp className="h-5 w-5" /><strong>{mobileOverview.highest}%</strong><span>Highest Score</span></div>
+        </div>
+      </section>
+
+      {error && <div className="md:hidden bg-red-50 text-red-700 p-3 rounded-xl border border-red-200 mx-5">{error}</div>}
+      {message && <div className="md:hidden bg-emerald-50 text-emerald-700 p-3 rounded-xl border border-emerald-200 mx-5">{message}</div>}
 
       {/* Mobile-only: full controls in modal */}
       <Modal open={formModalOpen} onClose={()=>setFormModalOpen(false)} title="Exam Details" size="full">
@@ -1923,269 +2212,46 @@ export default function TeacherGrades(){
         </div>
       </Modal>
 
-      {/* Selection summary when collapsed */}
-      {!controlsOpen && (
-        <div className="rounded-xl border border-gray-200 bg-white shadow-sm p-3 flex items-center justify-between text-sm sticky top-2 z-20 md:static">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="px-2 py-0.5 rounded-full bg-sky-50 text-sky-700 border border-sky-200">Class: <strong className="ml-1">{(classes.find(c=>String(c.id)===String(selectedClass))||{}).name || selectedClass}</strong></span>
-            <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">Subject: <strong className="ml-1">{(subjects.find(s=>String(s.id)===String(selectedSubject))||{}).name || selectedSubject}</strong></span>
-            <span className="px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">Exam: <strong className="ml-1">{(exams.find(e=>String(e.id)===String(selectedExamId))||{}).name || selectedExamId}</strong></span>
-          </div>
+      {studentsLoading && (
+        <div className="md:hidden mb-3 p-2 rounded-lg border bg-white shadow-sm text-sm text-gray-600 animate-pulse">Loading students…</div>
+      )}
+
+      {marksLoading && (
+        <div className="md:hidden mb-3 rounded-lg border border-indigo-200 bg-indigo-50/40 shadow-sm p-3">
           <div className="flex items-center gap-3">
-            <button onClick={reloadSavedMarks} className="text-indigo-700 hover:underline">Load Saved</button>
-            <button onClick={()=>setControlsOpen(true)} className="text-indigo-600 text-sm">Change</button>
+            <div className="w-5 h-5 rounded-full border-2 border-indigo-300 border-t-indigo-700 animate-spin" />
+            <div>
+              <div className="text-sm font-medium text-indigo-900">Loading saved marks…</div>
+              <div className="text-xs text-indigo-700">This page takes long sometimes.</div>
+            </div>
           </div>
+          <div className="mt-2 h-2 w-2/3 rounded bg-indigo-100 animate-pulse" />
         </div>
       )}
 
-      {/* Controls (shown inline only on md+; on mobile they're inside the modal) */}
-      {controlsOpen && (
-      <div className="hidden md:block">
-      <div className="rounded-2xl border border-gray-100 bg-white/90 backdrop-blur shadow-md p-3 md:p-4 space-y-3 md:space-y-4">
-        <div className="flex items-center justify-end">
-          <button
-            type="button"
-            onClick={()=>setControlsOpen(false)}
-            className="text-xs md:text-sm px-3 py-1.5 rounded-full bg-indigo-900/80 text-white border border-indigo-900/50 hover:bg-indigo-900 shadow-sm"
-          >
-            Hide Details
-          </button>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 md:gap-3">
-          <div className="grid gap-1.5">
-            <label className="text-xs font-medium text-gray-600">Class</label>
-            <select
-              className="border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-300"
-              value={selectedClass}
-              onChange={e=>{ setSelectedClass(e.target.value); setControlsOpen(true) }}
-            >
-              {classes.map(c=> <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
+      {entryLocked && (
+        <div className="md:hidden rounded-2xl border border-gray-200 bg-white shadow-sm p-4">
+          <div className="flex items-center gap-3">
+            <div className="w-5 h-5 rounded-full border-2 border-indigo-300 border-t-indigo-700 animate-spin" />
+            <div className="text-sm font-semibold text-gray-900">Preparing grade entry…</div>
           </div>
-          <div className="grid gap-1.5">
-            <label className="text-xs font-medium text-gray-600">Subject</label>
-            <select
-              className="border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-300"
-              value={selectedSubject}
-              onChange={e=>setSelectedSubject(e.target.value)}
-            >
-              {subjects.map(s=> <option key={s.id} value={s.id}>{s.code} - {s.name}</option>)}
-            </select>
+          <div className="mt-1 text-xs text-gray-600">
+            {studentsLoading ? 'Loading students…' : (examsLoading ? 'Loading exams…' : (marksLoading ? 'Loading saved marks…' : 'Select class, subject, and exam to begin.'))}
           </div>
-          {/* Component (Paper) selector if subject has components */}
-          {entryMode === 'single' && (
-            <div className="grid gap-1.5">
-              <label className="text-xs font-medium text-gray-600">Paper (Component)</label>
-              <select
-                className="border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-300"
-                value={selectedComponentId}
-                onChange={e=>setSelectedComponentId(e.target.value)}
-              >
-                {components.length === 0 && <option value="">(No papers) Whole Subject</option>}
-                {components.map(c=> <option key={c.id} value={c.id}>{c.code} - {c.name}</option>)}
-              </select>
-            </div>
-          )}
-          {/* Entry mode */}
-          <div className="grid gap-1.5">
-            <label className="text-xs font-medium text-gray-600">Entry Mode</label>
-            <select
-              className="border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-300"
-              value={entryMode}
-              onChange={e=>setEntryMode(e.target.value)}
-            >
-              <option value="single">Single Paper</option>
-              <option value="all">All Papers</option>
-            </select>
-          </div>
-          <div className="grid gap-1.5">
-            <label className="text-xs font-medium text-gray-600">Input Unit</label>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={()=>setInputAs(prev => prev === 'percent' ? 'marks' : 'percent')}
-                className={`input-unit-toggle inline-flex items-center rounded-full border px-3 py-1 text-[11px] bg-white hover:bg-gray-50 ${inputAs==='percent' ? 'input-unit-toggle--percent border-gray-200' : 'border-gray-200'}`}
-              >
-                {inputAs==='percent' ? 'Percentage (%)' : 'Marks'}
-              </button>
-              <span className="text-[11px] text-gray-500">Change how you type values</span>
-            </div>
-          </div>
-          {/* Out Of input(s) */}
-          {entryMode === 'single' ? (
-            <div className="grid gap-1">
-              <label className="text-xs text-gray-600">Marks Out Of</label>
-              <input
-                className="border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-300"
-                type="number"
-                inputMode="decimal"
-                min={1}
-                step="1"
-                value={outOf}
-                onChange={e=>setOutOf(e.target.value)}
-              />
-            </div>
-          ) : (
-            <div className="grid gap-1">
-              <label className="text-xs text-gray-600">Marks Out Of (per Paper)</label>
-              <div className="flex flex-wrap gap-2">
-                {components.map(c=> (
-                  <div key={c.id} className="flex items-center gap-1 border rounded px-2 py-1">
-                    <span className="text-xs text-gray-600">{c.code}</span>
-                    <input
-                      className="border p-1 rounded w-20 text-right focus:ring-2 focus:ring-indigo-200"
-                      type="number"
-                      inputMode="decimal"
-                      min={1}
-                      step="1"
-                      value={outOfPerComp[c.id] ?? ''}
-                      onChange={e=> setOutOfPerComp(prev=>({ ...prev, [c.id]: e.target.value })) }
-                    />
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-          <div className="grid gap-1">
-            <div className="flex items-center justify-between">
-              <label className="text-xs text-gray-600">Exam</label>
-              <div className="flex items-center gap-3">
-                <button type="button" onClick={reloadSavedMarks} className="text-[11px] text-indigo-700 hover:underline">Load Saved</button>
-                <button type="button" onClick={refreshExams} className="text-[11px] text-indigo-700 hover:underline disabled:opacity-60" disabled={examsLoading}>Refresh</button>
-              </div>
-            </div>
-            <select
-              className="border p-2 rounded"
-              value={selectedExamId}
-              disabled={examsLoading}
-              onChange={e=>{
-                const val = e.target.value
-                setSelectedExamId(val)
-                const ex = exams.find(x=>String(x.id)===val)
-                if (ex){
-                  setExamMeta({
-                    name: ex.name,
-                    year: ex.year,
-                    term: ex.term,
-                    date: ex.date,
-                    total_marks: Number(ex.total_marks)||100,
-                  })
-                }
-              }}
-            >
-              <option value="">{examsLoading ? 'Loading exams…' : 'Select Exam'}</option>
-              {exams.map(e=> (
-                <option key={e.id} value={e.id}>{e.name} — T{e.term} — {e.year} — {e.date}</option>
-              ))}
-            </select>
-            {exams.length === 0 && (
-              <span className="text-[11px] text-gray-500">No unpublished exams for this class. Ask admin to create one.</span>
-            )}
+          <div className="mt-4 grid grid-cols-1 gap-2">
+            <div className="h-10 rounded-xl bg-gray-100 animate-pulse" />
+            <div className="h-10 rounded-xl bg-gray-100 animate-pulse" />
+            <div className="h-10 rounded-xl bg-gray-100 animate-pulse" />
+            <div className="h-10 rounded-xl bg-gray-100 animate-pulse" />
           </div>
         </div>
-
-        {/* Read-only exam details */}
-        {selectedExamId && (
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs text-gray-600">
-            <div className="px-2 py-1 rounded border bg-gray-50">Name: <span className="font-medium text-gray-800 ml-1">{examMeta.name}</span></div>
-            <div className="px-2 py-1 rounded border bg-gray-50">Year: <span className="font-medium text-gray-800 ml-1">{examMeta.year}</span></div>
-            <div className="px-2 py-1 rounded border bg-gray-50">Term: <span className="font-medium text-gray-800 ml-1">T{examMeta.term}</span></div>
-            <div className="px-2 py-1 rounded border bg-gray-50">Date: <span className="font-medium text-gray-800 ml-1">{examMeta.date}</span></div>
-          </div>
-        )}
-
-        {/* Upload section */}
-        <div className="mt-4 border-t pt-4">
-          <div className="flex items-center justify-between mb-2">
-            <div className="text-sm font-medium">Upload File/Photo for Grade Entry</div>
-            <div className="flex items-center gap-2">
-              <button type="button" onClick={downloadTemplate} className="text-xs px-2 py-1 rounded-lg bg-gradient-to-r from-amber-500 to-orange-600 text-white">Download Template</button>
-            </div>
-          </div>
-          {uploadError && <div className="bg-red-50 text-red-700 p-2 rounded border border-red-200 text-sm mb-2">{uploadError}</div>}
-          <div className="flex flex-col md:flex-row gap-2 md:items-center">
-            <input type="file" accept=".csv,.xlsx,.xls,.png,.jpg,.jpeg,.bmp,.webp,.tif,.tiff" onChange={e=>setUploadFile(e.target.files?.[0]||null)} />
-            <div className="flex gap-2">
-              <button type="button" onClick={previewUpload} disabled={uploading || !uploadFile || !selectedExamId || !selectedSubject || mustPickComponent} className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-sky-500 to-blue-600 text-white disabled:opacity-60">{uploading ? 'Uploading…' : 'Preview'}</button>
-              <button type="button" onClick={commitUpload} disabled={commitUploading || !uploadFile || !selectedExamId || !selectedSubject || mustPickComponent} className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 text-white disabled:opacity-60">{commitUploading ? 'Saving…' : 'Commit'}</button>
-            </div>
-          </div>
-          {mustPickComponent && (
-            <div className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1 mt-2 inline-block">
-              Select a Paper/Component above to indicate which column the uploaded marks should fill.
-            </div>
-          )}
-        </div>
-      </div>
-      </div>
       )}
-
-        {studentsLoading && (
-          <div className="mb-3 p-2 rounded-lg border bg-white shadow-sm text-sm text-gray-600 animate-pulse">Loading students…</div>
-        )}
-
-        {marksLoading && (
-          <div className="mb-3 rounded-lg border border-indigo-200 bg-indigo-50/40 shadow-sm p-3">
-            <div className="flex items-center gap-3">
-              <div className="w-5 h-5 rounded-full border-2 border-indigo-300 border-t-indigo-700 animate-spin" />
-              <div>
-                <div className="text-sm font-medium text-indigo-900">Loading saved marks…</div>
-                <div className="text-xs text-indigo-700">This page takes long sometimes.</div>
-              </div>
-            </div>
-            <div className="mt-2 h-2 w-2/3 rounded bg-indigo-100 animate-pulse" />
-          </div>
-        )}
-
-        {/* Search Bar */}
-        <div className="mb-2 md:mb-3 flex flex-col md:flex-row md:items-center md:justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={e=>setSearchQuery(e.target.value)}
-              placeholder="Search student by name or admission"
-              className="w-full md:w-80 border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-300"
-            />
-            {searchQuery && (
-              <button
-                type="button"
-                onClick={()=>setSearchQuery('')}
-                className="px-3 py-2 rounded-xl text-sm bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 flex-shrink-0"
-              >
-                Clear
-              </button>
-            )}
-          </div>
-          <div className="text-xs text-gray-600">
-            <span>Total Students: {students.length}</span>
-          </div>
-        </div>
-
-        {entryLocked && (
-          <div className="rounded-2xl border border-gray-200 bg-white shadow-sm p-4">
-            <div className="flex items-center gap-3">
-              <div className="w-5 h-5 rounded-full border-2 border-indigo-300 border-t-indigo-700 animate-spin" />
-              <div className="text-sm font-semibold text-gray-900">Preparing grade entry…</div>
-            </div>
-            <div className="mt-1 text-xs text-gray-600">
-              {studentsLoading ? 'Loading students…' : (examsLoading ? 'Loading exams…' : (marksLoading ? 'Loading saved marks…' : 'Select class, subject, and exam to begin.'))}
-            </div>
-            <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-2">
-              <div className="h-10 rounded-xl bg-gray-100 animate-pulse" />
-              <div className="h-10 rounded-xl bg-gray-100 animate-pulse" />
-              <div className="h-10 rounded-xl bg-gray-100 animate-pulse" />
-              <div className="h-10 rounded-xl bg-gray-100 animate-pulse" />
-            </div>
-          </div>
-        )}
 
         {/* Students - mobile list */}
         {!entryLocked && (
-        <div className="md:hidden -mx-1">
-          <div className="mb-2 px-1 flex items-center justify-between gap-2">
+        <div className="teacher-marks-mobile md:hidden">
+          <div className="teacher-marks-toolbar">
             <div className="flex items-center gap-2">
-              <div className="text-sm font-medium text-gray-800">Students</div>
               <select
                 aria-label="Sort students"
                 className="text-[11px] border border-gray-200 rounded-lg px-2 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-200"
@@ -2227,14 +2293,14 @@ export default function TeacherGrades(){
                   min={1}
                   step="1"
                   value={outOf}
-                  onChange={e=>setOutOf(e.target.value)}
+                  onChange={e=>{ outOfTouchedRef.current = true; setOutOf(e.target.value) }}
                 />
               </div>
             )}
           </div>
           {entryMode === 'all' ? (
-            <div className="overflow-x-auto border rounded-xl bg-white shadow-sm">
-              <table className="min-w-full text-xs">
+            <div className="teacher-marks-grid-wrap overflow-x-auto border rounded-xl bg-white shadow-sm">
+              <table className="teacher-marks-grid-table min-w-full text-xs">
                 <thead className="bg-gray-50">
                   <tr>
                     <th className="px-2 py-2 text-left w-40">Student</th>
@@ -2296,17 +2362,20 @@ export default function TeacherGrades(){
               </table>
             </div>
           ) : (
-            <div className="space-y-2">
+            <div className="teacher-single-marks-grid">
+              <div className="teacher-single-marks-head" aria-hidden>
+                <span>Student</span>
+                <span>Marks</span>
+                <span>Status</span>
+              </div>
               {sortedStudents.map(st => (
-                <div key={st.id} className="flex items-center justify-between gap-3 px-3 py-2 border rounded-xl bg-white shadow-sm">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <div className="min-w-0">
-                      <div className="text-sm font-medium whitespace-normal break-words">{st.name}</div>
-                      <div className="text-[11px] text-gray-500">{st.admission_no}</div>
-                    </div>
+                <div key={st.id} className="teacher-single-marks-row">
+                  <div className="teacher-single-student">
+                    <strong>{st.name}</strong>
+                    <small>{st.admission_no || 'No admission no'}</small>
                   </div>
-                  <div className="flex items-center gap-1">
-                    <div className="relative">
+                  <div className="teacher-single-mark-cell">
+                    <div className="teacher-mark-input-wrap">
                       {(() => {
                         const k = `s:${st.id}`
                         const ss = saveState?.[k]
@@ -2324,7 +2393,7 @@ export default function TeacherGrades(){
                         min={0}
                         max={inputAs==='percent' ? 100 : (Number(outOf)||Number(examMeta.total_marks)||100)}
                         step="1"
-                        className={`border px-2 py-1.5 rounded-lg w-24 text-right focus:ring-2 focus:ring-indigo-200 ${stateClass} ${invalid[st.id] ? 'border-red-500 bg-red-50 ring-0' : ''}`}
+                        className={`teacher-mark-input border px-2 py-1.5 rounded-lg w-24 text-right focus:ring-2 focus:ring-indigo-200 ${stateClass} ${invalid[st.id] ? 'border-red-500 bg-red-50 ring-0' : ''}`}
                         value={inputAs==='percent' ? marksToPercent(marks[st.id], outOf) : (marks[st.id] || '')}
                         onChange={e=>handleMarkChange(st.id, e.target.value)}
                         onBlur={()=>flushSingleSave(st.id)}
@@ -2337,31 +2406,49 @@ export default function TeacherGrades(){
                       />
                         )
                       })()}
-                      {(() => {
-                        const k = `s:${st.id}`
-                        const ss = saveState?.[k]
-                        if (!ss || ss.status === 'idle') return null
-                        if (ss.status === 'saving'){
-                          return (
-                            <span className="absolute -right-5 top-1/2 -translate-y-1/2 text-gray-400" title="Saving…">
-                              <span className="inline-block h-3 w-3 rounded-full border-2 border-gray-300 border-t-indigo-500 animate-spin" />
-                            </span>
-                          )
-                        }
-                        if (ss.status === 'saved'){
-                          return (
-                            <span className="absolute -right-5 top-1/2 -translate-y-1/2 text-emerald-600" title="Saved">✓</span>
-                          )
-                        }
-                        if (ss.status === 'error'){
-                          return (
-                            <span className="absolute -right-5 top-1/2 -translate-y-1/2 text-red-600" title={ss.error || 'Save failed'}>!</span>
-                          )
-                        }
-                        return null
-                      })()}
                     </div>
-                    <span className="text-xs text-gray-500 w-14 text-right">{inputAs==='percent' ? '%' : toPercent(marks[st.id], outOf)}</span>
+                    <span className="teacher-mark-percent">{inputAs==='percent' ? '%' : toPercent(marks[st.id], outOf)}</span>
+                  </div>
+                  <div className="teacher-single-status-cell">
+                    {(() => {
+                      const k = `s:${st.id}`
+                      const ss = saveState?.[k]
+                      const raw = marks?.[st.id]
+                      const hasValue = !isNaN(parseFloat(raw))
+
+                      let label = 'Pending'
+                      let tone = 'text-amber-600'
+                      let Icon = Clock3
+
+                      if (invalid?.[st.id]){
+                        label = 'Invalid'
+                        tone = 'text-red-600'
+                        Icon = CircleX
+                      }else if (ss?.status === 'saving'){
+                        label = 'Saving'
+                        tone = 'text-amber-600'
+                        Icon = Clock3
+                      }else if (ss?.status === 'error'){
+                        label = 'Error'
+                        tone = 'text-red-600'
+                        Icon = CircleX
+                      }else if (ss?.status === 'saved' && hasValue){
+                        label = 'Updated'
+                        tone = 'text-emerald-600'
+                        Icon = CheckCircle2
+                      }else if (hasValue){
+                        label = 'Graded'
+                        tone = 'text-emerald-600'
+                        Icon = CheckCircle2
+                      }
+
+                      return (
+                        <span className={`teacher-single-status-pill ${tone}`}>
+                          <Icon className="h-4 w-4" />
+                          {label}
+                        </span>
+                      )
+                    })()}
                   </div>
                 </div>
               ))}
@@ -2370,158 +2457,14 @@ export default function TeacherGrades(){
         </div>
         )}
 
-        {!entryLocked && (
-        <div className="hidden md:block">
-          <table className="w-full text-left text-sm">
-            <thead className="teacher-grades-table-head bg-gradient-to-r from-indigo-50 to-fuchsia-50">
-              <tr className="text-gray-700">
-                <th className="py-2">Student</th>
-                <th className="py-2">Admission</th>
-                {entryMode === 'single' ? (
-                  <th className="py-2 text-right">Marks</th>
-                ) : (
-                  components.map(c => (
-                    <th key={c.id} className="py-2 text-right">{c.code}</th>
-                  ))
-                )}
-                {entryMode !== 'single' && components.length > 0 && (
-                  <th className="py-2 text-right">Percent</th>
-                )}
-              </tr>
-            </thead>
-            <tbody>
-              {sortedStudents.map((st, idx) => (
-                <tr key={st.id} className={`border-t ${idx%2===0? 'bg-white':'bg-gray-50'}`}>
-                  <td className="py-2">{st.name}</td>
-                  <td className="py-2">{st.admission_no}</td>
-                  {entryMode === 'single' ? (
-                    <td className="py-2 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <div className="relative">
-                          <input
-                            type="number"
-                            inputMode="decimal"
-                            min={0}
-                            max={inputAs==='percent' ? 100 : (Number(outOf)||Number(examMeta.total_marks)||100)}
-                            step="0.01"
-                            className={`border p-2 rounded w-28 text-right focus:ring-2 focus:ring-indigo-200 ${invalid[st.id] ? 'border-red-500 bg-red-50' : ''}`}
-                            value={inputAs==='percent' ? marksToPercent(marks[st.id], outOf) : (marks[st.id] || '')}
-                            onChange={e=>handleMarkChange(st.id, e.target.value)}
-                            onBlur={()=>flushSingleSave(st.id)}
-                            onKeyDown={(e)=>{
-                              if (e.key === 'Enter'){
-                                try{ e.currentTarget?.blur?.() }catch{}
-                                flushSingleSave(st.id)
-                              }
-                            }}
-                          />
-                          {(() => {
-                            const k = `s:${st.id}`
-                            const ss = saveState?.[k]
-                            if (!ss || ss.status === 'idle') return null
-                            if (ss.status === 'saving'){
-                              return (
-                                <span className="absolute -right-5 top-1/2 -translate-y-1/2 text-gray-400" title="Saving…">
-                                  <span className="inline-block h-3 w-3 rounded-full border-2 border-gray-300 border-t-indigo-500 animate-spin" />
-                                </span>
-                              )
-                            }
-                            if (ss.status === 'saved'){
-                              return (
-                                <span className="absolute -right-5 top-1/2 -translate-y-1/2 text-emerald-600" title="Saved">✓</span>
-                              )
-                            }
-                            if (ss.status === 'error'){
-                              return (
-                                <span className="absolute -right-5 top-1/2 -translate-y-1/2 text-red-600" title={ss.error || 'Save failed'}>!</span>
-                              )
-                            }
-                            return null
-                          })()}
-                        </div>
-                        <span className="text-xs text-gray-500 w-16 text-right">{inputAs==='percent' ? '%' : toPercent(marks[st.id], outOf)}</span>
-                      </div>
-                    </td>
-                  ) : (
-                    components.map(c => (
-                      <td key={c.id} className="py-2 text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <div className="relative">
-                            <input
-                              type="number"
-                              inputMode="decimal"
-                              min={0}
-                              max={inputAs==='percent' ? 100 : (Number(outOfPerComp[c.id])||Number(examMeta.total_marks)||100)}
-                              step="0.01"
-                              className={`border p-2 rounded w-24 text-right focus:ring-2 focus:ring-indigo-200 ${(invalidAll[c.id]?.[st.id]) ? 'border-red-500 bg-red-50' : ''}`}
-                              value={inputAs==='percent' ? marksToPercent((marksAll[c.id]?.[st.id]), outOfPerComp[c.id]) : ((marksAll[c.id]?.[st.id]) || '')}
-                              onChange={e=>handleMarkChangeAll(c.id, st.id, e.target.value)}
-                              onBlur={()=>flushAllSave(c.id, st.id)}
-                              onKeyDown={(e)=>{
-                                if (e.key === 'Enter'){
-                                  try{ e.currentTarget?.blur?.() }catch{}
-                                  flushAllSave(c.id, st.id)
-                                }
-                              }}
-                            />
-                            {(() => {
-                              const k = `c:${c.id}|s:${st.id}`
-                              const ss = saveState?.[k]
-                              if (!ss || ss.status === 'idle') return null
-                              if (ss.status === 'saving'){
-                                return (
-                                  <span className="absolute -right-5 top-1/2 -translate-y-1/2 text-gray-400" title="Saving…">
-                                    <span className="inline-block h-3 w-3 rounded-full border-2 border-gray-300 border-t-indigo-500 animate-spin" />
-                                  </span>
-                                )
-                              }
-                              if (ss.status === 'saved'){
-                                return (
-                                  <span className="absolute -right-5 top-1/2 -translate-y-1/2 text-emerald-600" title="Saved">✓</span>
-                                )
-                              }
-                              if (ss.status === 'error'){
-                                return (
-                                  <span className="absolute -right-5 top-1/2 -translate-y-1/2 text-red-600" title={ss.error || 'Save failed'}>!</span>
-                                )
-                              }
-                              return null
-                            })()}
-                          </div>
-                          <span className="text-xs text-gray-500 w-16 text-right">{inputAs==='percent' ? '%' : toPercent((marksAll[c.id]?.[st.id]) || '', outOfPerComp[c.id])}</span>
-                        </div>
-                      </td>
-                    ))
-                  )}
-                  {entryMode !== 'single' && components.length > 0 && (
-                    <td className="py-2 text-right">
-                      <span className="text-xs text-gray-700 font-medium">{toCombinedPercent(st.id)}</span>
-                    </td>
-                  )}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        )}
-
-        {/* Desktop save button */}
-        <div className="hidden md:flex justify-end">
-          <div className="flex gap-2">
-            <button onClick={()=>navigate(`/teacher/admin/enter/${selectedExamId}?readonly=1&klass=${encodeURIComponent(selectedClass||'')}`)} disabled={!selectedExamId} className="px-4 py-2 rounded-lg text-indigo-700 bg-white border border-indigo-200 hover:bg-indigo-50 disabled:opacity-60 shadow-soft">Preview Results</button>
-            <button onClick={submit} disabled={saving || !canSubmit} className="px-4 py-2 rounded-lg text-white bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 disabled:opacity-60 shadow-soft">{saving ? 'Saving...' : 'Save Grades'}</button>
-          </div>
-        </div>
-      
-
       {/* Sticky mobile save bar */}
       <div className="md:hidden fixed inset-x-0 bottom-14 z-40">
         <div className="mx-auto max-w-4xl px-3 pb-1.5">
           <div className="rounded-xl bg-white shadow-lg border border-gray-200 p-2 flex items-center justify-between">
             <div className="text-[11px] text-gray-600">Total Students: <span className="font-medium text-gray-800">{students.length}</span></div>
             <div className="flex gap-1.5">
-              <button onClick={()=>navigate(`/teacher/admin/enter/${selectedExamId}?readonly=1&klass=${encodeURIComponent(selectedClass||'')}`)} disabled={!selectedExamId} className="px-3 py-1.5 rounded-md text-indigo-700 bg-white border border-indigo-200 disabled:opacity-60 shadow-soft text-[12px]">Preview</button>
-              <button onClick={submit} disabled={saving || !canSubmit} className="px-3 py-1.5 rounded-md text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 shadow-soft text-[12px]">{saving ? 'Saving...' : 'Save Grades'}</button>
+              <button type="button" onClick={()=>navigate(`/teacher/admin/enter/${selectedExamId}?readonly=1&klass=${encodeURIComponent(selectedClass||'')}`)} disabled={!selectedExamId} className="px-3 py-1.5 rounded-md text-indigo-700 bg-white border border-indigo-200 disabled:opacity-60 shadow-soft text-[12px]">Preview</button>
+              <button type="button" onClick={submit} disabled={saving || !canSubmit} className="px-3 py-1.5 rounded-md text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 shadow-soft text-[12px]">{saving ? 'Saving...' : 'Save Grades'}</button>
             </div>
           </div>
         </div>

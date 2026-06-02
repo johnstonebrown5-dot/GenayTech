@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { BookOpen, ClipboardList, LayoutDashboard, MessageSquare, UserCircle } from 'lucide-react'
 import { useAuth } from '../auth'
 import { useLock } from './LockProvider'
 import api from '../api'
@@ -315,9 +316,16 @@ export default function TeacherLayout({ children }){
   })()
 
   const effectiveDarkMode = false
+  const bottomNavItems = [
+    { to: '/teacher', label: 'Dashboard', icon: LayoutDashboard },
+    { to: '/teacher/classes', label: 'Classes', icon: BookOpen },
+    { to: '/teacher/grades', label: 'Grades', icon: ClipboardList },
+    { to: '/teacher/messages', label: 'Messages', icon: MessageSquare },
+    { to: '/teacher/profile', label: 'Profile', icon: UserCircle },
+  ]
 
   return (
-    <div className={`min-h-screen bg-gray-50 teacher-theme ${effectiveDarkMode ? 'teacher-theme-dark' : ''}`}>
+    <div className={`min-h-screen bg-gray-50 teacher-theme teacher-reference-shell ${effectiveDarkMode ? 'teacher-theme-dark' : ''}`}>
       <TeacherOnboardingTour userId={user?.id} isClassTeacher={hasAttendanceAccess} />
       {broadcastBanner && (
         <div className="sticky top-0 z-40 w-full bg-red-600 text-white">
@@ -347,7 +355,7 @@ export default function TeacherLayout({ children }){
       )}
       {/* Top bar - refreshed style */}
       <header
-        className="sticky top-0 z-30 bg-white/80 backdrop-blur supports-[backdrop-filter]:bg-white/60 text-gray-900 px-3 md:px-4 h-14 flex items-center gap-2 md:gap-3 shadow-md border-b border-gray-100"
+        className="teacher-reference-topbar sticky top-0 z-30 bg-white/80 backdrop-blur supports-[backdrop-filter]:bg-white/60 text-gray-900 px-3 md:px-4 h-14 flex items-center gap-2 md:gap-3 shadow-md border-b border-gray-100"
         onClick={(e) => {
           try {
             if (typeof window !== 'undefined' && window.matchMedia && !window.matchMedia('(max-width: 767px)').matches) return
@@ -573,14 +581,28 @@ export default function TeacherLayout({ children }){
         </aside>
 
         {/* Content area */}
-        <main className={`transition-all duration-200 px-0 lg:px-6 pt-1 pb-6 md:pt-6 md:pb-6 ${isOpen? 'md:ml-64':'md:ml-16'}`}>
+        <main className={`teacher-reference-main transition-all duration-200 px-0 lg:px-6 pt-0 pb-24 md:pt-6 md:pb-6 ${isOpen? 'md:ml-64':'md:ml-16'}`}>
           {children}
         </main>
       </div>
+      <nav className="teacher-bottom-tabs md:hidden" aria-label="Teacher primary navigation">
+        {bottomNavItems.map(item => {
+          const active = item.to === '/teacher' ? pathname === '/teacher' : pathname.startsWith(item.to)
+          const Icon = item.icon
+          return (
+            <Link key={item.to} to={item.to} className={active ? 'active' : ''} aria-current={active ? 'page' : undefined}>
+              <Icon className="h-5 w-5" />
+              <span>{item.label}</span>
+              {item.label === 'Messages' && unreadCount > 0 && <b>{unreadCount > 99 ? '99+' : unreadCount}</b>}
+            </Link>
+          )
+        })}
+      </nav>
       {/* Floating Logout button for mobile only */}
       {(() => {
         const root = typeof document !== 'undefined' ? document.getElementById('floating-actions-root') : null
         const isSmall = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(max-width: 767px)').matches
+        if (isSmall) return null
         if (!isSmall) return null
         const size = 44
         const iconSize = 18

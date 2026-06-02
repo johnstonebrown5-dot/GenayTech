@@ -338,6 +338,25 @@ def me(request):
         if field in data and data.get(field) is not None:
             setattr(user, field, data.get(field))
             changed_fields.append(field)
+
+    # Allow deleting profile photo
+    # Accept flags: delete_avatar / delete_profile_picture / remove_avatar / remove_profile_picture
+    try:
+        del_flag = data.get('delete_avatar') or data.get('delete_profile_picture') or data.get('remove_avatar') or data.get('remove_profile_picture')
+        del_flag = str(del_flag).strip().lower() in ('1', 'true', 'yes', 'on')
+    except Exception:
+        del_flag = False
+    if del_flag:
+        try:
+            if getattr(user, 'profile_picture', None):
+                try:
+                    user.profile_picture.delete(save=False)
+                except Exception:
+                    pass
+            user.profile_picture = None
+            changed_fields.append('profile_picture')
+        except Exception:
+            pass
     # Accept avatar file under multiple common keys
     file_key = None
     for k in ("profile_picture","avatar","photo"):

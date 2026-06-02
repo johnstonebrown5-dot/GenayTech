@@ -1,214 +1,480 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
+import {
+  Bell,
+  Camera,
+  ChevronRight,
+  CircleHelp,
+  KeyRound,
+  LogOut,
+  RefreshCw,
+  Settings,
+  ShieldCheck,
+  UserRound,
+} from 'lucide-react'
 import api from '../api'
-import { uploadToCloudinary } from '../utils/cloudinary'
-import { toast } from '../utils/toast'
 import ProgressiveImage from '../components/ProgressiveImage'
+import Modal from '../components/Modal'
+import { useAuth } from '../auth'
+import { uploadToCloudinary } from '../utils/cloudinary'
 
 export default function TeacherProfile(){
+  const navigate = useNavigate()
+  const { logout } = useAuth()
   const [me, setMe] = useState(null)
   const [teacherProfile, setTeacherProfile] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [pw, setPw] = useState({ old_password: '', new_password: '' })
+  const [infoOpen, setInfoOpen] = useState(false)
+  const [changeOpen, setChangeOpen] = useState(false)
+  const [resetOpen, setResetOpen] = useState(false)
+  const [logoutOpen, setLogoutOpen] = useState(false)
+  const [photoOpen, setPhotoOpen] = useState(false)
+
+  // Change password
+  const [oldPassword, setOldPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [pwBusy, setPwBusy] = useState(false)
   const [pwMsg, setPwMsg] = useState('')
   const [pwErr, setPwErr] = useState('')
-  const [pwSaving, setPwSaving] = useState(false)
-  const [form, setForm] = useState({ first_name: '', last_name: '', email: '', phone: '' })
-  const [saveMsg, setSaveMsg] = useState('')
-  const [saveErr, setSaveErr] = useState('')
-  const [saving, setSaving] = useState(false)
-  const [avatarFile, setAvatarFile] = useState(null)
-  const [avatarPreview, setAvatarPreview] = useState('')
-  const [avatarSaving, setAvatarSaving] = useState(false)
 
-  useEffect(()=>{
+  // Reset password (email + code)
+  const [resetStep, setResetStep] = useState('request') // request | verify | confirm | done
+  const [resetEmail, setResetEmail] = useState('')
+  const [resetCode, setResetCode] = useState('')
+  const [resetNew, setResetNew] = useState('')
+  const [resetConfirm, setResetConfirm] = useState('')
+  const [resetBusy, setResetBusy] = useState(false)
+  const [resetMsg, setResetMsg] = useState('')
+  const [resetErr, setResetErr] = useState('')
+
+  // Profile photo
+  const [avatarPreview, setAvatarPreview] = useState('')
+  const [avatarBusy, setAvatarBusy] = useState(false)
+  const [avatarMsg, setAvatarMsg] = useState('')
+  const [avatarErr, setAvatarErr] = useState('')
+
+  useEffect(() => {
     let mounted = true
-    ;(async ()=>{
+    ;(async () => {
+      setLoading(true)
+      setError('')
       try{
-        setLoading(true)
-        const [meRes, tpRes] = await Promise.all([
+        const [meRes, profileRes] = await Promise.all([
           api.get('/auth/me/'),
-          api.get('/academics/teachers/mine/').catch(()=>({ data: null }))
+          api.get('/academics/teachers/mine/').catch(() => ({ data: null })),
         ])
         if (!mounted) return
-        setMe(meRes.data)
-        setTeacherProfile(tpRes?.data || null)
-        setForm({
-          first_name: meRes.data?.first_name || '',
-          last_name: meRes.data?.last_name || '',
-          email: meRes.data?.email || '',
-          phone: meRes.data?.phone || meRes.data?.mobile || meRes.data?.telephone || meRes.data?.profile?.phone || '',
-        })
-        // Set avatar preview if backend provides any common url field
-        const avatarUrl = meRes.data?.avatar_url || meRes.data?.photo_url || meRes.data?.profile_picture_url || meRes.data?.profile?.avatar_url || ''
-        if (avatarUrl) setAvatarPreview(avatarUrl)
-      }catch(e){ setError(e?.response?.data?.detail || e?.message) }
-      finally{ if(mounted) setLoading(false) }
+        setMe(meRes?.data || null)
+        setTeacherProfile(profileRes?.data || null)
+      }catch(e){
+        if (mounted) setError(e?.response?.data?.detail || e?.message || 'Failed to load profile')
+      }finally{
+        if (mounted) setLoading(false)
+      }
     })()
-    return ()=>{ mounted = false }
-  },[])
+    return () => { mounted = false }
+  }, [])
 
-  const changePassword = async (e) => {
-    e.preventDefault()
-    setPwSaving(true)
-    setPwErr('')
-    setPwMsg('')
-    try{
-      await api.post('/auth/users/change_password/', pw)
-      setPwMsg('Password changed successfully. You may need to log in again on next refresh.')
-      setPw({ old_password: '', new_password: '' })
-    }catch(err){
-      setPwErr(err?.response?.data?.detail || err?.message || 'Failed to change password')
-    }finally{ setPwSaving(false) }
+  useEffect(() => {
+    const email = (me?.email || '').trim()
+    if (email && !resetEmail) setResetEmail(email)
+  }, [me?.email, resetEmail])
+
+  const fullName = useMemo(() => {
+    return [me?.first_name, me?.last_name].filter(Boolean).join(' ') || me?.username || 'Teacher'
+  }, [me])
+  const avatarUrl = me?.avatar_url || me?.photo_url || me?.profile_picture_url || me?.profile?.avatar_url || ''
+  const teacherId = teacherProfile?.id ? `TCHR-${teacherProfile.id}` : `TCHR-${me?.id || '1024'}`
+
+  useEffect(() => {
+    if (avatarUrl) setAvatarPreview(avatarUrl)
+    else setAvatarPreview('')
+  }, [avatarUrl])
+
+  const doLogout = () => {
+    try { logout() } catch {}
+    try { navigate('/login') } catch {}
   }
 
-  const onPickAvatar = (e) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    setAvatarFile(file)
-    const url = URL.createObjectURL(file)
-    setAvatarPreview(url)
-  }
-
-  const saveAvatar = async () => {
-    if (!avatarFile) return
-    setAvatarSaving(true)
+  const submitChangePassword = async (e) => {
+    e?.preventDefault?.()
+    setPwErr(''); setPwMsg('')
+    const oldP = String(oldPassword || '')
+    const newP = String(newPassword || '')
+    if (!oldP || !newP) { setPwErr('Old password and new password are required.'); return }
+    if (newP.length < 6) { setPwErr('New password must be at least 6 characters.'); return }
+    if (newP !== String(confirmPassword || '')) { setPwErr('Passwords do not match.'); return }
+    setPwBusy(true)
     try{
-      const { url } = await uploadToCloudinary(avatarFile, { folder: 'edu-track/avatars' })
-      const res = await api.patch('/auth/me/', { avatar_url: url })
-      setMe(res.data || me)
-      setSaveMsg('Profile photo updated.')
+      await api.post('/auth/users/change_password/', { old_password: oldP, new_password: newP })
+      setPwMsg('Password changed. Please login again.')
+      setOldPassword(''); setNewPassword(''); setConfirmPassword('')
+      // Force re-login for safety
+      setTimeout(() => doLogout(), 600)
     }catch(err){
-      const msg = err?.response?.data?.detail || err?.message || 'Failed to upload photo'
-      setSaveErr(msg)
-      toast(msg, 'error')
+      setPwErr(err?.response?.data?.detail || 'Failed to change password')
     }finally{
-      setAvatarSaving(false)
+      setPwBusy(false)
     }
   }
 
-  const saveProfile = async (e) => {
-    e.preventDefault()
-    setSaving(true)
-    setSaveErr('')
-    setSaveMsg('')
+  const resetStart = () => {
+    setResetStep('request')
+    setResetCode('')
+    setResetNew('')
+    setResetConfirm('')
+    setResetMsg('')
+    setResetErr('')
+    setResetOpen(true)
+  }
+
+  const requestResetCode = async (e) => {
+    e?.preventDefault?.()
+    setResetErr(''); setResetMsg('')
+    const email = String(resetEmail || '').trim().toLowerCase()
+    if (!email) { setResetErr('Email is required.'); return }
+    setResetBusy(true)
     try{
-      // Only send editable, non-critical fields
-      const payload = {
-        first_name: form.first_name,
-        last_name: form.last_name,
-        email: form.email,
-      }
-      if (form.phone !== undefined) payload.phone = form.phone
-      const { data } = await api.patch('/auth/me/', payload)
-      setMe(data || { ...me, ...payload })
-      setSaveMsg('Profile updated successfully.')
+      const { data } = await api.post('/auth/password-reset/request/', { email })
+      setResetMsg(data?.detail || 'If this email exists, a code has been sent.')
+      setResetStep('verify')
     }catch(err){
-      setSaveErr(err?.response?.data?.detail || err?.message || 'Failed to update profile')
-    }finally{ setSaving(false) }
+      setResetErr(err?.response?.data?.detail || 'Failed to request reset code')
+    }finally{
+      setResetBusy(false)
+    }
+  }
+
+  const verifyResetCode = async (e) => {
+    e?.preventDefault?.()
+    setResetErr(''); setResetMsg('')
+    const email = String(resetEmail || '').trim().toLowerCase()
+    const code = String(resetCode || '').trim()
+    if (!email || !code) { setResetErr('Email and code are required.'); return }
+    setResetBusy(true)
+    try{
+      const { data } = await api.post('/auth/password-reset/verify/', { email, code })
+      setResetMsg(data?.detail || 'Code verified.')
+      setResetStep('confirm')
+    }catch(err){
+      setResetErr(err?.response?.data?.detail || 'Invalid code')
+    }finally{
+      setResetBusy(false)
+    }
+  }
+
+  const confirmResetPassword = async (e) => {
+    e?.preventDefault?.()
+    setResetErr(''); setResetMsg('')
+    const email = String(resetEmail || '').trim().toLowerCase()
+    const code = String(resetCode || '').trim()
+    const np = String(resetNew || '')
+    if (!email || !code || !np) { setResetErr('Email, code and new password are required.'); return }
+    if (np.length < 6) { setResetErr('New password must be at least 6 characters.'); return }
+    if (np !== String(resetConfirm || '')) { setResetErr('Passwords do not match.'); return }
+    setResetBusy(true)
+    try{
+      const { data } = await api.post('/auth/password-reset/confirm/', { email, code, new_password: np })
+      setResetMsg(data?.detail || 'Password reset. Please login again.')
+      setResetStep('done')
+      setTimeout(() => doLogout(), 600)
+    }catch(err){
+      setResetErr(err?.response?.data?.detail || 'Failed to reset password')
+    }finally{
+      setResetBusy(false)
+    }
+  }
+
+  const onPickAvatar = async (e) => {
+    const file = e?.target?.files?.[0]
+    if (!file) return
+    setAvatarErr('')
+    setAvatarMsg('')
+    try { setAvatarPreview(URL.createObjectURL(file)) } catch {}
+    setAvatarBusy(true)
+    try{
+      const { url } = await uploadToCloudinary(file, { folder: 'edu-track/avatars' })
+      const res = await api.patch('/auth/me/', { avatar_url: url })
+      setMe(res.data || me)
+      setAvatarPreview(url)
+      setAvatarMsg('Profile photo updated.')
+      try { window.dispatchEvent(new CustomEvent('profile:updated')) } catch {}
+      setPhotoOpen(false)
+    }catch(err){
+      setAvatarErr(err?.response?.data?.detail || err?.message || 'Failed to upload photo')
+    }finally{
+      setAvatarBusy(false)
+      try { e.target.value = '' } catch {}
+    }
+  }
+
+  const deleteAvatar = async () => {
+    setAvatarErr('')
+    setAvatarMsg('')
+    setAvatarBusy(true)
+    try{
+      const res = await api.patch('/auth/me/', { delete_avatar: true })
+      setMe(res.data || me)
+      setAvatarPreview('')
+      setAvatarMsg('Profile photo removed.')
+      try { window.dispatchEvent(new CustomEvent('profile:updated')) } catch {}
+      setPhotoOpen(false)
+    }catch(err){
+      setAvatarErr(err?.response?.data?.detail || err?.message || 'Failed to remove photo')
+    }finally{
+      setAvatarBusy(false)
+    }
   }
 
   return (
-    <div className="min-h-[calc(100vh-6rem)] bg-gray-50 pb-10">
-      {/* Cover */}
-      <div className="h-28 md:h-36 bg-gradient-to-r from-sky-500 via-indigo-500 to-fuchsia-500" />
-      <div className="-mt-10 md:-mt-12 px-4 md:px-6">
-        <div className="max-w-3xl mx-auto space-y-5">
-          <div className="text-white/90 text-sm md:text-base font-medium drop-shadow-sm">My Profile</div>
-          {loading && <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100">Loading...</div>}
-          {error && <div className="bg-red-50 text-red-700 p-3 rounded-2xl border border-red-100">{error}</div>}
-
-      {me && (
-        <div className="bg-white rounded-2xl shadow-md border border-gray-100 ring-1 ring-indigo-50">
-          <div className="border-b px-4 py-3">
-            <div className="text-base md:text-lg font-semibold text-gray-800">Profile</div>
-            <div className="text-xs text-gray-500">Manage your personal information</div>
-          </div>
-          <div className="p-4 md:p-6">
-          <div className="flex flex-col sm:flex-row sm:items-center gap-4 mb-6">
-            <div className="relative">
-              <div className="h-20 w-20 md:h-24 md:w-24 rounded-full overflow-hidden ring-4 ring-white shadow bg-indigo-50 text-indigo-700 flex items-center justify-center text-2xl">
-                {avatarPreview ? (
-                  <ProgressiveImage src={avatarPreview} alt="Avatar" className="h-full w-full object-cover" />
-                ) : (
-                  <span>{(me.first_name?.[0] || me.username?.[0] || 'U').toUpperCase()}</span>
-                )}
-              </div>
-            </div>
-            <div className="min-w-0 sm:text-left text-center">
-              <div className="text-lg md:text-2xl font-semibold truncate text-gray-900">{me.first_name} {me.last_name}</div>
-              <div className="mt-1 flex flex-wrap items-center justify-center sm:justify-start gap-2 text-sm text-gray-600">
-                <span className={`px-2 py-0.5 rounded-full border capitalize ${
-                  (me.role||'').toLowerCase()==='admin' ? 'bg-rose-50 text-rose-700 border-rose-200' :
-                  (me.role||'').toLowerCase()==='teacher' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
-                  (me.role||'').toLowerCase()==='finance' ? 'bg-amber-50 text-amber-700 border-amber-200' :
-                  'bg-indigo-50 text-indigo-700 border-indigo-200'
-                }`}>{me.role}</span>
-                <span className="truncate max-w-[14rem] sm:max-w-none">{me.email}</span>
-              </div>
-              <div className="mt-3 flex flex-wrap items-center justify-center sm:justify-start gap-2">
-                <label className="px-3 py-2 text-xs rounded-lg border cursor-pointer bg-white hover:bg-gray-50 shadow-sm transition-colors duration-200">
-                  Change Photo
-                  <input type="file" accept="image/*" className="hidden" onChange={onPickAvatar} />
-                </label>
-                <button type="button" onClick={saveAvatar} disabled={!avatarFile || avatarSaving} className="px-3 py-2 text-xs rounded-lg bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white disabled:opacity-60 shadow-sm transition-colors duration-200">{avatarSaving? 'Saving…' : 'Save Photo'}</button>
-              </div>
-            </div>
-          </div>
-          <form onSubmit={saveProfile} className="grid gap-4 md:grid-cols-2">
-            {saveErr && <div className="md:col-span-2 bg-red-50 text-red-700 p-2 rounded text-sm">{saveErr}</div>}
-            {saveMsg && <div className="md:col-span-2 bg-green-50 text-green-700 p-2 rounded text-sm">{saveMsg}</div>}
-            <label className="grid gap-1">
-              <span className="text-xs text-gray-600 font-medium">Username (read-only)</span>
-              <input className="w-full border border-gray-200 p-2.5 rounded-lg bg-gray-50 text-gray-700" value={me.username||''} readOnly />
-            </label>
-            <label className="grid gap-1">
-              <span className="text-xs text-gray-600 font-medium">Role (read-only)</span>
-              <input className="w-full border border-gray-200 p-2.5 rounded-lg bg-gray-50 capitalize text-gray-700" value={me.role||''} readOnly />
-            </label>
-            <label className="grid gap-1">
-              <span className="text-xs text-gray-600 font-medium">First name</span>
-              <input className="w-full border border-gray-200 p-2.5 rounded-lg focus:ring-2 focus:ring-indigo-200 focus:border-indigo-300 transition-colors duration-200" value={form.first_name} onChange={e=>setForm(f=>({...f, first_name:e.target.value}))} />
-            </label>
-            <label className="grid gap-1">
-              <span className="text-xs text-gray-600 font-medium">Last name</span>
-              <input className="w-full border border-gray-200 p-2.5 rounded-lg focus:ring-2 focus:ring-indigo-200 focus:border-indigo-300 transition-colors duration-200" value={form.last_name} onChange={e=>setForm(f=>({...f, last_name:e.target.value}))} />
-            </label>
-            <label className="grid gap-1 md:col-span-2">
-              <span className="text-xs text-gray-600 font-medium">Email</span>
-              <input type="email" className="w-full border border-gray-200 p-2.5 rounded-lg focus:ring-2 focus:ring-indigo-200 focus:border-indigo-300 transition-colors duration-200" value={form.email} onChange={e=>setForm(f=>({...f, email:e.target.value}))} />
-            </label>
-            <label className="grid gap-1 md:col-span-2">
-              <span className="text-xs text-gray-600 font-medium">Phone</span>
-              <input type="tel" className="w-full border border-gray-200 p-2.5 rounded-lg focus:ring-2 focus:ring-indigo-200 focus:border-indigo-300 transition-colors duration-200" value={form.phone} onChange={e=>setForm(f=>({...f, phone:e.target.value}))} />
-            </label>
-            <div className="md:col-span-2 flex justify-end">
-              <button className="px-4 py-2 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-sm shadow-sm disabled:opacity-60 transition-colors duration-200" disabled={saving}>{saving? 'Saving...' : 'Save Profile'}</button>
-            </div>
-          </form>
+    <div className="teacher-profile-reference">
+      <section className="teacher-profile-hero">
+        <div className="teacher-profile-head">
+          <button
+            type="button"
+            className="teacher-profile-avatar built-avatar"
+            onClick={()=>{ setAvatarErr(''); setAvatarMsg(''); setPhotoOpen(true) }}
+            aria-label="Change profile photo"
+            title="Change profile photo"
+          >
+            {avatarPreview ? (
+              <ProgressiveImage src={avatarPreview} alt={fullName} className="h-full w-full object-cover" />
+            ) : (
+              <GeneratedTeacherAvatar name={fullName} />
+            )}
+            <span className="teacher-profile-camera">
+              <Camera className="h-4 w-4" />
+            </span>
+          </button>
+          <h1>{loading ? 'Loading...' : fullName}</h1>
+          <p>{teacherProfile?.title || 'Senior Teacher'}</p>
+          <small>Teacher ID: {teacherId}</small>
+          <div className="teacher-profile-badges">
+            <span><ShieldCheck className="h-3.5 w-3.5" /> Verified</span>
+            <span>Active</span>
           </div>
         </div>
-      )}
+      </section>
 
-      <div className="bg-white rounded-2xl shadow-md border border-gray-100 mt-5 max-w-3xl mx-auto ring-1 ring-fuchsia-50">
-        <div className="border-b px-4 py-3">
-          <div className="text-base md:text-lg font-semibold text-gray-800">Change Password</div>
-          <div className="text-xs text-gray-500">Keep your account secure</div>
+      <section className="teacher-profile-sheet">
+        {error && <div className="teacher-reference-error mb-3">{error}</div>}
+        <div className="teacher-profile-menu">
+          <ProfileActionRow icon={<UserRound />} label="Personal Information" onClick={()=>setInfoOpen(true)} />
+          <ProfileRow icon={<Settings />} label="Account Settings" to="/sessions" />
+          <ProfileActionRow icon={<KeyRound />} label="Change Password" onClick={()=>{ setPwErr(''); setPwMsg(''); setChangeOpen(true) }} />
+          <ProfileActionRow icon={<RefreshCw />} label="Reset Password" onClick={resetStart} />
+          <ProfileRow icon={<Bell />} label="Notification Settings" to="/teacher/messages?tab=system" />
+          <ProfileRow icon={<CircleHelp />} label="Help & Support" to="/help" />
+          <ProfileActionRow icon={<LogOut />} label="Log Out" onClick={()=>setLogoutOpen(true)} danger />
         </div>
-        <form onSubmit={changePassword} className="p-4 md:p-6 grid gap-3 max-w-md mx-auto">
-          {/* Hidden username field improves password manager UX */}
-          <input type="text" name="username" autoComplete="username" value={me?.username||''} readOnly className="sr-only opacity-0 h-0 pointer-events-none" aria-hidden />
-          {pwErr && <div className="bg-red-50 text-red-700 p-2 rounded text-sm">{pwErr}</div>}
-          {pwMsg && <div className="bg-green-50 text-green-700 p-2 rounded text-sm">{pwMsg}</div>}
-          <input className="w-full border border-gray-200 p-2.5 rounded-lg focus:ring-2 focus:ring-indigo-200 focus:border-indigo-300 transition-colors duration-200" type="password" placeholder="Old Password" autoComplete="current-password" value={pw.old_password} onChange={e=>setPw({...pw, old_password:e.target.value})} required />
-          <input className="w-full border border-gray-200 p-2.5 rounded-lg focus:ring-2 focus:ring-indigo-200 focus:border-indigo-300 transition-colors duration-200" type="password" placeholder="New Password (min 6 chars)" autoComplete="new-password" value={pw.new_password} onChange={e=>setPw({...pw, new_password:e.target.value})} required />
+      </section>
+
+      <Modal open={photoOpen} onClose={()=>setPhotoOpen(false)} title="Profile Photo" size="sm">
+        <div className="grid gap-3">
+          {avatarErr && <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded p-2">{avatarErr}</div>}
+          {avatarMsg && <div className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded p-2">{avatarMsg}</div>}
+
+          <div className="flex items-center justify-center">
+            <div className="h-24 w-24 rounded-full overflow-hidden ring-4 ring-white shadow-md bg-indigo-50 text-indigo-700 flex items-center justify-center text-2xl">
+              {avatarPreview ? (
+                <img src={avatarPreview} alt="Profile photo preview" className="h-full w-full object-cover" />
+              ) : (
+                <span>{(fullName?.[0] || 'T').toUpperCase()}</span>
+              )}
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <label className={`inline-flex items-center justify-center px-4 py-2 rounded-lg bg-indigo-600 text-white font-semibold cursor-pointer ${avatarBusy ? 'opacity-60 pointer-events-none' : ''}`}>
+              {avatarBusy ? 'Please wait...' : 'Change Photo'}
+              <input type="file" accept="image/*" className="hidden" onChange={onPickAvatar} />
+            </label>
+
+            <button
+              type="button"
+              onClick={deleteAvatar}
+              disabled={avatarBusy || !avatarUrl}
+              className="px-4 py-2 rounded-lg border border-red-200 bg-white text-red-700 font-semibold disabled:opacity-60"
+            >
+              Remove Photo
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal open={infoOpen} onClose={()=>setInfoOpen(false)} title="Personal Information" size="sm">
+        <div className="grid gap-3 text-sm">
+          <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
+            <div className="text-xs text-gray-500">Name</div>
+            <div className="font-semibold text-gray-900">{fullName}</div>
+          </div>
+          <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
+            <div className="text-xs text-gray-500">Username</div>
+            <div className="font-semibold text-gray-900">{me?.username || '-'}</div>
+          </div>
+          <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
+            <div className="text-xs text-gray-500">Email</div>
+            <div className="font-semibold text-gray-900">{me?.email || '-'}</div>
+          </div>
+          <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
+            <div className="text-xs text-gray-500">Phone</div>
+            <div className="font-semibold text-gray-900">{me?.phone || '-'}</div>
+          </div>
           <div className="flex justify-end">
-            <button className="px-4 py-2 rounded-lg text-white bg-gradient-to-r from-pink-600 to-rose-600 hover:from-pink-700 hover:to-rose-700 shadow-sm disabled:opacity-60 transition-colors duration-200" disabled={pwSaving}>{pwSaving?'Saving...':'Change Password'}</button>
+            <button type="button" className="px-4 py-2 rounded-lg border bg-white" onClick={()=>setInfoOpen(false)}>Close</button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal open={changeOpen} onClose={()=>setChangeOpen(false)} title="Change Password" size="sm">
+        <form onSubmit={submitChangePassword} className="grid gap-3">
+          {pwErr && <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded p-2">{pwErr}</div>}
+          {pwMsg && <div className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded p-2">{pwMsg}</div>}
+          <label className="grid gap-1 text-sm">
+            <span className="text-gray-700">Old password</span>
+            <input type="password" value={oldPassword} onChange={e=>setOldPassword(e.target.value)} className="px-3 py-2 border rounded-lg" autoComplete="current-password" />
+          </label>
+          <label className="grid gap-1 text-sm">
+            <span className="text-gray-700">New password</span>
+            <input type="password" value={newPassword} onChange={e=>setNewPassword(e.target.value)} className="px-3 py-2 border rounded-lg" autoComplete="new-password" />
+          </label>
+          <label className="grid gap-1 text-sm">
+            <span className="text-gray-700">Confirm new password</span>
+            <input type="password" value={confirmPassword} onChange={e=>setConfirmPassword(e.target.value)} className="px-3 py-2 border rounded-lg" autoComplete="new-password" />
+          </label>
+          <div className="flex justify-end gap-2">
+            <button type="button" className="px-4 py-2 rounded-lg border bg-white" onClick={()=>setChangeOpen(false)}>Cancel</button>
+            <button type="submit" disabled={pwBusy} className="px-4 py-2 rounded-lg bg-indigo-600 text-white disabled:opacity-60">
+              {pwBusy ? 'Saving...' : 'Change Password'}
+            </button>
           </div>
         </form>
-      </div>
+      </Modal>
+
+      <Modal open={resetOpen} onClose={()=>setResetOpen(false)} title="Reset Password" size="sm">
+        <div className="grid gap-3">
+          {resetErr && <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded p-2">{resetErr}</div>}
+          {resetMsg && <div className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded p-2">{resetMsg}</div>}
+
+          {resetStep === 'request' && (
+            <form onSubmit={requestResetCode} className="grid gap-3">
+              <div className="text-sm text-gray-600">We will send a 6-digit code to your email.</div>
+              <label className="grid gap-1 text-sm">
+                <span className="text-gray-700">Email</span>
+                <input value={resetEmail} onChange={e=>setResetEmail(e.target.value)} className="px-3 py-2 border rounded-lg" type="email" placeholder="you@example.com" />
+              </label>
+              <div className="flex justify-end gap-2">
+                <button type="button" className="px-4 py-2 rounded-lg border bg-white" onClick={()=>setResetOpen(false)}>Cancel</button>
+                <button type="submit" disabled={resetBusy} className="px-4 py-2 rounded-lg bg-indigo-600 text-white disabled:opacity-60">
+                  {resetBusy ? 'Sending...' : 'Send Code'}
+                </button>
+              </div>
+            </form>
+          )}
+
+          {resetStep === 'verify' && (
+            <form onSubmit={verifyResetCode} className="grid gap-3">
+              <div className="text-sm text-gray-600">Enter the code sent to <span className="font-medium">{resetEmail || 'your email'}</span>.</div>
+              <label className="grid gap-1 text-sm">
+                <span className="text-gray-700">Code</span>
+                <input value={resetCode} onChange={e=>setResetCode(e.target.value)} className="px-3 py-2 border rounded-lg" inputMode="numeric" placeholder="123456" />
+              </label>
+              <div className="flex justify-between gap-2">
+                <button type="button" className="px-3 py-2 rounded-lg border bg-white" onClick={()=>setResetStep('request')}>Back</button>
+                <div className="flex gap-2">
+                  <button type="button" className="px-3 py-2 rounded-lg border bg-white" onClick={requestResetCode} disabled={resetBusy}>Resend</button>
+                  <button type="submit" disabled={resetBusy} className="px-4 py-2 rounded-lg bg-indigo-600 text-white disabled:opacity-60">
+                    {resetBusy ? 'Verifying...' : 'Verify Code'}
+                  </button>
+                </div>
+              </div>
+            </form>
+          )}
+
+          {resetStep === 'confirm' && (
+            <form onSubmit={confirmResetPassword} className="grid gap-3">
+              <div className="text-sm text-gray-600">Set your new password.</div>
+              <label className="grid gap-1 text-sm">
+                <span className="text-gray-700">New password</span>
+                <input type="password" value={resetNew} onChange={e=>setResetNew(e.target.value)} className="px-3 py-2 border rounded-lg" autoComplete="new-password" />
+              </label>
+              <label className="grid gap-1 text-sm">
+                <span className="text-gray-700">Confirm new password</span>
+                <input type="password" value={resetConfirm} onChange={e=>setResetConfirm(e.target.value)} className="px-3 py-2 border rounded-lg" autoComplete="new-password" />
+              </label>
+              <div className="flex justify-between gap-2">
+                <button type="button" className="px-3 py-2 rounded-lg border bg-white" onClick={()=>setResetStep('verify')}>Back</button>
+                <button type="submit" disabled={resetBusy} className="px-4 py-2 rounded-lg bg-indigo-600 text-white disabled:opacity-60">
+                  {resetBusy ? 'Saving...' : 'Reset Password'}
+                </button>
+              </div>
+            </form>
+          )}
+
+          {resetStep === 'done' && (
+            <div className="grid gap-3">
+              <div className="text-sm text-gray-700">Password updated. You will be redirected to login.</div>
+              <div className="flex justify-end">
+                <button type="button" className="px-4 py-2 rounded-lg bg-indigo-600 text-white" onClick={doLogout}>Go to login</button>
+              </div>
+            </div>
+          )}
         </div>
+      </Modal>
+
+      <Modal open={logoutOpen} onClose={()=>setLogoutOpen(false)} title="Confirm logout" size="sm">
+        <div className="grid gap-3">
+          <div className="text-sm text-gray-700">Are you sure you want to logout?</div>
+          <div className="flex justify-end gap-2">
+            <button type="button" className="px-4 py-2 rounded-lg border bg-white" onClick={()=>setLogoutOpen(false)}>Cancel</button>
+            <button type="button" className="px-4 py-2 rounded-lg bg-red-600 text-white" onClick={doLogout}>Logout</button>
+          </div>
+        </div>
+      </Modal>
+    </div>
+  )
+}
+
+function ProfileRow({ icon, label, to, danger=false }){
+  return (
+    <Link to={to} className={danger ? 'danger' : ''}>
+      {React.cloneElement(icon, { className: 'h-5 w-5' })}
+      <span>{label}</span>
+      {!danger && <ChevronRight className="h-4 w-4" />}
+    </Link>
+  )
+}
+
+function ProfileActionRow({ icon, label, onClick, danger=false }){
+  return (
+    <button type="button" onClick={onClick} className={danger ? 'danger' : ''}>
+      {React.cloneElement(icon, { className: 'h-5 w-5' })}
+      <span>{label}</span>
+      {!danger && <ChevronRight className="h-4 w-4" />}
+    </button>
+  )
+}
+
+function GeneratedTeacherAvatar({ name }){
+  const initials = String(name || 'Teacher')
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map(part => part[0]?.toUpperCase())
+    .join('') || 'T'
+
+  return (
+    <div className="generated-teacher-avatar" aria-label={`${name} avatar`}>
+      <div className="avatar-hair" />
+      <div className="avatar-face">
+        <span className="avatar-eye left" />
+        <span className="avatar-eye right" />
+        <span className="avatar-smile" />
       </div>
+      <div className="avatar-jacket" />
+      <strong>{initials}</strong>
     </div>
   )
 }

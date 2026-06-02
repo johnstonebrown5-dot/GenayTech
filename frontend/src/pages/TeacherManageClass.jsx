@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { ChevronRight, Plus, Search, SlidersHorizontal, UserRound, Users } from 'lucide-react'
 import api from '../api'
 import { useAuth } from '../auth'
 import AdminClassPrintReportCards from './AdminClassPrintReportCards'
@@ -8,6 +9,9 @@ export default function TeacherManageClass(){
   const { user } = useAuth()
   const [myClass, setMyClass] = useState(null)
   const [classesLoading, setClassesLoading] = useState(true)
+  const [students, setStudents] = useState([])
+  const [studentsLoading, setStudentsLoading] = useState(false)
+  const [studentSearch, setStudentSearch] = useState('')
   const search = (typeof window !== 'undefined') ? new URLSearchParams(window.location.search) : null
   const initialTab = (search?.get('tab') || 'dashboard')
   const initialInnerView = (search?.get('view') || '')
@@ -38,6 +42,23 @@ export default function TeacherManageClass(){
     })()
     return () => { mounted = false }
   }, [user?.id])
+
+  useEffect(() => {
+    if (!myClass?.id) return
+    let mounted = true
+    ;(async () => {
+      setStudentsLoading(true)
+      try{
+        const { data } = await api.get(`/academics/classes/${myClass.id}/students/`)
+        if (mounted) setStudents(Array.isArray(data) ? data : [])
+      }catch{
+        if (mounted) setStudents([])
+      }finally{
+        if (mounted) setStudentsLoading(false)
+      }
+    })()
+    return () => { mounted = false }
+  }, [myClass?.id])
 
   if (classesLoading) return <div className="p-4">Loading...</div>
   if (!myClass) return (
@@ -80,13 +101,22 @@ export default function TeacherManageClass(){
     }catch{}
   }
 
+  const visibleStudents = students.filter(s => {
+    const q = studentSearch.trim().toLowerCase()
+    if (!q) return true
+    return String(s.name || '').toLowerCase().includes(q) || String(s.admission_no || '').toLowerCase().includes(q)
+  })
+
   return (
-    <div className="max-w-full px-2 md:px-0">
-      <div className="mb-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+    <div className="teacher-class-reference-page">
+      <div className="teacher-class-reference-header mb-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
         <div>
           <h1 className="text-xl font-semibold text-slate-900">Manage My Class</h1>
           <div className="text-sm text-slate-600">{myClass?.name || 'Class'} · ID {myClass?.id}</div>
         </div>
+        <button type="button" onClick={()=>goSection('message')} className="teacher-class-message-top">
+          Message Students
+        </button>
       </div>
       <div className="w-full">
         {tab !== 'dashboard' && (
@@ -187,7 +217,7 @@ function AddStudentPanel({ classId }){
   }
 
   return (
-    <div className="rounded-none sm:rounded-xl border-t border-b sm:border border-gray-200 bg-white p-4 shadow w-full">
+    <div className="teacher-message-reference-panel rounded-none sm:rounded-xl border-t border-b sm:border border-gray-200 bg-white p-4 shadow w-full">
       <div className="font-medium mb-3">Add a new student to this class</div>
       {error && <div className="mb-3 text-sm text-red-700 bg-red-50 border border-red-200 rounded p-2">{String(error)}</div>}
       {done && <div className="mb-3 text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded p-2">Student added. ID {done?.id}</div>}
@@ -240,7 +270,7 @@ function EditStudentsPanel({ classId }){
   })
 
   return (
-    <div className="rounded-none sm:rounded-xl border-t border-b sm:border border-gray-200 bg-white p-4 shadow w-full">
+    <div className="teacher-message-reference-panel rounded-none sm:rounded-xl border-t border-b sm:border border-gray-200 bg-white p-4 shadow w-full">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-3">
         <div className="font-medium">Edit students (limited fields)</div>
         <div className="flex flex-col sm:flex-row sm:items-center gap-2 w-full sm:w-auto">
@@ -659,12 +689,14 @@ function MessageStudentsPanel({ classId }){
             onChange={(e)=>setMessage(e.target.value)}
             required
             rows={5}
+            maxLength={500}
             className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             placeholder="Type your message to all students..."
           />
         </label>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center justify-between gap-3">
           <button type="submit" disabled={sending} className="px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700">{sending? 'Sending...' : 'Send Message'}</button>
+          <div className="text-xs text-slate-500">{String(message || '').length}/500</div>
         </div>
       </form>
 
@@ -717,15 +749,23 @@ function MessageStudentsPanel({ classId }){
           </div>
         </div>
 
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
+        <div className="teacher-message-log-toolbar flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 mb-3">
           <div className="text-sm text-slate-600">
             Failed deliveries: {selectableIds.length}
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+
+          <div className="teacher-message-log-tabs flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => { setCategory('all'); setChannel('all'); setStatusFilter('all'); setSortMode('newest') }}
+              className={`text-sm px-3 py-1.5 rounded-lg border ${statusFilter === 'all' ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-white hover:bg-gray-50 border-slate-200 text-slate-700'}`}
+            >
+              All Logs
+            </button>
             <button
               type="button"
               onClick={()=> { setStatusFilter('fail'); setSortMode('failed_first') }}
-              className="text-sm px-3 py-1.5 rounded border bg-white hover:bg-gray-50 flex-1 sm:flex-none"
+              className={`text-sm px-3 py-1.5 rounded-lg border ${statusFilter === 'fail' ? 'bg-slate-900 border-slate-900 text-white' : 'bg-white hover:bg-gray-50 border-slate-200 text-slate-700'}`}
             >
               Failed Only
             </button>
@@ -733,11 +773,12 @@ function MessageStudentsPanel({ classId }){
               type="button"
               disabled={resending || selected.size === 0}
               onClick={resendSelected}
-              className={`${(resending || selected.size === 0) ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-700'} text-sm px-3 py-1.5 rounded bg-blue-600 text-white flex-1 sm:flex-none`}
+              className={`${(resending || selected.size === 0) ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-700'} text-sm px-3 py-1.5 rounded-lg bg-blue-600 text-white`}
             >
               {resending ? '...' : `Resend (${selected.size})`}
             </button>
           </div>
+
           <div className="flex items-end gap-2 bg-slate-50 p-2 rounded-lg border border-slate-100 w-full sm:w-auto">
             <label className="flex-1 grid text-xs">
               <span className="text-slate-600 mb-1">Clean logs older than (days)</span>
@@ -748,6 +789,10 @@ function MessageStudentsPanel({ classId }){
         </div>
 
         {(resendMsg || deleteMsg) && <div className="mb-3 text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded p-2">{String(resendMsg || deleteMsg)}</div>}
+
+        <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          Only the class teacher can view logs for this class.
+        </div>
 
         {logsError && <div className="mb-3 text-sm text-red-700 bg-red-50 border border-red-200 rounded p-2">{String(logsError)}</div>}
         {logsLoading ? (
@@ -769,14 +814,16 @@ function MessageStudentsPanel({ classId }){
                   <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Category</th>
                   <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Channel</th>
                   <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Status</th>
-                  <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Recipient</th>
+                  <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Recipients</th>
                   <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Message</th>
-                  <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Sender</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-100">
                 {sortedLogs.length === 0 ? (
-                  <tr><td colSpan="8" className="px-4 py-8 text-center text-gray-500">No logs found</td></tr>
+                  <tr><td colSpan="7" className="px-4 py-10 text-center text-gray-500">
+                    <div className="font-medium text-slate-700">No logs found</div>
+                    <div className="text-xs text-slate-500 mt-1">Message logs will appear here.</div>
+                  </td></tr>
                 ) : sortedLogs.map(it => {
                   const id = String(it?.id || '');
                   const canSelect = id.startsWith('dl:') && (it?.channel === 'sms' || it?.channel === 'email') && it?.ok === false;
@@ -803,7 +850,6 @@ function MessageStudentsPanel({ classId }){
                       <td className="px-4 py-2 text-sm text-slate-800 max-w-[520px]">
                         <div className="line-clamp-2">{String(it?.message || '')}</div>
                       </td>
-                      <td className="px-4 py-2 text-xs text-slate-600">{String(it?.sender || '-')}</td>
                     </tr>
                   );
                 })}

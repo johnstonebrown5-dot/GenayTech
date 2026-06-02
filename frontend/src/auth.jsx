@@ -111,6 +111,28 @@ export function AuthProvider({ children }) {
     }
   }, [user])
 
+  useEffect(() => {
+    // Refresh cached user data after profile updates (e.g., avatar changes)
+    const onProfileUpdated = async () => {
+      try{
+        const token = localStorage.getItem('access')
+        if (!token) return
+        const res = await api.get('/auth/me/')
+        const me = res?.data
+        setUser(prev => {
+          try { localStorage.setItem('user_data', JSON.stringify(me)) } catch {}
+          return me
+        })
+      }catch{
+        // ignore
+      }
+    }
+    try { window.addEventListener('profile:updated', onProfileUpdated) } catch {}
+    return () => {
+      try { window.removeEventListener('profile:updated', onProfileUpdated) } catch {}
+    }
+  }, [])
+
   return (
     <AuthContext.Provider value={{ user, login, logout, loading }}>
       {children}
