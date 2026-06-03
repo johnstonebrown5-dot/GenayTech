@@ -8,6 +8,19 @@ import StudentReportCardViewer from './StudentReportCardViewer'
 
 let __studentDashboardCache = null
 
+const stripExamDataFromDashboardCache = (cache) => {
+  if (!cache || typeof cache !== 'object') return cache
+  return {
+    ...cache,
+    academicsLoaded: false,
+    academicsFetchedAt: 0,
+    examResults: [],
+    calendarEvents: Array.isArray(cache.calendarEvents)
+      ? cache.calendarEvents.filter(e => e?.source !== 'exam' && !String(e?.id || '').startsWith('exam-'))
+      : [],
+  }
+}
+
 function Skeleton({ className = '' }){
   return <div className={`animate-pulse rounded bg-slate-200/80 ${className}`} />
 }
@@ -350,7 +363,7 @@ export default function StudentDashboard(){
         const persistent = localStorage.getItem('student_dashboard_cache')
         if (persistent) {
           try {
-            __studentDashboardCache = JSON.parse(persistent)
+            __studentDashboardCache = stripExamDataFromDashboardCache(JSON.parse(persistent))
           } catch (e) {
             __studentDashboardCache = null
           }
@@ -389,7 +402,7 @@ export default function StudentDashboard(){
 
     const saveToPersistentCache = (c) => {
       try {
-        localStorage.setItem('student_dashboard_cache', JSON.stringify(c))
+        localStorage.setItem('student_dashboard_cache', JSON.stringify(stripExamDataFromDashboardCache(c)))
       } catch (e) {}
     }
 
@@ -397,10 +410,10 @@ export default function StudentDashboard(){
       setStudent(c.student || null)
       setSchoolInfo(c.schoolInfo || null)
       setAssessments(c.assessments || [])
-      setExamResults(c.examResults || [])
+      setExamResults([])
       setCalendarYear(c.calendarYear || null)
       setCalendarTerm(c.calendarTerm || null)
-      setCalendarEvents(c.calendarEvents || [])
+      setCalendarEvents((c.calendarEvents || []).filter(e => e?.source !== 'exam' && !String(e?.id || '').startsWith('exam-')))
       setInvoices(c.invoices || [])
       setSummary(c.summary || { total_billed: 0, total_paid: 0, balance: 0 })
     }
@@ -516,11 +529,13 @@ export default function StudentDashboard(){
             })
 
             const combined = [...baseEvents, ...examEvents]
-            c.calendarEvents = combined
+            c.calendarEvents = baseEvents
             c.calendarLoaded = true
             c.calendarFetchedAt = now()
             saveToPersistentCache(c)
-            hydrateFromCache(c)
+            setCalendarYear(c.calendarYear || null)
+            setCalendarTerm(c.calendarTerm || null)
+            setCalendarEvents(combined)
           }
         }
 
@@ -540,13 +555,13 @@ export default function StudentDashboard(){
               c.assessments = Array.isArray(assS.value?.data) ? assS.value.data : (assS.value?.data?.results || [])
             }
             if (exmS.status === 'fulfilled') {
-              c.examResults = Array.isArray(exmS.value?.data) ? exmS.value.data : (exmS.value?.data?.results || [])
+              setExamResults(Array.isArray(exmS.value?.data) ? exmS.value.data : (exmS.value?.data?.results || []))
             }
             
             c.academicsLoaded = true
             c.academicsFetchedAt = now()
             saveToPersistentCache(c)
-            hydrateFromCache(c)
+            setAssessments(c.assessments || [])
           }
         }
 
@@ -702,11 +717,11 @@ export default function StudentDashboard(){
       if (__studentDashboardCache) {
         __studentDashboardCache.calendarYear = cy
         __studentDashboardCache.calendarTerm = ct
-        __studentDashboardCache.calendarEvents = combined
+        __studentDashboardCache.calendarEvents = baseEvents
         __studentDashboardCache.calendarLoaded = true
         __studentDashboardCache.calendarFetchedAt = Date.now()
         try {
-          localStorage.setItem('student_dashboard_cache', JSON.stringify(__studentDashboardCache))
+          localStorage.setItem('student_dashboard_cache', JSON.stringify(stripExamDataFromDashboardCache(__studentDashboardCache)))
         } catch {}
       }
       return true
@@ -736,11 +751,11 @@ export default function StudentDashboard(){
 
       if (__studentDashboardCache) {
         __studentDashboardCache.assessments = newAssessments
-        __studentDashboardCache.examResults = newResults
+        __studentDashboardCache.examResults = []
         __studentDashboardCache.academicsLoaded = true
         __studentDashboardCache.academicsFetchedAt = Date.now()
         try {
-          localStorage.setItem('student_dashboard_cache', JSON.stringify(__studentDashboardCache))
+          localStorage.setItem('student_dashboard_cache', JSON.stringify(stripExamDataFromDashboardCache(__studentDashboardCache)))
         } catch {}
       }
     } catch (e) {
@@ -771,7 +786,7 @@ export default function StudentDashboard(){
         __studentDashboardCache.financeSummaryFetchedAt = Date.now()
         __studentDashboardCache.invoicesFetchedAt = Date.now()
         try {
-          localStorage.setItem('student_dashboard_cache', JSON.stringify(__studentDashboardCache))
+          localStorage.setItem('student_dashboard_cache', JSON.stringify(stripExamDataFromDashboardCache(__studentDashboardCache)))
         } catch {}
       }
       return true

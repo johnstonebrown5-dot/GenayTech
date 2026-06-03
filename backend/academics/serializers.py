@@ -518,7 +518,7 @@ class ExamResultSerializer(serializers.ModelSerializer):
             # Backward-compat: if older data stored percentage-like marks (0..100) while denominator is smaller
             # (e.g. marks=85 and out_of=20), treat marks as percentage.
             if target_max and target_max > 0 and marks <= 100.0 and marks > target_max:
-                return round(marks, 2)
-            return round((marks / target_max) * 100.0, 2) if target_max else None
+                return int(round(marks))
+            return int(round((marks / target_max) * 100.0)) if target_max else None
         except Exception:
             return None

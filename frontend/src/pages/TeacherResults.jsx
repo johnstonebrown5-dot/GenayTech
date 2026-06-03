@@ -408,8 +408,8 @@ function TeacherResultsLegacy(){
             const pct = Number(st?.subject_percentages?.[String(sub.id)])
             if (Number.isFinite(pct)) { sum += pct; cnt += 1 }
           }
-          st.total = Math.round(sum * 100) / 100
-          st.average = cnt ? (Math.round((sum / cnt) * 100) / 100) : 0
+          st.total = Math.round(sum)
+          st.average = cnt ? Math.round(sum / cnt) : 0
         }
         combined.sort((a,b)=> (Number(b.total)||0) - (Number(a.total)||0))
         let lastTotal = null, lastPos = 0
@@ -484,8 +484,7 @@ function TeacherResultsLegacy(){
   const formatMean = (value) => {
     const v = Number(value)
     if (!Number.isFinite(v)) return '-'
-    const r = Math.round(v * 100) / 100
-    return Number.isInteger(r) ? String(r) : r.toFixed(2)
+    return String(Math.round(v))
   }
 
   // Fetch grading bands for subjects of the current summary; choose first non-empty as global bands

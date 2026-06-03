@@ -640,8 +640,7 @@ export default function AdminResults(){
   const formatMean = (value) => {
     const v = Number(value)
     if (!Number.isFinite(v)) return '-'
-    const r = Math.round(v * 100) / 100
-    return Number.isInteger(r) ? String(r) : r.toFixed(2)
+    return String(Math.round(v))
   }
 
   const blockSubjectMeanPct = useMemo(() => {

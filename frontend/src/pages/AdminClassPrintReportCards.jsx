@@ -586,7 +586,7 @@ export default function AdminClassPrintReportCards({ classIdProp = null, embedde
                                 return (
                                   <tr key={s.id}>
                                     <td className="py-1 border-b border-gray-200">{s.code}</td>
-                                    <td className="py-1 text-right border-b border-gray-200">{Number.isFinite(Number(v)) ? Number(v) : '-'}</td>
+                                    <td className="py-1 text-right border-b border-gray-200">{Number.isFinite(Number(v)) ? Math.round(Number(v)) : '-'}</td>
                                     <td className="py-1 text-center border-b border-gray-200">
                                       <span className={`px-2 py-0.5 rounded-full text-xs font-medium inline-block ${gradeBadgeClass(grade)}`}>{grade}</span>
                                     </td>
@@ -596,7 +596,7 @@ export default function AdminClassPrintReportCards({ classIdProp = null, embedde
                               })}
                               <tr>
                                 <td className="py-1 border-b border-gray-300 font-semibold">Total</td>
-                                <td className="py-1 text-right border-b border-gray-300 font-semibold">{Number(st.total||0).toFixed(2)}</td>
+                                <td className="py-1 text-right border-b border-gray-300 font-semibold">{Math.round(Number(st.total||0))}</td>
                                 <td className="py-1 text-center border-b border-gray-300 font-semibold">{gradeForAverage(st.average)}</td>
                                 <td className="py-1 border-b border-gray-300 font-semibold"></td>
                               </tr>

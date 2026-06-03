@@ -57,6 +57,24 @@ class Conflict(APIException):
     default_detail = 'Conflict'
     default_code = 'conflict'
 
+def _round_whole(value, default=0):
+    try:
+        return int(round(float(value)))
+    except Exception:
+        return default
+
+def _exam_is_published(exam):
+    return bool(getattr(exam, 'published', False)) or str(getattr(exam, 'status', '')).lower() == 'published'
+
+def _apply_no_store(response):
+    try:
+        response['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+        response['Pragma'] = 'no-cache'
+        response['Expires'] = '0'
+    except Exception:
+        pass
+    return response
+
 class IsTeacherOrAdmin(permissions.BasePermission):
     def has_permission(self, request, view):
         user = getattr(request, 'user', None)
@@ -2095,6 +2113,10 @@ class ExamViewSet(viewsets.ModelViewSet):
     # Allow teachers to read, admins to manage
     permission_classes = [IsTeacherOrAdmin]
 
+    def finalize_response(self, request, response, *args, **kwargs):
+        response = super().finalize_response(request, response, *args, **kwargs)
+        return _apply_no_store(response)
+
     def get_permissions(self):
         """Loosen gate for unsafe methods; enforce with object-level checks.
         - SAFE methods: keep IsTeacherOrAdmin
@@ -2544,11 +2566,11 @@ class ExamViewSet(viewsets.ModelViewSet):
                     acc = (e.get('subject_pct_acc') or {}).get(sub_id)
                     if acc and acc.get('den'):
                         try:
-                            subj_pct_map[sub_id] = round((float(acc['num']) / float(acc['den'])) * 100.0, 2)
+                            subj_pct_map[sub_id] = _round_whole((float(acc['num']) / float(acc['den'])) * 100.0)
                         except Exception:
-                            subj_pct_map[sub_id] = round(sum(parts) / len(parts), 2)
+                            subj_pct_map[sub_id] = _round_whole(sum(parts) / len(parts))
                     else:
-                        subj_pct_map[sub_id] = round(sum(parts) / len(parts), 2)
+                        subj_pct_map[sub_id] = _round_whole(sum(parts) / len(parts))
 
             # Fill missing subjects with 0 so blanks are treated as zeroes
             try:
@@ -2557,7 +2579,7 @@ class ExamViewSet(viewsets.ModelViewSet):
                 all_subj_ids = list(subj_pct_map.keys())
             for sub_id in all_subj_ids:
                 if str(sub_id) not in subj_pct_map:
-                    subj_pct_map[str(sub_id)] = 0.0
+                    subj_pct_map[str(sub_id)] = 0
 
             # Totals/averages to MATCH the Results page: use subject percentages across ALL class subjects
             pct_values = [subj_pct_map.get(str(i), 0.0) for i in all_subj_ids]
@@ -2567,15 +2589,15 @@ class ExamViewSet(viewsets.ModelViewSet):
 
             # Fallbacks in case percentages are unavailable for legacy data
             raw_avg = (e['total'] / e['count']) if e['count'] else 0.0
-            total_field = round(pct_sum if pct_cnt else e['total'], 2)
-            average_field = round(pct_avg if pct_cnt else raw_avg, 2)
+            total_field = _round_whole(pct_sum if pct_cnt else e['total'])
+            average_field = _round_whole(pct_avg if pct_cnt else raw_avg)
 
             students.append({
                 'id': e['id'],
                 'name': e['name'],
                 'total': total_field,
                 'average': average_field,
-                'marks': e['marks'],
+                'marks': {str(k): _round_whole(v) for k, v in (e.get('marks') or {}).items()},
                 'subject_percentages': subj_pct_map,
             })
         # sort by total desc (which is based on percent-sum for consistency with Results page)
@@ -2593,18 +2615,18 @@ class ExamViewSet(viewsets.ModelViewSet):
                 same_rank_count += 1
             st['position'] = position
         # class mean (average of student averages, using percentage-based averages)
-        class_mean = round(sum(s['average'] for s in students) / len(students), 2) if students else 0.0
+        class_mean = _round_whole(sum(s['average'] for s in students) / len(students)) if students else 0
         # subject means (by marks) and mean percentages (by averaging student subject percentages)
         subj_means = []
         subj_mean_percentages = []
         subj_ids = [s['id'] for s in class_subjects]
         for sid in subj_ids:
             vals = [st['marks'].get(str(sid)) for st in students if st['marks'].get(str(sid)) is not None]
-            mean = round(sum(vals)/len(vals), 2) if vals else 0.0
+            mean = _round_whole(sum(vals)/len(vals)) if vals else 0
             subj_means.append({'subject': sid, 'mean': mean})
             # Mean subject percentage across students
             pcts = [st.get('subject_percentages', {}).get(str(sid)) for st in students if st.get('subject_percentages', {}).get(str(sid)) is not None]
-            mean_pct = round(sum(pcts)/len(pcts), 2) if pcts else 0.0
+            mean_pct = _round_whole(sum(pcts)/len(pcts)) if pcts else 0
             subj_mean_percentages.append({'subject': sid, 'mean_percentage': mean_pct})
         return {
             'subjects': class_subjects,
@@ -3417,7 +3439,7 @@ class ExamViewSet(viewsets.ModelViewSet):
             grade = _letter_from_percentage(pct)
             rows.append([
                 s.get('code') or s.get('name'),
-                '' if mark is None else round(float(mark), 2),
+                '' if mark is None else _round_whole(mark),
                 grade,
                 remarks_by_subject.get(sid, ''),
             ])
@@ -4042,6 +4064,10 @@ class ExamResultViewSet(viewsets.ModelViewSet):
     # Students should be able to read their own published results; teachers/admins can access as scoped in get_queryset
     permission_classes = [permissions.IsAuthenticated]
 
+    def finalize_response(self, request, response, *args, **kwargs):
+        response = super().finalize_response(request, response, *args, **kwargs)
+        return _apply_no_store(response)
+
     def get_queryset(self):
         qs = super().get_queryset().select_related('exam','exam__klass','exam__klass__stream','student','subject','component').prefetch_related('component')
         school = getattr(getattr(self.request, 'user', None), 'school', None)
@@ -4102,6 +4128,8 @@ class ExamResultViewSet(viewsets.ModelViewSet):
             pass
         if school and exam and exam.klass.school_id != school.id:
             raise ValidationError({'exam': 'Exam must belong to your school'})
+        if exam and _exam_is_published(exam):
+            raise ValidationError({'detail': 'Cannot edit results of a published exam'})
         # Component belongs to subject
         if component and subject and component.subject_id != subject.id:
             raise ValidationError({'component': 'Component does not belong to the selected subject'})
@@ -4300,6 +4328,8 @@ class ExamResultViewSet(viewsets.ModelViewSet):
         school = getattr(getattr(self.request, 'user', None), 'school', None)
         if school and exam and getattr(getattr(exam, 'klass', None), 'school_id', None) != school.id:
             raise ValidationError({'exam': 'Exam must belong to your school'})
+        if exam and _exam_is_published(exam):
+            raise ValidationError({'detail': 'Cannot edit results of a published exam'})
 
         if component and subject and component.subject_id != subject.id:
             raise ValidationError({'component': 'Component does not belong to the selected subject'})
@@ -4405,6 +4435,9 @@ class ExamResultViewSet(viewsets.ModelViewSet):
             if not exam:
                 errors.append({'index': idx, 'error': {'exam': 'Not found'}})
                 continue
+            if _exam_is_published(exam):
+                errors.append({'index': idx, 'error': {'detail': 'Cannot edit results of a published exam'}})
+                continue
             if not student:
                 errors.append({'index': idx, 'error': {'student': 'Not found'}})
                 continue
@@ -4492,10 +4525,12 @@ class ExamResultViewSet(viewsets.ModelViewSet):
                     if m > oo:
                         raise ValidationError({'marks': f'Marks cannot exceed out_of ({oo})'})
                     out_of_to_store = float(oo)
+                    out_of_explicit = True
                 else:
                     if target_max is not None and m > target_max:
                         raise ValidationError({'marks': f'Marks cannot exceed maximum ({target_max})'})
                     out_of_to_store = float(target_max) if target_max is not None else None
+                    out_of_explicit = False
             except ValidationError as ve:
                 errors.append({'index': idx, 'error': ve.detail})
                 continue
@@ -4511,6 +4546,7 @@ class ExamResultViewSet(viewsets.ModelViewSet):
                 'component': component,
                 'marks': m,
                 'out_of': out_of_to_store,
+                'out_of_explicit': out_of_explicit,
                 'remarks': remarks
             })
         
@@ -4546,6 +4582,7 @@ class ExamResultViewSet(viewsets.ModelViewSet):
                     'obj': existing,
                     'marks': item['marks'],
                     'out_of': item['out_of'],
+                    'out_of_explicit': item.get('out_of_explicit', False),
                     'remarks': item['remarks'],
                     'idx': item['idx']
                 })
@@ -4580,12 +4617,12 @@ class ExamResultViewSet(viewsets.ModelViewSet):
                 for update_item in to_update:
                     obj = update_item['obj']
                     obj.marks = update_item['marks']
-                    if update_item['out_of'] is not None:
+                    if update_item.get('out_of_explicit') and update_item['out_of'] is not None:
                         obj.out_of = update_item['out_of']
                     if update_item['remarks'] is not None:
                         obj.remarks = update_item['remarks']
                     update_fields = ['marks']
-                    if update_item['out_of'] is not None:
+                    if update_item.get('out_of_explicit') and update_item['out_of'] is not None:
                         update_fields.append('out_of')
                     if update_item['remarks'] is not None:
                         update_fields.append('remarks')
@@ -4673,6 +4710,8 @@ class ExamResultViewSet(viewsets.ModelViewSet):
         school = getattr(getattr(request, 'user', None), 'school', None)
         if school and exam.klass.school_id != getattr(school, 'id', None):
             return Response({'detail': 'Exam must belong to your school'}, status=403)
+        if commit and _exam_is_published(exam):
+            return Response({'detail': 'Cannot edit results of a published exam'}, status=400)
         if component and component.subject_id != subject.id:
             return Response({'detail': 'Component does not belong to the selected subject'}, status=400)
         # Auto-assign sole component if subject has exactly one and none provided
@@ -5139,7 +5178,7 @@ class ExamResultViewSet(viewsets.ModelViewSet):
                 errors.append({'index': idx, 'error': str(ex)})
 
         status_code = 200 if not errors else 207
-        return Response({'saved': successes, 'failed': len(errors), 'errors': errors, 'ids': saved_ids})
+        return Response({'saved': successes, 'failed': len(errors), 'errors': errors, 'ids': saved_ids}, status=status_code)
 
     @action(
         detail=False,

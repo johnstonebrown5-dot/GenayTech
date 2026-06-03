@@ -28,7 +28,7 @@ export default function AdminEnterResults({ readOnly }){
   const [subjectOrder, setSubjectOrder] = useState([])
   const [reorderOpen, setReorderOpen] = useState(false)
   const { showError, showSuccess } = useNotification?.() || { showError: ()=>{}, showSuccess: ()=>{} }
-  const isReadOnly = Boolean(readOnly) || (new URLSearchParams(location.search).get('readonly') === '1')
+  const isReadOnly = Boolean(readOnly) || (new URLSearchParams(location.search).get('readonly') === '1') || Boolean(exam?.published)
   const klassOverride = new URLSearchParams(location.search).get('klass')
   const [reloadKey, setReloadKey] = useState(0)
   const [refreshing, setRefreshing] = useState(false)

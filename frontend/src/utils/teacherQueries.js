@@ -178,10 +178,14 @@ export const teacherQueries = {
   getExamSummary: (examId) => {
     const id = String(examId || '').trim()
     if (!id) return Promise.reject(new Error('Missing exam id'))
-    return cached(`exam_summary:${id}`, () => api.get(`/academics/exams/${id}/summary/`), { ttlMs: 60 * 1000 })
+    return api.get(`/academics/exams/${id}/summary/`, {
+      params: { _: Date.now() },
+      headers: { 'Cache-Control': 'no-cache', Pragma: 'no-cache' },
+      _noDedupe: true,
+    })
   },
 
-  getUnpublishedExams: async () => cached('unpublished_exams', async () => {
+  getUnpublishedExams: async () => {
     const list = await fetchAllPages('/academics/exams/?include_history=true&page_size=1000')
     const isUnpub = (e) => {
       if (typeof e?.published === 'boolean') return e.published === false
@@ -192,7 +196,7 @@ export const teacherQueries = {
       return true
     }
     return (list || []).filter(isUnpub)
-  }, { ttlMs: 60 * 1000 }),
+  },
 
   prefetchTeacherBootstrap: async (userId) => {
     const uid = userId == null ? '' : String(userId)

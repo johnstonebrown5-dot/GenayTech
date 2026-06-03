@@ -588,8 +588,8 @@ export default function StudentReportCard(){
                             const avg = cnt ? (sum / cnt) : 0
                             return (
                               <>
-                                <td key={`${ex.id}-t`} className="px-3 py-2 text-right font-medium">{`${sum.toFixed(2)}%`}</td>
-                                <td key={`${ex.id}-a`} className="px-3 py-2 text-center font-medium">{`${avg.toFixed(2)}%`}</td>
+                                <td key={`${ex.id}-t`} className="px-3 py-2 text-right font-medium">{`${Math.round(sum)}%`}</td>
+                                <td key={`${ex.id}-a`} className="px-3 py-2 text-center font-medium">{`${Math.round(avg)}%`}</td>
                               </>
                             )
                           })}

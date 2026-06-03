@@ -3,8 +3,6 @@ import { useParams, Link, useLocation } from 'react-router-dom'
 import api, { toAbsoluteUrl } from '../api'
 import { useAuth } from '../auth'
 
-let __embeddedReportCardCache = new Map()
-
 export default function StudentReportCardViewer({ embedded=false, hideControls=false, hideHistory=false, showTermSelector=true, showExamSelector=true, showBackPrint=true, selectedTermYear: controlledTermYear=null, onSelectedTermYearChange, selectedExamId: controlledExamId=null, onSelectedExamIdChange, studentIdProp=null, autoFlow=false, autoFlowWidth=820 }){
   const { id } = useParams()
   const studentId = Number(studentIdProp ?? id)
@@ -171,11 +169,6 @@ export default function StudentReportCardViewer({ embedded=false, hideControls=f
   const effectiveExamId = controlledExamId || selectedExamId
 
   const isEmbeddedSingleExam = Boolean(embedded && hideControls && hideHistory && !showTermSelector && !showExamSelector && studentId && effectiveExamId)
-
-  const cacheKey = useMemo(() => {
-    if (!isEmbeddedSingleExam) return null
-    return `${studentId}::${String(effectiveExamId)}`
-  }, [isEmbeddedSingleExam, studentId, effectiveExamId])
 
   const selectedExamFromResults = useMemo(()=>{
     if (!effectiveExamId) return null
@@ -388,19 +381,6 @@ export default function StudentReportCardViewer({ embedded=false, hideControls=f
           const exId = effectiveExamId || queryExamId
           if (!exId) return
 
-          try{
-            const cached = cacheKey ? __embeddedReportCardCache.get(cacheKey) : null
-            if (cached?.examResults) {
-              setExamResults(cached.examResults)
-              if (cached.examMeta) setExamMeta(cached.examMeta)
-              if (cached.summarySubjects) setSummarySubjects(cached.summarySubjects)
-              if (cached.summaryStudent) setSummaryStudent(cached.summaryStudent)
-              if (cached.summaryExam) setSummaryExam(cached.summaryExam)
-              if (cached.ranks) setRanks(cached.ranks)
-              return
-            }
-          }catch{}
-
           const [examRes, rowsRes] = await Promise.all([
             api.get(`/academics/exams/${exId}/`).catch(()=>null),
             api.get(`/academics/exam_results/?student=${studentId}&exam=${exId}`),
@@ -412,9 +392,6 @@ export default function StudentReportCardViewer({ embedded=false, hideControls=f
           const augmented = rows.map(r => ({ ...r, exam_detail: ed || r.exam_detail || {} }))
           setExamResults(augmented)
           setSelectedExamId(String(exId))
-          if (cacheKey) {
-            __embeddedReportCardCache.set(cacheKey, { examResults: augmented, examMeta: examRes?.data || null })
-          }
         } else {
           const exm = await api.get(`/academics/exam_results/?student=${studentId}`)
           if (!mounted) return
@@ -458,12 +435,6 @@ export default function StudentReportCardViewer({ embedded=false, hideControls=f
         const { data } = await api.get(`/academics/exams/${exId}/rank`, { params: { student: studentId } })
         if (!abort){
           setRanks(prev => ({ ...prev, [String(exId)]: data }))
-          try{
-            if (cacheKey) {
-              const prev = __embeddedReportCardCache.get(cacheKey) || {}
-              __embeddedReportCardCache.set(cacheKey, { ...prev, ranks: { ...(prev.ranks || {}), [String(exId)]: data } })
-            }
-          }catch{}
         }
       }catch{}
     })()
@@ -1079,7 +1050,7 @@ export default function StudentReportCardViewer({ embedded=false, hideControls=f
                   <div className="grid grid-cols-3 gap-3 mt-4">
                     <div className="rounded-lg border border-gray-200 p-3">
                       <div className="text-[11px] uppercase tracking-wider text-gray-500">Total</div>
-                      <div className="text-lg font-bold text-gray-900">{loading ? '...' : Number.isFinite(selectedTotals.sum) ? selectedTotals.sum.toFixed(0) : '0'}</div>
+                      <div className="text-lg font-bold text-gray-900">{loading ? '...' : Number.isFinite(selectedTotals.sum) ? Math.round(selectedTotals.sum) : '0'}</div>
                     </div>
                     <div className="rounded-lg border border-gray-200 p-3">
                       <div className="text-[11px] uppercase tracking-wider text-gray-500">Subjects</div>
@@ -1087,7 +1058,7 @@ export default function StudentReportCardViewer({ embedded=false, hideControls=f
                     </div>
                     <div className="rounded-lg border border-gray-200 p-3">
                       <div className="text-[11px] uppercase tracking-wider text-gray-500">Average</div>
-                      <div className="text-lg font-bold text-gray-900">{loading ? '...' : Number.isFinite(selectedTotals.avg) ? selectedTotals.avg.toFixed(1) : '0.0'}%</div>
+                      <div className="text-lg font-bold text-gray-900">{loading ? '...' : Number.isFinite(selectedTotals.avg) ? Math.round(selectedTotals.avg) : '0'}%</div>
                     </div>
                   </div>
                 </div>

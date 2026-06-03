@@ -90,25 +90,11 @@ export default function TeacherGrades(){
   ].join('|')
 
   const persistQueue = () => {
-    try{
-      const key = autosaveQueueKey()
-      const payload = {
-        when: Date.now(),
-        items: pendingQueueRef.current || {}
-      }
-      localStorage.setItem(key, JSON.stringify(payload))
-    }catch{}
+    // Do not persist exam/marks data in browser storage.
   }
 
   const loadQueue = () => {
-    try{
-      const raw = localStorage.getItem(autosaveQueueKey())
-      if (!raw) return
-      const data = JSON.parse(raw)
-      if (!data || typeof data !== 'object') return
-      const items = data.items && typeof data.items === 'object' ? data.items : {}
-      pendingQueueRef.current = items
-    }catch{}
+    pendingQueueRef.current = {}
   }
 
   const queuePending = (key, item) => {
@@ -258,10 +244,10 @@ export default function TeacherGrades(){
     `e:${selectedExamId||''}`,
   ].join('|')
   const loadOutOfPrefs = () => {
-    try{ const raw = localStorage.getItem(outOfStoreKey()); return raw ? JSON.parse(raw) : {} }catch{ return {} }
+    return {}
   }
   const saveOutOfPrefs = (map) => {
-    try{ localStorage.setItem(outOfStoreKey(), JSON.stringify(map||{})) }catch{}
+    // Out Of is authoritative from the API and must not be cached locally.
   }
 
   // Helper: compute percentage for a raw value given an Out Of
@@ -1442,7 +1428,7 @@ export default function TeacherGrades(){
     // No auto-collapse behavior
   }, [selectedClass, selectedSubject, selectedExamId])
 
-  // ---------- Draft persistence (localStorage) ----------
+  // ---------- Draft persistence disabled for exam/result data ----------
   const draftKey = () => {
     const parts = [
       'teachergrades',
@@ -1455,81 +1441,7 @@ export default function TeacherGrades(){
     return parts.join('|')
   }
 
-  // Save drafts whenever marks change
-  useEffect(()=>{
-    try{
-      if (!selectedClass || !selectedSubject || !selectedExamId) return
-      const key = draftKey()
-      const payload = {
-        when: Date.now(),
-        entryMode,
-        inputAs,
-        outOf,
-        outOfPerComp,
-        marks,
-        marksAll,
-      }
-      localStorage.setItem(key, JSON.stringify(payload))
-    }catch{}
-  }, [marks, marksAll, outOf, outOfPerComp, inputAs, entryMode, selectedClass, selectedSubject, selectedExamId])
-
-  // Restore drafts after server prefill
-  useEffect(()=>{
-    try{
-      if (!students.length || !selectedClass || !selectedSubject || !selectedExamId) return
-      const raw = localStorage.getItem(draftKey())
-      if (!raw) return
-      const data = JSON.parse(raw)
-      if (!data || typeof data !== 'object') return
-      // Only overlay same entry mode
-      if (data.entryMode === 'single'){
-        if (data.marks && typeof data.marks === 'object'){
-          setMarks(prev => {
-            const next = { ...(prev || {}) }
-            for (const [k, v] of Object.entries(data.marks || {})){
-              const draftVal = (v == null) ? '' : String(v)
-              const hasDraft = draftVal !== ''
-              const currVal = next[k]
-              const hasCurr = currVal != null && String(currVal) !== ''
-              // Never overwrite a non-empty server prefills with an empty draft
-              if (hasDraft || !hasCurr){
-                next[k] = draftVal
-              }
-            }
-            return next
-          })
-        }
-        if (data.outOf) setOutOf(String(data.outOf))
-        if (data.inputAs) setInputAs(data.inputAs)
-      } else {
-        if (data.marksAll && typeof data.marksAll === 'object'){
-          setMarksAll(prev => {
-            const next = { ...(prev || {}) }
-            for (const [compId, compMap] of Object.entries(data.marksAll || {})){
-              const draftCol = (compMap && typeof compMap === 'object') ? compMap : {}
-              const currCol = (next[compId] && typeof next[compId] === 'object') ? next[compId] : {}
-              const merged = { ...currCol }
-              for (const [sid, v] of Object.entries(draftCol)){
-                const draftVal = (v == null) ? '' : String(v)
-                const hasDraft = draftVal !== ''
-                const currVal = merged[sid]
-                const hasCurr = currVal != null && String(currVal) !== ''
-                if (hasDraft || !hasCurr){
-                  merged[sid] = draftVal
-                }
-              }
-              next[compId] = merged
-            }
-            return next
-          })
-        }
-        if (data.outOfPerComp && typeof data.outOfPerComp === 'object'){
-          setOutOfPerComp(prev => ({ ...prev, ...data.outOfPerComp }))
-        }
-        if (data.inputAs) setInputAs(data.inputAs)
-      }
-    }catch{}
-  }, [students, selectedClass, selectedSubject, selectedExamId])
+  useEffect(()=>{}, [marks, marksAll, outOf, outOfPerComp, inputAs, entryMode, selectedClass, selectedSubject, selectedExamId])
 
   const submit = async (event) => {
     event?.preventDefault?.()
