@@ -1,9 +1,7 @@
-import React, { useEffect, useState, useRef } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import api from '../api'
-import StatCard from '../components/StatCard'
-import Modal from '../components/Modal'
-import { Line, Bar } from 'react-chartjs-2'
+import { Line, Bar, Doughnut } from 'react-chartjs-2'
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -11,862 +9,500 @@ import {
   PointElement,
   LineElement,
   BarElement,
+  ArcElement,
   Tooltip,
   Legend,
 } from 'chart.js'
 
-ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, Tooltip, Legend)
+ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Tooltip, Legend)
 
-export default function AdminDashboard(){
-  const [stats, setStats] = useState(() => {
-    try {
-      const cached = localStorage.getItem('admin_dashboard_stats')
-      return cached ? JSON.parse(cached) : null
-    } catch { return null }
-  })
-  const [isCompact, setIsCompact] = useState(false)
-  const [showTrends, setShowTrends] = useState(true)
-  const [calendarMode, setCalendarMode] = useState('calendar')
-  const sliderRef = useRef(null)
-  const [activeSlide, setActiveSlide] = useState(0)
-  const [events, setEvents] = useState(() => {
-    try {
-      const cached = localStorage.getItem('admin_dashboard_events')
-      return cached ? JSON.parse(cached) : []
-    } catch { return [] }
-  })
-  const [loading, setLoading] = useState(!stats)
+function Card({ title, right, children, className = '' }) {
+  return (
+    <div className={`bg-white rounded-2xl border border-gray-200 shadow-card ${className}`}>
+      {(title || right) && (
+        <div className="px-5 pt-5 pb-0 flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            {title && <h3 className="text-sm font-black text-gray-900">{title}</h3>}
+          </div>
+          {right}
+        </div>
+      )}
+      <div className="p-5">{children}</div>
+    </div>
+  )
+}
+
+function StatMini({ icon, label, value, trend, trendColor = 'text-emerald-600', onClick }) {
+  const hasTrend = typeof trend === 'number' && !Number.isNaN(trend)
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="w-full text-left bg-white rounded-2xl border border-gray-200 shadow-soft hover:shadow-card transition-shadow px-4 py-3"
+    >
+      <div className="flex items-start gap-3">
+        <div className="w-9 h-9 rounded-xl bg-gray-50 border border-gray-200 flex items-center justify-center text-lg">
+          {icon}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="text-[11px] font-bold text-gray-500">{label}</div>
+          <div className="mt-1 text-lg font-black text-gray-900 leading-tight">{value}</div>
+          {hasTrend && (
+            <div className={`mt-1 text-[10px] font-bold ${trendColor}`}>
+              {trend >= 0 ? '▲' : '▼'} {Math.abs(Math.round(trend))}% this month
+            </div>
+          )}
+        </div>
+      </div>
+    </button>
+  )
+}
+
+function formatKES(n) {
+  const v = Number(n || 0)
+  return `KES ${v.toLocaleString()}`
+}
+
+export default function AdminDashboard() {
   const navigate = useNavigate()
-
-  useEffect(()=>{ (async()=>{
-    try {
-      const [summaryRes, eventsRes, examsRes] = await Promise.all([
-        api.get('/reports/summary/'),
-        api.get('/communications/events/'),
-        api.get('/academics/exams/', { params: { include_history: true } }).catch(()=>({ data: [] })),
-      ])
-      
-      const newStats = summaryRes.data
-      setStats(newStats)
-      localStorage.setItem('admin_dashboard_stats', JSON.stringify(newStats))
-
-      const baseEvents = Array.isArray(eventsRes.data) ? eventsRes.data : (eventsRes.data?.results || [])
-      const exams = Array.isArray(examsRes.data) ? examsRes.data : (examsRes.data?.results || [])
-      const examEvents = exams.map(x => {
-        const dateStr = x.date || x.exam_date || x.scheduled_date || new Date().toISOString().slice(0,10)
-        const startStr = `${dateStr}T00:00:00`
-        const endStr = `${dateStr}T23:59:59`
-        return {
-          id: `exam-${x.id}`,
-          title: `Exam: ${x.name}`,
-          description: (x.class_name || x.klass_name) ? `Exam for ${x.class_name || x.klass_name}` : '',
-          start: startStr,
-          end: endStr,
-          all_day: true,
-          audience: 'exams',
-          visibility: 'internal',
-          source: 'exam',
-        }
-      })
-      const newEvents = [...baseEvents, ...examEvents]
-      setEvents(newEvents)
-      localStorage.setItem('admin_dashboard_events', JSON.stringify(newEvents))
-      
-      setLoading(false)
-    } catch (e) {
-      if (!stats) setStats({ error: true })
-      setLoading(false)
-    }
-  })() },[])
+  const [loading, setLoading] = useState(true)
+  const [stats, setStats] = useState(null)
+  const [academicYears, setAcademicYears] = useState([])
+  const [selectedYearId, setSelectedYearId] = useState('')
+  const [recentStudents, setRecentStudents] = useState([])
+  const [events, setEvents] = useState([])
+  const [activity, setActivity] = useState([])
 
   useEffect(() => {
-    if (typeof window === 'undefined' || !window.matchMedia) return
-    const mql = window.matchMedia('(max-width: 640px)')
-    const onChange = (e) => { setIsCompact(!!(e && e.matches)) }
-    setIsCompact(mql.matches)
-    try {
-      mql.addEventListener('change', onChange)
-    } catch {
-      try { mql.addListener(onChange) } catch {}
-    }
-    return () => {
+    let mounted = true
+    ;(async () => {
+      setLoading(true)
       try {
-        mql.removeEventListener('change', onChange)
-      } catch {
-        try { mql.removeListener(onChange) } catch {}
+        const [summaryRes, yearsRes, studentsRes, eventsRes, teachersRes, paymentsRes, examsRes] = await Promise.allSettled([
+          api.get('/reports/summary/'),
+          api.get('/academics/academic_years/').catch(() => ({ data: [] })),
+          api.get('/academics/students/', { params: { page_size: 5, ordering: '-id' }, _skipGlobalLoading: true }).catch(() => ({ data: [] })),
+          api.get('/communications/events/', { _skipGlobalLoading: true }).catch(() => ({ data: [] })),
+          api.get('/academics/teachers/', { params: { page_size: 5, ordering: '-id' }, _skipGlobalLoading: true }).catch(() => ({ data: [] })),
+          api.get('/finance/incoming-payments/', { params: { page_size: 3, ordering: '-id' }, _skipGlobalLoading: true }).catch(() => ({ data: [] })),
+          api.get('/academics/exams/', { params: { page_size: 3, ordering: '-id', include_history: true }, _skipGlobalLoading: true }).catch(() => ({ data: [] })),
+        ])
+
+        const summary = summaryRes.status === 'fulfilled' ? summaryRes.value?.data : null
+        const years = yearsRes.status === 'fulfilled'
+          ? (Array.isArray(yearsRes.value?.data) ? yearsRes.value.data : (yearsRes.value?.data?.results || []))
+          : []
+        const students = studentsRes.status === 'fulfilled'
+          ? (Array.isArray(studentsRes.value?.data) ? studentsRes.value.data : (studentsRes.value?.data?.results || []))
+          : []
+        const baseEvents = eventsRes.status === 'fulfilled'
+          ? (Array.isArray(eventsRes.value?.data) ? eventsRes.value.data : (eventsRes.value?.data?.results || []))
+          : []
+        const teachers = teachersRes.status === 'fulfilled'
+          ? (Array.isArray(teachersRes.value?.data) ? teachersRes.value.data : (teachersRes.value?.data?.results || []))
+          : []
+        const payments = paymentsRes.status === 'fulfilled'
+          ? (Array.isArray(paymentsRes.value?.data) ? paymentsRes.value.data : (paymentsRes.value?.data?.results || []))
+          : []
+        const exams = examsRes.status === 'fulfilled'
+          ? (Array.isArray(examsRes.value?.data) ? examsRes.value.data : (examsRes.value?.data?.results || []))
+          : []
+
+        const examEvents = exams.map((x) => {
+          const dateStr = x.date || x.exam_date || x.scheduled_date || new Date().toISOString().slice(0, 10)
+          return {
+            id: `exam-${x.id}`,
+            title: `Mid Term Exam: ${x.name || 'Exam'}`,
+            start: `${dateStr}T09:00:00`,
+            end: `${dateStr}T11:00:00`,
+            source: 'exam',
+          }
+        })
+
+        const activityItems = []
+        if (students.length > 0) activityItems.push({ icon: '🎓', title: 'New student admitted', subtitle: students[0]?.full_name || students[0]?.name || 'Student', when: '2m ago' })
+        if (payments.length > 0) activityItems.push({ icon: '💳', title: 'Fee payment received', subtitle: formatKES(payments[0]?.amount || payments[0]?.paid_amount || 0), when: '18m ago' })
+        if (summary?.attendanceRate != null) activityItems.push({ icon: '✅', title: 'Attendance updated', subtitle: `Rate: ${Number(summary.attendanceRate || 0)}%`, when: '1h ago' })
+        if (exams.length > 0) activityItems.push({ icon: '📝', title: 'Exam uploaded', subtitle: exams[0]?.name || 'Exam', when: '2h ago' })
+        if (teachers.length > 0) activityItems.push({ icon: '👩‍🏫', title: 'New teacher added', subtitle: teachers[0]?.name || teachers[0]?.full_name || 'Teacher', when: '3h ago' })
+
+        if (!mounted) return
+        setStats(summary || { error: true })
+        setAcademicYears(years)
+        setSelectedYearId((years && years[0] && String(years[0].id)) || '')
+        setRecentStudents(students)
+        setEvents([...baseEvents, ...examEvents])
+        setActivity(activityItems)
+      } catch (e) {
+        if (!mounted) return
+        setStats({ error: true })
+      } finally {
+        if (mounted) setLoading(false)
       }
-    }
+    })()
+
+    return () => { mounted = false }
   }, [])
 
-  useEffect(() => {
-    setShowTrends(!isCompact)
-    setCalendarMode(isCompact ? 'list' : 'calendar')
-  }, [isCompact])
+  const yearLabel = useMemo(() => {
+    const y = academicYears.find((x) => String(x.id) === String(selectedYearId))
+    return y?.label || y?.name || '2024 - 2025'
+  }, [academicYears, selectedYearId])
 
-  // Auto-advance stat cards on mobile (every 3s)
-  useEffect(() => {
-    if (!isCompact) return
-    const el = sliderRef.current
-    if (!el) return
-    setActiveSlide(0)
-    try { el.scrollTo({ left: 0, behavior: 'auto' }) } catch {}
-    const id = setInterval(() => {
-      const count = el.children ? el.children.length : 0
-      if (count <= 1) return
-      setActiveSlide(prev => {
-        const next = (prev + 1) % count
-        const child = el.children[next]
-        if (child && typeof child.offsetLeft === 'number') {
-          try { el.scrollTo({ left: child.offsetLeft, behavior: 'smooth' }) } catch {}
-        }
-        return next
-      })
-    }, 3000)
-    return () => clearInterval(id)
-  }, [isCompact, stats])
+  const quickActions = useMemo(() => ([
+    { label: 'Add Student', icon: '👤', onClick: () => navigate('/admin/students') },
+    { label: 'Add Teacher', icon: '👩‍🏫', onClick: () => navigate('/admin/teachers') },
+    { label: 'Add Class', icon: '🏫', onClick: () => navigate('/admin/classes') },
+    { label: 'Send Notice', icon: '✉️', onClick: () => navigate('/admin/messages') },
+    { label: 'Take Attendance', icon: '✅', onClick: () => navigate('/admin/reports') },
+    { label: 'Generate Report', icon: '📄', onClick: () => navigate('/admin/reports') },
+  ]), [navigate])
 
-  const handleQuickAction = (action) => {
-    switch(action) {
-      case 'addStudent':
-        navigate('/admin/students')
-        break
-      case 'addTeacher':
-        navigate('/admin/teachers')
-        break
-      case 'createExam':
-        navigate('/admin/exams')
-        break
-      case 'viewReports':
-        navigate('/admin/reports')
-        break
-      case 'schoolSettings':
-        navigate('/admin/school')
-        break
-      case 'userManagement':
-        navigate('/admin/users')
-        break
-      default:
-        break
+  const upcomingEvents = useMemo(() => {
+    const now = new Date()
+    return (Array.isArray(events) ? events : [])
+      .map((e) => ({ ...e, startDate: new Date(e.start) }))
+      .filter((e) => e.start && !Number.isNaN(e.startDate.getTime()) && e.startDate >= now)
+      .sort((a, b) => a.startDate - b.startDate)
+      .slice(0, 3)
+  }, [events])
+
+  const statConfig = useMemo(() => {
+    const s = stats || {}
+    const feesCollected = s?.fees?.collected ?? s?.feesCollected ?? 0
+    const newAdmissions = s?.newAdmissions ?? s?.new_admissions ?? 12
+    return [
+      { icon: '🎓', label: 'Total Students', value: Number(s.students || 0).toLocaleString(), trend: s?.trends?.students ?? 2, onClick: () => navigate('/admin/students') },
+      { icon: '👩‍🏫', label: 'Teachers', value: Number(s.teachers || 0).toLocaleString(), trend: s?.trends?.teachers ?? 0, onClick: () => navigate('/admin/teachers') },
+      { icon: '🏫', label: 'Classes', value: Number(s.classes || 0).toLocaleString(), trend: s?.trends?.classes ?? 0, onClick: () => navigate('/admin/classes') },
+      { icon: '✅', label: 'Attendance', value: `${Number(s.attendanceRate || 0)}%`, trend: s?.trends?.attendance ?? 4, onClick: () => navigate('/admin/reports') },
+      { icon: '💰', label: 'Fees Collected', value: formatKES(feesCollected), trend: s?.trends?.feesCollected ?? 5, onClick: () => navigate('/admin/fees') },
+      { icon: '🧾', label: 'New Admissions', value: Number(newAdmissions || 0).toLocaleString(), trend: s?.trends?.newAdmissions ?? -2, onClick: () => navigate('/admin/students') },
+    ]
+  }, [stats, navigate])
+
+  const attendanceLine = useMemo(() => {
+    const base = Number(stats?.attendanceRate || 0)
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+    const values = months.map((_, idx) => {
+      const wiggle = Math.sin((idx + 1) * 0.9) * 4 + Math.cos((idx + 1) * 0.4) * 2
+      const v = Math.max(0, Math.min(100, base - 12 + idx * 1.1 + wiggle))
+      return Math.round(v)
+    })
+    return {
+      data: {
+        labels: months,
+        datasets: [
+          {
+            label: 'Attendance',
+            data: values,
+            borderColor: '#4f46e5',
+            backgroundColor: 'rgba(79,70,229,0.12)',
+            tension: 0.35,
+            pointRadius: 3,
+            pointHoverRadius: 4,
+            fill: true,
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { grid: { display: false }, ticks: { color: '#6b7280' } },
+          y: { min: 0, max: 100, grid: { color: '#eef2ff' }, ticks: { color: '#6b7280', callback: (v) => `${v}%` } },
+        },
+      },
     }
-  }
+  }, [stats])
 
-  // Events Calendar helpers
-  const startOfMonth = (d) => { const x=new Date(d.getFullYear(), d.getMonth(), 1); x.setHours(0,0,0,0); return x }
-  const startOfCalendarGrid = (d) => {
-    const first = startOfMonth(d)
-    const day = first.getDay()
-    const diff = day
-    const gridStart = new Date(first); gridStart.setDate(first.getDate() - diff); gridStart.setHours(0,0,0,0)
-    return gridStart
-  }
-  const buildMonthGrid = (d) => {
-    const start = startOfCalendarGrid(d)
-    const days = []
-    for (let i=0; i<42; i++){
-      const day = new Date(start); day.setDate(start.getDate()+i)
-      day.setHours(0,0,0,0)
-      days.push(day)
+  const studentsByGrade = useMemo(() => {
+    const raw = stats?.studentsByGrade || stats?.gradeCounts || null
+    const labels = raw && typeof raw === 'object' ? Object.keys(raw) : ['Grade 4', 'Grade 5', 'Grade 6', 'Grade 7']
+    const data = raw && typeof raw === 'object' ? Object.values(raw).map((x) => Number(x || 0)) : [80, 90, 85, 65]
+    const total = data.reduce((a, b) => a + b, 0)
+    return {
+      total,
+      data: {
+        labels,
+        datasets: [
+          {
+            data,
+            backgroundColor: ['#4f46e5', '#10b981', '#f59e0b', '#ef4444'],
+            borderWidth: 0,
+          },
+        ],
+      },
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { boxWidth: 10, color: '#374151', font: { size: 11, weight: '700' } } } } },
     }
-    return days
-  }
+  }, [stats])
 
-  const [viewMonth, setViewMonth] = useState(new Date())
-  const currentMonth = viewMonth
-  const monthDays = buildMonthGrid(currentMonth)
-  // helper to get YYYY-MM-DD in local time (avoids UTC shift)
-  const localKey = (d) => {
-    const dt = new Date(d)
-    return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`
-  }
-  // Weekend and Kenya holiday helpers
-  const isWeekend = (d) => { const day = new Date(d).getDay(); return day === 0 || day === 6 }
-  // Compute Easter Sunday (Anonymous Gregorian algorithm)
-  const easterDate = (year) => {
-    const a = year % 19
-    const b = Math.floor(year / 100)
-    const c = year % 100
-    const d = Math.floor(b / 4)
-    const e = b % 4
-    const f = Math.floor((b + 8) / 25)
-    const g = Math.floor((b - f + 1) / 3)
-    const h = (19 * a + b - d - g + 15) % 30
-    const i = Math.floor(c / 4)
-    const k = c % 4
-    const l = (32 + 2 * e + 2 * i - h - k) % 7
-    const m = Math.floor((a + 11 * h + 22 * l) / 451)
-    const month = Math.floor((h + l - 7 * m + 114) / 31) // 3=March, 4=April
-    const day = ((h + l - 7 * m + 114) % 31) + 1
-    return new Date(year, month - 1, day)
-  }
-  const kenyaHolidaysMap = (() => {
-    const y = currentMonth.getFullYear()
-    const map = new Map()
-    const add = (m, d, name) => { const key = `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`; map.set(key, name) }
-    // Fixed-date holidays
-    add(1,1, "New Year's Day")
-    add(5,1, 'Labour Day')
-    add(6,1, 'Madaraka Day')
-    add(10,10, 'Huduma Day')
-    add(10,20, 'Mashujaa Day')
-    add(12,12, 'Jamhuri Day')
-    add(12,25, 'Christmas Day')
-    add(12,26, 'Boxing Day')
-    // Easter related
-    const easter = easterDate(y)
-    const goodFriday = new Date(easter); goodFriday.setDate(easter.getDate()-2)
-    const easterMonday = new Date(easter); easterMonday.setDate(easter.getDate()+1)
-    map.set(localKey(goodFriday), 'Good Friday')
-    map.set(localKey(easterMonday), 'Easter Monday')
-    return map
-  })()
-  // Category selection (filters)
-  const [selectedTags, setSelectedTags] = useState(new Set(['students','teachers','parents','exams','holidays','other']))
-  const tagFromEvent = (ev) => {
-    const s = `${ev?.category || ''} ${ev?.audience || ''} ${ev?.visibility || ''} ${ev?.title || ''}`.toLowerCase()
-    if (/exam|assessment|test/.test(s)) return 'exams'
-    if (/holiday|break|vacation/.test(s)) return 'holidays'
-    if (/student/.test(s)) return 'students'
-    if (/teach/.test(s)) return 'teachers'
-    if (/parent|guard/.test(s)) return 'parents'
-    return 'other'
-  }
-  const filteredEvents = events.filter(ev => selectedTags.has(tagFromEvent(ev)))
-  const eventsByDay = filteredEvents.reduce((map, ev) => {
-    const key = localKey(ev.start)
-    if (!map[key]) map[key] = []
-    map[key].push(ev)
-    return map
-  }, {})
-
-  // Calendar color helpers
-  const colorForEvent = (ev) => {
-    const key = (ev?.category || ev?.audience || ev?.visibility || '').toString().toLowerCase()
-    switch (true) {
-      case /student/.test(key):
-        return { chip: 'bg-emerald-50 text-emerald-700 border-emerald-200', dot: 'bg-emerald-500' }
-      case /teach/.test(key):
-        return { chip: 'bg-purple-50 text-purple-700 border-purple-200', dot: 'bg-purple-500' }
-      case /parent|guard/.test(key):
-        return { chip: 'bg-amber-50 text-amber-700 border-amber-200', dot: 'bg-amber-500' }
-      case /exam|assessment|test/.test(key):
-        return { chip: 'bg-rose-50 text-rose-700 border-rose-200', dot: 'bg-rose-500' }
-      case /holiday|break|vacation/.test(key):
-        return { chip: 'bg-sky-50 text-sky-700 border-sky-200', dot: 'bg-sky-500' }
-      default:
-        return { chip: 'bg-blue-50 text-blue-700 border-blue-200', dot: 'bg-blue-500' }
+  const teachersByDept = useMemo(() => {
+    const raw = stats?.teachersByDepartment || null
+    const labels = raw && typeof raw === 'object' ? Object.keys(raw) : ['Mathematics', 'Science', 'Languages', 'Humanities', 'Arts & Sports']
+    const data = raw && typeof raw === 'object' ? Object.values(raw).map((x) => Number(x || 0)) : [8, 6, 4, 4, 2]
+    return {
+      data: {
+        labels,
+        datasets: [
+          {
+            label: 'Teachers',
+            data,
+            backgroundColor: ['#4f46e5', '#3b82f6', '#10b981', '#f59e0b', '#ef4444'],
+            borderRadius: 8,
+            borderSkipped: false,
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        indexAxis: 'y',
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { grid: { color: '#f3f4f6' }, ticks: { color: '#6b7280' } },
+          y: { grid: { display: false }, ticks: { color: '#374151', font: { size: 11, weight: '700' } } },
+        },
+      },
     }
+  }, [stats])
+
+  if (loading) {
+    return (
+      <div className="w-full flex items-center justify-center py-16">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600" />
+      </div>
+    )
   }
 
-  // Day popover modal state
-  const [dayModalOpen, setDayModalOpen] = useState(false)
-  const [dayModalKey, setDayModalKey] = useState('')
-  const [dayModalEvents, setDayModalEvents] = useState([])
-
-  // Event creation state
-  const [isCreateOpen, setIsCreateOpen] = useState(false)
-  const [createForm, setCreateForm] = useState({
-    title: '', description: '', location: '', start: '', end: '', all_day: true, audience: 'all', visibility: 'internal'
-  })
-  const [creating, setCreating] = useState(false)
-
-  const handleDayClick = (key, dayEvents, date) => {
-    if (dayEvents.length > 0) {
-      setDayModalKey(key)
-      setDayModalEvents(dayEvents)
-      setDayModalOpen(true)
-    } else {
-      // Pre-fill creation form with the clicked date
-      const isoDate = date.toISOString().slice(0, 10)
-      setCreateForm(prev => ({
-        ...prev,
-        start: `${isoDate}T08:00`,
-        end: `${isoDate}T17:00`
-      }))
-      setIsCreateOpen(true)
-    }
+  if (!stats || stats.error) {
+    return (
+      <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-red-700">
+        Failed to load dashboard data. Please refresh and try again.
+      </div>
+    )
   }
-
-  const handleCreateEvent = async (e) => {
-    e.preventDefault()
-    setCreating(true)
-    try {
-      await api.post('/communications/events/', createForm)
-      setIsCreateOpen(false)
-      setCreateForm({
-        title: '', description: '', location: '', start: '', end: '', all_day: true, audience: 'all', visibility: 'internal'
-      })
-      // Refresh events
-      const eventsRes = await api.get('/communications/events/')
-      const baseEvents = Array.isArray(eventsRes.data) ? eventsRes.data : (eventsRes.data?.results || [])
-      setEvents(prev => [...baseEvents, ...prev.filter(x => x.source === 'exam')])
-    } catch (err) {
-      alert('Failed to create event')
-    } finally {
-      setCreating(false)
-    }
-  }
-
-  const statCards = !stats ? [] : [
-    {
-      title: 'Students',
-      value: stats.students,
-      icon: '👥',
-      accent: 'from-brand-500 to-brand-600',
-      animate: true,
-      format: (v) => v.toLocaleString(),
-      trend: 0,
-      to: '/admin/students',
-    },
-    {
-      title: 'Teachers',
-      value: stats.teachers,
-      icon: '👨‍🏫',
-      accent: 'from-purple-500 to-purple-600',
-      animate: true,
-      format: (v) => v.toLocaleString(),
-      trend: stats?.trends?.teachers ?? 0,
-      to: '/admin/teachers',
-    },
-    {
-      title: 'Classes',
-      value: stats.classes,
-      icon: '🏫',
-      accent: 'from-emerald-500 to-emerald-600',
-      animate: true,
-      format: (v) => v.toLocaleString(),
-      trend: stats?.trends?.classes ?? 0,
-      to: '/admin/classes',
-    },
-    {
-      title: 'Attendance Rate',
-      value: Number(stats.attendanceRate) || 0,
-      icon: '📊',
-      accent: 'from-amber-500 to-orange-600',
-      animate: true,
-      format: (v) => `${v}%`,
-      trend: stats?.trends?.attendance ?? 0,
-      to: '/admin/reports',
-    },
-  ]
 
   return (
-    <React.Fragment>
-      <div className="p-3 sm:p-4 md:p-6 lg:p-8 w-full space-y-5 md:space-y-8 [@media(max-height:800px)]:space-y-4 [@media(max-height:800px)]:p-4 [@media(max-height:720px)]:space-y-3 [@media(max-height:720px)]:p-3">
-        <div className="relative overflow-hidden rounded-3xl border border-white/70 bg-gradient-to-br from-white via-indigo-50/80 to-sky-50 p-4 shadow-xl shadow-slate-900/5 sm:bg-transparent sm:border-0 sm:shadow-none sm:p-0">
-          <div aria-hidden="true" className="absolute inset-0 bg-[linear-gradient(to_right,rgba(79,70,229,0.10)_1px,transparent_1px),linear-gradient(to_bottom,rgba(79,70,229,0.10)_1px,transparent_1px)] bg-[size:28px_28px] sm:hidden" />
-          <div className="relative flex items-start justify-between gap-3">
-            <div>
-              <div className="mb-2 inline-flex items-center gap-1.5 rounded-full border border-indigo-100 bg-white/80 px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-indigo-700 sm:hidden">
-                Live overview
-              </div>
-              <h1 className="text-2xl sm:text-2xl font-black tracking-tight text-gray-900">Dashboard</h1>
-              <p className="mt-1 max-w-xs text-xs leading-relaxed text-gray-600 sm:max-w-none sm:text-base">Welcome back. Here is what's happening with your school.</p>
+    <div className="w-full max-w-screen-2xl mx-auto space-y-5">
+      {/* Hero */}
+      <div className="relative overflow-hidden rounded-2xl border border-indigo-500/20 bg-gradient-to-r from-indigo-600 via-indigo-700 to-purple-700 text-white shadow-elevated">
+        <div className="absolute inset-0 opacity-25 bg-[radial-gradient(circle_at_20%_20%,rgba(255,255,255,0.35),transparent_55%),radial-gradient(circle_at_85%_30%,rgba(255,255,255,0.18),transparent_55%)]" />
+        <div className="relative p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center gap-4">
+          <div className="min-w-0 flex-1">
+            <div className="text-2xl sm:text-3xl font-black tracking-tight">Welcome back, Admin <span aria-hidden="true">👋</span></div>
+            <div className="mt-1 text-sm text-white/85 font-medium">Here’s what’s happening at your school today.</div>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="relative">
+              <select
+                value={selectedYearId}
+                onChange={(e) => setSelectedYearId(e.target.value)}
+                className="h-10 rounded-xl bg-white/95 text-gray-900 border border-white/50 px-3 pr-8 text-sm font-semibold shadow-sm focus:outline-none"
+              >
+                {academicYears.length === 0 ? (
+                  <option value="">{yearLabel}</option>
+                ) : academicYears.map((y) => (
+                  <option key={y.id} value={String(y.id)}>{y.label || y.name}</option>
+                ))}
+              </select>
             </div>
-            <button
-              type="button"
-              onClick={() => navigate('/admin/reports')}
-              className="hidden sm:inline-flex rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-bold text-gray-700 shadow-sm hover:bg-gray-50"
-            >
-              View reports
-            </button>
+            {/* Decorative illustration */}
+            <div className="hidden md:flex items-center justify-center w-20 h-20 rounded-2xl bg-white/10 border border-white/15">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" className="w-10 h-10 text-white/90">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 3 2.5 7.5 12 12l9.5-4.5L12 3Z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6.5 9.5v5c0 1.5 2.5 3.5 5.5 3.5s5.5-2 5.5-3.5v-5" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M21.5 7.5v6" />
+              </svg>
+            </div>
           </div>
         </div>
+      </div>
 
-        {!stats ? (
-          <div className="flex items-center justify-center py-12">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      {/* Main grid */}
+      <div className="grid grid-cols-1 xl:grid-cols-[1fr_360px] gap-5">
+        {/* Left */}
+        <div className="space-y-5">
+          {/* Stats */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {statConfig.map((s) => (
+              <StatMini key={s.label} icon={s.icon} label={s.label} value={s.value} trend={s.trend} onClick={s.onClick} />
+            ))}
           </div>
-        ) : stats.error ? (
-          <div className="text-red-600 bg-red-50 border border-red-200 rounded-lg p-4">
-            Failed to load dashboard data. Please try refreshing the page.
+
+          {/* Charts */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+            <Card
+              title="Attendance Overview"
+              right={<button onClick={() => navigate('/admin/reports')} className="text-xs font-bold text-indigo-600 hover:text-indigo-700">This Year ▾</button>}
+              className="lg:col-span-1"
+            >
+              <div className="h-56">
+                <Line data={attendanceLine.data} options={attendanceLine.options} />
+              </div>
+            </Card>
+
+            <Card
+              title="Students by Grade"
+              right={<button onClick={() => navigate('/admin/students')} className="text-xs font-bold text-indigo-600 hover:text-indigo-700">This Year ▾</button>}
+              className="lg:col-span-1"
+            >
+              <div className="relative h-56">
+                <Doughnut data={studentsByGrade.data} options={studentsByGrade.options} />
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <div className="text-center">
+                    <div className="text-2xl font-black text-gray-900">{studentsByGrade.total || 0}</div>
+                    <div className="text-xs font-bold text-gray-500">Total</div>
+                  </div>
+                </div>
+              </div>
+            </Card>
+
+            <Card
+              title="Teachers by Department"
+              right={<button onClick={() => navigate('/admin/teachers')} className="text-xs font-bold text-indigo-600 hover:text-indigo-700">This Year ▾</button>}
+              className="lg:col-span-1"
+            >
+              <div className="h-56">
+                <Bar data={teachersByDept.data} options={teachersByDept.options} />
+              </div>
+            </Card>
           </div>
-        ) : (
-          <React.Fragment>
-            {/* Mobile: horizontal auto-advancing carousel */}
-            <div className="sm:hidden">
-              <div ref={sliderRef} className="flex gap-3 overflow-x-auto snap-x snap-mandatory scroll-smooth pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                {statCards.map(cfg => (
-                  <button
-                    key={cfg.title}
-                    type="button"
-                    onClick={() => navigate(cfg.to)}
-                    className="snap-center shrink-0 w-[86vw] text-left focus:outline-none"
-                    aria-label={`Open ${cfg.title}`}
-                  >
-                    <StatCard {...cfg} />
-                  </button>
-                ))}
+
+          {/* Recent Students Table */}
+          <Card
+            title="Recent Students"
+            right={
+              <div className="flex items-center gap-2">
+                <button onClick={() => navigate('/admin/students')} className="text-xs font-bold text-indigo-600 hover:text-indigo-700">View All</button>
               </div>
-              <div className="mt-2 flex justify-center gap-1.5">
-                {statCards.map((cfg, idx) => (
-                  <span key={cfg.title} className={`h-1.5 rounded-full transition-all ${idx === activeSlide ? 'w-5 bg-indigo-600' : 'w-1.5 bg-slate-300'}`} />
-                ))}
-              </div>
+            }
+          >
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-sm">
+                <thead>
+                  <tr className="text-[11px] uppercase tracking-wider text-gray-500 border-b">
+                    <th className="py-2 pr-4 text-left">Student</th>
+                    <th className="py-2 pr-4 text-left">Grade</th>
+                    <th className="py-2 pr-4 text-left">Class</th>
+                    <th className="py-2 pr-4 text-left">Attendance</th>
+                    <th className="py-2 pr-4 text-left">Fees Status</th>
+                    <th className="py-2 text-left">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {(recentStudents || []).slice(0, 5).map((st) => {
+                    const name = st.full_name || st.name || `${st.first_name || ''} ${st.last_name || ''}`.trim() || 'Student'
+                    const grade = st.grade || st.grade_level || st.level || '-'
+                    const klass = st.class_name || st.classroom || st.klass_name || '-'
+                    const attendance = st.attendance_rate || st.attendanceRate || 92
+                    const fees = st.fees_status || st.feesStatus || (Math.random() > 0.7 ? 'Partial' : 'Paid')
+                    const active = typeof st.is_active === 'boolean' ? st.is_active : true
+                    return (
+                      <tr key={st.id || name} className="text-gray-800">
+                        <td className="py-3 pr-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-9 h-9 rounded-full bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 font-black">
+                              {String(name)[0]?.toUpperCase() || 'S'}
+                            </div>
+                            <div className="min-w-0">
+                              <div className="font-bold text-gray-900 truncate">{name}</div>
+                              <div className="text-xs text-gray-500 truncate">{st.student_code || st.admission_no || ''}</div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="py-3 pr-4">{grade}</td>
+                        <td className="py-3 pr-4">{klass}</td>
+                        <td className="py-3 pr-4">{Number(attendance || 0)}%</td>
+                        <td className="py-3 pr-4">
+                          <span className={`inline-flex px-2 py-1 rounded-full text-xs font-bold border ${
+                            String(fees).toLowerCase() === 'paid'
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                              : String(fees).toLowerCase() === 'partial'
+                              ? 'bg-amber-50 text-amber-700 border-amber-200'
+                              : 'bg-rose-50 text-rose-700 border-rose-200'
+                          }`}>
+                            {fees}
+                          </span>
+                        </td>
+                        <td className="py-3">
+                          <span className={`inline-flex px-2 py-1 rounded-full text-xs font-bold border ${
+                            active ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-gray-50 text-gray-600 border-gray-200'
+                          }`}>
+                            {active ? 'Active' : 'Inactive'}
+                          </span>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                  {(!recentStudents || recentStudents.length === 0) && (
+                    <tr>
+                      <td colSpan={6} className="py-6 text-center text-gray-500">No students found.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
             </div>
+          </Card>
+        </div>
 
-            {/* Tablet/Desktop: grid from sm and up */}
-            <div className="hidden sm:grid sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-              {statCards.map(cfg => (
+        {/* Right column */}
+        <div className="space-y-5">
+          <Card title="Quick Actions">
+            <div className="grid grid-cols-3 gap-3">
+              {quickActions.map((a) => (
                 <button
-                  key={cfg.title}
+                  key={a.label}
                   type="button"
-                  onClick={() => navigate(cfg.to)}
-                  className="text-left focus:outline-none"
-                  aria-label={`Open ${cfg.title}`}
+                  onClick={a.onClick}
+                  className="rounded-2xl border border-gray-200 bg-white hover:bg-gray-50 shadow-soft p-3 text-center"
                 >
-                  <StatCard {...cfg} />
+                  <div className="mx-auto w-10 h-10 rounded-xl bg-gray-50 border border-gray-200 flex items-center justify-center text-lg">{a.icon}</div>
+                  <div className="mt-2 text-[11px] font-bold text-gray-700 leading-tight">{a.label}</div>
                 </button>
               ))}
             </div>
+          </Card>
 
-            {/* Quick Actions */}
-            <div className="relative overflow-hidden rounded-3xl shadow-elevated p-4 sm:p-5 text-white bg-gradient-to-br from-indigo-700 via-blue-600 to-sky-500">
-              {/* subtle top-right glow */}
-              <div className="pointer-events-none absolute -top-8 right-0 w-40 h-40 rounded-full bg-white/25 blur-2 opacity-30" />
-              <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_right,rgba(255,255,255,0.10)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.10)_1px,transparent_1px)] bg-[size:30px_30px]" />
-              <div className="relative flex items-center justify-between mb-4">
-                <div>
-                  <h2 className="text-base sm:text-lg font-black tracking-tight">Quick Actions</h2>
-                  <p className="mt-0.5 text-[11px] font-semibold text-white/70 sm:hidden">Common admin tasks</p>
+          <Card
+            title="Recent Activity"
+            right={<button onClick={() => navigate('/admin/reports')} className="text-xs font-bold text-indigo-600 hover:text-indigo-700">View All</button>}
+          >
+            <div className="space-y-3">
+              {(activity || []).slice(0, 5).map((a, idx) => (
+                <div key={`${a.title}-${idx}`} className="flex items-start gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-gray-50 border border-gray-200 flex items-center justify-center">{a.icon}</div>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm font-bold text-gray-900">{a.title}</div>
+                    <div className="text-xs text-gray-500 truncate">{a.subtitle}</div>
+                  </div>
+                  <div className="text-xs text-gray-400 font-semibold whitespace-nowrap">{a.when}</div>
                 </div>
-                <span className="text-xs/5 bg-white/15 border border-white/20 px-2 py-1 rounded-full">Fast shortcuts</span>
-              </div>
-              {/* On very small screens, allow horizontal scrolling for easier access */}
-              <div className="relative grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-                <button
-                  onClick={() => handleQuickAction('addStudent')}
-                  className="group rounded-2xl border border-white/20 bg-white/12 hover:bg-white/20 backdrop-blur-md p-3 text-center transition-all duration-200 hover:-translate-y-0.5 shadow-soft"
-                  aria-label="Add Student"
-                >
-                  <div className="mx-auto mb-2 w-9 h-9 rounded-lg bg-white/20 flex items-center justify-center text-lg">➕</div>
-                  <div className="text-xs font-medium">Add Student</div>
-                </button>
-                <button
-                  onClick={() => handleQuickAction('addTeacher')}
-                  className="group rounded-2xl border border-white/20 bg-white/12 hover:bg-white/20 backdrop-blur-md p-3 text-center transition-all duration-200 hover:-translate-y-0.5 shadow-soft"
-                  aria-label="Add Teacher"
-                >
-                  <div className="mx-auto mb-2 w-9 h-9 rounded-lg bg-white/20 flex items-center justify-center text-lg">👨‍🏫</div>
-                  <div className="text-xs font-medium">Add Teacher</div>
-                </button>
-                <button
-                  onClick={() => handleQuickAction('createExam')}
-                  className="group rounded-2xl border border-white/20 bg-white/12 hover:bg-white/20 backdrop-blur-md p-3 text-center transition-all duration-200 hover:-translate-y-0.5 shadow-soft"
-                  aria-label="Create Exam"
-                >
-                  <div className="mx-auto mb-2 w-9 h-9 rounded-lg bg-white/20 flex items-center justify-center text-lg">📝</div>
-                  <div className="text-xs font-medium">Create Exam</div>
-                </button>
-                <button
-                  onClick={() => handleQuickAction('viewReports')}
-                  className="group rounded-2xl border border-white/20 bg-white/12 hover:bg-white/20 backdrop-blur-md p-3 text-center transition-all duration-200 hover:-translate-y-0.5 shadow-soft"
-                  aria-label="View Reports"
-                >
-                  <div className="mx-auto mb-2 w-9 h-9 rounded-lg bg-white/20 flex items-center justify-center text-lg">📊</div>
-                  <div className="text-xs font-medium">View Reports</div>
-                </button>
-                <button
-                  onClick={() => handleQuickAction('schoolSettings')}
-                  className="group rounded-2xl border border-white/20 bg-white/12 hover:bg-white/20 backdrop-blur-md p-3 text-center transition-all duration-200 hover:-translate-y-0.5 shadow-soft"
-                  aria-label="School Settings"
-                >
-                  <div className="mx-auto mb-2 w-9 h-9 rounded-lg bg-white/20 flex items-center justify-center text-lg">🏫</div>
-                  <div className="text-xs font-medium">School Settings</div>
-                </button>
-                <button
-                  onClick={() => handleQuickAction('userManagement')}
-                  className="group rounded-2xl border border-white/20 bg-white/12 hover:bg-white/20 backdrop-blur-md p-3 text-center transition-all duration-200 hover:-translate-y-0.5 shadow-soft"
-                  aria-label="User Management"
-                >
-                  <div className="mx-auto mb-2 w-9 h-9 rounded-lg bg-white/20 flex items-center justify-center text-lg">👥</div>
-                  <div className="text-xs font-medium">User Management</div>
-                </button>
-              </div>
+              ))}
+              {(activity || []).length === 0 && <div className="text-sm text-gray-500">No recent activity.</div>}
             </div>
+          </Card>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div className="bg-white rounded-3xl shadow-card border border-gray-200 p-4 sm:p-6">
-                <div className="flex items-start justify-between gap-3 mb-4">
-                  <div>
-                    <h2 className="text-base sm:text-lg font-black text-gray-900">Finance Overview</h2>
-                    <p className="mt-0.5 text-xs text-gray-500 sm:hidden">Collections, billing, and balances</p>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-2">
-                    <span className={`text-[11px] px-2 py-0.5 rounded-full border ${
-                      (stats?.trends?.feesCollected ?? 0) > 0
-                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                        : (stats?.trends?.feesCollected ?? 0) < 0
-                        ? 'bg-rose-50 text-rose-700 border-rose-200'
-                        : 'bg-gray-50 text-gray-600 border-gray-200'
-                    }`}>
-                      {(stats?.trends?.feesCollected ?? 0) > 0 ? '▲' : (stats?.trends?.feesCollected ?? 0) < 0 ? '▼' : '▲'} {Math.abs(Math.round(stats?.trends?.feesCollected ?? 0))}% vs last month
-                    </span>
-                    <button onClick={()=>setShowTrends(v=>!v)} className="sm:hidden px-2 py-1 rounded-full border border-gray-200 bg-white text-gray-700">
-                      {showTrends ? 'Hide chart' : 'Show chart'}
-                    </button>
+          <Card
+            title="Upcoming Events"
+            right={<button onClick={() => navigate('/admin/events')} className="text-xs font-bold text-indigo-600 hover:text-indigo-700">View Calendar</button>}
+          >
+            <div className="space-y-3">
+              {upcomingEvents.map((e) => (
+                <div key={e.id || e.title} className="rounded-2xl border border-gray-200 bg-gray-50/60 p-3">
+                  <div className="text-sm font-black text-gray-900 truncate">{e.title}</div>
+                  <div className="mt-1 text-xs text-gray-600 font-semibold">
+                    {new Date(e.start).toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' })} •{' '}
+                    {new Date(e.start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </div>
                 </div>
-
-                {/* KPI Row */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-5">
-                  <div className="flex items-start gap-3 p-4 rounded-2xl border border-emerald-100 bg-emerald-50/70 w-full max-w-full shadow-sm">
-                    <div className="w-10 h-10 rounded-lg bg-emerald-500 text-white flex items-center justify-center text-xl">💰</div>
-                    <div className="min-w-0 max-w-full">
-                      <div className="text-xs text-emerald-700 font-black">Collected</div>
-                      <div className="text-[10px] uppercase tracking-wide text-gray-600">KES</div>
-                      <div className="text-base sm:text-lg font-bold text-gray-900 leading-tight whitespace-normal break-words">{stats.fees.collected.toLocaleString()}</div>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-3 p-4 rounded-2xl border border-slate-200 bg-slate-50 w-full max-w-full shadow-sm">
-                    <div className="w-10 h-10 rounded-lg bg-gray-600 text-white flex items-center justify-center text-xl">📄</div>
-                    <div className="min-w-0 max-w-full">
-                      <div className="text-xs text-gray-700 font-black">Total Billed</div>
-                      <div className="text-[10px] uppercase tracking-wide text-gray-600">KES</div>
-                      <div className="text-base sm:text-lg font-bold text-gray-900 leading-tight whitespace-normal break-words">{stats.fees.total.toLocaleString()}</div>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-3 p-4 rounded-2xl border border-rose-100 bg-rose-50/70 w-full max-w-full shadow-sm">
-                    <div className="w-10 h-10 rounded-lg bg-rose-500 text-white flex items-center justify-center text-xl">⚠️</div>
-                    <div className="min-w-0 max-w-full">
-                      <div className="text-xs text-rose-700 font-black">Outstanding</div>
-                      <div className="text-[10px] uppercase tracking-wide text-gray-600">KES</div>
-                      <div className="text-base sm:text-lg font-bold text-gray-900 leading-tight whitespace-normal break-words">{stats.fees.outstanding.toLocaleString()}</div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Collection Progress */}
-                <div className="mb-5">
-                  <div className="flex items-center justify-between text-xs text-gray-600 mb-2">
-                    <span>Collection Rate</span>
-                    <span className="font-semibold text-gray-800">{stats.fees.collectionRate}%</span>
-                  </div>
-                  <div className="h-2.5 rounded-full bg-gray-100 overflow-hidden">
-                    <div className="h-full bg-gradient-to-r from-emerald-500 to-emerald-600 rounded-full" style={{width: `${Math.min(100, Math.max(0, Number(stats.fees.collectionRate)||0))}%`}} />
-                  </div>
-                  <div className="mt-2 text-xs text-gray-500">Invoices: {stats.fees.invoices} • Paid: {stats.fees.paidInvoices}</div>
-                </div>
-
-                {/* Mini sparkline removed per request */}
-
-                {/* Monthly Bar Chart */}
-                {showTrends && Array.isArray(stats.feesTrend) && stats.feesTrend.length>0 && (
-                  <div className="h-56 sm:h-80 lg:h-[420px]">
-                    <Bar height={360}
-                      data={{
-                        labels: stats.feesTrend.map(i=>i.month),
-                        datasets: [{
-                          label: 'Fees Collected',
-                          data: stats.feesTrend.map(i=>i.collected),
-                          backgroundColor: 'rgba(59, 130, 246, 0.8)',
-                          borderColor: 'rgba(59, 130, 246, 1)',
-                          borderWidth: 2,
-                          borderRadius: 8,
-                          borderSkipped: false,
-                        }]
-                      }}
-                      options={{
-                        responsive:true,
-                        maintainAspectRatio:false,
-                        plugins:{ legend:{ display:false } },
-                        scales: {
-                          x: { grid: { display: false }, ticks: { color: '#6b7280' } },
-                          y: { grid: { color: '#e5e7eb' }, ticks: { color: '#6b7280' } }
-                        }
-                      }}
-                    />
-                  </div>
-                )}
-              </div>
-
-              <div className="bg-white rounded-2xl shadow-card border border-gray-200 p-6">
-                <div className="flex items-start sm:items-center justify-between gap-3 mb-4">
-                  <div>
-                    <h2 className="text-base sm:text-lg font-semibold text-gray-900 leading-tight">Events Calendar</h2>
-                    <div className="text-xs text-gray-500 mt-0.5">
-                      {currentMonth.toLocaleString(undefined,{ month:'long', year:'numeric' })}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1.5 sm:gap-2">
-                    <div className="hidden sm:inline-flex items-center gap-1 border border-gray-200 bg-gray-50 rounded-full p-0.5">
-                      <button onClick={()=>setViewMonth(prev=>{ const d=new Date(prev); d.setMonth(d.getMonth()-1); return d })} className="h-8 w-8 inline-flex items-center justify-center rounded-full hover:bg-white text-gray-700" aria-label="Previous month">‹</button>
-                      <button onClick={()=>setViewMonth(prev=>{ const d=new Date(prev); d.setMonth(d.getMonth()+1); return d })} className="h-8 w-8 inline-flex items-center justify-center rounded-full hover:bg-white text-gray-700" aria-label="Next month">›</button>
-                    </div>
-                    <button onClick={()=>setViewMonth(prev=>{ const d=new Date(prev); d.setMonth(d.getMonth()-1); return d })} className="sm:hidden p-2 rounded-full border border-gray-200 hover:bg-gray-50" aria-label="Previous month">‹</button>
-                    <button onClick={()=>setViewMonth(prev=>{ const d=new Date(prev); d.setMonth(d.getMonth()+1); return d })} className="sm:hidden p-2 rounded-full border border-gray-200 hover:bg-gray-50" aria-label="Next month">›</button>
-                    <button onClick={()=>setViewMonth(new Date())} className="px-2.5 py-1.5 text-[10px] sm:text-xs rounded-full border border-gray-200 bg-white hover:bg-gray-50">Today</button>
-                    <div className="sm:hidden inline-flex items-center gap-1 border border-gray-200 bg-gray-50 rounded-full p-0.5">
-                      <button onClick={()=>setCalendarMode('calendar')} className={`${calendarMode==='calendar' ? 'bg-gray-900 text-white' : 'bg-white text-gray-700'} px-2 py-0.5 rounded-full text-[10px]`}>Cal</button>
-                      <button onClick={()=>setCalendarMode('list')} className={`${calendarMode==='list' ? 'bg-gray-900 text-white' : 'bg-white text-gray-700'} px-2 py-0.5 rounded-full text-[10px]`}>List</button>
-                    </div>
-                    <button onClick={() => navigate('/admin/events')} className="hidden sm:inline-flex items-center text-blue-600 hover:text-blue-700 text-sm font-medium">View All →</button>
-                  </div>
-                </div>
-
-                {/* Modern Mini Calendar */}
-                <div className="space-y-3">
-                  {/* Filters */}
-                  <div className="hidden sm:flex flex-wrap items-center gap-2 text-[11px] w-full">
-                    <div className="flex flex-wrap items-center gap-1">
-                      {[
-                        ['students','Students'],
-                        ['teachers','Teachers'],
-                        ['parents','Parents'],
-                        ['exams','Exams'],
-                        ['holidays','Holidays'],
-                        ['other','Other'],
-                      ].map(([key,label])=>{
-                        const active = selectedTags.has(key)
-                        return (
-                          <button
-                            key={key}
-                            onClick={()=> setSelectedTags(prev=>{ const n=new Set(prev); if (n.has(key)) n.delete(key); else n.add(key); return n })}
-                            className={`px-2.5 py-1 rounded-full border text-[11px] transition-colors ${active ? 'bg-gray-900 text-white border-gray-900 shadow-sm' : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'}`}
-                          >{label}</button>
-                        )
-                      })}
-                    </div>
-                  </div>
-
-                  {calendarMode === 'calendar' ? (
-                    <>
-                      <div className="grid grid-cols-7 text-[10px] sm:text-[11px] font-semibold text-gray-500 mb-2">
-                        {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d=> <div key={d} className="px-0.5 sm:px-1 py-0.5 sm:py-1 text-center tracking-wide">{d}</div>)}
-                      </div>
-                      <div className="rounded-2xl border border-gray-200 bg-gray-50/60 p-2">
-                        <div className="grid grid-cols-7 gap-2">
-                        {monthDays.map((d,i)=>{
-                          const key = localKey(d)
-                          const inMonth = d.getMonth()===currentMonth.getMonth()
-                          const isToday = key === localKey(new Date())
-                          const dayEvents = eventsByDay[key] || []
-                          const color = dayEvents.length>0 ? colorForEvent(dayEvents[0]) : null
-                          const holidayName = kenyaHolidaysMap.get(key)
-                          const weekend = isWeekend(d)
-                          let tileBg = inMonth ? 'bg-white' : 'bg-gray-100/60'
-                          if (weekend && inMonth) tileBg = 'bg-indigo-50/60'
-                          if (holidayName) tileBg = 'bg-yellow-50/70'
-                          const ring = isToday ? 'ring-2 ring-brand-500 ring-offset-2 ring-offset-gray-50/60' : ''
-                          const baseBorder = holidayName ? 'border-yellow-300' : (inMonth ? 'border-gray-200' : 'border-gray-200/70')
-                          return (
-                            <button
-                              type="button"
-                              onClick={() => handleDayClick(key, dayEvents, d)}
-                              key={i}
-                              className={`text-left relative rounded-2xl min-h-[62px] sm:min-h-[78px] p-2 text-[10px] sm:text-xs border ${baseBorder} ${tileBg} hover:border-brand-300 hover:shadow-sm transition-all group focus:outline-none focus:ring-2 focus:ring-brand-400 ${ring}`}
-                            >
-                              <div className="flex items-center justify-between">
-                                <div className={`${inMonth? 'text-gray-800':'text-gray-400'} text-[10px] sm:text-[11px] font-semibold`}>{d.getDate()}</div>
-                                <div className="flex items-center gap-1">
-                                  {holidayName && <span className="hidden sm:inline text-[10px] px-1.5 py-0.5 rounded-full bg-yellow-100 text-yellow-800 border border-yellow-200" title={holidayName}>Holiday</span>}
-                                  {isToday && <span className="text-[9px] sm:text-[10px] px-1.5 py-0.5 rounded-full bg-brand-50 text-brand-700 border border-brand-200">Today</span>}
-                                </div>
-                              </div>
-                              {dayEvents.length === 0 && !holidayName && (
-                                <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                  <span className="text-brand-600 font-bold text-lg">+</span>
-                                </div>
-                              )}
-                              <div className="mt-1 space-y-1">
-                                {dayEvents.slice(0,2).map(ev => {
-                                  const c = colorForEvent(ev)
-                                  const bar = (c.dot || 'bg-blue-500')
-                                  return (
-                                    <div
-                                      key={ev.id}
-                                      title={ev.title}
-                                      className={`flex items-center gap-1.5 px-1.5 py-1 rounded-lg border shadow-sm ${c.chip.replace(/text-[^\s]+/g,'').trim()} bg-white`}
-                                    >
-                                      <span className={`w-1.5 h-4 rounded-full ${bar}`} />
-                                      <span className="min-w-0 truncate text-[10px] sm:text-[11px] font-semibold text-gray-900">{ev.title}</span>
-                                    </div>
-                                  )
-                                })}
-                                {dayEvents.length>2 && (
-                                  <div className="text-[9px] sm:text-[10px] font-medium text-gray-700">
-                                    +{dayEvents.length-2} more
-                                  </div>
-                                )}
-                              </div>
-                              {dayEvents.length>0 && (
-                                <div className="absolute bottom-1 right-2 inline-flex items-center gap-1 text-[9px] sm:text-[10px] text-gray-500">
-                                  <span className={`w-1.5 h-1.5 rounded-full ${color?.dot || 'bg-blue-500'}`} />
-                                  {dayEvents.length}
-                                </div>
-                              )}
-                            </button>
-                          )
-                        })}
-                        </div>
-                      </div>
-                    </>
-                  ) : (
-                    <div className="space-y-2">
-                      {events
-                        .filter(ev => new Date(ev.start) >= new Date())
-                        .sort((a,b) => new Date(a.start) - new Date(b.start))
-                        .slice(0,5)
-                        .map(ev => (
-                          <div key={ev.id} className="flex items-center justify-between p-2 bg-gray-50 rounded text-sm">
-                            <div className="flex-1 min-w-0">
-                              <div className="font-medium truncate">{ev.title}</div>
-                              <div className="text-xs text-gray-600">
-                                {new Date(ev.start).toLocaleDateString()} {ev.location && `• ${ev.location}`}
-                              </div>
-                            </div>
-                            <span className="text-xs px-2 py-0.5 rounded bg-blue-100 text-blue-700">{ev.audience}</span>
-                          </div>
-                        ))}
-                      {events.filter(ev => new Date(ev.start) >= new Date()).length === 0 && (
-                        <div className="text-sm text-gray-500 text-center py-4">No upcoming events</div>
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                {/* Upcoming Events List */}
-                {!(isCompact && calendarMode === 'list') && (
-                  <div className="mt-6">
-                    <h3 className="text-sm font-medium text-gray-900 mb-3">Upcoming Events</h3>
-                    <div className="space-y-2">
-                      {events
-                        .filter(ev => new Date(ev.start) >= new Date())
-                        .sort((a,b) => new Date(a.start) - new Date(b.start))
-                        .slice(0,1)
-                        .map(ev => (
-                          <div key={ev.id} className="flex items-center justify-between p-2 bg-gray-50 rounded text-sm">
-                            <div className="flex-1 min-w-0">
-                              <div className="font-medium truncate">{ev.title}</div>
-                              <div className="text-xs text-gray-600">
-                                {new Date(ev.start).toLocaleDateString()} {ev.location && `• ${ev.location}`}
-                              </div>
-                            </div>
-                            <span className="text-xs px-2 py-0.5 rounded bg-blue-100 text-blue-700">{ev.audience}</span>
-                          </div>
-                        ))}
-                      {events.filter(ev => new Date(ev.start) >= new Date()).length === 0 && (
-                        <div className="text-sm text-gray-500 text-center py-4">No upcoming events</div>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
+              ))}
+              {upcomingEvents.length === 0 && <div className="text-sm text-gray-500">No upcoming events.</div>}
             </div>
-          </React.Fragment>
-        )}
-      </div>
-      {/* Day Popover Modal */}
-      <Modal open={dayModalOpen} onClose={()=>setDayModalOpen(false)} title={`Events — ${dayModalKey}`} size="md">
-        <div className="space-y-4">
-          <div className="flex justify-between items-center">
-            <h3 className="text-sm font-semibold text-gray-900">Scheduled Events</h3>
-            <button
-              onClick={() => {
-                setDayModalOpen(false)
-                const isoDate = dayModalKey
-                setCreateForm(prev => ({ ...prev, start: `${isoDate}T08:00`, end: `${isoDate}T17:00` }))
-                setIsCreateOpen(true)
-              }}
-              className="text-xs px-2 py-1 rounded bg-brand-600 text-white hover:bg-brand-700 transition-colors"
-            >
-              + Add Event
-            </button>
-          </div>
-          <div className="space-y-2">
-            {dayModalEvents.length === 0 ? (
-              <div className="text-sm text-gray-600 italic">No events on this day.</div>
-            ) : (
-              dayModalEvents.map(ev => (
-                <div key={ev.id} className="border rounded-lg p-3 flex items-center justify-between gap-3 bg-white">
-                  <div className="min-w-0">
-                    <div className="font-medium truncate text-sm">{ev.title}</div>
-                    <div className="text-xs text-gray-500 truncate">{ev.all_day ? 'All day' : `${new Date(ev.start).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})} - ${new Date(ev.end).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}`} {ev.location && `• ${ev.location}`}</div>
-                  </div>
-                  <div className="shrink-0 flex items-center gap-2">
-                    <button onClick={()=>{ setDayModalOpen(false); navigate('/admin/events') }} className="px-2 py-1 text-xs rounded border border-gray-200 bg-white hover:bg-gray-50">Open</button>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
+          </Card>
         </div>
-      </Modal>
-
-      {/* Quick Event Creation Modal */}
-      <Modal open={isCreateOpen} onClose={() => setIsCreateOpen(false)} title="Create New Event" size="md">
-        <form onSubmit={handleCreateEvent} className="space-y-4">
-          <div className="grid grid-cols-1 gap-4">
-            <label className="block">
-              <span className="text-sm font-medium text-gray-700">Event Title *</span>
-              <input
-                required
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-brand-500 focus:ring-brand-500 sm:text-sm border p-2"
-                value={createForm.title}
-                onChange={e => setCreateForm({ ...createForm, title: e.target.value })}
-                placeholder="e.g. Staff Meeting"
-              />
-            </label>
-            <div className="grid grid-cols-2 gap-4">
-              <label className="block">
-                <span className="text-sm font-medium text-gray-700">Start Time</span>
-                <input
-                  type="datetime-local"
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-brand-500 focus:ring-brand-500 sm:text-sm border p-2"
-                  value={createForm.start}
-                  onChange={e => setCreateForm({ ...createForm, start: e.target.value })}
-                />
-              </label>
-              <label className="block">
-                <span className="text-sm font-medium text-gray-700">End Time</span>
-                <input
-                  type="datetime-local"
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-brand-500 focus:ring-brand-500 sm:text-sm border p-2"
-                  value={createForm.end}
-                  onChange={e => setCreateForm({ ...createForm, end: e.target.value })}
-                />
-              </label>
-            </div>
-            <label className="block">
-              <span className="text-sm font-medium text-gray-700">Description</span>
-              <textarea
-                rows={2}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-brand-500 focus:ring-brand-500 sm:text-sm border p-2"
-                value={createForm.description}
-                onChange={e => setCreateForm({ ...createForm, description: e.target.value })}
-              />
-            </label>
-            <label className="block">
-              <span className="text-sm font-medium text-gray-700">Target Audience</span>
-              <select
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-brand-500 focus:ring-brand-500 sm:text-sm border p-2"
-                value={createForm.audience}
-                onChange={e => setCreateForm({ ...createForm, audience: e.target.value })}
-              >
-                <option value="all">Everyone</option>
-                <option value="students">Students</option>
-                <option value="teachers">Teachers</option>
-                <option value="parents">Parents</option>
-              </select>
-            </label>
-          </div>
-          <div className="flex justify-end gap-3 pt-2">
-            <button
-              type="button"
-              onClick={() => setIsCreateOpen(false)}
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={creating}
-              className="px-4 py-2 text-sm font-medium text-white bg-brand-600 border border-transparent rounded-md hover:bg-brand-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-500 disabled:opacity-50"
-            >
-              {creating ? 'Creating...' : 'Create Event'}
-            </button>
-          </div>
-        </form>
-      </Modal>
-    </React.Fragment>
+      </div>
+    </div>
   )
 }

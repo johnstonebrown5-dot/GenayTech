@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useMemo, useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth'
@@ -7,21 +7,130 @@ import api from '../api'
 import { canRunAuthenticatedPoll, handlePollAuthError } from '../utils/authPoll'
 import FloatingDeliveryLog from './FloatingDeliveryLog'
 
+function NavIcon({ name, className = 'w-5 h-5' }) {
+  // Minimal, dependency-free icons (Heroicons-inspired)
+  const common = { className, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 2 }
+  switch (name) {
+    case 'dashboard':
+      return (
+        <svg {...common}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.5h8.25V3H3v10.5Zm9.75 7.5H21V3h-8.25v18ZM3 21h8.25v-6H3v6Z" />
+        </svg>
+      )
+    case 'students':
+      return (
+        <svg {...common}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 14.25c2.9 0 5.25-2.35 5.25-5.25S14.9 3.75 12 3.75 6.75 6.1 6.75 9s2.35 5.25 5.25 5.25Z" />
+          <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 20.25a7.5 7.5 0 0 1 15 0" />
+        </svg>
+      )
+    case 'teachers':
+      return (
+        <svg {...common}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 9.75h7.5M8.25 13.5h7.5" />
+          <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 6h15a.75.75 0 0 1 .75.75v10.5a.75.75 0 0 1-.75.75H4.5a.75.75 0 0 1-.75-.75V6.75A.75.75 0 0 1 4.5 6Z" />
+        </svg>
+      )
+    case 'staff':
+      return (
+        <svg {...common}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 3.75a3.75 3.75 0 0 0-3.75 3.75v.75H6.75a3 3 0 0 0-3 3v6a3 3 0 0 0 3 3h10.5a3 3 0 0 0 3-3v-6a3 3 0 0 0-3-3h-1.5V7.5A3.75 3.75 0 0 0 12 3.75Z" />
+        </svg>
+      )
+    case 'classes':
+      return (
+        <svg {...common}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 7.5h16.5M6 3.75h12a2.25 2.25 0 0 1 2.25 2.25v12A2.25 2.25 0 0 1 18 20.25H6A2.25 2.25 0 0 1 3.75 18V6A2.25 2.25 0 0 1 6 3.75Z" />
+        </svg>
+      )
+    case 'subjects':
+      return (
+        <svg {...common}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 19.5V6.75A2.25 2.25 0 0 1 6.75 4.5h12.75" />
+          <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 19.5A2.25 2.25 0 0 0 6.75 21.75h12.75V6.75A2.25 2.25 0 0 0 17.25 4.5H6.75" />
+        </svg>
+      )
+    case 'fees':
+      return (
+        <svg {...common}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 8.25h19.5v9.75H2.25V8.25Z" />
+          <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 15.75h.01M6 12h6" />
+        </svg>
+      )
+    case 'exams':
+      return (
+        <svg {...common}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M9 2.25h6M9 21.75h6" />
+          <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 2.25v4.5l-2.25 2.25v12a.75.75 0 0 0 .75.75h8.25a.75.75 0 0 0 .75-.75v-12L14.25 6.75v-4.5" />
+        </svg>
+      )
+    case 'reports':
+      return (
+        <svg {...common}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 19.5V4.5m0 15h15" />
+          <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 16.5V12m4.5 4.5V9m4.5 7.5V6" />
+        </svg>
+      )
+    case 'events':
+      return (
+        <svg {...common}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3.75v3m10.5-3.0v3M4.5 9h15" />
+          <path strokeLinecap="round" strokeLinejoin="round" d="M6 6h12a2.25 2.25 0 0 1 2.25 2.25V18A2.25 2.25 0 0 1 18 20.25H6A2.25 2.25 0 0 1 3.75 18V8.25A2.25 2.25 0 0 1 6 6Z" />
+        </svg>
+      )
+    case 'timetable':
+      return (
+        <svg {...common}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6h16.5v14.25H3.75V6Z" />
+          <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 10.5h16.5M8.25 10.5v9.75M14.25 10.5v9.75" />
+        </svg>
+      )
+    case 'messages':
+      return (
+        <svg {...common}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+          <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 10.5h9M7.5 13.5h6.75" />
+        </svg>
+      )
+    case 'logs':
+      return (
+        <svg {...common}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3.75h10.5v16.5H6.75V3.75Z" />
+          <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 7.5h7.5M8.25 10.5h7.5M8.25 13.5h6" />
+        </svg>
+      )
+    case 'website':
+      return (
+        <svg {...common}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 3.75c4.97 0 9 4.03 9 9s-4.03 9-9 9-9-4.03-9-9 4.03-9 9-9Z" />
+          <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 12h16.5" />
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 3.75c2.25 2.85 3.75 5.85 3.75 9S14.25 18.9 12 21.75c-2.25-2.85-3.75-5.85-3.75-9S9.75 6.6 12 3.75Z" />
+        </svg>
+      )
+    default:
+      return (
+        <svg {...common}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12h15" />
+        </svg>
+      )
+  }
+}
+
 const navItems = [
-  { to: '/admin', label: 'Dashboard', icon: '📊' },
-  { to: '/admin/students', label: 'Students', icon: '🎓' },
-  { to: '/admin/teachers', label: 'Teachers', icon: '👩‍🏫' },
-  { to: '/admin/staff', label: 'Support Staff', icon: '🧑‍🔧' },
-  { to: '/admin/classes', label: 'Classes', icon: '🏫' },
-  { to: '/admin/subjects', label: 'Subjects', icon: '📚' },
-  { to: '/admin/fees', label: 'Fees', icon: '💳' },
-  { to: '/admin/exams', label: 'Exams', icon: '📝' },
-  { to: '/admin/reports', label: 'Reports', icon: '📈' },
-  { to: '/admin/events', label: 'Events', icon: '📅' },
-  { to: '/admin/timetable', label: 'Timetable', icon: '📆' },
-  { to: '/admin/messages', label: 'Messages', icon: '✉️' },
-  { to: '/admin/communication-logs', label: 'Comm Logs', icon: '📱' },
-  { to: '/admin/website', label: 'Website', icon: '🌐' },
+  { to: '/admin', label: 'Dashboard', icon: 'dashboard' },
+  { to: '/admin/students', label: 'Students', icon: 'students' },
+  { to: '/admin/teachers', label: 'Teachers', icon: 'teachers' },
+  { to: '/admin/staff', label: 'Support Staff', icon: 'staff' },
+  { to: '/admin/classes', label: 'Classes', icon: 'classes' },
+  { to: '/admin/subjects', label: 'Subjects', icon: 'subjects' },
+  { to: '/admin/fees', label: 'Fees', icon: 'fees' },
+  { to: '/admin/exams', label: 'Exams', icon: 'exams' },
+  { to: '/admin/reports', label: 'Reports', icon: 'reports' },
+  { to: '/admin/events', label: 'Events', icon: 'events' },
+  { to: '/admin/timetable', label: 'Timetable', icon: 'timetable' },
+  { to: '/admin/messages', label: 'Communication', icon: 'messages' },
+  { to: '/admin/communication-logs', label: 'Comm Logs', icon: 'logs' },
+  { to: '/admin/website', label: 'Website', icon: 'website' },
 ]
 
 export default function AdminLayout({ children }){
@@ -33,6 +142,7 @@ export default function AdminLayout({ children }){
   const [isMobileOpen, setIsMobileOpen] = useState(false)
   const [schoolName, setSchoolName] = useState('')
   const [schoolLogo, setSchoolLogo] = useState('')
+  const [schoolMotto, setSchoolMotto] = useState('')
   const [currentTerm, setCurrentTerm] = useState(null)
   const [currentYear, setCurrentYear] = useState(null)
   const [unreadCount, setUnreadCount] = useState(0)
@@ -42,6 +152,9 @@ export default function AdminLayout({ children }){
   const [bannerExpanded, setBannerExpanded] = useState(false)
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
   const [avatarUrl, setAvatarUrl] = useState('')
+  const [userMenuOpen, setUserMenuOpen] = useState(false)
+  const [addMenuOpen, setAddMenuOpen] = useState(false)
+  const [searchValue, setSearchValue] = useState('')
   const [dismissedIds, setDismissedIds] = useState(() => {
     try { return JSON.parse(localStorage.getItem('dismissed_broadcast_ids') || '[]') } catch { return [] }
   })
@@ -66,9 +179,10 @@ export default function AdminLayout({ children }){
         if (mounted) {
           setSchoolName(data?.name || '')
           setSchoolLogo(data?.logo_url || data?.logo || '')
+          setSchoolMotto(data?.motto || data?.tagline || '')
         }
       } catch (e) {
-        if (mounted) { setSchoolName(''); setSchoolLogo('') }
+        if (mounted) { setSchoolName(''); setSchoolLogo(''); setSchoolMotto('') }
       }
     })()
     return () => { mounted = false }
@@ -133,6 +247,37 @@ export default function AdminLayout({ children }){
     const a = u.avatar_url || u.profile_picture_url || ''
     if (a) setAvatarUrl(a)
   }, [user])
+
+  // Close small popovers on route change
+  useEffect(() => {
+    setUserMenuOpen(false)
+    setAddMenuOpen(false)
+  }, [pathname])
+
+  // Close small popovers on click outside / escape
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key === 'Escape') {
+        setUserMenuOpen(false)
+        setAddMenuOpen(false)
+      }
+    }
+    const onClick = (e) => {
+      const t = e?.target
+      if (!t) return
+      // Any click on an element marked as "data-popover-ignore" should not auto-close.
+      const ignore = t.closest && t.closest('[data-popover-ignore="true"]')
+      if (ignore) return
+      setUserMenuOpen(false)
+      setAddMenuOpen(false)
+    }
+    try { window.addEventListener('keydown', onKey) } catch {}
+    try { window.addEventListener('click', onClick) } catch {}
+    return () => {
+      try { window.removeEventListener('keydown', onKey) } catch {}
+      try { window.removeEventListener('click', onClick) } catch {}
+    }
+  }, [])
 
   // React to profile updates fired by profile pages
   useEffect(() => {
@@ -229,10 +374,23 @@ export default function AdminLayout({ children }){
     return () => { mounted = false }
   }, [])
 
-  const sidebarBase = isOpen ? 'w-64' : 'w-16'
+  const sidebarBase = isOpen ? 'w-72' : 'w-20'
+
+  const userDisplayName = useMemo(() => {
+    const first = String(user?.first_name || '').trim()
+    const last = String(user?.last_name || '').trim()
+    const full = `${first} ${last}`.trim()
+    return full || user?.username || 'Admin'
+  }, [user])
+
+  const userRoleLabel = useMemo(() => {
+    if (user?.is_superuser) return 'Super Admin'
+    if (user?.is_staff || user?.role === 'admin') return 'Administrator'
+    return String(user?.role || 'User')
+  }, [user])
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-[#f6f7fb]">
       {broadcastBanner && (
         <div className="sticky top-0 z-40 w-full bg-red-600 text-white">
           <div className="max-w-screen-2xl mx-auto px-3 sm:px-4 md:px-6 py-2 flex items-start gap-2">
@@ -259,104 +417,112 @@ export default function AdminLayout({ children }){
           </div>
         </div>
       )}
-      {/* Top bar */}
-      <header className="sticky top-0 z-30 bg-white/80 backdrop-blur-xl supports-[backdrop-filter]:bg-white/65 border-b border-gray-200 px-3 sm:px-4 md:px-6 h-16 pt-[env(safe-area-inset-top)] shadow-[0_6px_20px_-8px_rgba(0,0,0,0.2)]">
-        <div className="max-w-screen-2xl mx-auto h-full flex items-center gap-2">
-          {/* Left: brand / sidebar toggle (desktop only) */}
-          <div className="flex items-center gap-2 min-w-0">
-            <button
-              className="p-2.5 rounded-xl hover:bg-gray-100 transition-all duration-200 hidden md:inline-flex border border-transparent hover:border-gray-200"
-              aria-label="Collapse sidebar"
-              onClick={()=>setIsOpen(v=>!v)}>
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 text-gray-700">
-                <path fillRule="evenodd" d="M19.5 3.75a.75.75 0 01.75.75v14.25a.75.75 0 01-.75.75H4.5a.75.75 0 01-.75-.75V4.5a.75.75 0 01.75-.75h15zm-9.53 3.22a.75.75 0 10-1.06 1.06l2.72 2.72-2.72 2.72a.75.75 0 101.06 1.06l3.25-3.25a.75.75 0 000-1.06l-3.25-3.25z" clipRule="evenodd" />
+      {/* Top bar (screenshot-style) */}
+      <header className="sticky top-0 z-30 bg-white/90 backdrop-blur-xl supports-[backdrop-filter]:bg-white/70 border-b border-gray-200 h-16 pt-[env(safe-area-inset-top)]">
+        <div className="max-w-screen-2xl mx-auto h-full flex items-center gap-3 px-3 sm:px-4 md:px-6">
+          {/* Sidebar toggle */}
+          <button
+            className="hidden md:inline-flex p-2 rounded-xl hover:bg-gray-100 border border-transparent hover:border-gray-200 transition"
+            aria-label="Toggle sidebar"
+            onClick={() => setIsOpen(v => !v)}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 text-gray-700">
+              <path d="M3.75 6.75h16.5v1.5H3.75v-1.5Zm0 4.5h16.5v1.5H3.75v-1.5Zm0 4.5h16.5v1.5H3.75v-1.5Z" />
+            </svg>
+          </button>
+
+          {/* Search */}
+          <div className="flex-1">
+            <div className="relative max-w-2xl">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-4.3-4.3m1.8-5.2a7 7 0 1 1-14 0 7 7 0 0 1 14 0Z" />
+                </svg>
+              </span>
+              <input
+                value={searchValue}
+                onChange={(e) => setSearchValue(e.target.value)}
+                placeholder="Search students, teachers, classes..."
+                className="w-full h-10 rounded-xl border border-gray-200 bg-white pl-10 pr-3 text-sm font-medium text-gray-800 placeholder:text-gray-400 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-200"
+              />
+            </div>
+          </div>
+
+          {/* Actions */}
+          <div className="flex items-center gap-2 sm:gap-3">
+            {/* Notification bell */}
+            <Link
+              to="/admin/messages"
+              className="relative inline-flex items-center justify-center w-10 h-10 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 shadow-sm"
+              aria-label="Notifications"
+              title="Notifications"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5 text-gray-700">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 17H9m6-2.25V11a3 3 0 1 0-6 0v3.75c0 .8-.32 1.57-.88 2.13L7.5 17.5h9l-.62-.62A3 3 0 0 1 15 14.75Z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9.5 19a2.5 2.5 0 0 0 5 0" />
               </svg>
-            </button>
-            <div className="hidden sm:flex items-center gap-2 min-w-0"></div>
-          </div>
+              {(unreadCount || broadcastUnread) > 0 && (
+                <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-red-600 text-white text-[10px] leading-[18px] font-bold text-center border-2 border-white">
+                  {(unreadCount || broadcastUnread) > 99 ? '99+' : (unreadCount || broadcastUnread)}
+                </span>
+              )}
+            </Link>
 
-          {/* Center: school name and term (modern, no background) */}
-          <div className="flex-1 flex items-center justify-center overflow-x-auto sm:overflow-visible px-1 sm:px-3">
-            <div className="flex items-center gap-3">
-              {schoolLogo ? (
-                <img src={schoolLogo} alt="School logo" className="h-6 w-6 object-contain" />
-              ) : null}
-              <div className="flex flex-col sm:flex-row sm:items-center sm:gap-2">
-                <span className="text-gray-900 text-sm sm:text-base font-bold tracking-tight">{schoolName || ''}</span>
-                {currentTerm && currentYear && (
-                  <span className="text-xs sm:text-sm font-medium text-gray-500">
-                    Term {currentTerm.number} {currentYear.label.split('/')[1] || currentYear.label}
-                  </span>
-                )}
-              </div>
+            {/* Add New */}
+            <div className="relative" data-popover-ignore="true">
+              <button
+                type="button"
+                onClick={() => setAddMenuOpen(v => !v)}
+                className="inline-flex items-center gap-2 h-10 px-3 rounded-xl bg-indigo-600 text-white font-semibold shadow-soft hover:bg-indigo-700"
+              >
+                <span className="inline-flex items-center justify-center w-6 h-6 rounded-lg bg-white/15">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 5v14M5 12h14" />
+                  </svg>
+                </span>
+                <span className="hidden sm:inline">Add New</span>
+              </button>
+              {addMenuOpen && (
+                <div className="absolute right-0 mt-2 w-52 rounded-xl border border-gray-200 bg-white shadow-elevated overflow-hidden">
+                  <button onClick={()=>navigate('/admin/students')} className="w-full text-left px-3 py-2.5 text-sm hover:bg-gray-50">Add Student</button>
+                  <button onClick={()=>navigate('/admin/teachers')} className="w-full text-left px-3 py-2.5 text-sm hover:bg-gray-50">Add Teacher</button>
+                  <button onClick={()=>navigate('/admin/classes')} className="w-full text-left px-3 py-2.5 text-sm hover:bg-gray-50">Add Class</button>
+                </div>
+              )}
             </div>
-          </div>
 
-          {/* Right: user and actions */}
-          <div className="ml-auto flex items-center gap-2 sm:gap-3">
-            {/* Back/Forward on md+ */}
-            <div className="hidden md:flex items-center gap-2">
+            {/* User menu */}
+            <div className="relative" data-popover-ignore="true">
               <button
-                onClick={() => navigate(-1)}
-                className="p-2.5 rounded-xl border border-gray-200 text-gray-600 hover:text-brand-700 hover:border-brand-200 hover:bg-brand-50/60 transition-all"
-                aria-label="Go back"
-                title="Back"
+                type="button"
+                onClick={() => setUserMenuOpen(v => !v)}
+                className="inline-flex items-center gap-2 pl-2 pr-2.5 h-10 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 shadow-sm"
+                aria-label="User menu"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
-                  <path fillRule="evenodd" d="M9.53 4.47a.75.75 0 010 1.06L5.56 9.5h13.69a.75.75 0 010 1.5H5.56l3.97 3.97a.75.75 0 11-1.06 1.06l-5.25-5.25a.75.75 0 010-1.06l5.25-5.25a.75.75 0 011.06 0z" clipRule="evenodd" />
-                </svg>
-              </button>
-              <button
-                onClick={() => navigate(1)}
-                className="p-2.5 rounded-xl border border-gray-200 text-gray-600 hover:text-brand-700 hover:border-brand-200 hover:bg-brand-50/60 transition-all"
-                aria-label="Go forward"
-                title="Forward"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
-                  <path fillRule="evenodd" d="M14.47 4.47a.75.75 0 011.06 0l5.25 5.25a.75.75 0 010 1.06l-5.25 5.25a.75.75 0 11-1.06-1.06L18.44 11H4.75a.75.75 0 010-1.5h13.69l-3.97-3.97a.75.75 0 010-1.06z" clipRule="evenodd" />
-                </svg>
-              </button>
-            </div>
-            {user && (
-              <Link
-                to="/admin/profile"
-                className="inline-flex items-center justify-center w-10 h-10 rounded-full border border-gray-200 bg-white hover:bg-gray-50 transition-all shadow-sm"
-                aria-label="Open profile"
-                title="Open my profile"
-              >
-                <div className="w-8 h-8 rounded-full overflow-hidden bg-brand-600 flex items-center justify-center">
+                <div className="w-8 h-8 rounded-full overflow-hidden bg-indigo-600 flex items-center justify-center shrink-0">
                   {avatarUrl ? (
                     <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
                   ) : (
-                    <span className="text-white text-xs font-medium">{(user.first_name || user.username || 'U')[0].toUpperCase()}</span>
+                    <span className="text-white text-xs font-bold">{String(userDisplayName || 'A')[0].toUpperCase()}</span>
                   )}
                 </div>
-              </Link>
-            )}
-            <button
-              onClick={lock}
-              className="hidden sm:flex px-3 py-2 rounded-lg text-sm font-semibold bg-gray-800 text-white hover:bg-gray-900 transition-all duration-200 shadow-soft items-center gap-2"
-              aria-label="Lock now"
-              title="Lock now"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V7.5a4.5 4.5 0 10-9 0v3" />
-                <rect x="5.25" y="10.5" width="13.5" height="9" rx="2" ry="2" />
-              </svg>
-              <span>Lock</span>
-            </button>
-            <button
-              onClick={logout}
-              className="hidden sm:flex px-3.5 py-2 rounded-lg text-sm font-semibold bg-red-600 text-white hover:bg-red-700 active:bg-red-800 transition-all duration-200 shadow-soft items-center gap-2"
-              aria-label="Logout"
-              title="Logout"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v6" />
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 7.5a7.5 7.5 0 1 0 10.5 0" />
-              </svg>
-              <span className="inline">Power</span>
-            </button>
+                <div className="hidden sm:flex flex-col items-start leading-tight">
+                  <span className="text-xs font-bold text-gray-900">{userDisplayName}</span>
+                  <span className="text-[11px] font-semibold text-gray-500">{userRoleLabel}</span>
+                </div>
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 text-gray-500">
+                  <path d="M12 15.75 6 9.75h12l-6 6Z" />
+                </svg>
+              </button>
+              {userMenuOpen && (
+                <div className="absolute right-0 mt-2 w-56 rounded-xl border border-gray-200 bg-white shadow-elevated overflow-hidden">
+                  <button onClick={()=>navigate('/admin/profile')} className="w-full text-left px-3 py-2.5 text-sm hover:bg-gray-50">My Profile</button>
+                  <button onClick={lock} className="w-full text-left px-3 py-2.5 text-sm hover:bg-gray-50">Lock</button>
+                  <div className="h-px bg-gray-100" />
+                  <button onClick={()=>setShowLogoutConfirm(true)} className="w-full text-left px-3 py-2.5 text-sm text-red-600 hover:bg-red-50">Logout</button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </header>
@@ -416,26 +582,47 @@ export default function AdminLayout({ children }){
 
         {/* Sidebar */}
         <aside
-          className={`fixed z-40 left-0 bottom-0 bg-gradient-to-b from-blue-600 via-blue-700 to-blue-900 border-r border-blue-500/30 transition-all duration-200 ${sidebarBase} hidden md:flex flex-col shadow-2xl`}
+          className={`fixed z-40 left-0 bottom-0 transition-all duration-200 ${sidebarBase} hidden md:flex flex-col shadow-2xl bg-[#0b1020]`}
           style={{ top: broadcastBanner ? 'calc(4rem + env(safe-area-inset-top) + 40px)' : 'calc(4rem + env(safe-area-inset-top))' }}
         >
-          <nav className="flex-1 min-h-0 p-2 space-y-1 [@media(max-height:720px)]:space-y-0.5 overflow-hidden">
+          {/* Brand */}
+          <div className="px-4 pt-4 pb-3 border-b border-white/10">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-10 h-10 rounded-xl bg-white/10 border border-white/15 overflow-hidden flex items-center justify-center shrink-0">
+                {schoolLogo ? (
+                  <img src={schoolLogo} alt="School logo" className="w-full h-full object-contain bg-white" />
+                ) : (
+                  <span className="text-white font-black">S</span>
+                )}
+              </div>
+              {isOpen && (
+                <div className="min-w-0">
+                  <div className="text-white font-black leading-tight truncate">{schoolName || 'School'}</div>
+                  <div className="text-[11px] text-white/60 font-semibold truncate">{schoolMotto || 'Excellence in Education'}</div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <nav className="flex-1 min-h-0 px-3 py-3 space-y-1 overflow-y-auto overscroll-contain">
             {navItems.map(i => {
-              const active = pathname === i.to
+              const active = pathname === i.to || (i.to !== '/admin' && pathname.startsWith(i.to))
               return (
                 <Link key={i.to} to={i.to}
                   className={`${active
-                    ? 'bg-white/20 text-white shadow-lg border border-white/30'
-                    : 'hover:bg-white/10 text-blue-100 hover:text-white'
-                  } flex items-center gap-3 px-3 py-2.5 [@media(max-height:720px)]:px-2.5 [@media(max-height:720px)]:py-2 [@media(max-height:640px)]:py-1.5 rounded-lg transition-all duration-300 group`}
+                    ? 'bg-indigo-600 text-white shadow-[0_10px_22px_rgba(79,70,229,0.35)]'
+                    : 'text-white/70 hover:text-white hover:bg-white/8'
+                  } flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 group`}
                   title={i.label}
                 >
-                  <span className="text-lg [@media(max-height:720px)]:text-base w-5 text-center">{i.icon}</span>
+                  <span className="inline-flex items-center justify-center w-9 h-9 rounded-xl bg-white/6 border border-white/10">
+                    <NavIcon name={i.icon} className="w-5 h-5" />
+                  </span>
                   {isOpen && (
-                    <span className="relative inline-flex items-center gap-2 text-sm font-medium truncate transition-all duration-300 group-hover:translate-x-1">
+                    <span className="relative inline-flex items-center gap-2 text-sm font-semibold truncate">
                       {i.label}
-                      {i.label === 'Messages' && unreadCount > 0 && (
-                        <span className="ml-1 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] bg-red-600 text-white">
+                      {i.to === '/admin/messages' && unreadCount > 0 && (
+                        <span className="ml-1 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] bg-red-600 text-white border border-white/40">
                           {unreadCount > 99 ? '99+' : unreadCount}
                         </span>
                       )}
@@ -445,46 +632,74 @@ export default function AdminLayout({ children }){
               )
             })}
           </nav>
-          <div className="mt-auto p-3 text-xs text-blue-200/80 [@media(max-height:720px)]:hidden">
-            {isOpen && (
+
+          {/* Upgrade card */}
+          <div className="p-3">
+            <div className="rounded-2xl bg-white/6 border border-white/10 p-3">
               <div className="flex items-center gap-2">
-                <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-                <span>© {new Date().getFullYear()} Genay Technologies</span>
+                <span className="inline-flex items-center justify-center w-8 h-8 rounded-xl bg-indigo-600/20 text-indigo-200 border border-indigo-400/20">
+                  ★
+                </span>
+                {isOpen && (
+                  <div className="min-w-0">
+                    <div className="text-white text-xs font-black">Upgrade to Premium</div>
+                    <div className="text-[11px] text-white/60 font-semibold">Unlock more features and analytics.</div>
+                  </div>
+                )}
               </div>
-            )}
+              {isOpen && (
+                <button
+                  type="button"
+                  onClick={() => navigate('/pricing/per-student-monthly')}
+                  className="mt-3 w-full h-10 rounded-xl bg-indigo-600 text-white font-bold shadow-soft hover:bg-indigo-700"
+                >
+                  Upgrade Now
+                </button>
+              )}
+            </div>
           </div>
         </aside>
 
         {/* Mobile Drawer Sidebar */}
         <aside
-          className={`fixed z-40 left-0 bottom-0 bg-gradient-to-b from-blue-600 via-blue-700 to-blue-900 border-r border-blue-500/30 w-full md:hidden transition-transform duration-200 shadow-2xl ${isMobileOpen? 'translate-x-0':'-translate-x-full'} flex flex-col`}
+          className={`fixed z-40 left-0 bottom-0 w-full md:hidden transition-transform duration-200 shadow-2xl ${isMobileOpen? 'translate-x-0':'-translate-x-full'} flex flex-col bg-[#0b1020]`}
           style={{ top: 0 }}
         >
-          <div className="flex items-center justify-between px-3 py-2 border-b border-blue-500/40 text-blue-50">
-            <span className="text-sm font-medium">Navigation</span>
+          <div className="flex items-center justify-between px-3 py-3 border-b border-white/10 text-white">
+            <div className="flex items-center gap-2">
+              <div className="w-9 h-9 rounded-xl bg-white/10 border border-white/15 overflow-hidden flex items-center justify-center">
+                {schoolLogo ? <img src={schoolLogo} alt="School logo" className="w-full h-full object-contain bg-white" /> : <span className="font-black">S</span>}
+              </div>
+              <div className="min-w-0">
+                <div className="text-sm font-black truncate">{schoolName || 'School'}</div>
+                <div className="text-[11px] text-white/60 font-semibold truncate">{schoolMotto || 'Excellence in Education'}</div>
+              </div>
+            </div>
             <button
               type="button"
               onClick={()=>setIsMobileOpen(false)}
-              className="p-1.5 rounded-full hover:bg-white/10"
+              className="p-2 rounded-full hover:bg-white/10"
               aria-label="Close menu"
             >
               ✕
             </button>
           </div>
-          <nav className="flex-1 space-y-1 overflow-y-auto overscroll-contain px-2 pb-[env(safe-area-inset-bottom)] pt-2">
+          <nav className="flex-1 space-y-1 overflow-y-auto overscroll-contain px-3 pb-[env(safe-area-inset-bottom)] pt-3">
             {navItems.map(i => {
-              const active = pathname === i.to
+              const active = pathname === i.to || (i.to !== '/admin' && pathname.startsWith(i.to))
               return (
                 <Link key={i.to} to={i.to}
                   className={`${active
-                    ? 'bg-white/20 text-white shadow-lg border border-white/30'
-                    : 'hover:bg-white/10 text-blue-100 hover:text-white'
-                  } flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-300`}
+                    ? 'bg-indigo-600 text-white shadow-[0_10px_22px_rgba(79,70,229,0.35)]'
+                    : 'text-white/70 hover:text-white hover:bg-white/8'
+                  } flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200`}
                 >
-                  <span className="text-lg">{i.icon}</span>
-                  <span className="relative inline-flex items-center gap-2 text-sm font-medium">
+                  <span className="inline-flex items-center justify-center w-9 h-9 rounded-xl bg-white/6 border border-white/10">
+                    <NavIcon name={i.icon} className="w-5 h-5" />
+                  </span>
+                  <span className="relative inline-flex items-center gap-2 text-sm font-semibold">
                     {i.label}
-                    {i.label === 'Messages' && unreadCount > 0 && (
+                    {i.to === '/admin/messages' && unreadCount > 0 && (
                       <span className="ml-1 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] bg-red-600 text-white">
                         {unreadCount > 99 ? '99+' : unreadCount}
                       </span>
@@ -494,20 +709,17 @@ export default function AdminLayout({ children }){
               )
             })}
           </nav>
-          <div className="p-2 mt-2 border-t border-blue-500/30 flex items-center gap-2">
-            <button onClick={lock} className="flex-1 px-3 py-2 rounded-lg text-sm font-medium bg-white/10 text-white border border-white/20 hover:bg-white/20 transition-colors">Lock</button>
-            <button onClick={()=>setShowLogoutConfirm(true)} className="flex-1 px-3 py-2 rounded-lg text-sm font-semibold bg-red-500 text-white hover:bg-red-600 transition-colors">Logout</button>
+          <div className="p-3 mt-2 border-t border-white/10 flex items-center gap-2">
+            <button onClick={lock} className="flex-1 px-3 py-2.5 rounded-xl text-sm font-semibold bg-white/10 text-white border border-white/15 hover:bg-white/15 transition-colors">Lock</button>
+            <button onClick={()=>setShowLogoutConfirm(true)} className="flex-1 px-3 py-2.5 rounded-xl text-sm font-semibold bg-red-500 text-white hover:bg-red-600 transition-colors">Logout</button>
           </div>
-          <div className="mt-auto p-3 text-xs text-blue-200/80">
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-              <span>© {new Date().getFullYear()} Genay Technologies</span>
-            </div>
+          <div className="mt-auto p-3 text-xs text-white/50">
+            © {new Date().getFullYear()} Genay Technologies
           </div>
         </aside>
 
         {/* Content area */}
-        <main className={`transition-all duration-200 px-4 md:px-6 pt-4 pb-24 md:py-6 ${isOpen? 'md:ml-64':'md:ml-16'}`}>
+        <main className={`transition-all duration-200 px-4 md:px-6 pt-5 pb-24 md:py-7 ${isOpen? 'md:ml-72':'md:ml-20'}`}>
           {children}
         </main>
       </div>
