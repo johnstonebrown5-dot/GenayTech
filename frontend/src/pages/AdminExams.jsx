@@ -1,7 +1,17 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import api from '../api'
 import Modal from '../components/Modal'
 import { useNavigate } from 'react-router-dom'
+import { Bar, Doughnut } from 'react-chartjs-2'
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  ArcElement,
+  Tooltip,
+  Legend,
+} from 'chart.js'
 import { 
   Plus, 
   Calendar, 
@@ -26,6 +36,88 @@ import {
   Loader2,
   X
 } from 'lucide-react'
+
+const centerTextPlugin = {
+  id: 'centerText',
+  afterDraw: (chart, _args, pluginOptions) => {
+    try {
+      const opts = pluginOptions || {}
+      const meta = chart.getDatasetMeta(0)
+      const first = meta?.data?.[0]
+      if (!first) return
+
+      const text = opts.text ?? ''
+      const subtext = opts.subtext ?? ''
+      if (!text && !subtext) return
+
+      const { ctx } = chart
+      const x = first.x
+      const y = first.y
+
+      ctx.save()
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'middle'
+
+      const mainSize = Number(opts.fontSize || 22)
+      const subSize = Number(opts.subFontSize || 11)
+
+      ctx.fillStyle = opts.color || '#111827'
+      ctx.font = `900 ${mainSize}px Inter, ui-sans-serif, system-ui`
+      ctx.fillText(String(text), x, subtext ? y - 6 : y)
+
+      if (subtext) {
+        ctx.fillStyle = opts.subColor || '#6b7280'
+        ctx.font = `800 ${subSize}px Inter, ui-sans-serif, system-ui`
+        ctx.fillText(String(subtext), x, y + 16)
+      }
+
+      ctx.restore()
+    } catch {
+      // no-op
+    }
+  },
+}
+
+ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend, centerTextPlugin)
+
+function timeAgo(value) {
+  if (!value) return ''
+  const d = new Date(value)
+  if (Number.isNaN(d.getTime())) return ''
+  const diffMs = Date.now() - d.getTime()
+  const diffMin = Math.floor(diffMs / 60000)
+  if (diffMin < 1) return 'just now'
+  if (diffMin < 60) return `${diffMin}m ago`
+  const diffHr = Math.floor(diffMin / 60)
+  if (diffHr < 24) return `${diffHr}h ago`
+  const diffDay = Math.floor(diffHr / 24)
+  return `${diffDay}d ago`
+}
+
+function fmtDateBadge(dateValue) {
+  const d = new Date(dateValue)
+  if (Number.isNaN(d.getTime())) return { m: '—', day: '—' }
+  return {
+    m: d.toLocaleDateString(undefined, { month: 'short' }).toUpperCase(),
+    day: String(d.getDate()).padStart(2, '0'),
+  }
+}
+
+function Card({ title, right, children, className = '' }) {
+  return (
+    <div className={`bg-white rounded-2xl border border-gray-200 shadow-card ${className}`}>
+      {(title || right) && (
+        <div className="px-5 pt-5 pb-0 flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            {title && <h3 className="text-sm font-black text-gray-900">{title}</h3>}
+          </div>
+          {right}
+        </div>
+      )}
+      <div className="p-5">{children}</div>
+    </div>
+  )
+}
 
 export default function AdminExams(){
   const navigate = useNavigate()
@@ -76,7 +168,9 @@ export default function AdminExams(){
   const [search, setSearch] = useState('')
   const [filterGrade, setFilterGrade] = useState('')
   const [filterClass, setFilterClass] = useState('')
+  const [filterTerm, setFilterTerm] = useState('')
   const [filterStatus, setFilterStatus] = useState('all') // all|published|unpublished
+  const [page, setPage] = useState(1)
 
   // Calendar state and helpers
   const [calMonth, setCalMonth] = useState(new Date())
@@ -251,11 +345,13 @@ export default function AdminExams(){
     const matchesSearch = !q || e.name.toLowerCase().includes(q) || className.toLowerCase().includes(q) || String(e.year).includes(q)
     // grade filter
     const matchesGrade = !filterGrade || gradeLevel === filterGrade
+    // term filter
+    const matchesTerm = !filterTerm || String(e.term) === String(filterTerm)
     // class filter
     const matchesClass = !filterClass || String(e.klass) === String(filterClass)
     // status filter
     const matchesStatus = filterStatus==='all' || (filterStatus==='published' ? !!e.published : !e.published)
-    return matchesSearch && matchesGrade && matchesClass && matchesStatus
+    return matchesSearch && matchesGrade && matchesTerm && matchesClass && matchesStatus
   })
 
   const sortedExams = [...filteredExams].sort((a,b) => {
@@ -279,6 +375,57 @@ export default function AdminExams(){
 
   const publishedCount = (Array.isArray(exams) ? exams : []).filter(e=>!!e.published).length
   const draftCount = (Array.isArray(exams) ? exams : []).filter(e=>!e.published).length
+
+  // Right-panel analytics (screenshot-style)
+  const overviewDonut = useMemo(() => ({
+    labels: ['Published', 'Draft', 'Pending', 'Archived'],
+    datasets: [{
+      data: [publishedCount, draftCount, 0, 0],
+      backgroundColor: ['#22c55e', '#7c3aed', '#f59e0b', '#94a3b8'],
+      borderColor: '#ffffff',
+      borderWidth: 2,
+      hoverOffset: 6,
+    }]
+  }), [publishedCount, draftCount])
+
+  const examsByClass = useMemo(() => {
+    const map = new Map()
+    ;(Array.isArray(exams) ? exams : []).forEach(e => {
+      const klass = (Array.isArray(classes) ? classes : []).find(c => c.id === e.klass)
+      const key = klass?.name || `Class ${e.klass}`
+      map.set(key, (map.get(key) || 0) + 1)
+    })
+    const items = Array.from(map.entries()).map(([label, value]) => ({ label, value }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 7)
+    return items
+  }, [exams, classes])
+
+  const examsByClassChart = useMemo(() => ({
+    labels: examsByClass.map(i => i.label),
+    datasets: [{
+      label: 'Exams',
+      data: examsByClass.map(i => i.value),
+      backgroundColor: 'rgba(79,70,229,0.9)',
+      borderRadius: 999,
+      barThickness: 10,
+    }]
+  }), [examsByClass])
+
+  const upcomingExams = useMemo(() => {
+    const list = (Array.isArray(exams) ? exams : [])
+      .filter(e => e?.date && new Date(e.date).getTime() >= new Date().setHours(0, 0, 0, 0))
+      .sort((a, b) => String(a.date).localeCompare(String(b.date)))
+      .slice(0, 3)
+    return list
+  }, [exams])
+
+  const latestPublished = useMemo(() => {
+    const list = (Array.isArray(exams) ? exams : [])
+      .filter(e => e?.published && e?.published_at)
+      .sort((a, b) => String(b.published_at).localeCompare(String(a.published_at)))
+    return list[0] || null
+  }, [exams])
 
   // Selection helpers
   const allFilteredIds = filteredExams.map(e=>e.id)
@@ -492,225 +639,232 @@ export default function AdminExams(){
 
   return (
     <React.Fragment>
-      <div className="max-w-[1600px] mx-auto space-y-8 p-4 sm:p-6 lg:p-8 animate-in fade-in duration-500">
-        {/* Header Section */}
-        <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
-          <div className="space-y-1">
-            <h1 className="text-3xl font-extrabold tracking-tight text-gray-900 sm:text-4xl">Exams Management</h1>
-            <p className="text-gray-500 font-medium">Create, manage and publish student examinations.</p>
+      <div className="max-w-[1600px] mx-auto space-y-6 p-4 sm:p-6 lg:p-8 animate-in fade-in duration-500">
+        {/* Header (matches screenshot style) */}
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div className="flex items-start gap-4">
+            <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 border border-indigo-100 flex items-center justify-center">
+              <FileText size={22} />
+            </div>
+            <div className="space-y-1">
+              <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-gray-900">Exams Management</h1>
+              <p className="text-gray-500 font-semibold text-sm">Create, manage and publish student examinations.</p>
+            </div>
           </div>
-          
           <div className="flex flex-wrap items-center gap-3">
             <button
               onClick={() => setShowCalendar(true)}
-              className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 bg-white text-gray-700 px-4 py-2.5 rounded-xl font-semibold border border-gray-200 shadow-sm hover:bg-gray-50 transition-all active:scale-95"
+              className="inline-flex items-center justify-center gap-2 bg-white text-gray-700 px-4 py-2.5 rounded-xl font-black text-xs border border-gray-200 shadow-sm hover:bg-gray-50 transition-all"
             >
-              <Calendar size={18} className="text-gray-500" />
+              <Calendar size={16} className="text-gray-500" />
               <span>Calendar</span>
             </button>
             <button
               onClick={() => navigate('/admin/results')}
-              className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 bg-indigo-50 text-indigo-700 px-4 py-2.5 rounded-xl font-semibold border border-indigo-100 hover:bg-indigo-100 transition-all active:scale-95"
+              className="inline-flex items-center justify-center gap-2 bg-white text-gray-700 px-4 py-2.5 rounded-xl font-black text-xs border border-gray-200 shadow-sm hover:bg-gray-50 transition-all"
             >
-              <FileSpreadsheet size={18} />
+              <FileSpreadsheet size={16} className="text-gray-500" />
               <span>Results</span>
             </button>
             <button
               onClick={() => setShowCreateExam(true)}
-              className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 bg-blue-600 text-white px-5 py-2.5 rounded-xl font-bold shadow-lg shadow-blue-200 hover:bg-blue-700 hover:shadow-xl transition-all active:scale-95"
+              className="inline-flex items-center justify-center gap-2 bg-indigo-600 text-white px-5 py-2.5 rounded-xl font-black text-xs shadow-soft hover:bg-indigo-700 transition-all"
             >
-              <Plus size={20} />
+              <Plus size={18} />
               <span>New Exam</span>
             </button>
           </div>
         </div>
 
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow group">
-            <div className="flex items-center justify-between mb-4">
-              <div className="p-3 bg-blue-50 text-blue-600 rounded-xl group-hover:scale-110 transition-transform">
-                <FileText size={24} />
-              </div>
-              <span className="text-xs font-bold text-gray-400 bg-gray-50 px-2 py-1 rounded-lg uppercase tracking-wider">Total</span>
-            </div>
-            <div className="text-3xl font-black text-gray-900 tracking-tight">{exams.length}</div>
-            <div className="text-sm font-medium text-gray-500 mt-1">Total Examinations</div>
-          </div>
-
-          <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow group">
-            <div className="flex items-center justify-between mb-4">
-              <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl group-hover:scale-110 transition-transform">
-                <CheckCircle2 size={24} />
-              </div>
-              <span className="text-xs font-bold text-emerald-400 bg-emerald-50 px-2 py-1 rounded-lg uppercase tracking-wider">Live</span>
-            </div>
-            <div className="text-3xl font-black text-gray-900 tracking-tight">{publishedCount}</div>
-            <div className="text-sm font-medium text-gray-500 mt-1">Published Exams</div>
-          </div>
-
-          <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow group">
-            <div className="flex items-center justify-between mb-4">
-              <div className="p-3 bg-amber-50 text-amber-600 rounded-xl group-hover:scale-110 transition-transform">
-                <Edit3 size={24} />
-              </div>
-              <span className="text-xs font-bold text-amber-400 bg-amber-50 px-2 py-1 rounded-lg uppercase tracking-wider">Draft</span>
-            </div>
-            <div className="text-3xl font-black text-gray-900 tracking-tight">{draftCount}</div>
-            <div className="text-sm font-medium text-gray-500 mt-1">Pending Publication</div>
-          </div>
-
-          <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow group">
-            <div className="flex items-center justify-between mb-4">
-              <div className="p-3 bg-purple-50 text-purple-600 rounded-xl group-hover:scale-110 transition-transform">
-                <LayoutGrid size={24} />
-              </div>
-              <span className="text-xs font-bold text-purple-400 bg-purple-50 px-2 py-1 rounded-lg uppercase tracking-wider">Classes</span>
-            </div>
-            <div className="text-3xl font-black text-gray-900 tracking-tight">{classes.length}</div>
-            <div className="text-sm font-medium text-gray-500 mt-1">Active Classes</div>
-          </div>
-        </div>
-
-        {/* Main Content Area */}
-        <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
-          {/* Tool Bar */}
-          <div className="p-6 border-b border-gray-50 space-y-4">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-              <div className="relative flex-1 max-w-md">
-                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-                <input 
-                  value={search} 
-                  onChange={e => setSearch(e.target.value)}
-                  placeholder="Search exams, classes, or years..." 
-                  className="w-full bg-gray-50 border-none rounded-2xl pl-11 pr-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 transition-all placeholder:text-gray-400"
-                />
-              </div>
-              
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setShowFilters(!showFilters)}
-                  className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-all ${showFilters ? 'bg-blue-50 text-blue-600' : 'text-gray-600 hover:bg-gray-50'}`}
-                >
-                  <Filter size={18} />
-                  <span>Filters</span>
-                </button>
-                
-                <div className="h-8 w-px bg-gray-100 mx-2" />
-                
-                <select 
-                  value={sortBy} 
-                  onChange={e => setSortBy(e.target.value)}
-                  className="bg-transparent border-none text-sm font-bold text-gray-600 focus:ring-0 cursor-pointer"
-                >
-                  <option value="latest">Sort: Latest</option>
-                  <option value="oldest">Sort: Oldest</option>
-                  <option value="published_first">Sort: Published</option>
-                  <option value="unpublished_first">Sort: Unpublished</option>
-                </select>
-              </div>
-            </div>
-
-            {/* Expanded Filters */}
-            {showFilters && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 p-4 bg-gray-50 rounded-2xl animate-in slide-in-from-top-2 duration-300">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">Grade Level</label>
-                  <select 
-                    value={filterGrade} 
-                    onChange={e => setFilterGrade(e.target.value)}
-                    className="w-full bg-white border-none rounded-xl text-sm font-medium focus:ring-2 focus:ring-blue-500 shadow-sm"
-                  >
-                    <option value="">All Grades</option>
-                    {gradeOptions.map(g => <option key={g} value={g}>{g}</option>)}
-                  </select>
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+          {/* LEFT: stats + table */}
+          <div className="xl:col-span-2 space-y-6">
+            {/* Stats row */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="bg-white rounded-2xl border border-gray-200 shadow-card p-4">
+                <div className="flex items-center justify-between">
+                  <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 border border-indigo-100 flex items-center justify-center">
+                    <FileText size={18} />
+                  </div>
                 </div>
-                
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">Specific Class</label>
-                  <select 
-                    value={filterClass} 
-                    onChange={e => setFilterClass(e.target.value)}
-                    className="w-full bg-white border-none rounded-xl text-sm font-medium focus:ring-2 focus:ring-blue-500 shadow-sm"
+                <div className="mt-3 text-2xl font-black text-gray-900">{(Array.isArray(exams) ? exams.length : 0).toLocaleString()}</div>
+                <div className="text-xs font-semibold text-gray-500">Total Examinations</div>
+                <button type="button" className="mt-2 text-xs font-black text-indigo-600 hover:underline">View all ›</button>
+              </div>
+
+              <div className="bg-white rounded-2xl border border-gray-200 shadow-card p-4">
+                <div className="flex items-center justify-between">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 border border-emerald-100 flex items-center justify-center">
+                    <CheckCircle2 size={18} />
+                  </div>
+                  <span className="text-[10px] font-black text-emerald-700 bg-emerald-50 px-2 py-1 rounded-full border border-emerald-100">LIVE</span>
+                </div>
+                <div className="mt-3 text-2xl font-black text-gray-900">{publishedCount.toLocaleString()}</div>
+                <div className="text-xs font-semibold text-gray-500">Published Exams</div>
+                <button type="button" className="mt-2 text-xs font-black text-indigo-600 hover:underline">View all ›</button>
+              </div>
+
+              <div className="bg-white rounded-2xl border border-gray-200 shadow-card p-4">
+                <div className="flex items-center justify-between">
+                  <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-700 border border-amber-100 flex items-center justify-center">
+                    <Edit3 size={18} />
+                  </div>
+                  <span className="text-[10px] font-black text-amber-700 bg-amber-50 px-2 py-1 rounded-full border border-amber-100">DRAFT</span>
+                </div>
+                <div className="mt-3 text-2xl font-black text-gray-900">{draftCount.toLocaleString()}</div>
+                <div className="text-xs font-semibold text-gray-500">Pending Publication</div>
+                <button type="button" className="mt-2 text-xs font-black text-indigo-600 hover:underline">View all ›</button>
+              </div>
+
+              <div className="bg-white rounded-2xl border border-gray-200 shadow-card p-4">
+                <div className="flex items-center justify-between">
+                  <div className="w-10 h-10 rounded-xl bg-purple-50 text-purple-600 border border-purple-100 flex items-center justify-center">
+                    <LayoutGrid size={18} />
+                  </div>
+                </div>
+                <div className="mt-3 text-2xl font-black text-gray-900">{(Array.isArray(classes) ? classes.length : 0).toLocaleString()}</div>
+                <div className="text-xs font-semibold text-gray-500">Active Classes</div>
+                <button type="button" className="mt-2 text-xs font-black text-indigo-600 hover:underline">View all ›</button>
+              </div>
+            </div>
+
+            {/* Table card */}
+            <div className="bg-white rounded-2xl border border-gray-200 shadow-card overflow-hidden">
+              {/* Toolbar row (screenshot-style) */}
+              <div className="p-4 md:p-5 border-b border-gray-100 flex flex-col gap-3">
+                <div className="flex flex-wrap items-center gap-3">
+                  <div className="relative flex-1 min-w-[240px]">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <input
+                      value={search}
+                      onChange={(e) => { setSearch(e.target.value); setPage(1) }}
+                      placeholder="Search exams, classes, or years..."
+                      className="w-full h-10 pl-9 pr-3 rounded-xl border border-gray-200 text-sm font-semibold"
+                    />
+                  </div>
+
+                  <select
+                    value={filterClass}
+                    onChange={(e) => { setFilterClass(e.target.value); setPage(1) }}
+                    className="h-10 px-3 rounded-xl border border-gray-200 bg-white text-sm font-semibold min-w-[160px]"
                   >
                     <option value="">All Classes</option>
                     {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                   </select>
-                </div>
 
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">Pub. Status</label>
-                  <select 
-                    value={filterStatus} 
-                    onChange={e => setFilterStatus(e.target.value)}
-                    className="w-full bg-white border-none rounded-xl text-sm font-medium focus:ring-2 focus:ring-blue-500 shadow-sm"
+                  <select
+                    value={filterTerm}
+                    onChange={(e) => { setFilterTerm(e.target.value); setPage(1) }}
+                    className="h-10 px-3 rounded-xl border border-gray-200 bg-white text-sm font-semibold min-w-[140px]"
                   >
-                    <option value="all">Any Status</option>
-                    <option value="published">Published Only</option>
-                    <option value="unpublished">Drafts Only</option>
+                    <option value="">All Terms</option>
+                    <option value="1">Term 1</option>
+                    <option value="2">Term 2</option>
+                    <option value="3">Term 3</option>
                   </select>
+
+                  <select
+                    value={filterStatus}
+                    onChange={(e) => { setFilterStatus(e.target.value); setPage(1) }}
+                    className="h-10 px-3 rounded-xl border border-gray-200 bg-white text-sm font-semibold min-w-[150px]"
+                  >
+                    <option value="all">All Statuses</option>
+                    <option value="published">Published</option>
+                    <option value="unpublished">Draft</option>
+                  </select>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowFilters(v => !v)}
+                    className={`h-10 px-4 rounded-xl border text-xs font-black inline-flex items-center gap-2 ${
+                      showFilters ? 'bg-indigo-600 border-indigo-600 text-white shadow-soft' : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    <Filter size={16} />
+                    Filters
+                  </button>
+
+                  <div className="ml-auto flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setSortBy('latest')}
+                      className="h-10 px-4 rounded-xl bg-white border border-gray-200 text-gray-700 text-xs font-black hover:bg-gray-50"
+                    >
+                      Sort: Latest
+                    </button>
+                  </div>
                 </div>
 
-                <div className="flex items-end">
-                  <button 
-                    onClick={() => { setSearch(''); setFilterGrade(''); setFilterClass(''); setFilterStatus('all'); }}
-                    className="w-full bg-gray-200 text-gray-700 py-2.5 rounded-xl text-sm font-bold hover:bg-gray-300 transition-colors active:scale-95"
-                  >
-                    Reset Filters
+                {showFilters && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 p-3 bg-gray-50 rounded-xl">
+                    <button
+                      type="button"
+                      onClick={() => { setSearch(''); setFilterGrade(''); setFilterTerm(''); setFilterClass(''); setFilterStatus('all'); setPage(1) }}
+                      className="h-10 rounded-xl bg-white border border-gray-200 text-gray-700 text-xs font-black hover:bg-gray-50"
+                    >
+                      Reset
+                    </button>
+                    <div className="sm:col-span-3 text-xs text-gray-500 font-semibold flex items-center">
+                      Showing {sortedExams.length.toLocaleString()} exams
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Bulk Action Bar */}
+              {selected.size > 0 && (
+                <div className="bg-indigo-600 px-5 py-3 flex items-center justify-between text-white">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center font-black">
+                      {selected.size}
+                    </div>
+                    <span className="font-black">Exams Selected</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={bulkPublishExams}
+                      disabled={bulkPublishing}
+                      className="h-9 px-3 rounded-xl bg-white text-indigo-700 text-[10px] font-black uppercase tracking-widest disabled:opacity-50"
+                    >
+                      {bulkPublishing ? 'Publishing…' : 'Publish'}
+                    </button>
+                    <button
+                      onClick={bulkDeleteExams}
+                      disabled={bulkDeleting}
+                      className="h-9 px-3 rounded-xl bg-rose-600 text-white text-[10px] font-black uppercase tracking-widest disabled:opacity-50"
+                    >
+                      {bulkDeleting ? 'Deleting…' : 'Delete'}
+                    </button>
+                    <button onClick={() => setSelected(new Set())} className="h-9 w-9 rounded-xl bg-white/15 hover:bg-white/20 inline-flex items-center justify-center">
+                      <X size={16} />
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {banner && (
+                <div className="m-5 p-4 bg-indigo-50 border border-indigo-100 rounded-2xl flex items-center gap-3 text-indigo-700">
+                  <AlertCircle size={18} className="shrink-0" />
+                  <p className="text-sm font-black">{banner}</p>
+                  <button onClick={() => setBanner('')} className="ml-auto text-indigo-400 hover:text-indigo-600">
+                    <X size={18} />
                   </button>
                 </div>
-              </div>
-            )}
-          </div>
+              )}
 
-          {/* Bulk Action Bar */}
-          {selected.size > 0 && (
-            <div className="bg-blue-600 p-4 flex items-center justify-between text-white animate-in slide-in-from-top duration-300">
-              <div className="flex items-center gap-3 ml-4">
-                <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center font-bold">
-                  {selected.size}
-                </div>
-                <span className="font-bold">Exams Selected</span>
-              </div>
-              
-              <div className="flex items-center gap-3">
-                <button 
-                  onClick={bulkPublishExams}
-                  disabled={bulkPublishing}
-                  className="bg-white text-blue-600 px-4 py-2 rounded-xl text-sm font-bold hover:bg-blue-50 transition-colors shadow-sm active:scale-95 disabled:opacity-50"
-                >
-                  {bulkPublishing ? 'Publishing...' : 'Publish Selected'}
-                </button>
-                <button 
-                  onClick={bulkDeleteExams}
-                  disabled={bulkDeleting}
-                  className="bg-red-500 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-red-600 transition-colors shadow-sm active:scale-95 disabled:opacity-50"
-                >
-                  {bulkDeleting ? 'Deleting...' : 'Delete Selected'}
-                </button>
-                <button 
-                  onClick={() => setSelected(new Set())}
-                  className="text-white/80 hover:text-white px-3"
-                >
-                  <X size={20} />
-                </button>
-              </div>
-            </div>
-          )}
+              {/* Pagination */}
+              {(() => {
+                const PAGE_SIZE = 6
+                const totalPages = Math.max(1, Math.ceil((sortedExams?.length || 0) / PAGE_SIZE))
+                const start = (page - 1) * PAGE_SIZE
+                const end = start + PAGE_SIZE
+                const pageItems = (sortedExams || []).slice(start, end)
 
-          {banner && (
-            <div className="mx-6 mt-6 p-4 bg-blue-50 border border-blue-100 rounded-2xl flex items-center gap-3 text-blue-700 animate-in zoom-in duration-300">
-              <AlertCircle size={20} className="shrink-0" />
-              <p className="text-sm font-bold">{banner}</p>
-              <button onClick={() => setBanner('')} className="ml-auto text-blue-400 hover:text-blue-600">
-                <X size={18} />
-              </button>
-            </div>
-          )}
-
-          {/* Table Container */}
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse min-w-[1000px]">
+                return (
+                  <>
+                    {/* Table Container */}
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left border-collapse min-w-[1000px]">
               <thead>
                 <tr className="border-b border-gray-50">
                   <th className="p-6 w-12 text-center">
@@ -731,7 +885,7 @@ export default function AdminExams(){
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {sortedExams.map(e => {
+                {pageItems.map(e => {
                   const klass = classes.find(c => c.id === e.klass);
                   return (
                     <tr key={e.id} className={`group transition-all hover:bg-gray-50/80 ${selected.has(e.id) ? 'bg-blue-50/50' : ''}`}>
@@ -849,8 +1003,38 @@ export default function AdminExams(){
                   );
                 })}
               </tbody>
-            </table>
-          </div>
+                      </table>
+                    </div>
+
+                    <div className="px-5 py-4 border-t border-gray-200 bg-white flex items-center justify-between">
+                      <div className="text-xs font-semibold text-gray-500">
+                        Showing {(sortedExams?.length || 0) ? (start + 1) : 0} to {Math.min(end, sortedExams?.length || 0)} of {(sortedExams?.length || 0).toLocaleString()} exams
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setPage((p) => Math.max(1, p - 1))}
+                          disabled={page <= 1}
+                          className="h-9 w-9 rounded-xl border border-gray-200 bg-white text-gray-700 disabled:opacity-40"
+                        >
+                          ‹
+                        </button>
+                        <div className="h-9 min-w-[36px] px-3 rounded-xl bg-indigo-600 text-white font-black text-sm inline-flex items-center justify-center">
+                          {page}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                          disabled={page >= totalPages}
+                          className="h-9 w-9 rounded-xl border border-gray-200 bg-white text-gray-700 disabled:opacity-40"
+                        >
+                          ›
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                )
+              })()}
 
           {loading && (
             <div className="p-20 flex flex-col items-center justify-center gap-4 text-gray-400">
@@ -869,13 +1053,114 @@ export default function AdminExams(){
                 <p className="text-sm font-medium">Try adjusting your filters or search query.</p>
               </div>
               <button 
-                onClick={() => { setSearch(''); setFilterGrade(''); setFilterClass(''); setFilterStatus('all'); }}
+                onClick={() => { setSearch(''); setFilterGrade(''); setFilterTerm(''); setFilterClass(''); setFilterStatus('all'); }}
                 className="text-blue-600 font-bold hover:underline"
               >
                 Clear all filters
               </button>
             </div>
           )}
+            </div>
+          </div>
+
+          {/* RIGHT: analytics panels */}
+          <div className="space-y-6">
+            <Card
+              title="Exams Overview"
+              right={<span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">This Term</span>}
+            >
+              <div className="h-[220px]">
+                <Doughnut
+                  data={overviewDonut}
+                  options={{
+                    maintainAspectRatio: false,
+                    cutout: '72%',
+                    plugins: {
+                      legend: { position: 'right', labels: { usePointStyle: true, pointStyle: 'circle', boxWidth: 10, font: { size: 11, weight: '700' } } },
+                      tooltip: { enabled: true },
+                      centerText: { text: (Array.isArray(exams) ? exams.length : 0).toLocaleString(), subtext: 'Total', fontSize: 22, subFontSize: 11 },
+                    },
+                  }}
+                />
+              </div>
+            </Card>
+
+            <Card
+              title="Exams by Class"
+              right={<span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">This Term</span>}
+            >
+              <div className="h-[180px]">
+                <Bar
+                  data={examsByClassChart}
+                  options={{
+                    indexAxis: 'y',
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                      x: { beginAtZero: true, grid: { color: 'rgba(148,163,184,0.20)' }, ticks: { font: { size: 10, weight: '700' }, color: '#6b7280' } },
+                      y: { grid: { display: false }, ticks: { font: { size: 10, weight: '800' }, color: '#111827' } },
+                    },
+                  }}
+                />
+              </div>
+            </Card>
+
+            <Card
+              title="Upcoming Exams"
+              right={<button type="button" className="text-xs font-black text-indigo-600 hover:underline" onClick={() => setShowCalendar(true)}>View Calendar</button>}
+            >
+              <div className="space-y-3">
+                {upcomingExams.length === 0 ? (
+                  <div className="text-sm text-gray-500 font-semibold">No upcoming exams.</div>
+                ) : (
+                  upcomingExams.map((e) => {
+                    const klass = classes.find(c => c.id === e.klass)
+                    const badge = fmtDateBadge(e.date)
+                    return (
+                      <div key={e.id} className="flex items-center gap-3 p-3 rounded-2xl border border-gray-100 bg-white shadow-sm">
+                        <div className="w-12 rounded-xl border border-gray-200 bg-gray-50 text-center py-2">
+                          <div className="text-[9px] font-black text-gray-500">{badge.m}</div>
+                          <div className="text-base font-black text-gray-900 leading-none">{badge.day}</div>
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="font-black text-gray-900 truncate">{e.name}</div>
+                          <div className="text-xs font-semibold text-gray-500 truncate">{klass?.name || e.klass} • Term {e.term}</div>
+                        </div>
+                        <span className={`px-2.5 py-1 rounded-full text-[10px] font-black border ${
+                          e.published ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-amber-50 text-amber-700 border-amber-100'
+                        }`}>
+                          {e.published ? 'Published' : 'Draft'}
+                        </span>
+                      </div>
+                    )
+                  })
+                )}
+              </div>
+            </Card>
+
+            <Card
+              title="Recent Activity"
+              right={<button type="button" className="text-xs font-black text-indigo-600 hover:underline" onClick={() => navigate('/admin/results')}>View All</button>}
+            >
+              {latestPublished ? (
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 border border-indigo-100 flex items-center justify-center">
+                    <FileText size={18} />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-sm font-black text-gray-900 truncate">
+                      {latestPublished.name} was published
+                    </div>
+                    <div className="text-xs font-semibold text-gray-500">
+                      By {String(latestPublished?.published_by_name || 'System')} • {timeAgo(latestPublished.published_at)}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-sm text-gray-500 font-semibold">No recent activity.</div>
+              )}
+            </Card>
+          </div>
         </div>
       </div>
 

@@ -98,6 +98,31 @@ body { @apply text-gray-800; }
 
 :root { color-scheme: light; }
 
+/* ------------------------------------------------------------
+   Desktop "dense layout" scaling
+   Goal: On smaller laptop screens (e.g., 11" / 1366px wide),
+   keep the DESKTOP layout (same structure) but render slightly
+   smaller so users don't need to zoom out in the browser.
+   Tailwind spacing/text sizes are rem-based, so adjusting the
+   root font-size scales the whole UI consistently.
+------------------------------------------------------------ */
+html { font-size: 16px; }
+
+/* Typical small laptops (e.g., 1366x768 / ~11") - make it much denser */
+@media (min-width: 1024px) and (max-width: 1366px) {
+  html { font-size: 12px; }
+}
+
+/* Mid-size laptops */
+@media (min-width: 1367px) and (max-width: 1535px) {
+  html { font-size: 13px; }
+}
+
+/* Standard laptops / smaller external monitors */
+@media (min-width: 1536px) and (max-width: 1919px) {
+  html { font-size: 14px; }
+}
+
 @layer base {
   body, form, input, textarea, select, button { color-scheme: light; }
   input, textarea, select, button {

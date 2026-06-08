@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import React, { useEffect, useMemo, useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import api from '../api'
 import Modal from '../components/Modal'
 import { useNotification } from '../components/NotificationContext'
@@ -28,11 +28,16 @@ let cachedStudentsNext = ''
 let studentsCacheTimestamp = 0
 const STUDENTS_CACHE_TTL_MS = 5 * 60 * 1000 // 5 minutes
 
+const PAGE_SIZE = 10
+
 export default function AdminStudents(){
+  const navigate = useNavigate()
   const [students, setStudents] = useState([])
   const [classes, setClasses] = useState([])
   const [studentsTotal, setStudentsTotal] = useState(0)
   const [studentsNext, setStudentsNext] = useState('') // pagination next URL for students
+  const [studentsPrev, setStudentsPrev] = useState('')
+  const [page, setPage] = useState(1)
   const [loadingMore, setLoadingMore] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [selectedStudentIds, setSelectedStudentIds] = useState([])
@@ -56,6 +61,7 @@ export default function AdminStudents(){
   const [filterGrade, setFilterGrade] = useState('')
   const [filterClass, setFilterClass] = useState('')
   const [filterGender, setFilterGender] = useState('')
+  const [filterStatus, setFilterStatus] = useState('active') // all | active | inactive | graduated
   const [isLoading, setIsLoading] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [confirmStudent, setConfirmStudent] = useState(null)
@@ -94,11 +100,17 @@ export default function AdminStudents(){
     }
   }
 
-  // Tab: active vs graduated vs inactive
-  const [tab, setTab] = useState('active') // 'active' | 'graduated' | 'inactive'
+  // Keep tab state for existing logic (status dropdown controls it)
+  const [tab, setTab] = useState('active') // 'all' | 'active' | 'graduated' | 'inactive'
   const [isCompact, setIsCompact] = useState(false)
   const [showFilters, setShowFilters] = useState(false)
   const [statIndex, setStatIndex] = useState(0)
+
+  // Summary stats (real data)
+  const [summary, setSummary] = useState(null)
+  const [maleCount, setMaleCount] = useState(0)
+  const [femaleCount, setFemaleCount] = useState(0)
+  const [currentYearLabel, setCurrentYearLabel] = useState('')
 
   const { showSuccess, showError } = useNotification()
 
@@ -106,43 +118,67 @@ export default function AdminStudents(){
     try {
       setIsLoading(true)
       setStudentsNext('')
+      setStudentsPrev('')
       try { showLoadingHint('Loading students…', 8) } catch {}
       // Build students query with optional tab/search and server-side grade/class filters
       let base = `/academics/students/`
       const params = new URLSearchParams()
-      if (searchTerm) {
-        // Search across ALL students (ignore tab constraints)
-        params.set('q', searchTerm)
-      } else if (tab === 'graduated') {
-        params.set('is_graduated', 'true')
-      } else if (tab === 'inactive') {
-        // Count graduated among inactive: fetch all students with is_active=false (any graduation state)
-        params.set('is_active', 'false')
-      } else {
-        // active
-        params.set('is_graduated', 'false')
-        params.set('is_active', 'true')
-      }
+      params.set('page_size', String(PAGE_SIZE))
+      params.set('page', String(page || 1))
+      if (searchTerm) params.set('q', searchTerm)
+      if (tab === 'graduated') params.set('is_graduated', 'true')
+      else if (tab === 'inactive') params.set('is_active', 'false')
+      else if (tab === 'active') { params.set('is_graduated', 'false'); params.set('is_active', 'true') }
       // Server-side Specific Grade & Class filters (if provided)
       if (tab === 'active' && filterGrade) params.set('grade', String(filterGrade))
-      if (tab === 'active' && filterClass) params.set('klass', String(filterClass))
+      if (filterClass) params.set('klass', String(filterClass))
       if (filterGender) params.set('gender', String(filterGender))
       const studentsUrl = `${base}?${params.toString()}`
       try { setLoadingProgress(25) } catch {}
-      const [st, cl] = await Promise.all([
+      const [st, cl, sum, yr, maleRes, femaleRes] = await Promise.allSettled([
         api.get(studentsUrl),
-        api.get('/academics/classes/?page_size=200')
+        api.get('/academics/classes/?page_size=200'),
+        api.get('/reports/summary/', { _skipGlobalLoading: true }),
+        api.get('/academics/academic_years/current/', { _skipGlobalLoading: true }).catch(() => ({ data: null })),
+        api.get(`/academics/students/?page_size=1&gender=Male`, { _skipGlobalLoading: true }).catch(() => ({ data: null })),
+        api.get(`/academics/students/?page_size=1&gender=Female`, { _skipGlobalLoading: true }).catch(() => ({ data: null })),
       ])
       try { setLoadingProgress(80) } catch {}
-      const stIsArray = Array.isArray(st.data)
-      const stData = stIsArray ? st.data : (Array.isArray(st.data?.results) ? st.data.results : [])
-      const clData = Array.isArray(cl.data) ? cl.data : (Array.isArray(cl.data?.results) ? cl.data.results : [])
+      const stVal = st.status === 'fulfilled' ? st.value : { data: [] }
+      const clVal = cl.status === 'fulfilled' ? cl.value : { data: [] }
+      const sumVal = sum.status === 'fulfilled' ? sum.value : { data: null }
+      const yrVal = yr.status === 'fulfilled' ? yr.value : { data: null }
+      const maleVal = maleRes.status === 'fulfilled' ? maleRes.value : { data: null }
+      const femaleVal = femaleRes.status === 'fulfilled' ? femaleRes.value : { data: null }
+
+      const stIsArray = Array.isArray(stVal.data)
+      const stData = stIsArray ? stVal.data : (Array.isArray(stVal.data?.results) ? stVal.data.results : [])
+      const clData = Array.isArray(clVal.data) ? clVal.data : (Array.isArray(clVal.data?.results) ? clVal.data.results : [])
       setStudents(stData)
       setClasses(clData)
       // Total count: if paginated, use count; if array response, use length
-      setStudentsTotal(stIsArray ? stData.length : (Number(st.data?.count) || stData.length))
+      setStudentsTotal(stIsArray ? stData.length : (Number(stVal.data?.count) || stData.length))
       // Save next link for incremental loading (only when paginated)
-      setStudentsNext(stIsArray ? '' : (st.data?.next || ''))
+      setStudentsNext(stIsArray ? '' : (stVal.data?.next || ''))
+      setStudentsPrev(stIsArray ? '' : (stVal.data?.previous || ''))
+
+      // Summary stats
+      setSummary(sumVal?.data || null)
+      setMaleCount(Number(maleVal?.data?.count || 0))
+      setFemaleCount(Number(femaleVal?.data?.count || 0))
+      try {
+        const y = yrVal?.data
+        let label = ''
+        if (y?.end_date) label = String(y.end_date).slice(0, 4)
+        if (!label && y?.label) {
+          const hits = String(y.label).match(/\b(20\d{2})\b/g)
+          if (hits && hits.length) label = hits[hits.length - 1]
+          else label = String(y.label)
+        }
+        setCurrentYearLabel(label)
+      } catch {
+        setCurrentYearLabel('')
+      }
       // Update cache for this tab
       cachedStudents = stData
       cachedClasses = clData
@@ -193,33 +229,11 @@ export default function AdminStudents(){
     }
   }
 
-  useEffect(()=>{ 
-    // Try to hydrate from cache first for this tab (but not during a search)
-    const now = Date.now()
-    if (
-      !searchTerm &&
-      !filterGrade &&
-      !filterClass &&
-      !filterGender &&
-      cachedStudents &&
-      cachedClasses &&
-      cachedTab === tab &&
-      now - studentsCacheTimestamp < STUDENTS_CACHE_TTL_MS
-    ){
-      setStudents(cachedStudents)
-      setClasses(cachedClasses)
-      setStudentsTotal(cachedStudentsTotal || 0)
-      setStudentsNext(cachedStudentsNext || '')
-      setIsLoading(false)
-      try { clearLoadingHint() } catch {}
-    } else {
-      load()
-    }
-  },[tab, searchTerm, filterGrade, filterClass, filterGender])
+  useEffect(()=>{ load() },[tab, searchTerm, filterGrade, filterClass, filterGender, page])
 
   useEffect(() => {
     setSelectedStudentIds([])
-  }, [tab, searchTerm, filterGrade, filterClass, filterGender])
+  }, [tab, searchTerm, filterGrade, filterClass, filterGender, page])
 
   // Load school name for print header (once per session)
   useEffect(() => {
@@ -240,6 +254,7 @@ export default function AdminStudents(){
     if (v === String(searchTerm || '')) return
     const id = setTimeout(() => {
       setSearchTerm(v)
+      setPage(1)
     }, 350)
     return () => clearTimeout(id)
   }, [searchDraft])
@@ -309,27 +324,56 @@ export default function AdminStudents(){
 
   const classOptions = (Array.isArray(classes) ? classes : []).filter(c => !filterGrade || String(c.grade_level) === String(filterGrade))
 
-  // Filter students based on search term and selected filters
-  const filteredStudents = students.filter(student => {
-    const lower = searchTerm.toLowerCase()
-    const searchMatch = !searchTerm ||
-      student.name.toLowerCase().includes(lower) ||
-      student.admission_no.toLowerCase().includes(lower) ||
-      (student.klass_detail?.name || '').toLowerCase().includes(lower)
+  // Server already filters; keep minimal local filtering as safety
+  const filteredStudents = useMemo(() => {
+    return (Array.isArray(students) ? students : []).filter((student) => {
+      if (!student) return false
+      if (filterGender && String(student.gender || '').toLowerCase() !== String(filterGender).toLowerCase()) return false
+      if (filterClass && String(student.klass || student.klass_detail?.id || '') !== String(filterClass)) return false
+      if (filterGrade) {
+        const klassId = student.klass || student.klass_detail?.id
+        const klassObj = classes.find(c => String(c.id) === String(klassId))
+        const studentGrade = student.klass_detail?.grade_level ?? klassObj?.grade_level ?? ''
+        if (String(studentGrade) !== String(filterGrade)) return false
+      }
+      return true
+    })
+  }, [students, classes, filterGender, filterClass, filterGrade])
 
-    if (!searchMatch) return false
+  const totalPages = useMemo(() => {
+    const total = Number(studentsTotal || 0)
+    return Math.max(1, Math.ceil(total / PAGE_SIZE))
+  }, [studentsTotal])
 
-    // Class and grade helpers
-    const klassId = student.klass || student.klass_detail?.id
-    const klassObj = classes.find(c => String(c.id) === String(klassId))
-    const studentGrade = student.klass_detail?.grade_level ?? klassObj?.grade_level ?? ''
+  const showingFrom = useMemo(() => {
+    if (!studentsTotal) return 0
+    return (Math.max(1, Number(page || 1)) - 1) * PAGE_SIZE + 1
+  }, [studentsTotal, page])
 
-    const genderMatch = !filterGender || String(student.gender || '').toLowerCase() === String(filterGender).toLowerCase()
-    const classMatch = !filterClass || String(klassId) === String(filterClass)
-    const gradeMatch = !filterGrade || String(studentGrade) === String(filterGrade)
+  const showingTo = useMemo(() => {
+    if (!studentsTotal) return 0
+    return Math.min(Number(studentsTotal || 0), (Math.max(1, Number(page || 1)) - 1) * PAGE_SIZE + filteredStudents.length)
+  }, [studentsTotal, page, filteredStudents.length])
 
-    return genderMatch && classMatch && gradeMatch
-  })
+  const pageButtons = useMemo(() => {
+    const p = Math.max(1, Number(page || 1))
+    const tp = Math.max(1, Number(totalPages || 1))
+    const out = []
+    const push = (x) => out.push(x)
+    if (tp <= 6) {
+      for (let i = 1; i <= tp; i += 1) push(i)
+      return out
+    }
+    // 1,2,3,...,last style
+    push(1)
+    if (p > 3) push('…')
+    const start = Math.max(2, p - 1)
+    const end = Math.min(tp - 1, p + 1)
+    for (let i = start; i <= end; i += 1) push(i)
+    if (p < tp - 2) push('…')
+    push(tp)
+    return out
+  }, [page, totalPages])
 
   const selectedSet = new Set(selectedStudentIds)
   const selectedCount = selectedStudentIds.length
@@ -619,158 +663,96 @@ export default function AdminStudents(){
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 pb-20 text-left">
-      <div className="sticky top-0 z-30 border-b border-white/70 bg-white/85 backdrop-blur-xl">
-        <div className="max-w-[1600px] mx-auto px-4 sm:px-6 py-4 sm:py-6">
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-            <div className="relative overflow-hidden rounded-[1.75rem] border border-indigo-100 bg-gradient-to-br from-white via-indigo-50/80 to-sky-50 p-4 shadow-sm sm:rounded-none sm:border-0 sm:bg-transparent sm:p-0 sm:shadow-none">
-              <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_right,rgba(79,70,229,0.10)_1px,transparent_1px),linear-gradient(to_bottom,rgba(79,70,229,0.10)_1px,transparent_1px)] bg-[size:22px_22px] sm:hidden" />
-              <div className="relative">
-                <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-indigo-100 bg-white/80 px-3 py-1 text-indigo-700 shadow-sm sm:border-0 sm:bg-transparent sm:px-0 sm:py-0 sm:shadow-none">
-                  <Users size={18} />
-                  <span className="text-[11px] sm:text-sm font-black uppercase tracking-wider">Student Directory</span>
-                </div>
-                <h1 className="text-2xl sm:text-3xl font-black text-gray-950 tracking-tight">
-                  Manage <span className="text-indigo-600">Students</span>
-                </h1>
-                <p className="mt-1 max-w-sm text-sm sm:text-base text-slate-600 font-semibold">Manage and organize your student records</p>
+    <div className="w-full space-y-5 pb-20 text-left">
+      {/* Hero (exact screenshot style) */}
+      <div className="relative overflow-hidden rounded-2xl border border-indigo-500/20 bg-gradient-to-r from-indigo-600 via-indigo-700 to-purple-700 text-white shadow-elevated">
+        <div className="absolute inset-0 opacity-25 bg-[radial-gradient(circle_at_20%_20%,rgba(255,255,255,0.35),transparent_55%),radial-gradient(circle_at_85%_30%,rgba(255,255,255,0.18),transparent_55%)]" />
+        <div className="relative p-5 sm:p-6 flex items-center justify-between gap-4">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-xl bg-white/10 border border-white/15 flex items-center justify-center">
+                <Users size={16} className="text-white" />
               </div>
+              <div className="text-xl sm:text-2xl font-black tracking-tight">Students</div>
             </div>
+            <div className="mt-1 text-sm text-white/85 font-medium">Manage and view all student information</div>
+          </div>
 
-            <div className="grid grid-cols-2 sm:flex sm:flex-row items-center gap-2 sm:gap-3">
-              <button
-                onClick={() => setShowAddStudent(true)}
-                className="col-span-2 sm:col-span-1 h-12 px-6 rounded-2xl bg-gradient-to-r from-indigo-600 to-blue-600 text-white font-black hover:from-indigo-700 hover:to-blue-700 transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-200 active:scale-95 w-full sm:w-auto"
+          <div className="flex items-center gap-2">
+            <div className="relative">
+              <select
+                value={currentYearLabel || ''}
+                onChange={() => {}}
+                className="h-10 rounded-xl bg-white/95 text-gray-900 border border-white/50 px-3 pr-8 text-sm font-semibold shadow-sm focus:outline-none"
               >
-                <UserPlus size={18} />
-                Enroll Student
-              </button>
-              <button
-                onClick={handlePrint}
-                disabled={exporting}
-                className="h-12 px-5 rounded-2xl bg-white border border-slate-200 text-slate-700 font-black hover:border-gray-900 hover:text-gray-900 transition-all flex items-center justify-center gap-2 shadow-sm disabled:opacity-60 w-full sm:w-auto"
-              >
-                <Printer size={18} />
-                Print
-              </button>
-              <button
-                onClick={handleDownload}
-                disabled={exporting}
-                className="h-12 px-5 rounded-2xl bg-emerald-600 text-white font-black hover:bg-emerald-700 transition-all flex items-center justify-center gap-2 shadow-lg shadow-emerald-200 active:scale-95 disabled:opacity-60 w-full sm:w-auto"
-              >
-                <Download size={18} />
-                Download
-              </button>
+                <option value={currentYearLabel || ''}>{currentYearLabel || 'Year'}</option>
+              </select>
             </div>
+            <button
+              type="button"
+              className="w-10 h-10 rounded-xl bg-white/10 border border-white/15 flex items-center justify-center"
+              title="Students"
+              aria-label="Students"
+            >
+              <GraduationCap size={18} className="text-white/90" />
+            </button>
           </div>
         </div>
       </div>
 
-      <div className="max-w-[1600px] mx-auto px-4 sm:px-6 py-5 sm:py-8 space-y-5 sm:space-y-8">
-
-        {/* Stats Cards */}
-        {(() => {
-          const newThisMonth = students.filter(s => {
-            const studentDate = new Date(s.created_at || s.id)
-            const now = new Date()
-            return studentDate.getMonth() === now.getMonth() && studentDate.getFullYear() === now.getFullYear()
-          }).length
-
-          const cards = [
-            (
-              <StatCard
-                title="Students"
-                value={isLoading ? 0 : studentsTotal}
-                icon="👥"
-                accent="from-brand-500 to-brand-600"
-                animate
-                format={(v)=>v.toLocaleString()}
-                trend={0}
-                size="sm"
-              />
-            ),
-            (
-              <StatCard
-                title="Active Classes"
-                value={isLoading ? 0 : classes.length}
-                icon="🏫"
-                accent="from-emerald-500 to-emerald-600"
-                animate
-                format={(v)=>v.toLocaleString()}
-                trend={0}
-                size="sm"
-              />
-            ),
-            (
-              <StatCard
-                title="New This Month"
-                value={isLoading ? 0 : newThisMonth}
-                icon="📈"
-                accent="from-fuchsia-500 to-fuchsia-600"
-                animate
-                format={(v)=>v.toLocaleString()}
-                trend={0}
-                size="sm"
-              />
-            )
-          ]
-
-          if (isCompact) {
-            return (
-              <div className="relative">
-                <div className="relative overflow-hidden rounded-2xl">
-                  <div
-                    className="flex"
-                    style={{ transform: `translateX(-${statIndex * 100}%)`, transition: 'transform 500ms ease' }}
-                  >
-                    {cards.map((c, idx) => (
-                      <div key={idx} className="min-w-full shrink-0">
-                        <div className="px-0.5">
-                          {c}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                <div className="mt-2 flex items-center justify-center gap-1.5">
-                  {cards.map((_, i) => (
-                    <span
-                      key={i}
-                      className={`h-1.5 rounded-full transition-all ${i === statIndex ? 'w-5 bg-blue-600' : 'w-1.5 bg-gray-300'}`}
-                      aria-hidden="true"
-                    />
-                  ))}
-                </div>
-              </div>
-            )
-          }
-          return (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-              {cards}
-            </div>
-          )
-        })()}
-
-        {/* Quick Actions banner */}
-        <div className="hidden md:block relative overflow-hidden rounded-2xl shadow-elevated p-4 text-white bg-gradient-to-r from-brand-600 via-indigo-600 to-fuchsia-600">
-          <div className="pointer-events-none absolute -top-8 right-0 w-40 h-40 rounded-full bg-white/20 blur-2 opacity-20" />
-          <div className="flex items-center justify-between gap-3">
+      {/* Stats row */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+        <div className="bg-white rounded-2xl border border-gray-200 shadow-card p-4">
+          <div className="flex items-start justify-between gap-3">
             <div>
-              <div className="text-xs font-medium text-white/90">Quick Actions</div>
-              <div className="text-base font-semibold">Enroll Student</div>
-              <div className="text-xs text-white/80">Add new enrollment</div>
+              <div className="text-[11px] font-black text-gray-500">Total Students</div>
+              <div className="mt-1 text-2xl font-black text-gray-900">{Number(studentsTotal || 0).toLocaleString()}</div>
+              <div className="mt-1 text-xs font-semibold text-gray-500">All enrolled students</div>
             </div>
-            <button
-              onClick={() => setShowAddStudent(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold bg-white/15 hover:bg-white/25 border border-white/25 backdrop-blur-md transition-colors"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-              </svg>
-              Add New Student
-            </button>
+            <div className="w-10 h-10 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center">👥</div>
           </div>
         </div>
+        <div className="bg-white rounded-2xl border border-gray-200 shadow-card p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <div className="text-[11px] font-black text-gray-500">Male Students</div>
+              <div className="mt-1 text-2xl font-black text-gray-900">{Number(maleCount || 0).toLocaleString()}</div>
+              <div className="mt-1 text-xs font-semibold text-gray-500">{studentsTotal ? `${Math.round((maleCount / (studentsTotal || 1)) * 1000) / 10}% of total` : ''}</div>
+            </div>
+            <div className="w-10 h-10 rounded-2xl bg-sky-50 border border-sky-100 flex items-center justify-center">♂</div>
+          </div>
+        </div>
+        <div className="bg-white rounded-2xl border border-gray-200 shadow-card p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <div className="text-[11px] font-black text-gray-500">Female Students</div>
+              <div className="mt-1 text-2xl font-black text-gray-900">{Number(femaleCount || 0).toLocaleString()}</div>
+              <div className="mt-1 text-xs font-semibold text-gray-500">{studentsTotal ? `${Math.round((femaleCount / (studentsTotal || 1)) * 1000) / 10}% of total` : ''}</div>
+            </div>
+            <div className="w-10 h-10 rounded-2xl bg-rose-50 border border-rose-100 flex items-center justify-center">♀</div>
+          </div>
+        </div>
+        <div className="bg-white rounded-2xl border border-gray-200 shadow-card p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <div className="text-[11px] font-black text-gray-500">New Admissions</div>
+              <div className="mt-1 text-2xl font-black text-gray-900">{Number(summary?.newAdmissionsAcademicYear ?? summary?.newAdmissions ?? 0).toLocaleString()}</div>
+              <div className="mt-1 text-xs font-semibold text-gray-500">This academic year</div>
+            </div>
+            <div className="w-10 h-10 rounded-2xl bg-emerald-50 border border-emerald-100 flex items-center justify-center">➕</div>
+          </div>
+        </div>
+        <div className="bg-white rounded-2xl border border-gray-200 shadow-card p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <div className="text-[11px] font-black text-gray-500">Average Age</div>
+              <div className="mt-1 text-2xl font-black text-gray-900">{summary?.studentsAvgAge != null ? Number(summary.studentsAvgAge).toLocaleString() : '—'}</div>
+              <div className="mt-1 text-xs font-semibold text-gray-500">Years</div>
+            </div>
+            <div className="w-10 h-10 rounded-2xl bg-amber-50 border border-amber-100 flex items-center justify-center">🗓️</div>
+          </div>
+        </div>
+      </div>
 
         <button
           onClick={()=> setShowAddStudent(true)}
@@ -782,130 +764,81 @@ export default function AdminStudents(){
           Enroll
         </button>
 
-        <div className="rounded-[1.75rem] sm:rounded-[2.5rem] border border-white/80 bg-white/95 p-3 shadow-xl shadow-slate-200/70 sm:p-6">
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-            <div className="inline-flex w-full max-w-md rounded-2xl sm:rounded-full bg-slate-100 p-1 shadow-inner">
-              <button
-                className={`flex-1 h-10 px-2 sm:px-4 rounded-xl sm:rounded-full text-[9px] sm:text-[10px] font-black uppercase tracking-widest border transition-all flex items-center justify-center gap-1.5 sm:gap-2 ${
-                  tab==='active'
-                    ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
-                    : 'bg-transparent text-gray-700 border-transparent hover:bg-white'
-                }`}
-                onClick={()=>{ setTab('active'); setSearchTerm(''); setSearchDraft(''); }}
-              >
-                <CheckCircle2 size={14} />
-                Active
-              </button>
-              <button
-                className={`flex-1 h-10 px-2 sm:px-4 rounded-xl sm:rounded-full text-[9px] sm:text-[10px] font-black uppercase tracking-widest border transition-all flex items-center justify-center gap-1.5 sm:gap-2 ${
-                  tab==='graduated'
-                    ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
-                    : 'bg-transparent text-gray-700 border-transparent hover:bg-white'
-                }`}
-                onClick={()=>{ setTab('graduated'); setSearchTerm(''); setSearchDraft(''); }}
-              >
-                <GraduationCap size={14} />
-                Graduated
-              </button>
-              <button
-                className={`flex-1 h-10 px-2 sm:px-4 rounded-xl sm:rounded-full text-[9px] sm:text-[10px] font-black uppercase tracking-widest border transition-all flex items-center justify-center gap-1.5 sm:gap-2 ${
-                  tab==='inactive'
-                    ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
-                    : 'bg-transparent text-gray-700 border-transparent hover:bg-white'
-                }`}
-                onClick={()=>{ setTab('inactive'); setSearchTerm(''); setSearchDraft(''); }}
-              >
-                <UserX size={14} />
-                Inactive
-              </button>
+      {/* Filters row (exact screenshot placement) */}
+      <div className="bg-white rounded-2xl border border-gray-200 shadow-card p-4">
+        <div className="flex flex-col lg:flex-row lg:items-center gap-3">
+          <div className="flex-1 flex flex-col sm:flex-row items-stretch gap-3">
+            <div className="relative flex-1">
+              <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Search students by name, roll number, or email..."
+                value={searchDraft}
+                onChange={(e) => setSearchDraft(e.target.value)}
+                className="h-11 w-full bg-white border border-slate-200 rounded-xl pl-11 pr-4 text-sm font-semibold focus:border-indigo-500 transition-all outline-none"
+              />
             </div>
 
-            <div className="grid grid-cols-2 sm:flex sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 w-full lg:w-auto">
-              <div className="relative col-span-2 w-full sm:w-[340px]">
-                <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
-                <input
-                  type="text"
-                  placeholder="Search students..."
-                  value={searchDraft}
-                  onChange={(e) => setSearchDraft(e.target.value)}
-                  className="h-12 w-full bg-slate-50 border border-slate-200 rounded-2xl pl-11 pr-4 text-sm font-semibold focus:border-indigo-500 focus:bg-white transition-all outline-none"
-                />
-              </div>
-              <button
-                onClick={()=> setSearchTerm(searchDraft)}
-                className="h-12 px-4 sm:px-6 rounded-2xl bg-gray-950 text-white font-black text-[10px] uppercase tracking-widest shadow-lg hover:bg-gray-800 transition-all active:scale-95 flex items-center gap-2 justify-center"
-              >
-                <Search size={16} />
-                Search
-              </button>
-              <button
-                type="button"
-                onClick={()=> setShowFilters(v=>!v)}
-                className={`h-12 px-4 sm:px-5 rounded-2xl border font-black text-[10px] uppercase tracking-widest transition-all flex items-center gap-2 justify-center ${showFilters ? 'bg-indigo-600 text-white border-indigo-600 shadow-lg shadow-indigo-200' : 'bg-white text-gray-700 border-slate-200 hover:border-gray-900 hover:text-gray-900 shadow-sm'}`}
-              >
-                <SlidersHorizontal size={16} />
-                Filters
-              </button>
-              {(filterGrade || filterClass || filterGender || searchTerm) && (
-                <button
-                  type="button"
-                  onClick={()=>{ setFilterGrade(''); setFilterClass(''); setFilterGender(''); setSearchTerm(''); setSearchDraft('') }}
-                  className="col-span-2 sm:col-span-1 h-12 px-5 rounded-2xl bg-white border border-gray-100 text-gray-600 font-black text-[10px] uppercase tracking-widest hover:border-rose-200 hover:text-rose-600 transition-all flex items-center gap-2 justify-center"
-                >
-                  <X size={16} />
-                  Clear
-                </button>
-              )}
-            </div>
+            <select
+              value={filterClass}
+              onChange={(e)=>{ setFilterClass(e.target.value); setPage(1) }}
+              className="h-11 w-full sm:w-44 bg-white border border-slate-200 rounded-xl px-3 text-sm font-semibold focus:border-indigo-500 transition-all outline-none"
+            >
+              <option value="">All Classes</option>
+              {classOptions.map(c => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+
+            <select
+              value={filterGender}
+              onChange={(e)=>{ setFilterGender(e.target.value); setPage(1) }}
+              className="h-11 w-full sm:w-40 bg-white border border-slate-200 rounded-xl px-3 text-sm font-semibold focus:border-indigo-500 transition-all outline-none"
+            >
+              <option value="">All Gender</option>
+              <option value="Male">Male</option>
+              <option value="Female">Female</option>
+            </select>
+
+            <select
+              value={filterStatus}
+              onChange={(e)=>{
+                const v = e.target.value
+                setFilterStatus(v)
+                setPage(1)
+                if (v === 'graduated') setTab('graduated')
+                else if (v === 'inactive') setTab('inactive')
+                else if (v === 'active') setTab('active')
+                else setTab('all')
+              }}
+              className="h-11 w-full sm:w-40 bg-white border border-slate-200 rounded-xl px-3 text-sm font-semibold focus:border-indigo-500 transition-all outline-none"
+            >
+              <option value="all">All Status</option>
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+              <option value="graduated">Graduated</option>
+            </select>
           </div>
 
-          {showFilters && (
-            <div className="mt-4 sm:mt-6 grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4 rounded-3xl border border-slate-100 bg-slate-50/80 p-3 sm:border-0 sm:bg-transparent sm:p-0">
-              {tab==='active' && (
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Grade</label>
-                  <select
-                    value={filterGrade}
-                    onChange={(e)=>{ setFilterGrade(e.target.value); setFilterClass('') }}
-                    className="h-11 w-full bg-white border border-slate-200 rounded-2xl px-4 text-sm font-semibold focus:border-indigo-500 transition-all outline-none"
-                  >
-                    <option value="">All Grades</option>
-                    {gradeOptions.map(g => (
-                      <option key={g} value={g}>Grade {g}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
-              {tab==='active' && (
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Class</label>
-                  <select
-                    value={filterClass}
-                    onChange={(e)=>setFilterClass(e.target.value)}
-                    className="h-11 w-full bg-white border border-slate-200 rounded-2xl px-4 text-sm font-semibold focus:border-indigo-500 transition-all outline-none"
-                  >
-                    <option value="">All Classes</option>
-                    {classOptions.map(c => (
-                      <option key={c.id} value={c.id}>{c.name} {c.grade_level ? `- ${c.grade_level}` : ''}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Gender</label>
-                <select
-                  value={filterGender}
-                  onChange={(e)=>setFilterGender(e.target.value)}
-                  className="h-11 w-full bg-white border border-slate-200 rounded-2xl px-4 text-sm font-semibold focus:border-indigo-500 transition-all outline-none"
-                >
-                  <option value="">All Genders</option>
-                  <option value="Male">Male</option>
-                  <option value="Female">Female</option>
-                </select>
-              </div>
-            </div>
-          )}
+          <div className="flex items-center justify-end gap-2">
+            <button
+              onClick={handleDownload}
+              disabled={exporting}
+              className="h-11 px-4 rounded-xl bg-white border border-gray-200 text-gray-700 font-black text-xs hover:bg-gray-50 disabled:opacity-60 inline-flex items-center gap-2"
+            >
+              <Download size={16} />
+              Export
+            </button>
+            <button
+              onClick={() => setShowAddStudent(true)}
+              className="h-11 px-4 rounded-xl bg-indigo-600 text-white font-black text-xs hover:bg-indigo-700 inline-flex items-center gap-2"
+            >
+              <UserPlus size={16} />
+              Add Student
+            </button>
+          </div>
         </div>
+      </div>
 
         {/* Mobile Card List */}
         <div className="sm:hidden space-y-3">
@@ -991,216 +924,140 @@ export default function AdminStudents(){
           </div>
         )}
 
-        {/* Students Table (desktop) */}
-        <div className="hidden sm:block bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden backdrop-blur-sm">
-          <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-xl font-bold text-gray-900">{searchTerm ? 'Search Results' : (tab==='active' ? 'Active Students' : (tab==='inactive' ? 'Inactive Students' : 'Graduated Students'))}</h2>
-                <p className="text-sm text-gray-600 mt-1">
-                  {filteredStudents.length} of {studentsTotal} students
-                  {searchTerm && ` matching \"${searchTerm}\"`}
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={()=> openBulk('gender')}
-                  disabled={selectedCount === 0}
-                  className="px-3 py-1.5 text-xs rounded-md bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-                >
-                  Bulk Gender{selectedCount ? ` (${selectedCount})` : ''}
-                </button>
-                <button
-                  onClick={()=> openBulk('klass')}
-                  disabled={selectedCount === 0}
-                  className="px-3 py-1.5 text-xs rounded-md bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-                >
-                  Bulk Class{selectedCount ? ` (${selectedCount})` : ''}
-                </button>
-                <button
-                  onClick={()=> openBulk('boarding_status')}
-                  disabled={selectedCount === 0}
-                  className="px-3 py-1.5 text-xs rounded-md bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-                >
-                  Bulk Boarding{selectedCount ? ` (${selectedCount})` : ''}
-                </button>
-                <button
-                  onClick={()=> openBulk('delete')}
-                  disabled={selectedCount === 0}
-                  className="px-3 py-1.5 text-xs rounded-md bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
-                >
-                  Delete Selected{selectedCount ? ` (${selectedCount})` : ''}
-                </button>
-                {selectedCount > 0 && (
-                  <button
-                    onClick={()=> setSelectedStudentIds([])}
-                    className="px-3 py-1.5 text-xs rounded-md bg-gray-100 text-gray-700 hover:bg-gray-200"
-                  >
-                    Clear Selection
-                  </button>
-                )}
-                <div className="flex items-center gap-1 text-sm text-gray-500">
-                  <div className={`w-2 h-2 rounded-full ${tab==='active'?'bg-green-400': (tab==='inactive'?'bg-red-400':'bg-gray-400')}`}></div>
-                  {tab==='active'?'Active': (tab==='inactive'?'Inactive':'Graduated')}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50/80">
-                <tr>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                    <input
-                      type="checkbox"
-                      checked={allVisibleSelected}
-                      onChange={toggleSelectAllVisible}
-                      aria-label="Select all"
-                    />
-                  </th>
-                  <th className="px-5 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                    Student Details
-                  </th>
-                  <th className="px-5 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                    Class Info
-                  </th>
-                  <th className="px-5 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                    Contact
-                  </th>
-                  <th className="px-5 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {isLoading ? (
-                  <tr>
-                    <td colSpan="5" className="px-5 py-12 text-center">
-                      <div className="flex items-center justify-center gap-3 text-gray-600">
-                        <svg className="animate-spin h-6 w-6 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
-                        </svg>
-                        <span>Loading students...</span>
-                      </div>
-                    </td>
-                  </tr>
-                ) : filteredStudents.length === 0 ? (
-                  <tr>
-                    <td colSpan="5" className="px-5 py-16 text-center">
-                      <div className="text-gray-500">
-                        <svg className="mx-auto h-12 w-12 text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                        </svg>
-                        <p className="text-lg font-semibold text-gray-600">No students found</p>
-                        <p className="text-sm text-gray-500 mt-2">
-                          {searchTerm ? 'Try adjusting your search terms' : 'Get started by enrolling your first student'}
-                        </p>
-                      </div>
-                    </td>
-                  </tr>
-                ) : (
-                  filteredStudents.map((s, index) => (
-                    <tr key={s.id} className="hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50 transition-all duration-200 group">
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        <input
-                          type="checkbox"
-                          checked={selectedSet.has(s.id)}
-                          onChange={()=> toggleSelectStudent(s.id)}
-                          aria-label={`Select ${s.name}`}
-                        />
-                      </td>
-                      <td className="px-5 py-3 whitespace-nowrap">
-                        <div className="flex items-center">
-                          <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-semibold text-sm mr-4 shadow-md">
-                            {s.name.split(' ').map(n => n[0]).join('').toUpperCase()}
+      {/* Students table (screenshot style) */}
+      <div className="bg-white rounded-2xl border border-gray-200 shadow-card overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-sm">
+            <thead className="bg-gray-50/80 text-[10px] uppercase tracking-wider text-gray-500 border-b">
+              <tr>
+                <th className="py-3 px-5 text-left">Student</th>
+                <th className="py-3 px-5 text-left">Roll Number</th>
+                <th className="py-3 px-5 text-left">Class</th>
+                <th className="py-3 px-5 text-left">Date of Birth</th>
+                <th className="py-3 px-5 text-left">Gender</th>
+                <th className="py-3 px-5 text-left">Parent/Guardian</th>
+                <th className="py-3 px-5 text-left">Status</th>
+                <th className="py-3 px-5 text-right">Action</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {isLoading ? (
+                <tr><td colSpan={8} className="py-10 text-center text-gray-500 font-semibold">Loading students...</td></tr>
+              ) : filteredStudents.length === 0 ? (
+                <tr><td colSpan={8} className="py-10 text-center text-gray-500 font-semibold">No students found.</td></tr>
+              ) : (
+                filteredStudents.map((s) => {
+                  const name = s?.name || 'Student'
+                  const email = s?.email || ''
+                  const roll = s?.admission_no || '—'
+                  const klassName = s?.klass_detail?.name || 'Not Assigned'
+                  const dob = s?.dob ? new Date(s.dob).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '—'
+                  const gender = String(s?.gender || '').toLowerCase()
+                  const guardianName = s?.guardian_name || '—'
+                  const guardianPhone = s?.guardian_id || ''
+                  const isActive = typeof s?.is_active === 'boolean' ? s.is_active : true
+                  return (
+                    <tr key={s.id} className="text-gray-800">
+                      <td className="py-3 px-5">
+                        <div className="flex items-center gap-3">
+                          <div className="w-9 h-9 rounded-full bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-700 font-black text-xs">
+                            {String(name).split(' ').map((p) => p[0]).slice(0, 2).join('').toUpperCase()}
                           </div>
-                          <div>
-                            <Link
-                              className="text-blue-600 hover:text-blue-800 font-semibold text-base hover:underline transition-colors"
-                              to={`/admin/students/${s.id}`}
-                            >
-                              {s.name}
-                            </Link>
-                            <p className="text-sm text-gray-500 font-mono">{s.admission_no}</p>
+                          <div className="min-w-0">
+                            <Link to={`/admin/students/${s.id}`} className="font-bold text-gray-900 hover:underline truncate block">{name}</Link>
+                            <div className="text-xs text-gray-500 truncate">{email}</div>
                           </div>
                         </div>
                       </td>
-                      <td className="px-5 py-3 whitespace-nowrap">
-                        {tab==='active' ? (
-                          <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-emerald-100 text-emerald-800 border border-emerald-200">
-                            <div className="w-2 h-2 rounded-full bg-emerald-500 mr-2"></div>
-                            {s.klass_detail?.name || s.klass || 'Not Assigned'}
-                          </span>
-                        ) : tab==='inactive' ? (
-                          <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-red-100 text-red-800 border border-red-200">
-                            <div className="w-2 h-2 rounded-full bg-red-500 mr-2"></div>
-                            Inactive
-                          </span>
+                      <td className="py-3 px-5 text-gray-700 font-semibold">{roll}</td>
+                      <td className="py-3 px-5 text-gray-700 font-semibold">{klassName}</td>
+                      <td className="py-3 px-5 text-gray-700 font-semibold">{dob}</td>
+                      <td className="py-3 px-5">
+                        {gender ? (
+                          <span className={`inline-flex px-2 py-1 rounded-full text-xs font-bold border ${
+                            gender === 'female' ? 'bg-rose-50 text-rose-700 border-rose-200' : 'bg-sky-50 text-sky-700 border-sky-200'
+                          }`}>{gender === 'female' ? 'Female' : 'Male'}</span>
                         ) : (
-                          <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-gray-100 text-gray-800 border border-gray-200">
-                            <div className="w-2 h-2 rounded-full bg-gray-500 mr-2"></div>
-                            Graduated{s.graduation_year ? ` • ${s.graduation_year}` : ''}
-                          </span>
+                          <span className="text-gray-500">—</span>
                         )}
                       </td>
-                      <td className="px-5 py-3 whitespace-nowrap">
-                        <div className="text-sm text-gray-900 font-medium">{s.guardian_id || 'N/A'}</div>
-                        <div className="text-xs text-gray-500">Guardian Phone</div>
+                      <td className="py-3 px-5">
+                        <div className="text-sm font-bold text-gray-900">{guardianName}</div>
+                        <div className="text-xs text-gray-500">{guardianPhone || ''}</div>
                       </td>
-                      <td className="px-5 py-3 whitespace-nowrap text-sm font-medium">
-                        <div className="flex items-center gap-2">
-                          <Link
-                            to={`/admin/students/${s.id}`}
-                            className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-indigo-700 bg-indigo-100 hover:bg-indigo-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all duration-200"
-                          >
-                            <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                            </svg>
-                            View Details
-                          </Link>
+                      <td className="py-3 px-5">
+                        <span className={`inline-flex px-2 py-1 rounded-full text-xs font-bold border ${
+                          isActive ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-gray-50 text-gray-600 border-gray-200'
+                        }`}>{isActive ? 'Active' : 'Inactive'}</span>
+                      </td>
+                      <td className="py-3 px-5 text-right">
+                        <div className="inline-flex items-center gap-2">
                           <button
-                            onClick={()=>handleAction(s, 'deactivate')}
-                            className={`inline-flex items-center px-3 py-1.5 border text-xs font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 transition-all duration-200 ${s.is_active ? 'text-red-700 bg-red-100 hover:bg-red-200 border-transparent focus:ring-red-500' : 'text-emerald-700 bg-emerald-100 hover:bg-emerald-200 border-transparent focus:ring-emerald-500'}`}
+                            type="button"
+                            onClick={() => navigate(`/admin/students/${s.id}`)}
+                            className="w-9 h-9 rounded-xl bg-transparent hover:bg-gray-100 text-gray-500 hover:text-gray-900"
+                            title="View"
+                            aria-label="View"
                           >
-                            <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v8m-4-4h8" />
-                            </svg>
-                            {s.is_active ? 'Deactivate' : 'Activate'}
+                            ⋮
                           </button>
                           <button
-                            onClick={()=>handleAction(s, 'transfer')}
-                            className="inline-flex items-center px-3 py-1.5 border border-blue-200 text-xs font-medium rounded-md text-blue-700 bg-blue-50 hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200"
-                          >
-                            ✈️ Transfer
-                          </button>
-                          <button
-                            onClick={()=>handleAction(s, 'delete')}
-                            className="inline-flex items-center px-3 py-1.5 border border-rose-200 text-xs font-medium rounded-md text-rose-700 bg-rose-50 hover:bg-rose-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-rose-500 transition-all duration-200"
-                          >
-                            🗑️ Delete
-                          </button>
+                            type="button"
+                            onClick={() => handleAction(s, 'deactivate')}
+                            className="hidden"
+                            aria-hidden="true"
+                          />
                         </div>
                       </td>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-            {/* Load More row */}
-            {studentsNext && (
-              <div className="px-5 py-3 border-t bg-white flex justify-center">
+                  )
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="px-5 py-4 border-t bg-white flex items-center justify-between">
+          <div className="text-xs font-semibold text-gray-500">
+            Showing {showingFrom} to {showingTo} of {Number(studentsTotal || 0).toLocaleString()} students
+          </div>
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setPage((p) => Math.max(1, Number(p || 1) - 1))}
+              disabled={Number(page || 1) <= 1}
+              className="w-8 h-8 rounded-lg border border-gray-200 bg-white disabled:opacity-50"
+              aria-label="Previous page"
+              title="Previous"
+            >
+              ‹
+            </button>
+            {pageButtons.map((p, idx) => (
+              p === '…' ? (
+                <span key={`dots-${idx}`} className="px-2 text-sm text-gray-400">…</span>
+              ) : (
                 <button
-                  onClick={loadMore}
-                  disabled={loadingMore}
-                  className="px-4 py-2 text-sm rounded-md bg-blue-600 text-white disabled:opacity-60"
+                  key={p}
+                  type="button"
+                  onClick={() => setPage(Number(p))}
+                  className={`w-8 h-8 rounded-lg text-sm font-bold border ${
+                    Number(page || 1) === Number(p) ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
+                  }`}
                 >
-                  {loadingMore ? 'Loading…' : 'Load More'}
+                  {p}
                 </button>
-              </div>
-            )}
+              )
+            ))}
+            <button
+              type="button"
+              onClick={() => setPage((p) => Math.min(totalPages, Number(p || 1) + 1))}
+              disabled={Number(page || 1) >= totalPages}
+              className="w-8 h-8 rounded-lg border border-gray-200 bg-white disabled:opacity-50"
+              aria-label="Next page"
+              title="Next"
+            >
+              ›
+            </button>
           </div>
         </div>
       </div>

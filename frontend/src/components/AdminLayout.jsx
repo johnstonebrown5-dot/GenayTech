@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect } from 'react'
+import React, { useMemo, useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth'
@@ -130,7 +130,6 @@ const navItems = [
   { to: '/admin/timetable', label: 'Timetable', icon: 'timetable' },
   { to: '/admin/messages', label: 'Communication', icon: 'messages' },
   { to: '/admin/communication-logs', label: 'Comm Logs', icon: 'logs' },
-  { to: '/admin/website', label: 'Website', icon: 'website' },
 ]
 
 export default function AdminLayout({ children }){
@@ -158,6 +157,8 @@ export default function AdminLayout({ children }){
   const [dismissedIds, setDismissedIds] = useState(() => {
     try { return JSON.parse(localStorage.getItem('dismissed_broadcast_ids') || '[]') } catch { return [] }
   })
+  const broadcastRef = useRef(null)
+  const [broadcastHeight, setBroadcastHeight] = useState(0)
 
   const dismissBanner = (id) => {
     if (!id) return
@@ -222,6 +223,21 @@ export default function AdminLayout({ children }){
       document.title = schoolName ? schoolName : 'Genay Technologies'
     }
   }, [schoolName])
+
+  // Measure broadcast banner height (so sidebar height/top can be exact)
+  useEffect(() => {
+    const measure = () => {
+      try {
+        const h = broadcastRef.current ? Math.round(broadcastRef.current.getBoundingClientRect().height || 0) : 0
+        setBroadcastHeight(Number.isFinite(h) ? h : 0)
+      } catch {
+        setBroadcastHeight(0)
+      }
+    }
+    measure()
+    try { window.addEventListener('resize', measure) } catch {}
+    return () => { try { window.removeEventListener('resize', measure) } catch {} }
+  }, [broadcastBanner, bannerExpanded])
 
   // Ensure we have an up-to-date active status for the current user (and avatar)
   useEffect(() => {
@@ -375,6 +391,9 @@ export default function AdminLayout({ children }){
   }, [])
 
   const sidebarBase = isOpen ? 'w-72' : 'w-20'
+  // Sidebar is offset from the viewport by ~0.75rem on the left + ~0.75rem gap.
+  // So content should shift by (sidebar width + left offset + gap).
+  const desktopOffset = isOpen ? 'md:ml-[19.5rem]' : 'md:ml-[6.5rem]'
 
   const userDisplayName = useMemo(() => {
     const first = String(user?.first_name || '').trim()
@@ -392,7 +411,7 @@ export default function AdminLayout({ children }){
   return (
     <div className="min-h-screen bg-[#f6f7fb]">
       {broadcastBanner && (
-        <div className="sticky top-0 z-40 w-full bg-red-600 text-white">
+        <div ref={broadcastRef} className="sticky top-0 z-40 w-full bg-red-600 text-white">
           <div className="max-w-screen-2xl mx-auto px-3 sm:px-4 md:px-6 py-2 flex items-start gap-2">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5 mt-0.5">
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M10.29 3.86l-8.48 14.7A1 1 0 002.62 20h18.76a1 1 0 00.86-1.5l-8.48-14.64a1 1 0 00-1.73 0z" />
@@ -418,8 +437,8 @@ export default function AdminLayout({ children }){
         </div>
       )}
       {/* Top bar (screenshot-style) */}
-      <header className="sticky top-0 z-30 bg-white/90 backdrop-blur-xl supports-[backdrop-filter]:bg-white/70 border-b border-gray-200 h-16 pt-[env(safe-area-inset-top)]">
-        <div className="max-w-screen-2xl mx-auto h-full flex items-center gap-3 px-3 sm:px-4 md:px-6">
+      <header className={`sticky top-0 z-30 bg-white/90 backdrop-blur-xl supports-[backdrop-filter]:bg-white/70 border-b border-gray-200 h-16 pt-[env(safe-area-inset-top)] ${desktopOffset} md:mr-3`}>
+        <div className="w-full h-full flex items-center gap-3 px-3 sm:px-4 md:px-6">
           {/* Sidebar toggle */}
           <button
             className="hidden md:inline-flex p-2 rounded-xl hover:bg-gray-100 border border-transparent hover:border-gray-200 transition"
@@ -443,7 +462,7 @@ export default function AdminLayout({ children }){
                 value={searchValue}
                 onChange={(e) => setSearchValue(e.target.value)}
                 placeholder="Search students, teachers, classes..."
-                className="w-full h-10 rounded-xl border border-gray-200 bg-white pl-10 pr-3 text-sm font-medium text-gray-800 placeholder:text-gray-400 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                className="w-full h-10 rounded-full border border-gray-200 bg-white pl-10 pr-3 text-sm font-semibold text-gray-800 placeholder:text-gray-400 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-200"
               />
             </div>
           </div>
@@ -473,9 +492,9 @@ export default function AdminLayout({ children }){
               <button
                 type="button"
                 onClick={() => setAddMenuOpen(v => !v)}
-                className="inline-flex items-center gap-2 h-10 px-3 rounded-xl bg-indigo-600 text-white font-semibold shadow-soft hover:bg-indigo-700"
+                className="inline-flex items-center gap-2 h-10 pl-2 pr-3 rounded-full bg-indigo-600 text-white font-black shadow-soft hover:bg-indigo-700"
               >
-                <span className="inline-flex items-center justify-center w-6 h-6 rounded-lg bg-white/15">
+                <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-white/15">
                   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M12 5v14M5 12h14" />
                   </svg>
@@ -582,8 +601,13 @@ export default function AdminLayout({ children }){
 
         {/* Sidebar */}
         <aside
-          className={`fixed z-40 left-0 bottom-0 transition-all duration-200 ${sidebarBase} hidden md:flex flex-col shadow-2xl bg-[#0b1020]`}
-          style={{ top: broadcastBanner ? 'calc(4rem + env(safe-area-inset-top) + 40px)' : 'calc(4rem + env(safe-area-inset-top))' }}
+          className={`fixed z-40 left-3 transition-all duration-200 ${sidebarBase} hidden md:flex flex-col shadow-2xl bg-[#0b1020] rounded-2xl border border-white/10 overflow-hidden`}
+          style={{
+            // Sidebar starts at the top (next to the header), not under the header.
+            // Only broadcast banner (if present) should push it down.
+            top: `calc(${broadcastHeight}px + env(safe-area-inset-top) + 0.75rem)`,
+            bottom: 'calc(env(safe-area-inset-bottom) + 0.75rem)',
+          }}
         >
           {/* Brand */}
           <div className="px-4 pt-4 pb-3 border-b border-white/10">
@@ -719,7 +743,7 @@ export default function AdminLayout({ children }){
         </aside>
 
         {/* Content area */}
-        <main className={`transition-all duration-200 px-4 md:px-6 pt-5 pb-24 md:py-7 ${isOpen? 'md:ml-72':'md:ml-20'}`}>
+        <main className={`transition-all duration-200 px-4 md:px-6 pt-5 pb-24 md:py-7 ${desktopOffset} md:mr-3`}>
           {children}
         </main>
       </div>

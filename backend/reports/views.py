@@ -7,7 +7,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from django.core.cache import cache
 
-from academics.models import Student, Class as Klass, Attendance, Assessment, ExamResult
+from academics.models import Student, Class as Klass, Attendance, Assessment, ExamResult, StudentClassHistory, AcademicYear
 from finance.models import Invoice, Payment
 from accounts.models import User
 
@@ -59,6 +59,26 @@ def summary(request):
         'invoices': inv_qs.count(),
         'paid_invoices': inv_qs.filter(status='paid').count()
     }
+
+    # Students by grade (for dashboard charts)
+    students_by_grade = {}
+    try:
+        grade_rows = (
+            st_qs
+            .filter(klass__isnull=False)
+            .values('klass__grade_level')
+            .annotate(count=Count('id'))
+            .order_by('klass__grade_level')
+        )
+        for row in grade_rows:
+            gl = row.get('klass__grade_level')
+            if gl:
+                students_by_grade[str(gl)] = int(row.get('count') or 0)
+        unassigned = st_qs.filter(klass__isnull=True).count()
+        if unassigned:
+            students_by_grade['Unassigned'] = int(unassigned)
+    except Exception:
+        students_by_grade = {}
     
     # Attendance aggregation in one query
     recent_att = att_qs.filter(date__gte=since)
@@ -159,6 +179,44 @@ def summary(request):
         'attendance': pct_change(att_rate_curr, att_rate_prev),
         'feesCollected': pct_change(fees_collected_curr, fees_collected_prev),
     }
+
+    # Students average age (years)
+    students_avg_age = None
+    try:
+        avg_dob = st_qs.exclude(dob__isnull=True).aggregate(avg=Avg('dob')).get('avg')
+        if avg_dob:
+            age_days = (today - avg_dob).days
+            students_avg_age = round(float(age_days) / 365.25, 1)
+    except Exception:
+        students_avg_age = None
+
+    # New admissions (StudentClassHistory records)
+    new_admissions_30d = 0
+    new_admissions_academic_year = 0
+    try:
+        hist_qs = StudentClassHistory.objects.all()
+        if school:
+            # Scope to school via related classes (best-effort for all actions)
+            hist_qs = hist_qs.filter(Q(to_class__school=school) | Q(from_class__school=school))
+        assigned_qs = hist_qs.filter(action='assigned')
+        new_admissions_30d = assigned_qs.filter(created_at__date__gte=since).count()
+
+        # Academic-year scope (best effort: based on student's school's current AcademicYear)
+        try:
+            ay = AcademicYear.objects.filter(school=school, start_date__lte=today, end_date__gte=today).first() if school else None
+        except Exception:
+            ay = None
+        if ay:
+            new_admissions_academic_year = assigned_qs.filter(created_at__date__gte=ay.start_date, created_at__date__lte=ay.end_date).count()
+        else:
+            new_admissions_academic_year = 0
+
+        admissions_curr = assigned_qs.filter(created_at__date__gte=current_month_start, created_at__date__lte=today).count()
+        admissions_prev = assigned_qs.filter(created_at__date__gte=prev_month_start, created_at__date__lte=prev_month_end).count()
+        trends['newAdmissions'] = pct_change(admissions_curr, admissions_prev)
+    except Exception:
+        new_admissions_30d = 0
+        new_admissions_academic_year = 0
     
     # Academic Performance - single query with aggregation using ExamResult
     academic_stats = exam_results_qs.aggregate(
@@ -210,6 +268,11 @@ def summary(request):
         'classes': counts['classes'],
         'attendanceRate': attendance_rate,
         'trends': trends,
+        # Back-compat: keep `newAdmissions` as "last 30 days"
+        'newAdmissions': new_admissions_30d,
+        'newAdmissionsAcademicYear': new_admissions_academic_year,
+        'studentsByGrade': students_by_grade,
+        'studentsAvgAge': students_avg_age,
         'fees': {
             'collected': float(finance_stats['collected']),
             'outstanding': float(finance_stats['outstanding']),

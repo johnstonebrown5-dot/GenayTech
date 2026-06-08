@@ -14,7 +14,48 @@ import {
   Legend,
 } from 'chart.js'
 
-ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Tooltip, Legend)
+const centerTextPlugin = {
+  id: 'centerText',
+  afterDraw: (chart, _args, pluginOptions) => {
+    try {
+      const opts = pluginOptions || {}
+      const meta = chart.getDatasetMeta(0)
+      const first = meta?.data?.[0]
+      if (!first) return
+
+      const text = opts.text ?? ''
+      const subtext = opts.subtext ?? ''
+      if (!text && !subtext) return
+
+      const { ctx } = chart
+      const x = first.x
+      const y = first.y
+
+      ctx.save()
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'middle'
+
+      const mainSize = Number(opts.fontSize || 22)
+      const subSize = Number(opts.subFontSize || 11)
+
+      ctx.fillStyle = opts.color || '#111827'
+      ctx.font = `900 ${mainSize}px Inter, ui-sans-serif, system-ui`
+      ctx.fillText(String(text), x, subtext ? y - 6 : y)
+
+      if (subtext) {
+        ctx.fillStyle = opts.subColor || '#6b7280'
+        ctx.font = `800 ${subSize}px Inter, ui-sans-serif, system-ui`
+        ctx.fillText(String(subtext), x, y + 16)
+      }
+
+      ctx.restore()
+    } catch (e) {
+      // no-op
+    }
+  },
+}
+
+ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Tooltip, Legend, centerTextPlugin)
 
 function Card({ title, right, children, className = '' }) {
   return (
@@ -61,6 +102,20 @@ function StatMini({ icon, label, value, trend, trendColor = 'text-emerald-600', 
 function formatKES(n) {
   const v = Number(n || 0)
   return `KES ${v.toLocaleString()}`
+}
+
+function timeAgo(value) {
+  if (!value) return ''
+  const d = new Date(value)
+  if (Number.isNaN(d.getTime())) return ''
+  const diffMs = Date.now() - d.getTime()
+  const diffMin = Math.floor(diffMs / 60000)
+  if (diffMin < 1) return 'just now'
+  if (diffMin < 60) return `${diffMin}m ago`
+  const diffHr = Math.floor(diffMin / 60)
+  if (diffHr < 24) return `${diffHr}h ago`
+  const diffDay = Math.floor(diffHr / 24)
+  return `${diffDay}d ago`
 }
 
 export default function AdminDashboard() {
@@ -120,11 +175,53 @@ export default function AdminDashboard() {
         })
 
         const activityItems = []
-        if (students.length > 0) activityItems.push({ icon: '🎓', title: 'New student admitted', subtitle: students[0]?.full_name || students[0]?.name || 'Student', when: '2m ago' })
-        if (payments.length > 0) activityItems.push({ icon: '💳', title: 'Fee payment received', subtitle: formatKES(payments[0]?.amount || payments[0]?.paid_amount || 0), when: '18m ago' })
-        if (summary?.attendanceRate != null) activityItems.push({ icon: '✅', title: 'Attendance updated', subtitle: `Rate: ${Number(summary.attendanceRate || 0)}%`, when: '1h ago' })
-        if (exams.length > 0) activityItems.push({ icon: '📝', title: 'Exam uploaded', subtitle: exams[0]?.name || 'Exam', when: '2h ago' })
-        if (teachers.length > 0) activityItems.push({ icon: '👩‍🏫', title: 'New teacher added', subtitle: teachers[0]?.name || teachers[0]?.full_name || 'Teacher', when: '3h ago' })
+
+        const newestPayment = (payments || [])
+          .slice()
+          .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))[0]
+        if (newestPayment?.created_at) {
+          activityItems.push({
+            icon: '💳',
+            title: 'Fee payment received',
+            subtitle: `${newestPayment?.student?.name || 'Student'} • ${formatKES(newestPayment?.amount || 0)}`,
+            when: timeAgo(newestPayment.created_at),
+          })
+        }
+
+        const newestEvent = (baseEvents || [])
+          .slice()
+          .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))[0]
+        if (newestEvent?.created_at) {
+          activityItems.push({
+            icon: '📅',
+            title: 'Event scheduled',
+            subtitle: newestEvent?.title || 'Event',
+            when: timeAgo(newestEvent.created_at),
+          })
+        }
+
+        const newestPublishedExam = (exams || [])
+          .filter((x) => x?.published_at)
+          .slice()
+          .sort((a, b) => new Date(b.published_at || 0) - new Date(a.published_at || 0))[0]
+        if (newestPublishedExam?.published_at) {
+          activityItems.push({
+            icon: '📝',
+            title: 'Exam published',
+            subtitle: newestPublishedExam?.name || 'Exam',
+            when: timeAgo(newestPublishedExam.published_at),
+          })
+        }
+
+        const latestAttendance = Array.isArray(summary?.attendanceTrend) ? summary.attendanceTrend[summary.attendanceTrend.length - 1] : null
+        if (latestAttendance?.date) {
+          activityItems.push({
+            icon: '✅',
+            title: 'Attendance updated',
+            subtitle: `Rate: ${Number(latestAttendance?.rate || 0)}%`,
+            when: timeAgo(latestAttendance.date),
+          })
+        }
 
         if (!mounted) return
         setStats(summary || { error: true })
@@ -170,28 +267,35 @@ export default function AdminDashboard() {
   const statConfig = useMemo(() => {
     const s = stats || {}
     const feesCollected = s?.fees?.collected ?? s?.feesCollected ?? 0
-    const newAdmissions = s?.newAdmissions ?? s?.new_admissions ?? 12
+    const newAdmissions = s?.newAdmissions ?? s?.new_admissions ?? 0
     return [
-      { icon: '🎓', label: 'Total Students', value: Number(s.students || 0).toLocaleString(), trend: s?.trends?.students ?? 2, onClick: () => navigate('/admin/students') },
-      { icon: '👩‍🏫', label: 'Teachers', value: Number(s.teachers || 0).toLocaleString(), trend: s?.trends?.teachers ?? 0, onClick: () => navigate('/admin/teachers') },
-      { icon: '🏫', label: 'Classes', value: Number(s.classes || 0).toLocaleString(), trend: s?.trends?.classes ?? 0, onClick: () => navigate('/admin/classes') },
-      { icon: '✅', label: 'Attendance', value: `${Number(s.attendanceRate || 0)}%`, trend: s?.trends?.attendance ?? 4, onClick: () => navigate('/admin/reports') },
-      { icon: '💰', label: 'Fees Collected', value: formatKES(feesCollected), trend: s?.trends?.feesCollected ?? 5, onClick: () => navigate('/admin/fees') },
-      { icon: '🧾', label: 'New Admissions', value: Number(newAdmissions || 0).toLocaleString(), trend: s?.trends?.newAdmissions ?? -2, onClick: () => navigate('/admin/students') },
+      { icon: '🎓', label: 'Total Students', value: Number(s.students || 0).toLocaleString(), trend: s?.trends?.students, onClick: () => navigate('/admin/students') },
+      { icon: '👩‍🏫', label: 'Teachers', value: Number(s.teachers || 0).toLocaleString(), trend: s?.trends?.teachers, onClick: () => navigate('/admin/teachers') },
+      { icon: '🏫', label: 'Classes', value: Number(s.classes || 0).toLocaleString(), trend: s?.trends?.classes, onClick: () => navigate('/admin/classes') },
+      { icon: '✅', label: 'Attendance', value: `${Number(s.attendanceRate || 0)}%`, trend: s?.trends?.attendance, onClick: () => navigate('/admin/reports') },
+      { icon: '💰', label: 'Fees Collected', value: formatKES(feesCollected), trend: s?.trends?.feesCollected, onClick: () => navigate('/admin/fees') },
+      { icon: '🧾', label: 'New Admissions', value: Number(newAdmissions || 0).toLocaleString(), trend: s?.trends?.newAdmissions, onClick: () => navigate('/admin/students') },
     ]
   }, [stats, navigate])
 
   const attendanceLine = useMemo(() => {
-    const base = Number(stats?.attendanceRate || 0)
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-    const values = months.map((_, idx) => {
-      const wiggle = Math.sin((idx + 1) * 0.9) * 4 + Math.cos((idx + 1) * 0.4) * 2
-      const v = Math.max(0, Math.min(100, base - 12 + idx * 1.1 + wiggle))
-      return Math.round(v)
-    })
+    const trend = Array.isArray(stats?.attendanceTrend) ? stats.attendanceTrend : null
+    const labels = (trend && trend.length > 0)
+      ? trend.map((t) => {
+        const d = new Date(t.date)
+        return Number.isNaN(d.getTime())
+          ? String(t.date || '')
+          : d.toLocaleDateString(undefined, { month: 'short', day: '2-digit' })
+      })
+      : ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+    const values = (trend && trend.length > 0)
+      ? trend.map((t) => Math.round(Number(t.rate || 0)))
+      : labels.map(() => 0)
+
     return {
       data: {
-        labels: months,
+        labels,
         datasets: [
           {
             label: 'Attendance',
@@ -219,9 +323,10 @@ export default function AdminDashboard() {
 
   const studentsByGrade = useMemo(() => {
     const raw = stats?.studentsByGrade || stats?.gradeCounts || null
-    const labels = raw && typeof raw === 'object' ? Object.keys(raw) : ['Grade 4', 'Grade 5', 'Grade 6', 'Grade 7']
-    const data = raw && typeof raw === 'object' ? Object.values(raw).map((x) => Number(x || 0)) : [80, 90, 85, 65]
+    const labels = raw && typeof raw === 'object' ? Object.keys(raw) : []
+    const data = raw && typeof raw === 'object' ? Object.values(raw).map((x) => Number(x || 0)) : []
     const total = data.reduce((a, b) => a + b, 0)
+    const palette = ['#4f46e5', '#10b981', '#f59e0b', '#ef4444', '#3b82f6', '#8b5cf6', '#14b8a6', '#f97316', '#22c55e', '#e11d48', '#0ea5e9', '#a855f7']
     return {
       total,
       data: {
@@ -229,12 +334,19 @@ export default function AdminDashboard() {
         datasets: [
           {
             data,
-            backgroundColor: ['#4f46e5', '#10b981', '#f59e0b', '#ef4444'],
+            backgroundColor: labels.map((_, idx) => palette[idx % palette.length]),
             borderWidth: 0,
           },
         ],
       },
-      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { boxWidth: 10, color: '#374151', font: { size: 11, weight: '700' } } } } },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { position: 'right', labels: { boxWidth: 10, color: '#374151', font: { size: 11, weight: '700' } } },
+          centerText: { text: total || 0, subtext: 'Total' },
+        },
+      },
     }
   }, [stats])
 
@@ -350,12 +462,6 @@ export default function AdminDashboard() {
             >
               <div className="relative h-56">
                 <Doughnut data={studentsByGrade.data} options={studentsByGrade.options} />
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                  <div className="text-center">
-                    <div className="text-2xl font-black text-gray-900">{studentsByGrade.total || 0}</div>
-                    <div className="text-xs font-bold text-gray-500">Total</div>
-                  </div>
-                </div>
               </div>
             </Card>
 
@@ -394,10 +500,10 @@ export default function AdminDashboard() {
                 <tbody className="divide-y divide-gray-100">
                   {(recentStudents || []).slice(0, 5).map((st) => {
                     const name = st.full_name || st.name || `${st.first_name || ''} ${st.last_name || ''}`.trim() || 'Student'
-                    const grade = st.grade || st.grade_level || st.level || '-'
-                    const klass = st.class_name || st.classroom || st.klass_name || '-'
-                    const attendance = st.attendance_rate || st.attendanceRate || 92
-                    const fees = st.fees_status || st.feesStatus || (Math.random() > 0.7 ? 'Partial' : 'Paid')
+                    const grade = st?.klass_detail?.grade_level || st.grade || st.grade_level || st.level || '-'
+                    const klass = st?.klass_detail?.name || st.class_name || st.classroom || st.klass_name || '-'
+                    const attendance = st.attendance_rate || st.attendanceRate
+                    const fees = st.fees_status || st.feesStatus
                     const active = typeof st.is_active === 'boolean' ? st.is_active : true
                     return (
                       <tr key={st.id || name} className="text-gray-800">
@@ -414,17 +520,21 @@ export default function AdminDashboard() {
                         </td>
                         <td className="py-3 pr-4">{grade}</td>
                         <td className="py-3 pr-4">{klass}</td>
-                        <td className="py-3 pr-4">{Number(attendance || 0)}%</td>
+                        <td className="py-3 pr-4">{attendance == null ? '—' : `${Number(attendance || 0)}%`}</td>
                         <td className="py-3 pr-4">
-                          <span className={`inline-flex px-2 py-1 rounded-full text-xs font-bold border ${
-                            String(fees).toLowerCase() === 'paid'
-                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                              : String(fees).toLowerCase() === 'partial'
-                              ? 'bg-amber-50 text-amber-700 border-amber-200'
-                              : 'bg-rose-50 text-rose-700 border-rose-200'
-                          }`}>
-                            {fees}
-                          </span>
+                          {fees ? (
+                            <span className={`inline-flex px-2 py-1 rounded-full text-xs font-bold border ${
+                              String(fees).toLowerCase() === 'paid'
+                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                : String(fees).toLowerCase() === 'partial'
+                                ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                : 'bg-rose-50 text-rose-700 border-rose-200'
+                            }`}>
+                              {fees}
+                            </span>
+                          ) : (
+                            <span className="text-gray-500">—</span>
+                          )}
                         </td>
                         <td className="py-3">
                           <span className={`inline-flex px-2 py-1 rounded-full text-xs font-bold border ${
