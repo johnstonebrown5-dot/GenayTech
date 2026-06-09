@@ -93,6 +93,7 @@ import TeacherBlockTimetable from './pages/TeacherBlockTimetable'
 import TeacherEvents from './pages/TeacherEvents'
 import SuperAdminLayout from './components/SuperAdminLayout'
 import SuperAdminDashboard from './pages/SuperAdminDashboard'
+import SuperAdminPlaceholder from './pages/SuperAdminPlaceholder'
 import SuperAdminDemoRequests from './pages/SuperAdminDemoRequests'
 import SuperAdminSchools from './pages/SuperAdminSchools'
 import SuperAdminAnalysis from './pages/SuperAdminAnalysis'
@@ -350,6 +351,11 @@ export default function App() {
             <Route path="/app" element={<RoleRedirect />} />
             <Route path="/superadmin" element={<SuperuserRoute><SuperAdminLayout><Outlet/></SuperAdminLayout></SuperuserRoute>}>
               <Route index element={<SuperAdminDashboard/>} />
+              <Route path="students" element={<SuperAdminPlaceholder title="Students" />} />
+              <Route path="reports" element={<SuperAdminPlaceholder title="Reports" />} />
+              <Route path="communication" element={<SuperAdminPlaceholder title="Communication" />} />
+              <Route path="examinations" element={<SuperAdminPlaceholder title="Examinations" />} />
+              <Route path="human-resource" element={<SuperAdminPlaceholder title="Human Resource" />} />
               <Route path="demo-requests" element={<SuperAdminDemoRequests/>} />
               <Route path="schools" element={<SuperAdminSchools/>} />
               <Route path="analysis" element={<SuperAdminAnalysis/>} />
