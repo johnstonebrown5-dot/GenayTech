@@ -6,6 +6,7 @@ import { uploadToCloudinary } from '../utils/cloudinary'
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Legend)
 
+// Mobile-optimized AdminProfile component  
 export default function AdminProfile(){
   const [me, setMe] = useState(null)
   const [stats, setStats] = useState({ students: 128, teachers: 24, classes: 16, attendance: 98 })
@@ -203,19 +204,19 @@ export default function AdminProfile(){
   if (error) return <div className="p-6 text-center text-red-600">{error}</div>
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-4 md:space-y-6 p-3 md:p-6">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold text-gray-900">My Profile</h1>
-        <p className="mt-1 text-sm text-gray-500">Manage your personal information, security settings and account preferences.</p>
+        <h1 className="text-2xl md:text-3xl font-bold text-gray-900">My Profile</h1>
+        <p className="mt-1 text-xs md:text-sm text-gray-500">Manage your personal information, security settings and account preferences.</p>
       </div>
 
       {me && (
         <>
           {/* Profile Card with Stats */}
-          <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6">
-            <div className="flex flex-col sm:flex-row sm:items-center gap-6 mb-6">
-              <div className="h-28 w-28 rounded-full overflow-hidden ring-4 ring-white shadow-md bg-indigo-50 text-indigo-700 flex items-center justify-center text-4xl flex-shrink-0">
+          <div className="bg-white rounded-2xl md:rounded-3xl border border-gray-100 shadow-sm p-3 md:p-6">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-4 md:gap-6 mb-4 md:mb-6">
+              <div className="h-20 w-20 md:h-28 md:w-28 rounded-full overflow-hidden ring-2 md:ring-4 ring-white shadow-md bg-indigo-50 text-indigo-700 flex items-center justify-center text-2xl md:text-4xl flex-shrink-0">
                 {avatarPreview ? (
                   <img src={avatarPreview} alt="Avatar" className="h-full w-full object-cover" />
                 ) : (
@@ -223,71 +224,71 @@ export default function AdminProfile(){
                 )}
               </div>
               <div className="flex-1">
-                <div className="flex items-center gap-3 mb-2">
-                  <h2 className="text-2xl font-bold text-gray-900">{me.first_name} {me.last_name}</h2>
-                  <span className="px-3 py-1 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700">Administrator</span>
+                <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-3 mb-2">
+                  <h2 className="text-lg md:text-2xl font-bold text-gray-900">{me.first_name} {me.last_name}</h2>
+                  <span className="px-2 md:px-3 py-0.5 md:py-1 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700 w-fit">Administrator</span>
                 </div>
-                <p className="text-sm text-gray-500 mb-4">{me.email}</p>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                  <div className="text-center sm:text-left">
-                    <div className="text-2xl font-bold text-gray-900">{stats.students}</div>
+                <p className="text-xs md:text-sm text-gray-500 mb-3 md:mb-4">{me.email}</p>
+                <div className="grid grid-cols-2 gap-2 md:gap-4">
+                  <div className="text-center">
+                    <div className="text-lg md:text-2xl font-bold text-gray-900">{stats.students}</div>
                     <div className="text-xs text-gray-500">Students</div>
                   </div>
-                  <div className="text-center sm:text-left">
-                    <div className="text-2xl font-bold text-gray-900">{stats.teachers}</div>
+                  <div className="text-center">
+                    <div className="text-lg md:text-2xl font-bold text-gray-900">{stats.teachers}</div>
                     <div className="text-xs text-gray-500">Teachers</div>
                   </div>
-                  <div className="text-center sm:text-left">
-                    <div className="text-2xl font-bold text-gray-900">{stats.classes}</div>
+                  <div className="text-center">
+                    <div className="text-lg md:text-2xl font-bold text-gray-900">{stats.classes}</div>
                     <div className="text-xs text-gray-500">Classes</div>
                   </div>
-                  <div className="text-center sm:text-left">
-                    <div className="text-2xl font-bold text-gray-900">{stats.attendance}%</div>
+                  <div className="text-center">
+                    <div className="text-lg md:text-2xl font-bold text-gray-900">{stats.attendance}%</div>
                     <div className="text-xs text-gray-500">Attendance</div>
                   </div>
                 </div>
               </div>
-              <label className={`px-4 py-2 rounded-full text-sm font-semibold border border-gray-200 bg-white hover:bg-gray-50 cursor-pointer ${avatarSaving ? 'opacity-60 pointer-events-none' : ''}`}>
+              <label className={`px-3 md:px-4 py-2 md:py-2 rounded-full text-xs md:text-sm font-semibold border border-gray-200 bg-white hover:bg-gray-50 cursor-pointer whitespace-nowrap ${avatarSaving ? 'opacity-60 pointer-events-none' : ''}`}>
                 {avatarSaving ? 'Uploading…' : 'Change Photo'}
                 <input type="file" accept="image/*" className="hidden" onChange={onPickAvatar} />
               </label>
             </div>
 
-            {/* Tabs */}
-            <div className="border-b border-gray-100 flex gap-0">
+            {/* Tabs - Scrollable on mobile */}
+            <div className="border-b border-gray-100 flex gap-0 overflow-x-auto overflow-y-hidden -mx-3 md:mx-0 px-3 md:px-0">
               {[
-                { id: 'personal', label: 'Personal Information', icon: '👤' },
+                { id: 'personal', label: 'Personal', icon: '👤' },
                 { id: 'security', label: 'Security', icon: '🔒' },
-                { id: 'preferences', label: 'Preferences', icon: '⚙️' },
-                { id: 'sessions', label: 'Active Sessions', icon: '📱' },
-                { id: 'notifications', label: 'Notifications', icon: '🔔' },
-                { id: 'privacy', label: 'Privacy & Data', icon: '🔐' }
+                { id: 'preferences', label: 'Prefs', icon: '⚙️' },
+                { id: 'sessions', label: 'Sessions', icon: '📱' },
+                { id: 'notifications', label: 'Notify', icon: '🔔' },
+                { id: 'privacy', label: 'Privacy', icon: '🔐' }
               ].map(tab => (
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`px-4 py-3 text-sm font-medium border-b-2 -mb-px transition-colors ${
+                  className={`px-2 md:px-4 py-2 md:py-3 text-xs md:text-sm font-medium border-b-2 -mb-px transition-colors whitespace-nowrap ${
                     activeTab === tab.id
                       ? 'border-indigo-600 text-indigo-600'
                       : 'border-transparent text-gray-600 hover:text-gray-900'
                   }`}
                 >
-                  {tab.icon} {tab.label}
+                  {tab.icon} <span className="hidden md:inline"> {tab.label}</span>
                 </button>
               ))}
             </div>
           </div>
 
           {/* Main Content */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 md:gap-6">
             {/* Left Column - Form */}
             <div className="lg:col-span-2">
               {activeTab === 'personal' && (
-                <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6">
-                  <h3 className="text-lg font-bold text-gray-900 mb-4">Personal Information</h3>
-                  <p className="text-sm text-gray-500 mb-6">Update your personal details and contact information.</p>
+                <div className="bg-white rounded-2xl md:rounded-3xl border border-gray-100 shadow-sm p-3 md:p-6">
+                  <h3 className="text-base md:text-lg font-bold text-gray-900 mb-3 md:mb-4">Personal Information</h3>
+                  <p className="text-xs md:text-sm text-gray-500 mb-4 md:mb-6">Update your personal details and contact information.</p>
 
-                  <form onSubmit={saveProfile} className="grid gap-4">
+                  <form onSubmit={saveProfile} className="grid gap-3 md:gap-4">
                     {saveErr && <div className="bg-red-50 text-red-700 p-3 rounded-xl text-sm border border-red-100">{saveErr}</div>}
                     {saveMsg && <div className="bg-emerald-50 text-emerald-700 p-3 rounded-xl text-sm border border-emerald-100">{saveMsg}</div>}
 
@@ -360,17 +361,17 @@ export default function AdminProfile(){
                       </label>
                     </div>
 
-                    <div className="flex justify-end gap-3 pt-4">
+                    <div className="flex flex-col-reverse md:flex-row justify-end gap-2 md:gap-3 pt-3 md:pt-4">
                       <button
                         type="button"
-                        className="px-4 py-2 rounded-full border border-gray-200 bg-white text-sm font-semibold text-gray-700 hover:bg-gray-50"
+                        className="w-full md:w-auto px-3 md:px-4 py-2.5 md:py-2 rounded-full border border-gray-200 bg-white text-xs md:text-sm font-semibold text-gray-700 hover:bg-gray-50 min-h-[44px] md:min-h-auto"
                       >
                         Cancel
                       </button>
                       <button
                         type="submit"
                         disabled={saving}
-                        className="px-4 py-2 rounded-full bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 disabled:opacity-60"
+                        className="w-full md:w-auto px-3 md:px-4 py-2.5 md:py-2 rounded-full bg-emerald-600 text-white text-xs md:text-sm font-semibold hover:bg-emerald-700 disabled:opacity-60 min-h-[44px] md:min-h-auto"
                       >
                         {saving ? 'Saving Changes...' : 'Save Changes'}
                       </button>
@@ -801,27 +802,27 @@ export default function AdminProfile(){
             </div>
 
             {/* Right Column - Sidebar */}
-            <div className="space-y-6">
+            <div className="space-y-3 md:space-y-6">
               {/* Account Status */}
-              <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6">
-                <h3 className="font-bold text-gray-900 mb-4">Account Status</h3>
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-sm text-gray-600">Status</span>
-                  <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700">Active</span>
+              <div className="bg-white rounded-2xl md:rounded-3xl border border-gray-100 shadow-sm p-3 md:p-6">
+                <h3 className="font-bold text-gray-900 mb-3 md:mb-4 text-sm md:text-base">Account Status</h3>
+                <div className="flex items-center justify-between mb-2 md:mb-3">
+                  <span className="text-xs md:text-sm text-gray-600">Status</span>
+                  <span className="px-2 md:px-2.5 py-0.5 md:py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700">Active</span>
                 </div>
                 <p className="text-xs text-gray-500">Your account is active and in good standing.</p>
-                <div className="mt-4 pt-4 border-t border-gray-100">
+                <div className="mt-3 md:mt-4 pt-3 md:pt-4 border-t border-gray-100">
                   <div className="flex items-center justify-between">
                     <span className="text-xs text-gray-600">Member since</span>
-                    <span className="text-sm font-semibold text-gray-900">January 15, 2024</span>
+                    <span className="text-xs md:text-sm font-semibold text-gray-900">January 15, 2024</span>
                   </div>
                 </div>
               </div>
 
               {/* Active Sessions */}
-              <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="font-bold text-gray-900">Active Sessions</h3>
+              <div className="bg-white rounded-2xl md:rounded-3xl border border-gray-100 shadow-sm p-3 md:p-6">
+                <div className="flex items-center justify-between mb-3 md:mb-4">
+                  <h3 className="font-bold text-gray-900 text-sm md:text-base">Active Sessions</h3>
                   <button className="text-xs font-semibold text-indigo-600 hover:text-indigo-700">View All</button>
                 </div>
                 <div className="space-y-3">
@@ -839,9 +840,9 @@ export default function AdminProfile(){
               </div>
 
               {/* Quick Actions */}
-              <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6">
-                <h3 className="font-bold text-gray-900 mb-4">Quick Actions</h3>
-                <div className="space-y-3">
+              <div className="bg-white rounded-2xl md:rounded-3xl border border-gray-100 shadow-sm p-3 md:p-6">
+                <h3 className="font-bold text-gray-900 mb-3 md:mb-4 text-sm md:text-base">Quick Actions</h3>
+                <div className="space-y-2 md:space-y-3">
                   <button className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-gray-50 border border-gray-100 text-left transition-colors">
                     <div className="text-xl">📥</div>
                     <div>
