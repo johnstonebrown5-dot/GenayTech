@@ -179,6 +179,31 @@ input::-webkit-input-placeholder, textarea::-webkit-input-placeholder { color: #
 /* Improve select consistency */
 select { appearance: none; -webkit-appearance: none; -moz-appearance: none; background-color: #ffffff !important; }
 
+.login-card input,
+.login-card button {
+  color-scheme: dark !important;
+}
+
+.login-card .login-dark-field,
+.login-card .login-dark-field input,
+.login-card .login-code-input {
+  background-color: transparent !important;
+  border-color: rgba(255,255,255,0.14) !important;
+  color: #ffffff !important;
+  box-shadow: none !important;
+}
+
+.login-card .login-dark-field input::placeholder {
+  color: rgba(255,255,255,0.45) !important;
+}
+
+.login-card input:-webkit-autofill {
+  -webkit-box-shadow: 0 0 0px 1000px rgba(15,23,42,0.95) inset !important;
+  box-shadow: 0 0 0px 1000px rgba(15,23,42,0.95) inset !important;
+  -webkit-text-fill-color: #ffffff !important;
+  caret-color: #ffffff !important;
+}
+
 .teacher-theme-dark {
   background-color: #030712;
   color: #e5e7eb;
