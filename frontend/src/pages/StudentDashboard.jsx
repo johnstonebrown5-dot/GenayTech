@@ -5,6 +5,9 @@ import { useAuth } from '../auth'
 import Modal from '../components/Modal'
 import StatCard from '../components/StatCard'
 import StudentReportCardViewer from './StudentReportCardViewer'
+import StudentMobileHome from '../components/studentMobile/StudentMobileHome'
+import StudentMobileAcademics from '../components/studentMobile/StudentMobileAcademics'
+import StudentMobileFinance from '../components/studentMobile/StudentMobileFinance'
 
 let __studentDashboardCache = null
 
@@ -53,6 +56,9 @@ export default function StudentDashboard(){
   const [refreshingFinance, setRefreshingFinance] = useState(false)
   const [refreshingAcademics, setRefreshingAcademics] = useState(false)
   const [statementFilter, setStatementFilter] = useState('all') // all | invoice | payment
+  const [attendance, setAttendance] = useState([])
+  const [notificationsUnread, setNotificationsUnread] = useState(0)
+  const [messagesUnread, setMessagesUnread] = useState(0)
 
   const [calendarYear, setCalendarYear] = useState(null)
   const [calendarTerm, setCalendarTerm] = useState(null)
@@ -547,15 +553,20 @@ export default function StudentDashboard(){
             const settled = await Promise.allSettled([
               api.get('/academics/assessments/my/'),
               stId ? api.get(`/academics/exam_results/?student=${stId}`) : Promise.resolve({ data: [] }),
+              stId ? api.get(`/academics/attendance/?student=${stId}`).catch(() => ({ data: [] })) : Promise.resolve({ data: [] }),
             ])
             if (!mounted) return
-            const [assS, exmS] = settled
+            const [assS, exmS, attS] = settled
             
             if (assS.status === 'fulfilled') {
               c.assessments = Array.isArray(assS.value?.data) ? assS.value.data : (assS.value?.data?.results || [])
             }
             if (exmS.status === 'fulfilled') {
               setExamResults(Array.isArray(exmS.value?.data) ? exmS.value.data : (exmS.value?.data?.results || []))
+            }
+            if (attS.status === 'fulfilled') {
+              const att = Array.isArray(attS.value?.data) ? attS.value.data : (attS.value?.data?.results || [])
+              setAttendance(att)
             }
             
             c.academicsLoaded = true
@@ -614,6 +625,33 @@ export default function StudentDashboard(){
     })()
     return () => { mounted = false }
   }, [currentTab])
+
+  useEffect(() => {
+    if (!authUser?.id) return
+    let mounted = true
+  ;(async () => {
+      try {
+        const [inb, sys] = await Promise.allSettled([
+          api.get('/communications/messages/', { _skipGlobalLoading: true }),
+          api.get('/communications/messages/system/', { _skipGlobalLoading: true }),
+        ])
+        if (!mounted) return
+        const myId = authUser.id
+        const computeUnread = (arr) => {
+          if (!Array.isArray(arr)) return 0
+          return arr.reduce((acc, m) => {
+            const rec = Array.isArray(m.recipients) ? m.recipients.find(r => r.user === myId) : null
+            return acc + (rec && !rec.read ? 1 : 0)
+          }, 0)
+        }
+        const inboxList = inb.status === 'fulfilled' ? (Array.isArray(inb.value.data) ? inb.value.data : (inb.value.data?.results || [])) : []
+        const sysList = sys.status === 'fulfilled' ? (Array.isArray(sys.value.data) ? sys.value.data : (sys.value.data?.results || [])) : []
+        setMessagesUnread(computeUnread(inboxList.filter(m => !m.system_tag)))
+        setNotificationsUnread(computeUnread(sysList))
+      } catch {}
+    })()
+    return () => { mounted = false }
+  }, [authUser])
 
   const calendarUpcoming = useMemo(() => {
     try {
@@ -740,14 +778,17 @@ export default function StudentDashboard(){
       const settled = await Promise.allSettled([
         api.get('/academics/assessments/my/', { timeout: 15000, _skipGlobalLoading: true }),
         stId ? api.get(`/academics/exam_results/?student=${stId}`, { timeout: 15000, _skipGlobalLoading: true }) : Promise.resolve({ data: [] }),
+        stId ? api.get(`/academics/attendance/?student=${stId}`, { timeout: 15000, _skipGlobalLoading: true }).catch(() => ({ data: [] })) : Promise.resolve({ data: [] }),
       ])
 
-      const [assS, exmS] = settled
+      const [assS, exmS, attS] = settled
       const newAssessments = assS.status === 'fulfilled' ? (Array.isArray(assS.value?.data) ? assS.value.data : (assS.value?.data?.results || [])) : assessments
       const newResults = exmS.status === 'fulfilled' ? (Array.isArray(exmS.value?.data) ? exmS.value.data : (exmS.value?.data?.results || [])) : examResults
+      const newAttendance = attS.status === 'fulfilled' ? (Array.isArray(attS.value?.data) ? attS.value.data : (attS.value?.data?.results || [])) : attendance
 
       setAssessments(newAssessments)
       setExamResults(newResults)
+      setAttendance(newAttendance)
 
       if (__studentDashboardCache) {
         __studentDashboardCache.assessments = newAssessments
@@ -1035,70 +1076,107 @@ export default function StudentDashboard(){
   }
 
   return (
-    <div className="space-y-5 sm:space-y-7 bg-white">
+    <div className="space-y-5 sm:space-y-7 bg-white sm:bg-white">
 
       {error && <div className="-mx-3 sm:mx-0 bg-red-50 text-red-700 p-3 sm:p-3 rounded-none sm:rounded">{error}</div>}
 
   {currentTab === 'dashboard' && (
-    <div className="space-y-6">
-      {/* Welcome banner */}
-      <div className="hidden sm:flex bg-green-600 text-white rounded shadow p-3 items-center justify-between">
-        <div className="font-medium">
-          {isBaseLoading && !student?.name && !authUser?.first_name ? (
-            <Skeleton className="h-4 w-56 bg-white/25" />
-          ) : (
-            <>Welcome {(student?.name || authUser?.first_name || authUser?.username || '').toUpperCase()}</>
-          )}
+    <>
+      <StudentMobileHome
+        student={student}
+        authUser={authUser}
+        summary={summary}
+        calendarUpcoming={calendarUpcoming}
+        calendarTerm={calendarTerm}
+        messagesUnread={messagesUnread}
+        notificationsUnread={notificationsUnread}
+        isLoading={isFinanceSummaryLoading}
+      />
+      <div className="hidden sm:block space-y-6">
+      <div className="hidden sm:grid grid-cols-1 xl:grid-cols-[minmax(0,3fr)_minmax(260px,1fr)] gap-4">
+        <div className="rounded-3xl bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-700 text-white shadow-xl overflow-hidden">
+          <div className="px-6 py-5 sm:px-8 sm:py-7">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+              <div className="min-w-0">
+                <div className="text-xs uppercase tracking-[0.28em] opacity-75">Student dashboard</div>
+                <div className="mt-3 text-3xl font-black tracking-tight leading-tight">
+                  {isBaseLoading && !student?.name && !authUser?.first_name ? (
+                    <Skeleton className="h-10 w-56 bg-white/15" />
+                  ) : (
+                    `Welcome back, ${student?.name || authUser?.first_name || authUser?.username || 'Student'}`
+                  )}
+                </div>
+                <div className="mt-2 text-sm text-slate-200 max-w-2xl">
+                  Quick access to your class, fee status, events and academic progress.
+                </div>
+              </div>
+              <div className="rounded-3xl bg-white/10 p-4 sm:p-5 border border-white/10 shadow-inner">
+                <div className="text-xs uppercase tracking-[0.28em] text-slate-200 opacity-90">Next item</div>
+                <div className="mt-3 text-sm font-semibold text-white">
+                  {calendarUpcoming?.[0]?.title || 'No upcoming events'}
+                </div>
+                {calendarUpcoming?.[0]?.start && (
+                  <div className="mt-2 text-[12px] text-slate-300">
+                    {new Date(calendarUpcoming[0].start).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="rounded-3xl bg-white/10 p-4 border border-white/10">
+                <div className="text-[11px] uppercase tracking-[0.26em] text-slate-300">Class</div>
+                <div className="mt-2 text-xl font-bold text-white">{classLabel || 'Unknown'}</div>
+              </div>
+              <div className="rounded-3xl bg-white/10 p-4 border border-white/10">
+                <div className="text-[11px] uppercase tracking-[0.26em] text-slate-300">Messages</div>
+                <div className="mt-2 text-xl font-bold text-white">{messagesUnread || 0}</div>
+                <div className="mt-1 text-[11px] text-slate-300">Unread</div>
+              </div>
+              <div className="rounded-3xl bg-white/10 p-4 border border-white/10">
+                <div className="text-[11px] uppercase tracking-[0.26em] text-slate-300">Notifications</div>
+                <div className="mt-2 text-xl font-bold text-white">{notificationsUnread || 0}</div>
+                <div className="mt-1 text-[11px] text-slate-300">System updates</div>
+              </div>
+            </div>
+          </div>
         </div>
-        <div className="text-xs opacity-90">Dashboard</div>
-      </div>
 
-      {/* Quick actions removed as per request */}
-
-      {/* Summary cards */}
-      <div className="px-3 sm:px-0 grid md:grid-cols-3 gap-3 sm:gap-4">
-        <div className="bg-amber-500 text-white rounded-xl shadow-sm p-4">
-          <div className="flex items-center justify-between gap-3">
-            <div className="text-xs sm:text-sm opacity-90 font-medium">Total Billed</div>
-            <button
-              type="button"
-              onClick={() => { setFinanceDetailsMode('invoices'); setFinanceDetailsOpen(true) }}
-              className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-full bg-white/15 hover:bg-white/20 border border-white/20 transition"
-              title="View invoices"
-            >
-              <span>View</span>
-              <span className="text-xs">→</span>
-            </button>
+        <div className="space-y-4">
+          <div className="rounded-3xl bg-white border border-slate-200 shadow-sm p-4">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Total billed</div>
+                <div className="mt-2 text-2xl font-extrabold text-slate-900">{isFinanceSummaryLoading ? <Skeleton className="h-7 w-28 bg-slate-200" /> : moneyPlain(summary.total_billed)}</div>
+              </div>
+              <button
+                type="button"
+                onClick={() => { setFinanceDetailsMode('invoices'); setFinanceDetailsOpen(true) }}
+                className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+              >
+                View invoices
+              </button>
+            </div>
           </div>
-          <div className="text-xl sm:text-2xl font-bold mt-1">
-            {isFinanceSummaryLoading ? <Skeleton className="h-7 w-32 bg-white/25" /> : moneyPlain(summary.total_billed)}
+          <div className="rounded-3xl bg-white border border-slate-200 shadow-sm p-4">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Total paid</div>
+                <div className="mt-2 text-2xl font-extrabold text-slate-900">{isFinanceSummaryLoading ? <Skeleton className="h-7 w-28 bg-slate-200" /> : moneyPlain(summary.total_paid)}</div>
+              </div>
+              <button
+                type="button"
+                onClick={() => { setFinanceDetailsMode('payments'); setFinanceDetailsOpen(true) }}
+                className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+              >
+                View payments
+              </button>
+            </div>
           </div>
-          <div className="text-[10px] sm:text-xs mt-1 opacity-80">All time invoiced</div>
-        </div>
-        <div className="bg-green-600 text-white rounded-xl shadow-sm p-4">
-          <div className="flex items-center justify-between gap-3">
-            <div className="text-xs sm:text-sm opacity-90 font-medium">Total Paid</div>
-            <button
-              type="button"
-              onClick={() => { setFinanceDetailsMode('payments'); setFinanceDetailsOpen(true) }}
-              className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-full bg-white/15 hover:bg-white/20 border border-white/20 transition"
-              title="View payments"
-            >
-              <span>View</span>
-              <span className="text-xs">→</span>
-            </button>
+          <div className="rounded-3xl bg-white border border-slate-200 shadow-sm p-4">
+            <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Balance</div>
+            <div className="mt-2 text-2xl font-extrabold text-slate-900">{isFinanceSummaryLoading ? <Skeleton className="h-7 w-28 bg-slate-200" /> : moneyPlain(summary.balance)}</div>
+            <div className="mt-1 text-sm text-slate-500">Outstanding amount</div>
           </div>
-          <div className="text-xl sm:text-2xl font-bold mt-1">
-            {isFinanceSummaryLoading ? <Skeleton className="h-7 w-32 bg-white/25" /> : moneyPlain(summary.total_paid)}
-          </div>
-          <div className="text-[10px] sm:text-xs mt-1 opacity-80">All time payments</div>
-        </div>
-        <div className="bg-sky-600 text-white rounded-xl shadow-sm p-4">
-          <div className="text-xs sm:text-sm opacity-90 font-medium">Balance</div>
-          <div className="text-xl sm:text-2xl font-bold mt-1">
-            {isFinanceSummaryLoading ? <Skeleton className="h-7 w-32 bg-white/25" /> : moneyPlain(summary.balance)}
-          </div>
-          <div className="text-[10px] sm:text-xs mt-1 opacity-80">Outstanding</div>
         </div>
       </div>
 
@@ -1131,17 +1209,21 @@ export default function StudentDashboard(){
           <div className="p-4 md:p-6 flex flex-col md:flex-row gap-6 md:gap-8">
             {/* Avatar Section */}
             <div className="flex flex-col items-center gap-3 shrink-0">
-              <div className="relative group">
-                <div className="w-24 h-24 md:w-32 md:h-32 rounded-3xl bg-slate-100 border-4 border-white shadow-sm overflow-hidden flex items-center justify-center">
-                  {isBaseLoading ? (
-                    <Skeleton className="h-full w-full" />
-                  ) : student?.photo_url ? (
-                    <img src={student.photo_url} alt="Student" className="w-full h-full object-cover" />
-                  ) : (
-                    <span className="text-4xl md:text-5xl opacity-20">👤</span>
-                  )}
-                </div>
-              </div>
+              <button
+                type="button"
+                onClick={() => navigate('/student/profile')}
+                className="relative group w-24 h-24 md:w-32 md:h-32 rounded-3xl bg-slate-100 border-4 border-white shadow-sm overflow-hidden flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-slate-400"
+                title="View profile"
+                aria-label="Open profile"
+              >
+                {isBaseLoading ? (
+                  <Skeleton className="h-full w-full" />
+                ) : student?.photo_url ? (
+                  <img src={student.photo_url} alt="Student" className="w-full h-full object-cover" />
+                ) : (
+                  <span className="text-4xl md:text-5xl opacity-20">👤</span>
+                )}
+              </button>
               {!isBaseLoading && student?.admission_no && (
                 <span className="px-3 py-1 rounded-full bg-slate-100 text-slate-600 text-xs font-bold tracking-wider">
                   {student.admission_no}
@@ -1415,11 +1497,22 @@ export default function StudentDashboard(){
           </div>
         </div>
       </div>
-    </div>
+      </div>
+    </>
   )}
 
   {currentTab === 'finance' && (
-    <div className="-mx-3 sm:mx-0 bg-white sm:rounded-3xl p-4 sm:p-6 border border-slate-200">
+    <>
+      <StudentMobileFinance
+        summary={summary}
+        feeStatement={feeStatement}
+        paymentRows={paymentRows}
+        isLoading={isFinanceSummaryLoading}
+        onRefresh={refreshFinanceData}
+        onPrint={printFeeStatement}
+        refreshing={refreshingFinance}
+      />
+      <div className="hidden sm:block -mx-3 sm:mx-0 bg-white sm:rounded-3xl p-4 sm:p-6 border border-slate-200">
       <div className="flex items-center justify-between mb-6">
         <div className="min-w-0">
           <h2 className="text-xl font-bold text-slate-900">Finance</h2>
@@ -1698,11 +1791,24 @@ export default function StudentDashboard(){
           </section>
         )}
       </div>
-    </div>
+      </div>
+    </>
   )}
 
   {currentTab === 'academics' && (
-    <div className="-mx-3 sm:mx-0 bg-white sm:rounded-3xl p-4 sm:p-6 border border-slate-200">
+    <>
+      <StudentMobileAcademics
+        student={student}
+        assessments={assessments}
+        examResults={examResults}
+        calendarYear={calendarYear}
+        calendarTerm={calendarTerm}
+        attendance={attendance}
+        isLoading={isAcademicsLoading}
+        onRefresh={refreshAcademicsData}
+        refreshing={refreshingAcademics}
+      />
+      <div className="hidden sm:block -mx-3 sm:mx-0 bg-white sm:rounded-3xl p-4 sm:p-6 border border-slate-200">
       <div className="flex items-center justify-between mb-6">
         <div className="min-w-0">
           <h2 className="text-xl font-bold text-slate-900">Academics</h2>
@@ -1998,7 +2104,8 @@ export default function StudentDashboard(){
           </section>
         )}
       </div>
-    </div>
+      </div>
+    </>
   )}
   
   <Modal open={showEdit} onClose={() => (!editSubmitting && setShowEdit(false))} title="Update contact details" size="sm">

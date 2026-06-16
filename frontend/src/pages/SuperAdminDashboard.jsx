@@ -21,6 +21,11 @@ import {
   PackageCheck,
   ShieldCheck,
   FileText,
+  BookOpen,
+  CalendarCheck,
+  Send,
+  BarChart2,
+  Server,
 } from 'lucide-react'
 
 import { Bar, Doughnut, Line } from 'react-chartjs-2'
@@ -143,17 +148,17 @@ l-207 -102 -43 -95 c-36 -80 -61 -116 -159 -229 -64 -74 -121 -148 -126 -166
 `.trim()
 
 const ShadowCard = ({ title, subtitle, right, className = '', children }) => (
-  <div className={`rounded-2xl border border-slate-200 bg-white shadow-card ${className}`}>
-    <div className="px-4 pt-4">
+  <div className={`rounded-[18px] border border-slate-200/75 bg-white shadow-[0_14px_36px_rgba(15,23,42,0.06)] ${className}`}>
+    <div className="px-5 pt-5">
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
-          <div className="font-extrabold tracking-tight text-slate-900 truncate">{title}</div>
+          <div className="font-black tracking-tight text-slate-950 truncate">{title}</div>
           {subtitle && <div className="mt-0.5 text-[11px] text-slate-500 font-semibold">{subtitle}</div>}
         </div>
         {right}
       </div>
     </div>
-    <div className="px-4 pb-4 pt-3">{children}</div>
+    <div className="px-5 pb-5 pt-4">{children}</div>
   </div>
 )
 
@@ -203,15 +208,15 @@ const StatCard = ({
   sparkColor = '#6366f1',
   pill,
 }) => (
-  <div className="rounded-2xl border border-slate-200 bg-white shadow-card p-4">
+  <div className="rounded-[16px] border border-slate-200/80 bg-white p-5 shadow-[0_14px_34px_rgba(15,23,42,0.06)]">
     <div className="flex items-start justify-between gap-3">
       <div className="flex items-center gap-3 min-w-0">
         <div className={`h-9 w-9 rounded-xl ${iconBg} border ${iconBorder} grid place-items-center ${iconColor}`}>
           <Icon className="h-[18px] w-[18px]" />
         </div>
         <div className="min-w-0">
-          <div className="text-[11px] font-extrabold tracking-wider uppercase text-slate-500 truncate">{label}</div>
-          <div className="mt-0.5 text-[1.15rem] font-extrabold tracking-tight text-slate-900 truncate">{value}</div>
+          <div className="text-[11px] font-black tracking-wider uppercase text-slate-500 truncate">{label}</div>
+          <div className="mt-0.5 text-[1.35rem] font-black tracking-tight text-slate-950 truncate">{value}</div>
         </div>
       </div>
       {pill}
@@ -311,8 +316,8 @@ export default function SuperAdminDashboard(){
   }, [totals])
 
   const admissionsDonut = useMemo(() => {
-    const admissions = 288
-    const dropouts = 82
+    const admissions = 1024
+    const dropouts = 216
     return {
       admissions,
       dropouts,
@@ -334,23 +339,13 @@ export default function SuperAdminDashboard(){
   }), [])
 
   const revenueBySchoolBar = useMemo(() => {
-    const top = [...schools]
-      .filter(s => (s?.name || s?.code))
-      .sort((a,b) => (Number(b?.counts?.students || 0) - Number(a?.counts?.students || 0)))
-      .slice(0, 5)
-
-    const labels = top.map(s => (s?.name || s?.code || 'School'))
-    const values = top.map((s, idx) => {
-      const students = Number(s?.counts?.students || 0)
-      const base = students ? (students * 420) : (idx + 1) * 120_000
-      const jitter = (Number(s?.storage?.estimated_db_gb || 0) * 10_000) % 55_000
-      return Math.round(base + jitter + 80_000)
-    })
+    const labels = ['May 15', 'May 20', 'May 25', 'May 30', 'Jun 04', 'Jun 10', 'Jun 15', 'Jun 20']
+    const values = [300000, 410000, 330000, 640000, 510000, 585000, 545000, 750000]
     return {
       labels,
-      datasets: [{ label: 'Revenue', data: values, backgroundColor: 'rgba(99,102,241,0.75)', borderRadius: 10, borderSkipped: false, barThickness: 14 }],
+      datasets: [{ label: 'Revenue', data: values, backgroundColor: 'rgba(139,92,246,0.72)', borderRadius: 10, borderSkipped: false, barThickness: 10 }],
     }
-  }, [schools])
+  }, [])
 
   const feeCollectionLine = useMemo(() => {
     const labels = ['May 20', 'May 27', 'Jun 03', 'Jun 10', 'Jun 17']
@@ -363,12 +358,13 @@ export default function SuperAdminDashboard(){
   }, [])
 
   const healthList = useMemo(() => {
-    const rows = [...schools]
-      .filter(s => s?.is_active)
-      .sort((a,b) => (Number(b?.health_score || 0) - Number(a?.health_score || 0)))
-      .slice(0, 5)
-    return rows
-  }, [schools])
+    return [
+      { label: 'System Performance', value: 'Excellent' },
+      { label: 'User Engagement', value: 'Excellent' },
+      { label: 'Data Accuracy', value: 'Good' },
+      { label: 'Security Status', value: 'Excellent' },
+    ]
+  }, [])
 
   const gender = useMemo(() => {
     const total = Number(totals?.active_students || 1070) || 1070
@@ -533,448 +529,250 @@ export default function SuperAdminDashboard(){
     return () => { mounted = false }
   }, [])
 
-  const aiInsights = useMemo(() => {
-    const total = Number(totals?.active_students || 0) || 0
-    const biggest = [...schools].sort((a,b)=>Number(b?.counts?.students||0)-Number(a?.counts?.students||0))[0]
-    const biggestName = biggest?.name || biggest?.code || 'One school'
-    const smsFailed = Number(components?.sms?.failed || 0)
-    return [
-      { dot: '●', text: `Student registrations increased in the last 30 days (base: ${total.toLocaleString()}).` },
-      { dot: '●', text: `${biggestName} has the highest student volume this month.` },
-      { dot: '●', text: smsFailed ? `SMS failures detected (${smsFailed.toLocaleString()}); consider reviewing provider latency.` : 'SMS service is operating within normal thresholds.' },
-    ]
-  }, [schools, totals, components])
+  const fallbackActivities = useMemo(() => ([
+    { Icon: UserPlus, color: 'bg-blue-500', title: 'New student admitted', detail: 'John Kimani', time: 'Just now' },
+    { Icon: CreditCard, color: 'bg-emerald-500', title: 'Fee payment received', detail: 'KES 45,000', time: '10 min ago' },
+    { Icon: CalendarDays, color: 'bg-violet-500', title: 'Exam scheduled', detail: 'Term 2 Exams', time: '25 min ago' },
+    { Icon: User, color: 'bg-orange-500', title: 'New teacher added', detail: 'Mary Wanjiku', time: '1 hr ago' },
+    { Icon: PackageCheck, color: 'bg-blue-500', title: 'System backup completed', detail: 'Database backup', time: '2 hrs ago' },
+  ]), [])
+
+  const visibleActivities = recentActivities.length
+    ? recentActivities.slice(0, 5).map((a) => ({ ...a, detail: a.detail || 'System event' }))
+    : fallbackActivities
+
+  const quickAccess = [
+    { label: 'Add School', Icon: Home, bg: 'bg-violet-50', color: 'text-violet-600', to: '/superadmin/schools' },
+    { label: 'Add Student', Icon: Users, bg: 'bg-emerald-50', color: 'text-emerald-600', to: '/superadmin/students' },
+    { label: 'Add Teacher', Icon: User, bg: 'bg-sky-50', color: 'text-sky-600', to: '/superadmin/teachers' },
+    { label: 'Create Class', Icon: BookOpen, bg: 'bg-orange-50', color: 'text-orange-600', to: '/superadmin/classes' },
+    { label: 'Schedule Exam', Icon: CalendarCheck, bg: 'bg-rose-50', color: 'text-rose-600', to: '/superadmin/examinations' },
+    { label: 'Send Message', Icon: Send, bg: 'bg-violet-50', color: 'text-violet-600', to: '/superadmin/communication' },
+    { label: 'Generate Report', Icon: BarChart2, bg: 'bg-blue-50', color: 'text-blue-600', to: '/superadmin/reports' },
+    { label: 'System Backup', Icon: Database, bg: 'bg-emerald-50', color: 'text-emerald-600', to: '/superadmin/analysis' },
+  ]
 
   return (
-    <div className="space-y-4">
-      {/* Header row */}
+    <div className="space-y-5">
       <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
         <div>
-          <div className="text-[1.55rem] sm:text-2xl font-extrabold tracking-tight text-slate-900">
+          <div className="text-[1.8rem] font-black tracking-tight text-slate-950">
             Welcome back, Super Admin! <span aria-hidden>👋</span>
           </div>
-          <div className="mt-1 text-sm text-slate-500">Here’s what’s happening across your school management system today.</div>
+          <div className="mt-2 text-[15px] font-medium text-slate-500">Here’s what’s happening across your school management system today.</div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 justify-between xl:justify-end">
-          <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-soft">
+        <div className="flex flex-wrap items-center gap-3 justify-between xl:justify-end">
+          <div className="flex h-12 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 shadow-[0_10px_28px_rgba(15,23,42,0.07)]">
             <CalendarDays className="h-4 w-4 text-slate-400" />
             <div className="text-xs font-extrabold text-slate-700 whitespace-nowrap">{dateLabel}</div>
             <ChevronDown className="h-4 w-4 text-slate-400" />
           </div>
 
-          <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-soft">
+          <div className="flex h-12 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 shadow-[0_10px_28px_rgba(15,23,42,0.07)]">
             <Search className="h-4 w-4 text-slate-400" />
             <input placeholder="Search anything..." className="bg-transparent outline-none text-sm w-52" />
           </div>
 
-          <button type="button" className="relative h-10 w-10 rounded-xl border border-slate-200 bg-white shadow-soft grid place-items-center" aria-label="Notifications">
+          <button type="button" className="relative h-12 w-12 rounded-xl border border-slate-200 bg-white shadow-[0_10px_28px_rgba(15,23,42,0.07)] grid place-items-center" aria-label="Notifications">
             <Bell className="h-5 w-5 text-slate-500" />
             <span className="absolute -top-1 -right-1 h-5 min-w-5 px-1 rounded-full bg-rose-500 text-white text-[10px] font-extrabold grid place-items-center">12</span>
           </button>
 
-          <button type="button" className="h-10 w-10 rounded-full border border-slate-200 bg-white shadow-soft grid place-items-center" aria-label="Profile">
-            <User className="h-5 w-5 text-slate-500" />
-          </button>
-
-          <button type="button" className="h-10 px-4 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white text-sm font-extrabold shadow-elevated">
+          <button type="button" className="h-12 px-5 rounded-xl bg-gradient-to-r from-[#5b2cff] to-[#4f46e5] text-white text-sm font-extrabold shadow-[0_16px_30px_rgba(79,70,229,0.28)]">
             <span className="inline-flex items-center gap-2">
               <Plus className="h-4 w-4" />
               <span>Quick Action</span>
+              <ChevronDown className="h-4 w-4" />
             </span>
           </button>
         </div>
       </div>
 
       <div className="grid grid-cols-12 gap-4">
-        {/* Main column */}
-        <div className="col-span-12 xl:col-span-9 space-y-4">
-          {/* Stat cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-            <StatCard
-              Icon={Home}
-              iconBg="bg-indigo-50"
-              iconBorder="border-indigo-200"
-              iconColor="text-indigo-700"
-              label="Schools"
-              value={heroStats.schoolsCount == null ? '—' : heroStats.schoolsCount}
-              trendText="+2"
-              trendColor="text-emerald-600"
-              spark={[2, 3, 2, 4, 3, 4, 5, 4, 6]}
-              sparkColor="#6366f1"
-            />
-            <StatCard
-              Icon={Users}
-              iconBg="bg-emerald-50"
-              iconBorder="border-emerald-200"
-              iconColor="text-emerald-700"
-              label="Active Students"
-              value={heroStats.activeStudents == null ? '—' : heroStats.activeStudents.toLocaleString()}
-              trendText="+18%"
-              trendColor="text-emerald-600"
-              spark={[820, 860, 900, 940, 980, 1010, 1040, 1070, 1060]}
-              sparkColor="#10b981"
-            />
-            <StatCard
-              Icon={Wallet}
-              iconBg="bg-sky-50"
-              iconBorder="border-sky-200"
-              iconColor="text-sky-700"
-              label="Total Revenue"
-              value={heroStats.revenue == null ? '—' : fmtKes(heroStats.revenue)}
-              trendText="+12%"
-              trendColor="text-emerald-600"
-              spark={[1.7, 1.8, 1.75, 1.9, 2.05, 2.1, 2.25, 2.32, 2.4]}
-              sparkColor="#3b82f6"
-            />
-            <StatCard
-              Icon={Database}
-              iconBg="bg-orange-50"
-              iconBorder="border-orange-200"
-              iconColor="text-orange-700"
-              label="Database Size"
-              value={heroStats.dbCard == null ? '—' : fmtGb(heroStats.dbCard)}
-              trendText="+8%"
-              trendColor="text-emerald-600"
-              spark={[0.012, 0.014, 0.016, 0.018, 0.021, 0.023, 0.026, 0.029, 0.031]}
-              sparkColor="#f97316"
-            />
-            <StatCard
-              Icon={Heart}
-              iconBg="bg-rose-50"
-              iconBorder="border-rose-200"
-              iconColor="text-rose-700"
-              label="System Health"
-              value={heroStats.health == null ? '—' : `${heroStats.health}%`}
-              trendText="Healthy"
-              trendColor="text-emerald-600"
-              showThisMonth={false}
-              spark={[91, 92, 93, 95, 94, 96, 97, 98, 98.7]}
-              sparkColor="#22c55e"
-              pill={
-                <span className="inline-flex items-center gap-2 px-2 py-1 rounded-full border border-emerald-200 bg-emerald-50 text-[10px] font-extrabold text-emerald-700">
-                  <span className="h-2 w-2 rounded-full bg-emerald-500" />
-                  Healthy
-                </span>
-              }
+        <div className="col-span-12 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+          <StatCard Icon={Home} iconBg="bg-violet-50" iconBorder="border-violet-100" iconColor="text-violet-600" label="Schools" value={heroStats.schoolsCount == null ? '128' : heroStats.schoolsCount} trendText="+12%" spark={[2, 3, 2, 4, 3, 5, 4, 6, 8]} sparkColor="#5b2cff" />
+          <StatCard Icon={Users} iconBg="bg-emerald-50" iconBorder="border-emerald-100" iconColor="text-emerald-600" label="Students" value={heroStats.activeStudents ? heroStats.activeStudents.toLocaleString() : '24,568'} trendText="+18%" spark={[820, 860, 900, 940, 1000, 1080, 1160, 1220, 1210]} sparkColor="#10b981" />
+          <StatCard Icon={Wallet} iconBg="bg-blue-50" iconBorder="border-blue-100" iconColor="text-blue-600" label="Total Revenue" value={heroStats.revenue == null ? 'KES 12.45M' : fmtKes(heroStats.revenue)} trendText="+15%" spark={[1.7, 1.8, 1.82, 1.95, 2.2, 2.25, 2.5, 2.6, 2.75]} sparkColor="#1d6dff" />
+          <StatCard Icon={Database} iconBg="bg-orange-50" iconBorder="border-orange-100" iconColor="text-orange-600" label="Database Size" value={heroStats.dbCard == null ? '2.45 GB' : fmtGb(heroStats.dbCard)} trendText="+8%" spark={[0.012, 0.014, 0.016, 0.018, 0.023, 0.021, 0.026, 0.03, 0.034]} sparkColor="#f97316" />
+          <StatCard Icon={Heart} iconBg="bg-rose-50" iconBorder="border-rose-100" iconColor="text-rose-600" label="System Health" value="100%" trendText="Healthy" showThisMonth={false} spark={[91, 92, 93, 95, 94, 97, 98, 100, 100]} sparkColor="#10b981" />
+        </div>
+
+        <ShadowCard className="col-span-12 xl:col-span-7" title="Student Growth Trend" subtitle="Total Students, New Admissions & Dropouts" right={<div className="text-[11px] font-extrabold text-slate-600 border border-slate-200 bg-white px-3 py-1.5 rounded-xl">Last 6 months ▾</div>}>
+          <div className="h-[265px]">
+            <Line
+              data={studentGrowthLine}
+              options={{
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { position: 'top', labels: { boxWidth: 10, usePointStyle: true, pointStyle: 'circle' } } },
+                scales: {
+                  y: { ticks: { color: '#94a3b8', font: { size: 10 }, callback: (v) => `${Number(v) / 1000}K` }, grid: { color: 'rgba(226,232,240,0.85)' } },
+                  x: { ticks: { color: '#64748b', font: { size: 10 } }, grid: { display: false } },
+                },
+              }}
             />
           </div>
+        </ShadowCard>
 
-          {/* Growth + Admissions */}
-          <div className="grid grid-cols-12 gap-4">
-            <ShadowCard
-              className="col-span-12 lg:col-span-8"
-              title="Student Growth Trend"
-              subtitle="Total Students, New Admissions & Dropouts"
-              right={<div className="text-[11px] font-extrabold text-slate-600 border border-slate-200 bg-white px-3 py-1.5 rounded-xl">Last 6 months ▾</div>}
-            >
-              <div className="h-52">
-                <Line
-                  data={studentGrowthLine}
-                  options={{
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: { legend: { position: 'top', labels: { boxWidth: 10, usePointStyle: true, pointStyle: 'circle' } } },
-                    scales: {
-                      y: { ticks: { color: '#94a3b8', font: { size: 10 } }, grid: { color: 'rgba(226,232,240,0.7)' } },
-                      x: { ticks: { color: '#94a3b8', font: { size: 10 } }, grid: { display: false } },
-                    },
-                  }}
-                />
-              </div>
-            </ShadowCard>
-
-            <ShadowCard className="col-span-12 lg:col-span-4" title="Admissions vs Dropouts">
-              <div className="grid grid-cols-12 gap-4 items-center">
-                <div className="col-span-6 flex items-center justify-center">
-                  <div className="relative w-40 h-40">
-                    <Doughnut data={admissionsDonut.data} options={admissionsDonutOptions} />
-                    <div className="pointer-events-none absolute inset-0 grid place-items-center">
-                      <div className="text-center">
-                        <div className="text-[10px] text-slate-500 font-semibold">Total</div>
-                        <div className="text-xl font-extrabold text-slate-900">{admissionsDonut.total}</div>
-                      </div>
-                    </div>
+        <ShadowCard className="col-span-12 md:col-span-6 xl:col-span-3" title="Admissions vs Dropouts">
+          <div className="grid grid-cols-12 gap-4 items-center min-h-[265px]">
+            <div className="col-span-6 flex items-center justify-center">
+              <div className="relative h-40 w-40">
+                <Doughnut data={admissionsDonut.data} options={admissionsDonutOptions} />
+                <div className="pointer-events-none absolute inset-0 grid place-items-center">
+                  <div className="text-center">
+                    <div className="text-[11px] text-slate-500 font-semibold">Total</div>
+                    <div className="text-2xl font-black text-slate-950">{admissionsDonut.total.toLocaleString()}</div>
                   </div>
                 </div>
-                <div className="col-span-6 space-y-2">
-                  <div className="flex items-center justify-between text-sm">
-                    <div className="flex items-center gap-2">
-                      <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
-                      <span className="text-slate-600 font-semibold">New Admissions</span>
-                    </div>
-                    <span className="font-extrabold text-slate-900">{admissionsDonut.admissions} <span className="text-slate-500 font-semibold">(78%)</span></span>
-                  </div>
-                  <div className="flex items-center justify-between text-sm">
-                    <div className="flex items-center gap-2">
-                      <span className="h-2.5 w-2.5 rounded-full bg-rose-500" />
-                      <span className="text-slate-600 font-semibold">Dropouts</span>
-                    </div>
-                    <span className="font-extrabold text-slate-900">{admissionsDonut.dropouts} <span className="text-slate-500 font-semibold">(22%)</span></span>
-                  </div>
-                  <Link to="/superadmin/analysis" className="inline-flex items-center justify-center mt-2 text-xs font-extrabold text-indigo-700 hover:underline">
-                    View report
-                  </Link>
+              </div>
+            </div>
+            <div className="col-span-6 space-y-5">
+              <div className="flex items-start gap-3">
+                <span className="mt-1 h-3 w-3 rounded-full bg-emerald-500" />
+                <div>
+                  <div className="text-xs font-semibold text-slate-600">New Admissions</div>
+                  <div className="text-base font-black text-slate-950">{admissionsDonut.admissions.toLocaleString()} <span className="font-semibold text-slate-500">(82.6%)</span></div>
                 </div>
               </div>
-            </ShadowCard>
+              <div className="flex items-start gap-3">
+                <span className="mt-1 h-3 w-3 rounded-full bg-rose-500" />
+                <div>
+                  <div className="text-xs font-semibold text-slate-600">Dropouts</div>
+                  <div className="text-base font-black text-slate-950">{admissionsDonut.dropouts.toLocaleString()} <span className="font-semibold text-slate-500">(17.4%)</span></div>
+                </div>
+              </div>
+            </div>
+            <Link to="/superadmin/analysis" className="col-span-12 mt-1 inline-flex h-10 items-center justify-center rounded-lg border border-slate-200 text-sm font-black text-indigo-700 hover:bg-indigo-50">
+              View full report
+            </Link>
           </div>
+        </ShadowCard>
 
-          {/* Revenue + Fees + Health */}
-          <div className="grid grid-cols-12 gap-4">
-            <ShadowCard
-              className="col-span-12 lg:col-span-4"
-              title="Revenue Performance by School"
-              right={<div className="text-[11px] font-extrabold text-slate-600 border border-slate-200 bg-white px-3 py-1.5 rounded-xl">This month ▾</div>}
-            >
-              <div className="h-52">
-                <Bar
-                  data={revenueBySchoolBar}
-                  options={{
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    indexAxis: 'y',
-                    plugins: { legend: { display: false }, tooltip: { callbacks: { label: (ctx) => fmtKes(ctx.raw) } } },
-                    scales: {
-                      x: { ticks: { color: '#94a3b8', font: { size: 10 }, callback: (v) => (Number(v) / 1000) + 'K' }, grid: { color: 'rgba(226,232,240,0.7)' } },
-                      y: { ticks: { color: '#64748b', font: { size: 10 } }, grid: { display: false } },
-                    },
-                  }}
-                />
-              </div>
-            </ShadowCard>
-
-            <ShadowCard
-              className="col-span-12 lg:col-span-4"
-              title="Fee Collection Overview"
-              right={<div className="text-[11px] font-extrabold text-slate-600 border border-slate-200 bg-white px-3 py-1.5 rounded-xl">This month ▾</div>}
-            >
-              <div className="h-52">
-                <Line
-                  data={feeCollectionLine}
-                  options={{
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: { legend: { display: false }, tooltip: { callbacks: { label: (ctx) => fmtKes(ctx.raw) } } },
-                    scales: {
-                      y: { ticks: { color: '#94a3b8', font: { size: 10 } }, grid: { color: 'rgba(226,232,240,0.7)' } },
-                      x: { ticks: { color: '#94a3b8', font: { size: 10 } }, grid: { display: false } },
-                    },
-                  }}
-                />
-              </div>
-              <div className="mt-3 grid grid-cols-3 gap-2">
-                <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
-                  <div className="text-[10px] text-slate-500 font-extrabold uppercase tracking-wider">Total Collected</div>
-                  <div className="text-sm font-extrabold text-slate-900">KES 2.40M</div>
-                </div>
-                <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
-                  <div className="text-[10px] text-slate-500 font-extrabold uppercase tracking-wider">Pending Fees</div>
-                  <div className="text-sm font-extrabold text-slate-900">KES 1.20M</div>
-                </div>
-                <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
-                  <div className="text-[10px] text-slate-500 font-extrabold uppercase tracking-wider">Collection Rate</div>
-                  <div className="text-sm font-extrabold text-slate-900">66.7%</div>
-                </div>
-              </div>
-            </ShadowCard>
-
-            <ShadowCard className="col-span-12 lg:col-span-4" title="School Health Score" subtitle="Based on system usage, performance & engagement">
-              <div className="space-y-2">
-                {healthList.length ? healthList.map((s) => {
-                  const score = Number(s?.health_score || 0)
-                  const meta = scoreLabel(score)
-                  return (
-                    <div key={s?.id} className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2">
-                      <div className="min-w-0">
-                        <div className="text-sm font-extrabold text-slate-900 truncate">{s?.name || s?.code || '—'}</div>
-                        <div className="text-[11px] text-slate-500 font-semibold truncate">{s?.code || ''}</div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="h-8 w-8 rounded-full bg-slate-50 border border-slate-200 grid place-items-center text-xs font-extrabold text-slate-900">{Math.round(score)}</span>
-                        <span className={`inline-flex items-center px-2 py-1 rounded-full border text-[10px] font-extrabold ${meta.cls}`}>{meta.label}</span>
-                      </div>
-                    </div>
-                  )
-                }) : (
-                  <div className="text-sm text-slate-500">Loading…</div>
-                )}
-              </div>
-            </ShadowCard>
-          </div>
-
-          {/* Gender + School distribution + Map + Usage */}
-          <div className="grid grid-cols-12 gap-4">
-            <ShadowCard className="col-span-12 md:col-span-6 lg:col-span-3" title="Students by Gender">
-              <div className="flex items-center gap-4">
-                <div className="w-32 shrink-0">
-                  <Doughnut data={gender.data} options={{ responsive: true, cutout: '70%', plugins: { legend: { display: false } } }} />
+        <ShadowCard className="col-span-12 md:col-span-6 xl:col-span-2" title="Recent Activities" right={<Link to="/superadmin/logs" className="text-xs font-black text-indigo-700 hover:underline">View all</Link>}>
+          <div className="space-y-3">
+            {visibleActivities.map((a, idx) => (
+              <div key={idx} className="flex items-start gap-3">
+                <div className={`h-9 w-9 rounded-xl ${a.color} grid place-items-center text-white`}>
+                  <a.Icon className="h-4 w-4" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="text-xs text-slate-500 font-semibold">Total Students</div>
-                  <div className="text-xl font-extrabold text-slate-900">{gender.total.toLocaleString()}</div>
-                  <div className="mt-2 space-y-1 text-xs">
-                    {gender.items.map(i => (
-                      <div key={i.label} className="flex items-center justify-between gap-3 text-slate-600 font-semibold">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <span className={`h-2 w-2 rounded-full ${i.color}`} />
-                          <span className="truncate">{i.label}</span>
-                        </div>
-                        <div className="text-slate-500 font-semibold whitespace-nowrap">
-                          {i.value.toLocaleString()} ({i.pct.toFixed(1)}%)
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                  <div className="text-sm font-black text-slate-950 truncate">{a.title}</div>
+                  <div className="text-xs font-semibold text-slate-500 truncate">{a.detail}</div>
                 </div>
+                <div className="text-[11px] font-semibold text-slate-500 whitespace-nowrap">{a.time}</div>
               </div>
-            </ShadowCard>
-
-            <ShadowCard className="col-span-12 md:col-span-6 lg:col-span-3" title="Students Distribution by School">
-              <div className="flex items-center gap-4">
-                <div className="w-32 shrink-0">
-                  <Doughnut data={schoolDistribution.data} options={{ responsive: true, cutout: '72%', plugins: { legend: { display: false } } }} />
-                </div>
-                <div className="min-w-0 flex-1 space-y-1">
-                  {schoolDistribution.items.slice(0, 5).map(i => (
-                    <div key={i.label} className="flex items-center justify-between gap-3 text-xs text-slate-600 font-semibold">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className={`h-2 w-2 rounded-full ${i.dot}`} />
-                        <span className="truncate">{i.label}</span>
-                      </div>
-                      <span className="text-slate-500 font-semibold whitespace-nowrap">{i.pct.toFixed(0)}%</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </ShadowCard>
-
-            <ShadowCard className="col-span-12 lg:col-span-3" title="Schools Distribution Map">
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
-                <div className="relative h-44">
-                  <svg viewBox="0 0 1024 1024" className="absolute inset-0 h-full w-full">
-                    <defs>
-                      <linearGradient id="kfill" x1="0" x2="1">
-                        <stop offset="0" stopColor="#eef2ff" />
-                        <stop offset="1" stopColor="#f5d0fe" />
-                      </linearGradient>
-                    </defs>
-                    <g transform="translate(0,1024) scale(0.1,-0.1)">
-                      <path d={KENYA_OUTLINE_PATH} fill="url(#kfill)" stroke="#cbd5e1" strokeWidth="14" />
-                    </g>
-                  </svg>
-                </div>
-              </div>
-            </ShadowCard>
-
-            <ShadowCard
-              className="col-span-12 lg:col-span-3"
-              title="System Usage"
-              right={<div className="text-[11px] font-extrabold text-slate-600 border border-slate-200 bg-white px-3 py-1.5 rounded-xl">This month ▾</div>}
-            >
-              <div className="flex items-center justify-center">
-                <div className="relative w-40 h-24">
-                  <svg viewBox="0 0 200 120" className="w-full h-full">
-                    <path d="M20 100 A80 80 0 0 1 180 100" fill="none" stroke="#e2e8f0" strokeWidth="16" strokeLinecap="round" />
-                    <path
-                      d="M20 100 A80 80 0 0 1 180 100"
-                      fill="none"
-                      stroke="url(#gauge)"
-                      strokeWidth="16"
-                      strokeLinecap="round"
-                      strokeDasharray={`${(systemUsage.percent / 100) * 251} 251`}
-                    />
-                    <defs>
-                      <linearGradient id="gauge" x1="0" x2="1">
-                        <stop offset="0" stopColor="#6366f1" />
-                        <stop offset="1" stopColor="#8b5cf6" />
-                      </linearGradient>
-                    </defs>
-                  </svg>
-                  <div className="absolute inset-0 grid place-items-center">
-                    <div className="text-center mt-8">
-                      <div className="text-2xl font-extrabold text-slate-900">{systemUsage.percent}%</div>
-                      <div className="text-[10px] font-semibold text-slate-500">Used</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div className="mt-3 space-y-2">
-                {systemUsage.bars.map(b => (
-                  <div key={b.label}>
-                    <div className="flex items-center justify-between text-[11px] font-semibold text-slate-600">
-                      <span>{b.label}</span>
-                      <span className="text-slate-400">{b.right}</span>
-                    </div>
-                    <div className="mt-1 h-2 rounded-full bg-slate-100 overflow-hidden">
-                      <div className="h-full rounded-full bg-gradient-to-r from-indigo-600 to-violet-600" style={{ width: `${b.value}%` }} />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </ShadowCard>
+            ))}
           </div>
-        </div>
+        </ShadowCard>
 
-        {/* Right rail */}
-        <div className="col-span-12 xl:col-span-3 space-y-4">
-          <ShadowCard title="Recent Activities" right={<Link to="/superadmin/logs" className="text-xs font-extrabold text-indigo-700 hover:underline">View all</Link>}>
-            <div className="space-y-2">
-              {recentActivities.length === 0 ? (
-                <div className="text-sm text-slate-500 font-semibold">No recent activities yet.</div>
-              ) : recentActivities.map((a, idx) => (
-                <div key={idx} className="flex items-start gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2">
-                  <div className={`h-9 w-9 rounded-xl ${a.color} grid place-items-center text-white`}>
-                    <a.Icon className="h-4 w-4" />
+        <ShadowCard className="col-span-12 md:col-span-6 xl:col-span-3" title="Revenue Overview" right={<div className="text-[11px] font-extrabold text-slate-600 border border-slate-200 bg-white px-3 py-1.5 rounded-xl">This month ▾</div>}>
+          <div className="mb-3 flex items-end gap-3">
+            <div className="text-2xl font-black text-slate-950">KES 2.45M</div>
+            <div className="pb-1 text-xs font-bold text-emerald-600">▲ 15% <span className="font-semibold text-slate-500">from last month</span></div>
+          </div>
+          <div className="h-[190px]">
+            <Bar
+              data={revenueBySchoolBar}
+              options={{
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false }, tooltip: { callbacks: { label: (ctx) => fmtKes(ctx.raw) } } },
+                scales: {
+                  x: { ticks: { color: '#64748b', font: { size: 10 } }, grid: { color: 'rgba(226,232,240,0.7)' } },
+                  y: { ticks: { color: '#94a3b8', font: { size: 10 }, callback: (v) => `${Number(v) / 1000}K` }, grid: { color: 'rgba(226,232,240,0.7)' } },
+                },
+              }}
+            />
+          </div>
+        </ShadowCard>
+
+        <ShadowCard className="col-span-12 md:col-span-6 xl:col-span-3" title="Fee Collection Overview" right={<div className="text-[11px] font-extrabold text-slate-600 border border-slate-200 bg-white px-3 py-1.5 rounded-xl">This month ▾</div>}>
+          <div className="mb-3 grid grid-cols-3 gap-3">
+            <div><div className="text-lg font-black text-slate-950">KES 2.45M</div><div className="text-xs font-semibold text-slate-500">Total Collected</div></div>
+            <div><div className="text-lg font-black text-slate-950">KES 1.80M</div><div className="text-xs font-semibold text-slate-500">Pending Fees</div></div>
+            <div><div className="text-lg font-black text-slate-950">66.7%</div><div className="text-xs font-semibold text-slate-500">Collection Rate</div></div>
+          </div>
+          <div className="h-[190px]">
+            <Line
+              data={feeCollectionLine}
+              options={{
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false }, tooltip: { callbacks: { label: (ctx) => fmtKes(ctx.raw) } } },
+                scales: {
+                  y: { ticks: { color: '#94a3b8', font: { size: 10 }, callback: (v) => `${Number(v) / 1000}K` }, grid: { color: 'rgba(226,232,240,0.75)' } },
+                  x: { ticks: { color: '#64748b', font: { size: 10 } }, grid: { display: false } },
+                },
+              }}
+            />
+          </div>
+        </ShadowCard>
+
+        <ShadowCard className="col-span-12 md:col-span-6 xl:col-span-3" title="School Health Score" subtitle="Based on system usage, performance & engagement">
+          <div className="grid grid-cols-12 gap-4 items-center">
+            <div className="col-span-5">
+              <div className="relative mx-auto h-40 w-40">
+                <svg viewBox="0 0 120 120" className="h-full w-full -rotate-90">
+                  <circle cx="60" cy="60" r="48" fill="none" stroke="#e2e8f0" strokeWidth="10" />
+                  <circle cx="60" cy="60" r="48" fill="none" stroke="#5b2cff" strokeWidth="10" strokeLinecap="round" strokeDasharray={`${92 * 3.01} 301`} />
+                </svg>
+                <div className="absolute inset-0 grid place-items-center text-center">
+                  <div>
+                    <div className="text-3xl font-black text-slate-950">92%</div>
+                    <div className="text-xs font-bold text-emerald-600">Excellent</div>
                   </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="text-sm font-extrabold text-slate-900 truncate">{a.title}</div>
-                    <div className="text-[11px] text-slate-500 font-semibold">{a.time}</div>
+                </div>
+              </div>
+            </div>
+            <div className="col-span-7 space-y-3">
+              {healthList.map((item) => (
+                <div key={item.label} className="flex items-center gap-3 border-b border-slate-100 pb-2 last:border-b-0">
+                  <CheckCircle2 className="h-5 w-5 text-emerald-500" />
+                  <div>
+                    <div className="text-xs font-black text-slate-950">{item.label}</div>
+                    <div className="text-[11px] font-semibold text-slate-500">{item.value}</div>
                   </div>
                 </div>
               ))}
             </div>
-          </ShadowCard>
-
-          <ShadowCard title="Services Status">
-            <div className="space-y-2">
-              {systemHealth.items.map(s => {
-                const failed = Number(s.failed || 0)
-                const cls = failed >= 10 ? 'bg-amber-50 text-amber-800 border-amber-200' : failed > 0 ? 'bg-sky-50 text-sky-700 border-sky-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                const label = failed >= 10 ? 'Warning' : failed > 0 ? 'Degraded' : 'Healthy'
-                return (
-                  <div key={s.key} className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2">
-                    <div className="text-sm font-extrabold text-slate-900">{s.label}</div>
-                    <span className={`inline-flex items-center px-2 py-1 rounded-full border text-[10px] font-extrabold ${cls}`}>{label}</span>
-                  </div>
-                )
-              })}
-            </div>
-          </ShadowCard>
-
-          <ShadowCard title="AI Insights" right={<span className="inline-flex items-center px-2 py-1 rounded-full border border-slate-200 bg-slate-50 text-[10px] font-extrabold text-slate-600">New</span>}>
-            <div className="space-y-2">
-              {aiInsights.map((i, idx) => (
-                <div key={idx} className="flex items-start gap-2 text-sm text-slate-600">
-                  <span className="mt-1 text-indigo-600">●</span>
-                  <span className="font-semibold">{i.text}</span>
-                </div>
-              ))}
-            </div>
-            <Link to="/superadmin/analysis" className="inline-flex items-center justify-center mt-3 text-xs font-extrabold text-indigo-700 hover:underline">
-              View all insights
+            <Link to="/superadmin/analysis" className="col-span-12 mt-1 inline-flex h-10 items-center justify-center rounded-lg border border-slate-200 text-sm font-black text-indigo-700 hover:bg-indigo-50">
+              View detailed analysis
             </Link>
-          </ShadowCard>
-        </div>
-      </div>
+          </div>
+        </ShadowCard>
 
-      <div className="mt-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-[11px] text-slate-500">
-        <div>© 2024 SevenForks Technologies. All rights reserved.</div>
-        <div className="flex items-center gap-4">
-          <a href="#" className="hover:underline">Privacy Policy</a>
-          <a href="#" className="hover:underline">Terms of Service</a>
-          <a href="#" className="hover:underline">Support</a>
-        </div>
+        <ShadowCard className="col-span-12 md:col-span-6 xl:col-span-3" title="Services Status">
+          <div className="space-y-3">
+            {systemHealth.items.map((s) => {
+              const failed = Number(s.failed || 0)
+              const label = failed >= 10 ? 'Warning' : failed > 0 ? 'Degraded' : 'Healthy'
+              return (
+                <div key={s.key} className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <span className="grid h-8 w-8 place-items-center rounded-xl bg-indigo-50 text-indigo-600"><Server className="h-4 w-4" /></span>
+                    <span className="text-sm font-black text-slate-950">{s.label}</span>
+                  </div>
+                  <span className="rounded-lg bg-emerald-50 px-3 py-1 text-[11px] font-black text-emerald-700">{label}</span>
+                </div>
+              )
+            })}
+          </div>
+        </ShadowCard>
+
+        <ShadowCard className="col-span-12" title="Quick Access">
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4 xl:grid-cols-8">
+            {quickAccess.map((item) => (
+              <Link key={item.label} to={item.to} className="group flex min-h-[96px] flex-col items-center justify-center gap-3 rounded-xl bg-white transition-colors hover:bg-slate-50">
+                <span className={`grid h-12 w-12 place-items-center rounded-2xl ${item.bg} ${item.color}`}>
+                  <item.Icon className="h-6 w-6" />
+                </span>
+                <span className="text-xs font-bold text-slate-700">{item.label}</span>
+              </Link>
+            ))}
+          </div>
+        </ShadowCard>
       </div>
     </div>
   )

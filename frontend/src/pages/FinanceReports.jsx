@@ -250,6 +250,49 @@ export default function FinanceReports(){
     },
   }
 
+  const sparklineData = useMemo(() => ({
+    labels: daily.map(d => d[0]),
+    datasets: [
+      {
+        label: 'Payments',
+        data: daily.map(d => d[1]),
+        borderColor: '#4338ca',
+        backgroundColor: 'rgba(67,56,202,0.16)',
+        tension: 0.4,
+        pointRadius: 0,
+        fill: true,
+      },
+    ],
+  }), [daily])
+
+  const sparkOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        backgroundColor: 'rgba(15,23,42,0.95)',
+        titleColor: '#fff',
+        bodyColor: '#fff',
+        borderWidth: 0,
+        padding: 10,
+      },
+    },
+    scales: {
+      x: { display: false },
+      y: { display: false },
+    },
+  }
+
+  const paymentsVsExpensesData = useMemo(() => ({
+    labels: ['Payments', 'Expenses'],
+    datasets: [{
+      data: [totalAmt, totalExpenses],
+      backgroundColor: ['#22c55e', '#ef4444'],
+      hoverOffset: 6,
+    }],
+  }), [totalAmt, totalExpenses])
+
   return (
     <div className="max-w-7xl mx-auto space-y-6 pb-12">
       <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
@@ -399,6 +442,34 @@ export default function FinanceReports(){
           </div>
           <div className="mt-1 text-2xl font-extrabold tabular-nums text-gray-900">{searched.length}</div>
           <div className="text-xs mt-1 font-bold text-gray-500">Payments filtered by method/date/search</div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-5">
+          <div className="flex items-center justify-between gap-3 mb-4">
+            <div>
+              <p className="text-xs uppercase tracking-[0.2em] text-gray-400">Mobile trend</p>
+              <h3 className="text-base font-semibold text-gray-900">Last payments sparkline</h3>
+            </div>
+            <span className="text-xs font-semibold text-gray-500">{daily.length} days</span>
+          </div>
+          <div className="h-36">
+            <Line data={sparklineData} options={sparkOptions} />
+          </div>
+        </div>
+
+        <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-5">
+          <div className="flex items-center justify-between gap-3 mb-4">
+            <div>
+              <p className="text-xs uppercase tracking-[0.2em] text-gray-400">Share</p>
+              <h3 className="text-base font-semibold text-gray-900">Payments vs expenses</h3>
+            </div>
+            <span className="text-xs font-semibold text-gray-500">Quick ratio</span>
+          </div>
+          <div className="flex items-center justify-center h-36">
+            <div className="w-full max-w-xs h-full"><Doughnut data={paymentsVsExpensesData} options={{ cutout:'70%', plugins:{ legend:{ position:'bottom', labels:{ boxWidth: 8, boxHeight: 8, color: '#475569' } }, tooltip:{ backgroundColor:'rgba(15,23,42,0.95)', titleColor:'#fff', bodyColor:'#fff', borderWidth:0, padding:10 } } }} /></div>
+          </div>
         </div>
       </div>
 

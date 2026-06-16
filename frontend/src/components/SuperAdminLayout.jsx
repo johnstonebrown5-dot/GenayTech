@@ -13,29 +13,55 @@ import {
   FileText,
   MessagesSquare,
   GraduationCap,
-  Briefcase,
+  ClipboardList,
+  CalendarCheck,
   Globe,
-  Wrench,
+  Megaphone,
   Settings,
-  ChevronLeft,
-  ChevronRight,
   LogOut,
 } from 'lucide-react'
 
-const navItems = [
-  { to: '/superadmin', label: 'Dashboard', Icon: LayoutDashboard },
-  { to: '/superadmin/schools', label: 'Schools', Icon: School },
-  { to: '/superadmin/students', label: 'Students', Icon: Users },
-  { to: '/superadmin/analysis', label: 'System Analysis', Icon: BarChart3 },
-  { to: '/superadmin/logs', label: 'Logs', Icon: ScrollText },
-  { to: '/superadmin/payment-methods', label: 'Payment Methods', Icon: CreditCard },
-  { to: '/superadmin/reports', label: 'Reports', Icon: FileText },
-  { to: '/superadmin/communication', label: 'Communication', Icon: MessagesSquare },
-  { to: '/superadmin/examinations', label: 'Examinations', Icon: GraduationCap },
-  { to: '/superadmin/human-resource', label: 'Human Resource', Icon: Briefcase },
-  { to: '/superadmin/system-config', label: 'System Domain', Icon: Globe },
-  { to: '/superadmin/maintenance', label: 'Maintenance', Icon: Wrench },
-  { to: '/superadmin/profile', label: 'Settings', Icon: Settings },
+const navGroups = [
+  {
+    title: '',
+    items: [
+      { to: '/superadmin', label: 'Dashboard', Icon: LayoutDashboard },
+    ],
+  },
+  {
+    title: 'Management',
+    items: [
+      { to: '/superadmin/schools', label: 'Schools', Icon: School },
+      { to: '/superadmin/students', label: 'Students', Icon: Users },
+      { to: '/superadmin/teachers', label: 'Teachers', Icon: GraduationCap },
+      { to: '/superadmin/classes', label: 'Classes', Icon: ClipboardList },
+      { to: '/superadmin/examinations', label: 'Examinations', Icon: FileText },
+      { to: '/superadmin/attendance', label: 'Attendance', Icon: CalendarCheck },
+    ],
+  },
+  {
+    title: 'Analytics',
+    items: [
+      { to: '/superadmin/analysis', label: 'System Analysis', Icon: BarChart3 },
+      { to: '/superadmin/reports', label: 'Reports', Icon: FileText },
+    ],
+  },
+  {
+    title: 'Communication',
+    items: [
+      { to: '/superadmin/communication', label: 'Communication', Icon: MessagesSquare },
+      { to: '/superadmin/announcements', label: 'Announcements', Icon: Megaphone },
+    ],
+  },
+  {
+    title: 'System',
+    items: [
+      { to: '/superadmin/payment-methods', label: 'Payment Methods', Icon: CreditCard },
+      { to: '/superadmin/logs', label: 'Logs', Icon: ScrollText },
+      { to: '/superadmin/system-config', label: 'System Domain', Icon: Globe },
+      { to: '/superadmin/profile', label: 'Settings', Icon: Settings },
+    ],
+  },
 ]
 
 export default function SuperAdminLayout({ children }){
@@ -44,9 +70,8 @@ export default function SuperAdminLayout({ children }){
   const { user, logout } = useAuth()
   const [displayUser, setDisplayUser] = useState(user)
   const [avatarUrl, setAvatarUrl] = useState('')
-  const [isOpen, setIsOpen] = useState(true)
   const [isMobileOpen, setIsMobileOpen] = useState(false)
-  const brandName = 'SevenForks'
+  const brandName = 'GENAY'
 
   useEffect(() => { setIsMobileOpen(false) }, [pathname])
 
@@ -96,53 +121,51 @@ export default function SuperAdminLayout({ children }){
     return () => { try { window.removeEventListener('profile:updated', onUpdated) } catch {} }
   }, [user])
 
-  const Item = ({ to, label, Icon, disabled = false, forceLabel = false }) => {
+  const Item = ({ to, label, Icon, disabled = false }) => {
     const normalizePath = (p) => String(p || '').replace(/\/+$/, '') || '/'
     const currentPath = normalizePath(pathname)
     const targetPath = normalizePath(to)
     const active = targetPath === '/superadmin'
       ? currentPath === targetPath
       : currentPath === targetPath || currentPath.startsWith(targetPath + '/')
-    const showLabel = isOpen || forceLabel
     const base =
-      `group relative flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-semibold transition-all active:scale-[0.99] ` +
+      `group relative flex items-center gap-3 px-4 py-3 rounded-xl text-[15px] font-bold transition-all active:scale-[0.99] ` +
       (disabled
         ? 'opacity-55 cursor-not-allowed text-white/70'
         : active
-          ? 'bg-gradient-to-r from-[#6d5dfc] to-[#4d32d9] text-white shadow-md shadow-indigo-500/20'
-          : 'text-white/80 hover:bg-white/10 hover:text-white')
+          ? 'bg-gradient-to-r from-[#7c3cff] to-[#4b2cff] text-white shadow-[0_0_24px_rgba(124,60,255,0.55)]'
+          : 'text-white/86 hover:bg-white/10 hover:text-white')
 
     const inner = (
       <>
-        <span aria-hidden className={`absolute left-0 top-1/2 -translate-y-1/2 h-6 w-1 rounded-full bg-white transition-opacity ${active ? 'opacity-90' : 'opacity-0'}`} />
-        <span className={`grid place-items-center h-9 w-9 rounded-xl transition-all ${active ? 'bg-white/15 ring-1 ring-white/20' : 'bg-white/10 group-hover:bg-white/15 ring-1 ring-white/10'}`}>
+        <span className={`grid place-items-center h-7 w-7 rounded-lg transition-all ${active ? 'bg-white/10 text-white' : 'bg-white/8 text-white/80 group-hover:bg-white/12'}`}>
           <Icon className="h-[18px] w-[18px]" />
         </span>
-        <span className={`${showLabel ? 'block' : 'hidden'} whitespace-nowrap`}>{label}</span>
+        <span className="whitespace-nowrap">{label}</span>
       </>
     )
 
     if (disabled || !to) {
       return (
-        <button type="button" disabled className={base} title={!showLabel ? label : undefined}>
+        <button type="button" disabled className={base}>
           {inner}
         </button>
       )
     }
 
     return (
-      <Link to={to} title={!showLabel ? label : undefined} className={base}>
+      <Link to={to} className={base}>
         {inner}
       </Link>
     )
   }
 
   return (
-    <div className="min-h-screen w-full bg-[#f5f6ff]">
+    <div className="min-h-screen w-full bg-[#f7f8ff]">
       <div className="md:hidden sticky top-0 z-40 flex items-center justify-between px-4 py-3 bg-white/80 backdrop-blur border-b border-slate-200 pt-[env(safe-area-inset-top)]">
         <button onClick={() => setIsMobileOpen(v => !v)} className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 hover:bg-slate-50">Menu</button>
         <div className="flex items-center gap-2 min-w-0">
-          <div className="h-8 w-8 rounded-xl bg-gradient-to-br from-indigo-600 to-violet-600" />
+          <div className="h-8 w-8 rounded-xl bg-gradient-to-br from-sky-400 to-indigo-700" />
           <div className="font-extrabold tracking-tight text-slate-900 truncate">{brandName}</div>
         </div>
         <button onClick={() => navigate('/superadmin/sessions')} className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 hover:bg-slate-50">Logout</button>
@@ -150,56 +173,50 @@ export default function SuperAdminLayout({ children }){
 
       <div className="flex w-full min-w-0">
         <aside
-          className={`h-[100dvh] sticky top-0 hidden md:flex flex-col ${isOpen ? 'w-[280px]' : 'w-24'} transition-all duration-200 text-white bg-gradient-to-b from-[#0b1027] via-[#0f1637] to-[#4b1bd9]`}
+          className="h-[100dvh] sticky top-0 hidden md:flex w-[292px] shrink-0 flex-col text-white bg-[radial-gradient(circle_at_20%_20%,rgba(81,61,255,0.28),transparent_28%),linear-gradient(180deg,#050b1f_0%,#071036_56%,#12086f_100%)]"
         >
-          <div className="px-4 pt-5 pb-3">
-            <div className="flex items-center justify-between">
-              <div className={`flex items-center gap-2 ${isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'} transition-opacity`}>
-                <div className="h-8 w-8 rounded-full bg-white/10 ring-1 ring-white/15 grid place-items-center">
-                  <span className="font-black tracking-tight">SF</span>
-                </div>
-                <div className="font-extrabold tracking-tight">{brandName}</div>
+          <div className="px-5 pt-8 pb-4">
+            <div className="flex items-center gap-3">
+              <div className="grid h-12 w-12 place-items-center rounded-2xl bg-gradient-to-br from-cyan-300 via-blue-500 to-indigo-700 text-[30px] font-black shadow-[0_12px_30px_rgba(37,99,235,0.35)]">
+                G
               </div>
-              <button
-                onClick={() => setIsOpen(v => !v)}
-                className="h-8 w-8 rounded-lg hover:bg-white/10 text-white/90 grid place-items-center"
-                aria-label="Toggle sidebar"
-              >
-                {isOpen ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-              </button>
-            </div>
-
-            <div className="mt-4 flex items-center gap-2">
-              <div className="h-8 w-8 rounded-full bg-white/10 ring-1 ring-white/15 grid place-items-center">
-                <span className="h-2 w-2 rounded-full bg-white/90" />
+              <div>
+                <div className="text-[20px] font-black leading-5 tracking-wide">{brandName}</div>
+                <div className="mt-1 text-[10px] font-black uppercase tracking-[0.22em] text-white/80">Technologies</div>
               </div>
-              <div className={`text-xs font-semibold text-white/80 ${isOpen ? 'block' : 'hidden'}`}>Super Admin</div>
             </div>
           </div>
 
-          <nav className="px-3 pb-3 space-y-1">
-            {navItems.map(i => (
-              <Item key={i.to || i.label} {...i} />
+          <nav className="flex-1 overflow-y-auto px-5 pb-4">
+            {navGroups.map((group) => (
+              <div key={group.title || 'main'} className={group.title ? 'mt-5' : ''}>
+                {group.title && <div className="mb-2 px-3 text-[12px] font-black uppercase tracking-[0.08em] text-white/42">{group.title}</div>}
+                <div className="space-y-1.5">
+                  {group.items.map(i => <Item key={i.to || i.label} {...i} />)}
+                </div>
+              </div>
             ))}
           </nav>
 
-          <div className="mt-auto px-4 pb-4">
-            <div className={`rounded-2xl bg-white/10 ring-1 ring-white/15 p-3 ${isOpen ? 'block' : 'hidden'}`}>
+          <div className="px-5 pb-6">
+            <div className="overflow-hidden rounded-2xl bg-white/9 ring-1 ring-white/10">
+              <div className="p-4">
               <div className="flex items-center gap-3">
-                <div className="relative h-10 w-10 rounded-xl overflow-hidden bg-white/15 ring-1 ring-white/15 flex items-center justify-center">
+                <div className="relative h-12 w-12 rounded-full overflow-hidden bg-white ring-1 ring-white/15 flex items-center justify-center">
                   {avatarUrl ? (
                     <img src={avatarUrl} alt="Avatar" className="h-full w-full object-cover" />
                   ) : (
-                    <span className="text-white text-sm font-extrabold">{userInitial}</span>
+                    <span className="text-indigo-700 text-sm font-extrabold">{userInitial}</span>
                   )}
-                  <span className="absolute -right-0.5 -bottom-0.5 h-3 w-3 rounded-full bg-emerald-400 ring-2 ring-[#0f1637]" />
+                  <span className="absolute -right-0.5 -bottom-0.5 h-3.5 w-3.5 rounded-full bg-emerald-400 ring-2 ring-[#15126a]" />
                 </div>
                 <div className="min-w-0">
-                  <div className="text-[11px] font-extrabold text-white truncate">Super Admin</div>
-                  <div className="text-[11px] text-white/70 truncate">{displayUser?.email || displayUser?.username || ''}</div>
+                  <div className="text-[14px] font-black text-white truncate">Super Admin</div>
+                  <div className="text-[12px] text-white/68 truncate">{displayUser?.email || displayUser?.username || 'superadmin@genay.com'}</div>
                 </div>
               </div>
-              <button onClick={logout} className="mt-3 w-full px-3 py-2 rounded-xl text-sm font-extrabold bg-white text-slate-900 hover:bg-white/90 inline-flex items-center justify-center gap-2">
+              </div>
+              <button onClick={logout} className="w-full border-t border-white/8 bg-white/5 px-3 py-3 text-[14px] font-bold text-white hover:bg-white/10 inline-flex items-center justify-center gap-2">
                 <LogOut className="h-4 w-4" />
                 Logout
               </button>
@@ -210,19 +227,20 @@ export default function SuperAdminLayout({ children }){
         {isMobileOpen && (
           <div className="md:hidden fixed inset-0 z-50">
             <div className="absolute inset-0 bg-black/40" onClick={() => setIsMobileOpen(false)} />
-            <div className="absolute left-0 top-0 bottom-0 w-[85vw] max-w-[20rem] text-white bg-gradient-to-b from-[#0b1027] via-[#0f1637] to-[#4b1bd9] border-r border-black/20 p-3 pt-[env(safe-area-inset-top)]">
+            <div className="absolute left-0 top-0 bottom-0 w-[85vw] max-w-[20rem] text-white bg-gradient-to-b from-[#050b1f] via-[#071036] to-[#12086f] border-r border-black/20 p-3 pt-[env(safe-area-inset-top)] overflow-y-auto">
               <div className="flex items-center justify-between mb-3 px-1">
                 <div className="flex items-center gap-2">
-                  <div className="h-8 w-8 rounded-xl bg-white/10 ring-1 ring-white/15 grid place-items-center font-black">SF</div>
+                  <div className="h-8 w-8 rounded-xl bg-gradient-to-br from-cyan-300 to-indigo-700 grid place-items-center font-black">G</div>
                   <div className="font-extrabold tracking-tight text-white">{brandName}</div>
                 </div>
                 <button onClick={() => setIsMobileOpen(false)} className="p-2 rounded-xl hover:bg-white/10 text-white">✖</button>
               </div>
-              <div className="space-y-1">
-                {navItems.map(i => (
-                  <Item key={i.to || i.label} {...i} forceLabel />
-                ))}
-              </div>
+              {navGroups.map((group) => (
+                <div key={group.title || 'main'} className={group.title ? 'mt-5' : ''}>
+                  {group.title && <div className="mb-2 px-3 text-[12px] font-black uppercase tracking-[0.08em] text-white/42">{group.title}</div>}
+                  <div className="space-y-1">{group.items.map(i => <Item key={i.to || i.label} {...i} />)}</div>
+                </div>
+              ))}
               <button onClick={logout} className="mt-4 w-full px-3 py-2 rounded-xl text-sm font-extrabold bg-white text-slate-900 hover:bg-white/90 inline-flex items-center justify-center gap-2">
                 <LogOut className="h-4 w-4" />
                 Logout
@@ -231,8 +249,8 @@ export default function SuperAdminLayout({ children }){
           </div>
         )}
 
-        <main className="flex-1 w-full min-w-0 p-4 sm:p-5 md:p-6">
-          <div className="max-w-[1400px] mx-auto">
+        <main className="flex-1 w-full min-w-0 p-4 sm:p-5 md:p-7">
+          <div className="max-w-[1600px] mx-auto">
             {children}
           </div>
         </main>

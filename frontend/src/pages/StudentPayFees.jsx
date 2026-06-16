@@ -54,116 +54,120 @@ export default function StudentPayFees(){
   }
 
   return (
-    <div className="-mx-3 sm:mx-0 rounded-none sm:rounded-3xl overflow-hidden border border-slate-200/70 shadow-[0_18px_45px_rgba(15,23,42,0.08)] bg-gradient-to-br from-white via-white to-slate-50">
-      <div className="px-4 sm:px-6 pt-5 pb-4 border-b border-slate-200/60 bg-white/70 backdrop-blur-xl">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <div className="h-9 w-9 rounded-2xl bg-gradient-to-br from-emerald-500 to-sky-500 text-white grid place-items-center shadow-sm">
-                <Coins className="h-5 w-5" />
-              </div>
+    <div className="px-4 sm:px-6 pb-6">
+      <div className="max-w-3xl mx-auto space-y-6">
+        <div className="overflow-hidden rounded-[28px] border border-slate-200/70 bg-gradient-to-br from-white via-white to-slate-50 shadow-[0_18px_45px_rgba(15,23,42,0.08)]">
+          <div className="bg-white/90 backdrop-blur-xl border-b border-slate-200/60 px-4 sm:px-6 py-5">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
               <div className="min-w-0">
-                <div className="text-[11px] font-semibold tracking-[0.18em] text-slate-500 uppercase">Finance</div>
-                <div className="text-base sm:text-lg font-semibold text-slate-900 truncate">Pay Fees</div>
-              </div>
-            </div>
-            <div className="mt-2 text-xs text-slate-600 flex items-center gap-2">
-              <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-slate-100 text-slate-700 border border-slate-200">
-                <ShieldCheck className="h-3.5 w-3.5" />
-                Secure via M-Pesa STK
-              </span>
-              <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-white/20 ${statusMeta.cls}`}>
-                {(() => {
-                  const Icon = statusMeta.icon
-                  return <Icon className={`h-3.5 w-3.5 ${statusMeta.spin ? 'animate-spin' : ''}`} />
-                })()}
-                {statusMeta.label}
-              </span>
-            </div>
-          </div>
-          <button
-            onClick={onBack}
-            className="shrink-0 inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm text-slate-700 hover:bg-slate-50 active:scale-[0.99] transition"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Back
-          </button>
-        </div>
-      </div>
-
-      <div className="px-4 sm:px-6 pt-4 pb-6">
-        {error && <div className="mb-3 bg-rose-50 border border-rose-200 rounded-2xl p-3 text-sm text-rose-800">{error}</div>}
-
-        <form onSubmit={submit} className="bg-white rounded-3xl border border-slate-200 shadow-card p-4 sm:p-5">
-          <div className="grid gap-4">
-            <div>
-              <label className="block text-sm font-semibold text-slate-800">Amount</label>
-              <div className="mt-1.5 relative">
-                <div className="pointer-events-none absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400">
-                  <Coins className="h-4 w-4" />
+                <div className="flex items-center gap-3">
+                  <div className="h-11 w-11 rounded-2xl bg-gradient-to-br from-emerald-500 to-sky-500 text-white grid place-items-center shadow-sm">
+                    <Coins className="h-5 w-5" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-[11px] font-semibold tracking-[0.18em] text-slate-500 uppercase">Finance</div>
+                    <div className="text-xl sm:text-2xl font-semibold text-slate-900 truncate">Pay Fees</div>
+                  </div>
                 </div>
-                <input
-                  ref={amountRef}
-                  type="text"
-                  inputMode="decimal"
-                  className="w-full border border-slate-200 rounded-2xl pl-10 pr-3 py-3 text-sm bg-white focus-soft"
-                  value={amount}
-                  onChange={e=>setAmount(e.target.value)}
-                  placeholder="e.g. 1500"
-                />
-              </div>
-              <div className="mt-1 text-xs text-slate-500">Enter the amount you want to pay now.</div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-semibold text-slate-800">Phone (M-Pesa)</label>
-              <div className="mt-1.5 relative">
-                <div className="pointer-events-none absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400">
-                  <Phone className="h-4 w-4" />
+                <p className="mt-3 text-sm text-slate-600 max-w-2xl">Pay school fees directly using M-Pesa STK. Confirm the prompt on your phone to complete the transaction securely.</p>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <span className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-700">
+                    <ShieldCheck className="h-3.5 w-3.5" />
+                    Secure via M-Pesa
+                  </span>
+                  <span className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium ${statusMeta.cls}`}>
+                    {(() => {
+                      const Icon = statusMeta.icon
+                      return <Icon className={`h-3.5 w-3.5 ${statusMeta.spin ? 'animate-spin' : ''}`} />
+                    })()}
+                    {statusMeta.label}
+                  </span>
                 </div>
-                <input
-                  ref={phoneRef}
-                  type="tel"
-                  className="w-full border border-slate-200 rounded-2xl pl-10 pr-3 py-3 text-sm bg-white focus-soft"
-                  value={phone}
-                  onChange={e=>setPhone(e.target.value)}
-                  placeholder="07XXXXXXXX or 2547XXXXXXXX"
-                  inputMode="numeric"
-                />
               </div>
-              <div className="mt-1 text-xs text-slate-500">We’ll send an STK prompt to this number.</div>
-            </div>
-
-            <div className="flex items-center justify-between pt-1 text-xs text-slate-500">
-              <span className="inline-flex items-center gap-1.5">
-                <Sparkles className="h-3.5 w-3.5" />
-                Tip: Confirm the prompt on your phone to finish.
-              </span>
-              {stkStatus !== 'idle' && <span className="font-medium text-slate-600">{String(stkStatus).toUpperCase()}</span>}
-            </div>
-
-            <div className="grid grid-cols-2 gap-2">
               <button
-                type="button"
                 onClick={onBack}
-                className="px-4 py-3 rounded-2xl border border-slate-200 text-sm font-semibold text-slate-700 bg-white hover:bg-slate-50 active:scale-[0.99] transition disabled:opacity-60"
-                disabled={submitting}
+                className="shrink-0 inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition"
               >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                className="px-4 py-3 rounded-2xl text-sm font-semibold text-white bg-gradient-to-r from-emerald-600 to-sky-600 shadow-soft hover:from-emerald-600 hover:to-sky-500 active:scale-[0.99] transition disabled:opacity-60 disabled:shadow-none"
-                disabled={submitting || !(Number(amount) > 0 && String(phone||'').trim())}
-              >
-                <span className="inline-flex items-center justify-center gap-2">
-                  {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                  {submitting ? 'Processing…' : 'Pay Now'}
-                </span>
+                <ArrowLeft className="h-4 w-4" />
+                Back
               </button>
             </div>
           </div>
-        </form>
+
+          <div className="px-4 sm:px-6 pb-6 pt-5">
+            {error && <div className="mb-4 rounded-3xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">{error}</div>}
+            <form onSubmit={submit} className="space-y-5 rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="grid gap-4">
+                <div>
+                  <label className="block text-sm font-semibold text-slate-800">Amount</label>
+                  <div className="mt-2 relative">
+                    <div className="pointer-events-none absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400">
+                      <Coins className="h-4 w-4" />
+                    </div>
+                    <input
+                      ref={amountRef}
+                      type="text"
+                      inputMode="decimal"
+                      className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-10 py-3 text-sm text-slate-900 outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                      value={amount}
+                      onChange={e => setAmount(e.target.value)}
+                      placeholder="e.g. 1500"
+                    />
+                  </div>
+                  <p className="mt-2 text-xs text-slate-500">Enter the amount you want to pay now.</p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-slate-800">Phone (M-Pesa)</label>
+                  <div className="mt-2 relative">
+                    <div className="pointer-events-none absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400">
+                      <Phone className="h-4 w-4" />
+                    </div>
+                    <input
+                      ref={phoneRef}
+                      type="tel"
+                      className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-10 py-3 text-sm text-slate-900 outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                      value={phone}
+                      onChange={e => setPhone(e.target.value)}
+                      placeholder="07XXXXXXXX or 2547XXXXXXXX"
+                      inputMode="numeric"
+                    />
+                  </div>
+                  <p className="mt-2 text-xs text-slate-500">We’ll send an STK prompt to this number.</p>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between text-sm text-slate-500">
+                <div className="inline-flex items-center gap-2">
+                  <Sparkles className="h-4 w-4" />
+                  Tip: Confirm the prompt on your phone to finish.
+                </div>
+                {stkStatus !== 'idle' && <div className="font-medium text-slate-700">{String(stkStatus).toUpperCase()}</div>}
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={onBack}
+                  className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={submitting}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="rounded-2xl bg-gradient-to-r from-emerald-600 to-sky-600 px-4 py-3 text-sm font-semibold text-white shadow-soft hover:from-emerald-700 hover:to-sky-500 transition disabled:opacity-60 disabled:shadow-none"
+                  disabled={submitting || !(Number(amount) > 0 && String(phone || '').trim())}
+                >
+                  <span className="inline-flex items-center justify-center gap-2">
+                    {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                    {submitting ? 'Processing…' : 'Pay Now'}
+                  </span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       </div>
     </div>
   )

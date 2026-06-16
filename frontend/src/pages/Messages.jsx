@@ -1,9 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { useLocation } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { Loader2, Search, User, ShieldAlert, Check, CheckCheck } from 'lucide-react'
 import api from '../api'
 import { useNotification } from '../components/NotificationContext'
 import { useAuth } from '../auth'
+import StudentMobileHeader from '../components/studentMobile/StudentMobileHeader'
 
 // Global cache for users to persist across navigations
 let __usersCache = null;
@@ -13,6 +14,7 @@ export default function Messages(){
   const { user } = useAuth()
   const { showSuccess, showError } = useNotification()
   const location = useLocation()
+  const navigate = useNavigate()
   const [inbox, setInbox] = useState([])
   const [outbox, setOutbox] = useState([])
   const [loading, setLoading] = useState(true)
@@ -602,11 +604,44 @@ export default function Messages(){
     }
   }, [conversation.length])
 
+  const isStudentMobile = location.pathname.startsWith('/student/messages')
+
   return (
-    <div className="messages-page mx-auto max-w-6xl w-full h-[calc(100vh-5rem)] bg-slate-50 md:bg-white md:border md:rounded-2xl overflow-hidden flex md:shadow-card">
+    <div>
+      {isStudentMobile && !activeUser && viewTab !== 'system' && (
+        <div className="sm:hidden bg-blue-600 rounded-b-3xl shadow-md">
+          <StudentMobileHeader
+            theme="blue"
+            embedded
+            title="Messages"
+            showBack
+            onBack={() => navigate('/student')}
+            rightIcon={
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+              </svg>
+            }
+            onRightClick={() => setShowUsersMobile(true)}
+          />
+        </div>
+      )}
+      {isStudentMobile && !activeUser && viewTab !== 'system' && (
+        <div className="sm:hidden px-4 py-3 bg-slate-50">
+          <div className="relative">
+            <input
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              placeholder="Search messages"
+              className="w-full h-11 rounded-2xl border-0 bg-white pl-10 pr-4 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
+            />
+            <Search className="h-4 w-4 absolute left-3.5 top-3.5 text-slate-400" />
+          </div>
+        </div>
+      )}
+    <div className={`messages-page mx-auto max-w-6xl w-full ${isStudentMobile ? 'h-[calc(100vh-11rem)] sm:h-[calc(100vh-5rem)]' : 'h-[calc(100vh-5rem)]'} bg-slate-50 md:bg-white md:border md:rounded-2xl overflow-hidden flex md:shadow-card`}>
       {/* Left: Users list */}
       <aside className={`w-full sm:w-80 border-r border-white/80 flex-col bg-slate-50 md:bg-white overflow-hidden ${activeUser || viewTab === 'system' ? 'hidden sm:flex' : 'flex'}`}>
-        <div className="flex flex-col p-3 sm:p-4 border-b border-white/80 bg-white/90 backdrop-blur-xl sticky top-0 z-20 shadow-sm">
+        <div className="flex flex-col p-3 sm:p-4 border-b border-white/80 bg-white/90 backdrop-blur-xl sticky top-0 z-20 shadow-sm hidden sm:flex">
           <div className="relative mb-3 overflow-hidden rounded-2xl border border-indigo-100 bg-gradient-to-br from-white via-indigo-50/80 to-sky-50 p-3">
             <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_right,rgba(79,70,229,0.09)_1px,transparent_1px),linear-gradient(to_bottom,rgba(79,70,229,0.09)_1px,transparent_1px)] bg-[size:22px_22px]" />
             <div className="relative">
@@ -666,7 +701,7 @@ export default function Messages(){
           </div>
         </div>
         
-        <div className="p-3 border-b border-white/80 bg-slate-50">
+        <div className={`p-3 border-b border-white/80 bg-slate-50 ${isStudentMobile ? 'hidden sm:block' : ''}`}>
           <div className="relative">
             <input
               value={query}
@@ -1203,6 +1238,7 @@ export default function Messages(){
           </div>
         </div>
       )}
+    </div>
     </div>
   )
 }

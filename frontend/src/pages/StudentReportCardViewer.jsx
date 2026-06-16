@@ -2,6 +2,10 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, Link, useLocation } from 'react-router-dom'
 import api, { toAbsoluteUrl } from '../api'
 import { useAuth } from '../auth'
+import { Line, Bar, Doughnut } from 'react-chartjs-2'
+import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, LineElement, PointElement, ArcElement, Tooltip, Legend } from 'chart.js'
+
+ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, ArcElement, Tooltip, Legend)
 
 export default function StudentReportCardViewer({ embedded=false, hideControls=false, hideHistory=false, showTermSelector=true, showExamSelector=true, showBackPrint=true, selectedTermYear: controlledTermYear=null, onSelectedTermYearChange, selectedExamId: controlledExamId=null, onSelectedExamIdChange, studentIdProp=null, autoFlow=false, autoFlowWidth=820 }){
   const { id } = useParams()
@@ -778,6 +782,160 @@ export default function StudentReportCardViewer({ embedded=false, hideControls=f
     return { total, count, average }
   }, [subjects, termExams, marksByExamAndSubject])
 
+  const subjectScores = useMemo(() => subjects.map((subj) => {
+    const value = Number(selectedExamMarks[String(subj.id)])
+    return Number.isFinite(value) ? Math.max(0, Math.min(100, value)) : 0
+  }), [subjects, selectedExamMarks])
+
+  const examTrendData = useMemo(() => {
+    const map = new Map()
+    for (const r of examResults) {
+      const ed = r.exam_detail || {}
+      const exId = String(toId(ed.id) || toId(r.exam) || toId(r.exam_id) || '')
+      if (!exId) continue
+      const year = ed.year || (ed?.date ? (isNaN(new Date(ed.date)) ? null : new Date(ed.date).getFullYear()) : null)
+      const term = ed.term || ed?.inferred_term?.number || null
+      const label = ed.name || String(r.exam || `Exam ${exId}`)
+      let raw = Number(r.marks ?? r.score ?? r.total ?? r.subject_total ?? r.total_marks ?? r.mark ?? r.value)
+      if (!Number.isFinite(raw)) continue
+      const denom = Number(r.out_of ?? r.component_detail?.max_marks ?? ed.total_marks ?? 100)
+      const normalized = Number.isFinite(denom) && denom > 0 ? Math.max(0, Math.min(100, raw > 100 && raw > denom ? (raw / 100) * denom : (raw / denom) * 100)) : null
+      if (!Number.isFinite(normalized)) continue
+      const item = map.get(exId) || { total: 0, count: 0, label, year, term }
+      item.total += normalized
+      item.count += 1
+      map.set(exId, item)
+    }
+    const arr = Array.from(map.values())
+      .filter(item => item.count > 0)
+      .map(item => ({
+        label: item.label,
+        year: item.year,
+        term: item.term,
+        avg: item.total / item.count,
+      }))
+      .sort((a, b) => {
+        const ya = Number(a.year || 0)
+        const yb = Number(b.year || 0)
+        if (ya !== yb) return ya - yb
+        const ta = Number(a.term || 0)
+        const tb = Number(b.term || 0)
+        if (ta !== tb) return ta - tb
+        return String(a.label || '').localeCompare(String(b.label || ''))
+      })
+    return arr
+  }, [examResults])
+
+  const examTrendChartData = useMemo(() => ({
+    labels: examTrendData.map((item, index) => item.label || `Exam ${index + 1}`),
+    datasets: [
+      {
+        label: 'Average score',
+        data: examTrendData.map(item => Number(item.avg.toFixed(1))),
+        borderColor: '#2563eb',
+        backgroundColor: 'rgba(37,99,235,0.16)',
+        tension: 0.35,
+        pointRadius: examTrendData.length === 1 ? 6 : 4,
+        pointBackgroundColor: '#2563eb',
+        pointBorderColor: '#2563eb',
+        pointBorderWidth: 2,
+        borderWidth: 2,
+        spanGaps: true,
+        fill: false,
+        cubicInterpolationMode: 'monotone',
+      },
+    ],
+  }), [examTrendData])
+
+  const examTrendChartOptions = useMemo(() => ({
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        backgroundColor: 'rgba(15,23,42,0.95)',
+        titleColor: '#fff',
+        bodyColor: '#fff',
+        borderWidth: 0,
+        padding: 10,
+      },
+    },
+    elements: {
+      line: { tension: 0.35, borderWidth: 2 },
+      point: { radius: 5, hoverRadius: 7 },
+    },
+    scales: {
+      x: {
+        grid: { color: 'rgba(15,23,42,0.05)' },
+        ticks: { color: '#64748b', font: { size: 11 }, maxRotation: 0, minRotation: 0, autoSkip: true },
+      },
+      y: {
+        beginAtZero: true,
+        max: 100,
+        grid: { color: 'rgba(15,23,42,0.05)' },
+        ticks: { color: '#64748b', font: { size: 11 }, callback: (value) => `${value}%` },
+      },
+    },
+  }), [])
+
+  const subjectPerformanceData = useMemo(() => ({
+    labels: subjects.map((subj) => subj.label),
+    datasets: [
+      {
+        label: 'Score %',
+        data: subjectScores,
+        backgroundColor: subjectScores.map((_, index) => index % 2 === 0 ? 'rgba(59,130,246,0.75)' : 'rgba(16,185,129,0.72)'),
+        borderColor: '#3b82f6',
+        borderWidth: 1,
+        borderRadius: 8,
+        maxBarThickness: 26,
+      },
+    ],
+  }), [subjectScores, subjects])
+
+  const performanceChartOptions = useMemo(() => ({
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        backgroundColor: 'rgba(15,23,42,0.95)',
+        titleColor: '#fff',
+        bodyColor: '#fff',
+        borderWidth: 0,
+        padding: 10,
+      },
+    },
+    scales: {
+      x: {
+        grid: { color: 'rgba(15,23,42,0.05)' },
+        ticks: { color: '#64748b', font: { size: 11 }, autoSkip: true, maxRotation: 0, minRotation: 0 },
+      },
+      y: {
+        beginAtZero: true,
+        max: 100,
+        grid: { color: 'rgba(15,23,42,0.05)' },
+        ticks: { color: '#64748b', font: { size: 11 }, stepSize: 20, callback: (value) => `${value}%` },
+      },
+    },
+  }), [])
+
+  const gaugeChartOptions = useMemo(() => ({
+    responsive: true,
+    maintainAspectRatio: false,
+    cutout: '70%',
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        backgroundColor: 'rgba(15,23,42,0.95)',
+        titleColor: '#fff',
+        bodyColor: '#fff',
+        borderWidth: 0,
+        padding: 10,
+      },
+    },
+  }), [])
+
   const examHistory = useMemo(()=>{
     const map = new Map()
     for (const r of examResults){
@@ -1015,6 +1173,19 @@ export default function StudentReportCardViewer({ embedded=false, hideControls=f
                             : '-'
                         )}
                       </div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-3xl border border-gray-200 bg-slate-50 p-4 mb-4">
+                    <div className="flex items-center justify-between gap-3 mb-3">
+                      <div>
+                        <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Performance over time</p>
+                        <h3 className="text-base font-semibold text-slate-900">Exam trend</h3>
+                      </div>
+                      <span className="text-xs font-semibold text-slate-500">{examTrendData.length || 0} exams</span>
+                    </div>
+                    <div className="h-56">
+                      <Line data={examTrendChartData} options={examTrendChartOptions} />
                     </div>
                   </div>
 

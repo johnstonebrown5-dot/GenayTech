@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { Link, useParams } from 'react-router-dom'
 import api from '../api'
 import StudentReportCardViewer from './StudentReportCardViewer'
 
@@ -144,6 +144,12 @@ export default function StudentAllReportCards({ studentIdProp=null }){
   }, [examResults])
 
   const effectiveStudentId = resolvedStudentId
+  const formatReportLabel = (exam) => {
+    if (!exam) return 'Report Card'
+    const termLabel = exam.term != null ? `Term ${exam.term}` : null
+    const yearLabel = exam.year ? `${exam.year}` : null
+    return [termLabel, yearLabel].filter(Boolean).join(' · ') || 'Report Card'
+  }
 
   if (loading) return <div className="p-6 max-w-3xl mx-auto bg-white rounded shadow">Loading…</div>
   if (error) return <div className="p-6 max-w-3xl mx-auto bg-red-50 text-red-700 rounded border border-red-100">{error}</div>
@@ -153,36 +159,62 @@ export default function StudentAllReportCards({ studentIdProp=null }){
   )
 
   return (
-    <div className="p-6">
-      <div className="max-w-3xl mx-auto space-y-6">
-        {allExams.map(ex => (
-          <div key={ex.id} className="border rounded-xl overflow-hidden bg-white shadow">
-            <div className="flex items-center justify-end gap-2 p-3 border-b bg-slate-50">
-              <button
-                type="button"
-                className="px-3 py-1.5 rounded border text-sm bg-white hover:bg-gray-50"
-                onClick={() => printElement(cardRefs.current[String(ex.id)], `ReportCard_${ex.year||''}_T${ex.term||''}_${ex.id}`)}
-              >Print</button>
-              <button
-                type="button"
-                className="px-3 py-1.5 rounded bg-indigo-600 text-white text-sm hover:bg-indigo-700"
-                onClick={() => printElement(cardRefs.current[String(ex.id)], `ReportCard_${ex.year||''}_T${ex.term||''}_${ex.id}`)}
-              >Download</button>
+    <div className="px-4 sm:px-6 pb-6">
+      <div className="max-w-5xl mx-auto space-y-6">
+        <div className="rounded-[28px] border border-slate-200 bg-white shadow-[0_18px_45px_rgba(15,23,42,0.08)] p-5">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
+              <div className="text-[11px] font-semibold tracking-[0.18em] text-slate-500 uppercase">Academics</div>
+              <h1 className="mt-2 text-2xl font-semibold text-slate-900">Your Report Cards</h1>
+              <p className="mt-3 text-sm text-slate-600">View, print, or download the term report cards available for this student.</p>
             </div>
-            <div ref={(node)=>{ if (node) cardRefs.current[String(ex.id)] = node }}>
-            <StudentReportCardViewer
-              embedded={true}
-              hideControls={true}
-              hideHistory={true}
-              showTermSelector={false}
-              showExamSelector={false}
-              showBackPrint={true}
-              studentIdProp={effectiveStudentId}
-              autoFlow={true}
-              autoFlowWidth={820}
-              selectedTermYear={`${ex.year||''}${ex.term!=null?`-T${ex.term}`:''}`}
-              selectedExamId={ex.id}
-            />
+            <Link
+              to="/student/academics"
+              className="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-100"
+            >
+              Back to Academics
+            </Link>
+          </div>
+        </div>
+
+        {allExams.map(ex => (
+          <div key={ex.id} className="overflow-hidden rounded-[28px] border border-slate-200 bg-slate-50 shadow-sm">
+            <div className="flex flex-col gap-3 px-5 py-4 border-b bg-white/90 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <div className="text-sm font-semibold text-slate-900">{formatReportLabel(ex)}</div>
+                <div className="mt-1 text-sm text-slate-500">Print or save a clean copy of this report card.</div>
+              </div>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <button
+                  type="button"
+                  className="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-50"
+                  onClick={() => printElement(cardRefs.current[String(ex.id)], `ReportCard_${ex.year||''}_T${ex.term||''}_${ex.id}`)}
+                >
+                  Print
+                </button>
+                <button
+                  type="button"
+                  className="inline-flex items-center justify-center rounded-2xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
+                  onClick={() => printElement(cardRefs.current[String(ex.id)], `ReportCard_${ex.year||''}_T${ex.term||''}_${ex.id}`)}
+                >
+                  Download
+                </button>
+              </div>
+            </div>
+            <div ref={(node) => { if (node) cardRefs.current[String(ex.id)] = node }} className="bg-white">
+              <StudentReportCardViewer
+                embedded={true}
+                hideControls={true}
+                hideHistory={true}
+                showTermSelector={false}
+                showExamSelector={false}
+                showBackPrint={true}
+                studentIdProp={effectiveStudentId}
+                autoFlow={true}
+                autoFlowWidth={820}
+                selectedTermYear={`${ex.year||''}${ex.term!=null?`-T${ex.term}`:''}`}
+                selectedExamId={ex.id}
+              />
             </div>
           </div>
         ))}

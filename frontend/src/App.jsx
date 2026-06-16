@@ -34,6 +34,9 @@ import StudentPayFees from './pages/StudentPayFees'
 import StudentVerifyPayment from './pages/StudentVerifyPayment'
 import ConfirmPayment from './pages/ConfirmPayment'
 import StudentLayout from './components/StudentLayout'
+import StudentMore from './pages/StudentMore'
+import StudentProfile from './pages/StudentProfile'
+import StudentNotifications from './pages/StudentNotifications'
 import FinanceDashboard from './pages/FinanceDashboard';
 import FinanceLayout from './components/FinanceLayout';
 import FinanceExpenses from './pages/FinanceExpenses';
@@ -431,6 +434,9 @@ export default function App() {
             <Route path="/student" element={<ProtectedRoute roles={["student","admin"]}><StudentLayout><Outlet/></StudentLayout></ProtectedRoute>}>
               <Route index element={<StudentDashboard/>} />
               <Route path="messages" element={<Messages/>} />
+              <Route path="notifications" element={<StudentNotifications/>} />
+              <Route path="profile" element={<StudentProfile/>} />
+              <Route path="more" element={<StudentMore/>} />
               <Route path="academics" element={<StudentDashboard/>} />
               <Route path="report-card" element={<StudentAllReportCards/>} />
               <Route path="finance/pay" element={<StudentPayFees/>} />
