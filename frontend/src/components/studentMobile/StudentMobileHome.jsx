@@ -90,7 +90,7 @@ export default function StudentMobileHome({
 
   return (
     <div className="sm:hidden bg-slate-50 min-h-screen pb-28 px-0">
-      <div className="relative overflow-hidden bg-gradient-to-br from-sky-400 to-sky-500 px-5 pb-10 pt-8 shadow-[0_30px_90px_-35px_rgba(15,23,42,0.9)]">
+      <div className="relative overflow-hidden bg-gradient-to-br from-sky-400 to-sky-500 px-5 pb-12 pt-8 shadow-[0_30px_90px_-35px_rgba(15,23,42,0.9)]">
         <div className="absolute inset-x-0 top-0 h-44 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.18),transparent_60%),radial-gradient(circle_at_top_right,rgba(59,130,246,0.2),transparent_60%)]" />
         <div className="relative flex items-start justify-between gap-3">
           <div className="flex items-start gap-3 min-w-0 flex-1">
@@ -106,18 +106,7 @@ export default function StudentMobileHome({
             <div className="min-w-0 flex-1">
               <div className="text-[11px] uppercase tracking-[0.28em] text-slate-700">{schoolName}</div>
               <div className="mt-2 text-lg font-semibold tracking-tight text-slate-900 truncate">{displayName}</div>
-              <div className="mt-2 inline-flex items-center gap-2 rounded-full border border-slate-300/50 bg-white/60 px-3 py-1.5 text-[10px] text-slate-700 whitespace-nowrap">
-                <span className="font-semibold">ID: {studentId}</span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    try { navigator.clipboard.writeText(studentId) } catch {}
-                  }}
-                  className="inline-flex items-center gap-1 rounded-full bg-slate-300/40 px-1.5 py-0.5 text-slate-800"
-                >
-                  <span>Copy</span>
-                </button>
-              </div>
+              <div className="mt-2 text-[11px] text-slate-700">Student ID: {studentId}</div>
             </div>
           </div>
 
@@ -137,19 +126,10 @@ export default function StudentMobileHome({
           </div>
         </div>
 
-        <div className="mt-5 grid grid-cols-3 gap-3">
-          <div className="rounded-[24px] border border-white/30 bg-white/50 p-3 text-center text-slate-800 shadow-[inset_0_1px_0_rgba(255,255,255,0.5)]">
-            <div className="text-[10px] uppercase tracking-[0.28em] text-slate-600">Term</div>
-            <div className="mt-2 text-sm font-semibold text-slate-900">{currentTerm}</div>
-          </div>
-          <div className="rounded-[24px] border border-white/30 bg-white/50 p-3 text-center text-slate-800 shadow-[inset_0_1px_0_rgba(255,255,255,0.5)]">
-            <div className="text-[10px] uppercase tracking-[0.28em] text-slate-600">Class</div>
-            <div className="mt-2 text-sm font-semibold text-slate-900">{studentClass}</div>
-          </div>
-          <div className="rounded-[24px] border border-white/30 bg-white/50 p-3 text-center text-slate-800 shadow-[inset_0_1px_0_rgba(255,255,255,0.5)]">
-            <div className="text-[10px] uppercase tracking-[0.28em] text-slate-600">Grade</div>
-            <div className="mt-2 text-sm font-semibold text-slate-900">{studentGrade}</div>
-          </div>
+        <div className="mt-5 grid grid-cols-3 gap-3 text-center">
+          <div className="mt-1 text-xs font-semibold text-slate-600">{currentTerm}</div>
+          <div className="mt-1 text-xs font-semibold text-slate-600">{studentClass}</div>
+          <div className="mt-1 text-xs font-semibold text-slate-600">{studentGrade}</div>
         </div>
       </div>
 
