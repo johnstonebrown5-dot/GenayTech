@@ -43,6 +43,15 @@ export default function AdminSubjects(){
   const [activeFilter, setActiveFilter] = useState('All')
   const [sortBy, setSortBy] = useState('Newest')
 
+  const normalizeCategory = (category) => {
+    const value = String(category || '').trim().toLowerCase()
+    if (value === 'language' || value === 'languages') return 'Languages'
+    if (value === 'science') return 'Science'
+    if (value === 'humanities') return 'Humanities'
+    if (value === 'arts' || value === 'art') return 'Arts'
+    return 'Other'
+  }
+
   const stats = useMemo(() => {
     const total = subjects.length
     const examinable = subjects.filter(s => s.is_examinable !== false).length
@@ -59,14 +68,6 @@ export default function AdminSubjects(){
     { value: 'Classes', label: 'Most classes' },
   ]
 
-  const normalizeCategory = (category) => {
-    const value = String(category || '').trim().toLowerCase()
-    if (value === 'language' || value === 'languages') return 'Languages'
-    if (value === 'science') return 'Science'
-    if (value === 'humanities') return 'Humanities'
-    if (value === 'arts' || value === 'art') return 'Arts'
-    return 'Other'
-  }
 
   const getBadgeClasses = (category) => {
     switch (normalizeCategory(category)) {
