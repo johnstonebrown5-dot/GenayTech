@@ -1,4 +1,15 @@
 import React, { useEffect, useMemo, useState } from 'react'
+import { Doughnut, Bar } from 'react-chartjs-2'
+import {
+  Chart as ChartJS,
+  ArcElement,
+  Tooltip,
+  Legend,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+} from 'chart.js'
+ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement)
 import api from '../api'
 import { useNotification } from '../components/NotificationContext'
 import { Link } from 'react-router-dom'
@@ -60,6 +71,25 @@ export default function AdminSubjects(){
     return { total, examinable, unexaminable, categories }
   }, [subjects])
 
+  const categoriesChartData = useMemo(() => {
+    const counts = {}
+    subjects.forEach(s => {
+      const cat = normalizeCategory(s.category)
+      counts[cat] = (counts[cat] || 0) + 1
+    })
+    const labels = Object.keys(counts)
+    const data = labels.map(l => counts[l])
+    return {
+      labels,
+      datasets: [{
+        data,
+        backgroundColor: ['#6366F1', '#06B6D4', '#10B981', '#F59E0B', '#A78BFA'],
+        borderWidth: 0,
+      }]
+    }
+  }, [subjects])
+
+
   const filterOptions = ['All', 'Science', 'Languages', 'Humanities', 'Arts', 'Other']
   const sortOptions = [
     { value: 'Newest', label: 'Newest' },
@@ -112,6 +142,24 @@ export default function AdminSubjects(){
 
     return map
   }, [teachers])
+
+  const topSubjectsByTeachers = useMemo(() => {
+    const arr = (subjects||[]).map(s => ({
+      id: s.id,
+      name: s.name || s.code || `#${s.id}`,
+      teachers: teacherCountBySubject.get(String(s.id)) || teacherCountBySubject.get(String((s.name||'').toLowerCase())) || 0
+    }))
+    arr.sort((a,b) => b.teachers - a.teachers)
+    const top = arr.slice(0, 6)
+    return {
+      labels: top.map(t => t.name),
+      datasets: [{
+        label: 'Assigned teachers',
+        data: top.map(t => t.teachers),
+        backgroundColor: '#4F46E5'
+      }]
+    }
+  }, [subjects, teacherCountBySubject])
 
   const filteredSubjects = useMemo(() => {
     let list = Array.isArray(subjects) ? [...subjects] : []
@@ -421,6 +469,27 @@ export default function AdminSubjects(){
                   <div className="mt-4 text-slate-500 uppercase tracking-[0.35em] text-[11px] font-bold">Grading Setup</div>
                   <div className="mt-3 text-lg font-black text-slate-900">Configure exam rules and bands</div>
                 </button>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+                <div className="rounded-3xl bg-white p-6 shadow-soft border border-gray-100">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-black">Subjects by Category</h3>
+                    <span className="text-sm text-slate-400">Overview</span>
+                  </div>
+                  <div className="w-full h-56">
+                    <Doughnut data={categoriesChartData} options={{ plugins: { legend: { position: 'bottom' }, tooltip: { enabled: true } } }} />
+                  </div>
+                </div>
+                <div className="rounded-3xl bg-white p-6 shadow-soft border border-gray-100">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-black">Top Subjects by Assigned Teachers</h3>
+                    <span className="text-sm text-slate-400">Most staffed</span>
+                  </div>
+                  <div className="w-full h-56">
+                    <Bar data={topSubjectsByTeachers} options={{ indexAxis: 'y', plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true } } }} />
+                  </div>
+                </div>
               </div>
 
               <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
