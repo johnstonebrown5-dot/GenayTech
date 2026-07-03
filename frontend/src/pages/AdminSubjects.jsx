@@ -7,25 +7,21 @@ import {
   Plus, 
   Users, 
   UserCheck, 
-  Search, 
-  Filter, 
-  MoreVertical, 
   CheckCircle2, 
-  XCircle, 
-  ChevronRight,
   GraduationCap,
   LayoutGrid,
-  List,
   Tags,
   FlaskConical,
   Languages,
   Palette,
   Globe2,
   HelpCircle,
-  Settings2
+  Upload,
+  Download,
+  ArrowRight,
+  SlidersHorizontal
 } from 'lucide-react'
 import Modal from '../components/Modal'
-import { toast } from 'react-hot-toast'
 
 export default function AdminSubjects(){
   const [subjects, setSubjects] = useState([])
@@ -44,17 +40,108 @@ export default function AdminSubjects(){
   const { showSuccess, showError } = useNotification()
 
   const [showCreateSubject, setShowCreateSubject] = useState(false)
-  const [showClassAllocation, setShowClassAllocation] = useState(false)
-  const [showTeacherAllocation, setShowTeacherAllocation] = useState(false)
-  const [showDirectory, setShowDirectory] = useState(true)
+  const [activeFilter, setActiveFilter] = useState('All')
+  const [sortBy, setSortBy] = useState('Newest')
 
   const stats = useMemo(() => {
     const total = subjects.length
     const examinable = subjects.filter(s => s.is_examinable !== false).length
     const unexaminable = total - examinable
-    const categories = new Set(subjects.map(s => s.category)).size
+    const categories = new Set(subjects.map(s => normalizeCategory(s.category))).size
     return { total, examinable, unexaminable, categories }
   }, [subjects])
+
+  const filterOptions = ['All', 'Science', 'Languages', 'Humanities', 'Arts', 'Other']
+  const sortOptions = [
+    { value: 'Newest', label: 'Newest' },
+    { value: 'AtoZ', label: 'A → Z' },
+    { value: 'Teachers', label: 'Most teachers' },
+    { value: 'Classes', label: 'Most classes' },
+  ]
+
+  const normalizeCategory = (category) => {
+    const value = String(category || '').trim().toLowerCase()
+    if (value === 'language' || value === 'languages') return 'Languages'
+    if (value === 'science') return 'Science'
+    if (value === 'humanities') return 'Humanities'
+    if (value === 'arts' || value === 'art') return 'Arts'
+    return 'Other'
+  }
+
+  const getBadgeClasses = (category) => {
+    switch (normalizeCategory(category)) {
+      case 'Science': return 'bg-emerald-50 text-emerald-700 border-emerald-100'
+      case 'Languages': return 'bg-blue-50 text-blue-700 border-blue-100'
+      case 'Humanities': return 'bg-amber-50 text-amber-700 border-amber-100'
+      case 'Arts': return 'bg-purple-50 text-purple-700 border-purple-100'
+      default: return 'bg-slate-50 text-slate-600 border-slate-100'
+    }
+  }
+
+  const classCountBySubject = useMemo(() => {
+    const map = new Map()
+    classes.forEach(c => {
+      const ids = Array.isArray(c.subjects) ? c.subjects.map(s => s?.id || s) : []
+      ids.forEach(id => {
+        if (!id) return
+        const key = String(id)
+        map.set(key, (map.get(key) || 0) + 1)
+      })
+    })
+    return map
+  }, [classes])
+
+  const teacherCountBySubject = useMemo(() => {
+    const map = new Map()
+    const addSubject = (subjectKey) => {
+      if (!subjectKey) return
+      const key = String(subjectKey).trim().toLowerCase()
+      if (!key) return
+      map.set(key, (map.get(key) || 0) + 1)
+    }
+
+    teachers.forEach(teacher => {
+      const subjectField = teacher.subjects
+      if (Array.isArray(subjectField)) {
+        subjectField.forEach(item => addSubject(item?.name || item?.code || item))
+      } else if (typeof subjectField === 'string') {
+        subjectField.split(/[,;]+/).forEach(item => addSubject(item))
+      }
+    })
+
+    return map
+  }, [teachers])
+
+  const filteredSubjects = useMemo(() => {
+    let list = Array.isArray(subjects) ? [...subjects] : []
+    if (activeFilter !== 'All') {
+      list = list.filter(s => normalizeCategory(s.category) === activeFilter)
+    }
+    if (sortBy === 'AtoZ') {
+      return list.sort((a, b) => String(a.name || a.code || '').localeCompare(String(b.name || b.code || '')))
+    }
+    if (sortBy === 'Teachers') {
+      return list.sort((a, b) => {
+        const aCount = teacherCountBySubject.get(String(a.id)) || teacherCountBySubject.get(String(a.name || '').toLowerCase()) || 0
+        const bCount = teacherCountBySubject.get(String(b.id)) || teacherCountBySubject.get(String(b.name || '').toLowerCase()) || 0
+        return bCount - aCount
+      })
+    }
+    if (sortBy === 'Classes') {
+      return list.sort((a, b) => (classCountBySubject.get(String(b.id)) || 0) - (classCountBySubject.get(String(a.id)) || 0))
+    }
+    return list
+  }, [subjects, activeFilter, sortBy, teacherCountBySubject, classCountBySubject])
+
+  const getTeacherCount = (subject) => {
+    const exactNameKey = String(subject?.name || '').trim().toLowerCase()
+    const codeKey = String(subject?.code || '').trim().toLowerCase()
+    return teacherCountBySubject.get(String(subject?.id)) || teacherCountBySubject.get(exactNameKey) || teacherCountBySubject.get(codeKey) || 0
+  }
+
+  const getClassCount = (subject) => {
+    return classCountBySubject.get(String(subject?.id)) || 0
+  }
 
   const getCategoryIcon = (category) => {
     switch (category?.toLowerCase()) {
@@ -247,220 +334,228 @@ export default function AdminSubjects(){
       </div>
 
       <div className="max-w-[1600px] mx-auto px-6 py-8">
-        <div className="grid grid-cols-1 xl:grid-cols-12 gap-8">
-          {/* Main Directory Column */}
-          <div className="xl:col-span-8 space-y-8">
-            <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
-              <div className="p-6 border-b border-gray-50 flex items-center justify-between bg-gradient-to-r from-gray-50/50 to-white">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-gray-100 text-gray-600 flex items-center justify-center">
-                    <LayoutGrid size={20} />
-                  </div>
-                  <div>
-                    <h2 className="text-lg font-black text-gray-900 tracking-tight">Subject Directory</h2>
-                    <p className="text-xs font-medium text-gray-500 italic">Click a subject for detailed view</p>
-                  </div>
+        <div className="space-y-8">
+          <div className="bg-white rounded-3xl border border-gray-100 shadow-soft overflow-hidden">
+            <div className="p-6 md:p-8 flex flex-col gap-6 md:gap-0 md:flex-row md:items-start md:justify-between">
+              <div className="max-w-2xl space-y-3">
+                <div className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1 text-sm font-semibold text-blue-700">
+                  <BookOpen size={16} />
+                  Subjects Directory
                 </div>
-                <div className="flex items-center gap-2">
-                   <div className="relative">
-                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-                     <input 
-                       className="bg-gray-50 border-gray-100 border-2 rounded-xl pl-9 pr-4 py-2 text-sm font-bold placeholder:text-gray-300 focus:border-blue-500 transition-all outline-none w-64"
-                       placeholder="Search subjects..."
-                     />
-                   </div>
+                <div>
+                  <h2 className="text-4xl font-black tracking-tight text-slate-900">Curriculum subjects and allocations</h2>
+                  <p className="mt-2 text-sm text-slate-500">A clean overview of subjects, exam status, assigned staff, and class coverage.</p>
                 </div>
               </div>
 
-              <div className="p-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-4">
-                  {subjects.map(s => (
-                    <Link 
-                      key={s.id} 
-                      to={`/admin/subjects/${s.id}`} 
-                      className="group bg-white border-2 border-gray-50 rounded-2xl p-4 hover:border-blue-500 hover:shadow-xl hover:shadow-blue-500/5 transition-all active:scale-[0.98]"
-                    >
-                      <div className="flex items-start justify-between mb-4">
-                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center shadow-sm ${getCategoryColor(s.category)}`}>
-                          {getCategoryIcon(s.category)}
-                        </div>
-                        {s.is_examinable === false && (
-                          <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-amber-50 text-amber-600 uppercase tracking-widest border border-amber-100">
-                            Non-Exams
-                          </span>
-                        )}
-                      </div>
-                      <div>
-                        <h3 className="text-base font-black text-gray-900 tracking-tight mb-0.5 group-hover:text-blue-600 transition-colors">
-                          {s.name}
-                        </h3>
-                        <div className="flex items-center gap-2 text-xs font-bold text-gray-400 uppercase tracking-widest">
-                          <span>{s.code}</span>
-                          <span className="w-1 h-1 rounded-full bg-gray-200" />
-                          <span>{s.category || 'Other'}</span>
-                        </div>
-                      </div>
-                    </Link>
-                  ))}
-                  {!subjects.length && !loading && (
-                    <div className="col-span-full py-20 text-center">
-                       <div className="w-20 h-20 rounded-full bg-gray-50 flex items-center justify-center mx-auto mb-4 border-2 border-gray-100 border-dashed">
-                         <BookOpen size={40} className="text-gray-200" />
-                       </div>
-                       <h3 className="text-gray-400 font-black uppercase tracking-widest text-sm mb-1">No subjects found</h3>
-                       <p className="text-gray-400 text-xs font-medium">Add subjects to the curriculum to get started</p>
-                    </div>
-                  )}
+              <div className="flex flex-wrap items-center gap-3 justify-end">
+                <button className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition">
+                  <Upload size={16} />
+                  Import
+                </button>
+                <button className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition">
+                  <Download size={16} />
+                  Export
+                </button>
+                <button onClick={() => setShowCreateSubject(true)} className="inline-flex items-center gap-2 rounded-2xl bg-indigo-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition">
+                  <Plus size={16} />
+                  New Subject
+                </button>
+              </div>
+            </div>
+
+            <div className="border-t border-gray-100 bg-blue-50/70 px-6 py-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+                <div className="rounded-3xl bg-white p-5 shadow-sm border border-slate-100">
+                  <div className="flex items-center justify-between">
+                    <div className="rounded-2xl bg-blue-100 p-3 text-blue-600"><BookOpen size={20} /></div>
+                    <div className="text-xs uppercase tracking-[0.35em] font-black text-slate-400">Total</div>
+                  </div>
+                  <div className="mt-4 text-3xl font-black text-slate-900">{stats.total}</div>
+                  <div className="mt-1 text-sm text-slate-500">Total Subjects</div>
+                </div>
+                <div className="rounded-3xl bg-white p-5 shadow-sm border border-slate-100">
+                  <div className="flex items-center justify-between">
+                    <div className="rounded-2xl bg-emerald-100 p-3 text-emerald-600"><CheckCircle2 size={20} /></div>
+                    <div className="text-xs uppercase tracking-[0.35em] font-black text-slate-400">Examinable</div>
+                  </div>
+                  <div className="mt-4 text-3xl font-black text-slate-900">{stats.examinable}</div>
+                  <div className="mt-1 text-sm text-slate-500">Exam subjects ready for assessment</div>
+                </div>
+                <div className="rounded-3xl bg-white p-5 shadow-sm border border-slate-100">
+                  <div className="flex items-center justify-between">
+                    <div className="rounded-2xl bg-amber-100 p-3 text-amber-600"><HelpCircle size={20} /></div>
+                    <div className="text-xs uppercase tracking-[0.35em] font-black text-slate-400">Non-Exam</div>
+                  </div>
+                  <div className="mt-4 text-3xl font-black text-slate-900">{stats.unexaminable}</div>
+                  <div className="mt-1 text-sm text-slate-500">Subjects outside the formal exam scope</div>
+                </div>
+                <div className="rounded-3xl bg-white p-5 shadow-sm border border-slate-100">
+                  <div className="flex items-center justify-between">
+                    <div className="rounded-2xl bg-purple-100 p-3 text-purple-600"><Tags size={20} /></div>
+                    <div className="text-xs uppercase tracking-[0.35em] font-black text-slate-400">Categories</div>
+                  </div>
+                  <div className="mt-4 text-3xl font-black text-slate-900">{stats.categories}</div>
+                  <div className="mt-1 text-sm text-slate-500">Curriculum categories in use</div>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Sidebar Column: Allocations */}
-          <div className="xl:col-span-4 space-y-8">
-            {/* Class Allocation Card */}
-            <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden group">
-              <div className="p-6 border-b border-gray-50 bg-gradient-to-r from-gray-50/50 to-white flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center group-hover:scale-110 transition-transform">
-                    <LayoutGrid size={24} />
-                  </div>
-                  <div>
-                    <h2 className="text-lg font-black text-gray-900 tracking-tight text-left">Class Allocation</h2>
-                    <p className="text-[10px] font-medium text-gray-500 italic text-left">Assign subjects to classes</p>
-                  </div>
-                </div>
-                <button 
-                  onClick={() => setShowClassAllocation(!showClassAllocation)}
-                  className="w-8 h-8 rounded-lg bg-gray-50 text-gray-400 flex items-center justify-center hover:bg-gray-100 transition-colors"
-                >
-                  <ChevronRight size={18} className={`transform transition-transform ${showClassAllocation ? 'rotate-90' : ''}`} />
+          <div className="grid grid-cols-1 xl:grid-cols-12 gap-8">
+            <div className="xl:col-span-8 space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <button className="group rounded-3xl border border-slate-200 bg-white p-6 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-xl">
+                  <div className="rounded-3xl bg-indigo-600/10 p-3 text-indigo-600 inline-flex"><Users size={20} /></div>
+                  <div className="mt-4 text-slate-500 uppercase tracking-[0.35em] text-[11px] font-bold">Allocate Teachers</div>
+                  <div className="mt-3 text-lg font-black text-slate-900">Assign staff to core subjects</div>
+                </button>
+                <button className="group rounded-3xl border border-slate-200 bg-white p-6 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-xl">
+                  <div className="rounded-3xl bg-blue-600/10 p-3 text-blue-600 inline-flex"><LayoutGrid size={20} /></div>
+                  <div className="mt-4 text-slate-500 uppercase tracking-[0.35em] text-[11px] font-bold">Allocate Classes</div>
+                  <div className="mt-3 text-lg font-black text-slate-900">Map subjects to class schedules</div>
+                </button>
+                <button className="group rounded-3xl border border-slate-200 bg-white p-6 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-xl">
+                  <div className="rounded-3xl bg-emerald-600/10 p-3 text-emerald-600 inline-flex"><GraduationCap size={20} /></div>
+                  <div className="mt-4 text-slate-500 uppercase tracking-[0.35em] text-[11px] font-bold">Grading Setup</div>
+                  <div className="mt-3 text-lg font-black text-slate-900">Configure exam rules and bands</div>
                 </button>
               </div>
 
-              {showClassAllocation && (
-                <div className="p-6">
-                  <form onSubmit={saveClassSubjects} className="space-y-6 text-left">
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-black text-gray-400 uppercase tracking-widest px-1 block">Target Class</label>
-                      <select 
-                        className="w-full bg-gray-50 border-gray-100 border-2 rounded-2xl px-4 py-3 text-gray-900 font-bold focus:ring-4 focus:ring-purple-500/10 focus:border-purple-500 transition-all outline-none appearance-none" 
-                        value={classAssign.klass} 
-                        onChange={e=>setClassAssign({...classAssign, klass: e.target.value})}
-                      >
-                        <option value="">Select Class...</option>
-                        {classes.map(c => <option key={c.id} value={c.id}>{c.name} - {c.grade_level}</option>)}
-                      </select>
-                    </div>
+              <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                <div className="flex flex-wrap gap-2">
+                  {filterOptions.map(option => (
+                    <button
+                      key={option}
+                      onClick={() => setActiveFilter(option)}
+                      className={`rounded-full px-4 py-2 text-sm font-semibold transition ${activeFilter === option ? 'bg-indigo-600 text-white shadow-soft' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+                    >
+                      {option}
+                    </button>
+                  ))}
+                </div>
+                <div className="inline-flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+                  <SlidersHorizontal size={18} className="text-slate-400" />
+                  <span className="text-sm font-semibold text-slate-500">Sort</span>
+                  <select
+                    value={sortBy}
+                    onChange={e => setSortBy(e.target.value)}
+                    className="border-none bg-transparent text-sm font-black text-slate-900 outline-none"
+                  >
+                    {sortOptions.map(option => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
 
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-black text-gray-400 uppercase tracking-widest px-1 block">Select Subjects</label>
-                      <div className="bg-gray-50/50 rounded-2xl border border-gray-100 p-4 max-h-[300px] overflow-y-auto space-y-2 custom-scrollbar">
-                        {subjects.map(s => {
-                          const selected = classAssign.subject_ids.includes(s.id)
-                          return (
-                            <button 
-                              type="button" 
-                              key={s.id} 
-                              onClick={()=>setClassAssign(a=>({...a, subject_ids: toggleId(a.subject_ids, s.id)}))} 
-                              className={`w-full flex items-center justify-between p-3 rounded-xl border-2 transition-all ${selected ? 'bg-purple-600 border-purple-600 text-white shadow-lg shadow-purple-100' : 'bg-white border-white text-gray-600 hover:border-purple-100'}`}
-                            >
-                              <div className="flex items-center gap-3">
-                                {getCategoryIcon(s.category)}
-                                <span className="text-sm font-bold">{s.name}</span>
-                              </div>
-                              {selected ? <CheckCircle2 size={16} /> : <Plus size={16} className="text-gray-300" />}
-                            </button>
-                          )
-                        })}
+              <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+                {filteredSubjects.map(subject => (
+                  <div key={subject.id} className="group rounded-[26px] border border-slate-100 bg-white p-6 shadow-soft transition hover:-translate-y-0.5 hover:shadow-xl">
+                    <div className="flex items-center justify-between gap-3 mb-5">
+                      <div className={`inline-flex h-12 w-12 items-center justify-center rounded-2xl ${getCategoryColor(subject.category)}`}>
+                        {getCategoryIcon(subject.category)}
+                      </div>
+                      <span className={`rounded-full border px-3 py-1 text-[11px] font-black uppercase tracking-[0.24em] ${getBadgeClasses(subject.category)}`}>
+                        {normalizeCategory(subject.category)}
+                      </span>
+                    </div>
+                    <div className="space-y-3">
+                      <div>
+                        <h3 className="text-xl font-black text-slate-900">{subject.name}</h3>
+                        <p className="mt-2 text-sm text-slate-500 uppercase tracking-[0.24em] font-semibold">{subject.code}</p>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3 text-sm text-slate-500">
+                        <div className="rounded-3xl bg-slate-50 p-4">
+                          <div className="text-[11px] font-black uppercase tracking-[0.28em] text-slate-400">Teachers</div>
+                          <div className="mt-2 text-lg font-black text-slate-900">{getTeacherCount(subject)}</div>
+                        </div>
+                        <div className="rounded-3xl bg-slate-50 p-4">
+                          <div className="text-[11px] font-black uppercase tracking-[0.28em] text-slate-400">Classes</div>
+                          <div className="mt-2 text-lg font-black text-slate-900">{getClassCount(subject)}</div>
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between gap-3">
+                        <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-black uppercase tracking-[0.28em] ${subject.is_examinable === false ? 'bg-amber-100 text-amber-800 border-amber-200' : 'bg-emerald-100 text-emerald-800 border-emerald-200'}`}>
+                          {subject.is_examinable === false ? 'Non-exam' : 'Examinable'}
+                        </span>
+                        <span className="text-xs font-semibold text-slate-400">Updated 2d ago</span>
                       </div>
                     </div>
+                    <div className="mt-6 flex flex-wrap gap-3">
+                      <Link to={`/admin/subjects/${subject.id}`} className="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">
+                        View
+                      </Link>
+                      <Link to={`/admin/subjects/${subject.id}`} className="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">
+                        Edit
+                      </Link>
+                      <button className="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">
+                        More
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
 
-                    <button className="w-full h-12 bg-purple-600 hover:bg-purple-700 text-white font-black rounded-2xl shadow-lg shadow-purple-200 transition-all active:scale-[0.98] disabled:opacity-50" disabled={!classAssign.klass}>
-                      Save Class Allocation
-                    </button>
-                  </form>
+              {filteredSubjects.length === 0 && !loading && (
+                <div className="rounded-3xl border border-dashed border-slate-200 bg-white p-12 text-center text-slate-500">
+                  <p className="text-lg font-black">No subjects match this filter.</p>
+                  <p className="mt-2 text-sm">Try switching categories or create a new subject to fill the directory.</p>
                 </div>
               )}
             </div>
 
-            {/* Teacher Allocation Card */}
-            <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden group">
-              <div className="p-6 border-b border-gray-50 bg-gradient-to-r from-gray-50/50 to-white flex items-center justify-between">
+            <div className="xl:col-span-4">
+              <div className="rounded-3xl border border-slate-100 bg-white p-6 shadow-soft">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center group-hover:scale-110 transition-transform">
-                    <UserCheck size={24} />
-                  </div>
+                  <div className="inline-flex h-12 w-12 items-center justify-center rounded-3xl bg-indigo-600/10 text-indigo-600"><Users size={22} /></div>
                   <div>
-                    <h2 className="text-lg font-black text-gray-900 tracking-tight text-left">Staff Allocation</h2>
-                    <p className="text-[10px] font-medium text-gray-500 italic text-left">Assign subjects to teachers</p>
+                    <p className="text-sm font-black text-slate-900">Need help setting up?</p>
+                    <p className="mt-1 text-sm text-slate-500">Use these core tools to allocate teachers, assign classes, or configure grading rules from one place.</p>
                   </div>
                 </div>
-                <button 
-                  onClick={() => setShowTeacherAllocation(!showTeacherAllocation)}
-                  className="w-8 h-8 rounded-lg bg-gray-50 text-gray-400 flex items-center justify-center hover:bg-gray-100 transition-colors"
-                >
-                  <ChevronRight size={18} className={`transform transition-transform ${showTeacherAllocation ? 'rotate-90' : ''}`} />
-                </button>
-              </div>
-
-              {showTeacherAllocation && (
-                <div className="p-6">
-                  <form onSubmit={saveTeacherSubjects} className="space-y-6 text-left">
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-black text-gray-400 uppercase tracking-widest px-1 block text-left">Teacher / Staff</label>
-                      <select 
-                        className="w-full bg-gray-50 border-gray-100 border-2 rounded-2xl px-4 py-3 text-gray-900 font-bold focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all outline-none appearance-none" 
-                        value={teacherAssign.teacher_id} 
-                        onChange={e=>setTeacherAssign({...teacherAssign, teacher_id: e.target.value})}
-                      >
-                        <option value="">Select Teacher...</option>
-                        {allTeacherDirectory.profiles.map(t => (
-                          <option key={t.id} value={`t:${t.id}`}>{t.user?.first_name} {t.user?.last_name}</option>
-                        ))}
-                        {allTeacherDirectory.missingUsers.length > 0 && (
-                          <optgroup label="Unlinked Staff Profiles">
-                            {allTeacherDirectory.missingUsers.map(u => (
-                              <option key={`u-${u.id}`} value={`u:${u.id}`}>{u.first_name} {u.last_name}</option>
-                            ))}
-                          </optgroup>
-                        )}
-                      </select>
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-black text-gray-400 uppercase tracking-widest px-1 block text-left">Teaching Load</label>
-                      <div className="bg-gray-50/50 rounded-2xl border border-gray-100 p-4 max-h-[300px] overflow-y-auto space-y-2 custom-scrollbar text-left">
-                        {subjects.map(s => {
-                          const selected = teacherAssign.subject_ids.includes(s.id)
-                          return (
-                            <button 
-                              type="button" 
-                              key={s.id} 
-                              onClick={()=>setTeacherAssign(a=>({...a, subject_ids: toggleId(a.subject_ids, s.id)}))} 
-                              className={`w-full flex items-center justify-between p-3 rounded-xl border-2 transition-all ${selected ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg shadow-indigo-100' : 'bg-white border-white text-gray-600 hover:border-indigo-100'}`}
-                            >
-                              <div className="flex items-center gap-3">
-                                {getCategoryIcon(s.category)}
-                                <span className="text-sm font-bold">{s.name}</span>
-                              </div>
-                              {selected ? <CheckCircle2 size={16} /> : <Plus size={16} className="text-gray-300" />}
-                            </button>
-                          )
-                        })}
+                <div className="mt-6 space-y-4">
+                  <button className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-left text-sm font-semibold text-slate-700 hover:bg-slate-100 transition">
+                    <div className="flex items-center justify-between gap-4">
+                      <div>
+                        <div className="text-slate-500 uppercase tracking-[0.25em] text-[10px]">Allocate Teachers</div>
+                        <div className="mt-2 text-base font-black text-slate-900">Send subject lists to faculty</div>
                       </div>
+                      <ArrowRight className="text-slate-400" size={18} />
                     </div>
-
-                    <button className="w-full h-12 bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded-2xl shadow-lg shadow-indigo-200 transition-all active:scale-[0.98] disabled:opacity-50" disabled={!teacherAssign.teacher_id}>
-                      Save Staff Allocation
-                    </button>
-                  </form>
+                  </button>
+                  <button className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-left text-sm font-semibold text-slate-700 hover:bg-slate-100 transition">
+                    <div className="flex items-center justify-between gap-4">
+                      <div>
+                        <div className="text-slate-500 uppercase tracking-[0.25em] text-[10px]">Allocate Classes</div>
+                        <div className="mt-2 text-base font-black text-slate-900">Align subjects with grade groups</div>
+                      </div>
+                      <ArrowRight className="text-slate-400" size={18} />
+                    </div>
+                  </button>
+                  <button className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-left text-sm font-semibold text-slate-700 hover:bg-slate-100 transition">
+                    <div className="flex items-center justify-between gap-4">
+                      <div>
+                        <div className="text-slate-500 uppercase tracking-[0.25em] text-[10px]">Grading Setup</div>
+                        <div className="mt-2 text-base font-black text-slate-900">Create exam criteria and bands</div>
+                      </div>
+                      <ArrowRight className="text-slate-400" size={18} />
+                    </div>
+                  </button>
                 </div>
-              )}
+              </div>
             </div>
           </div>
         </div>
       </div>
+
+      <button
+        onClick={() => setShowCreateSubject(true)}
+        className="fixed bottom-8 right-8 z-50 inline-flex items-center gap-3 rounded-full bg-indigo-600 px-6 py-4 text-sm font-black text-white shadow-elevated hover:bg-indigo-700 transition"
+      >
+        <Plus size={18} />
+        New Subject
+      </button>
 
       {/* Create Subject Modal */}
       <Modal open={showCreateSubject} onClose={()=>setShowCreateSubject(false)} title="New Curriculum Subject" size="md">
