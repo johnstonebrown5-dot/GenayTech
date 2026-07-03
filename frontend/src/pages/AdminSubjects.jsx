@@ -384,8 +384,8 @@ export default function AdminSubjects(){
 
       <div className="max-w-[1600px] mx-auto px-6 py-8">
         <div className="space-y-8">
-          <div className="bg-white rounded-3xl border border-gray-100 shadow-soft overflow-hidden">
-            <div className="p-6 md:p-8 flex flex-col gap-6 md:gap-0 md:flex-row md:items-start md:justify-between">
+          <div className="bg-white rounded-xl border border-gray-100 shadow-soft overflow-hidden">
+            <div className="p-4 md:p-6 flex flex-col gap-4 md:gap-0 md:flex-row md:items-start md:justify-between">
               <div className="max-w-2xl space-y-3">
                 <div className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1 text-sm font-semibold text-blue-700">
                   <BookOpen size={16} />
@@ -415,7 +415,7 @@ export default function AdminSubjects(){
 
             <div className="border-t border-gray-100 bg-blue-50/70 px-6 py-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-                <div className="rounded-3xl bg-white p-5 shadow-sm border border-slate-100">
+                <div className="rounded-xl bg-white p-3 shadow-sm border border-slate-100">
                   <div className="flex items-center justify-between">
                     <div className="rounded-2xl bg-blue-100 p-3 text-blue-600"><BookOpen size={20} /></div>
                     <div className="text-xs uppercase tracking-[0.35em] font-black text-slate-400">Total</div>
@@ -423,7 +423,7 @@ export default function AdminSubjects(){
                   <div className="mt-4 text-3xl font-black text-slate-900">{stats.total}</div>
                   <div className="mt-1 text-sm text-slate-500">Total Subjects</div>
                 </div>
-                <div className="rounded-3xl bg-white p-5 shadow-sm border border-slate-100">
+                <div className="rounded-xl bg-white p-3 shadow-sm border border-slate-100">
                   <div className="flex items-center justify-between">
                     <div className="rounded-2xl bg-emerald-100 p-3 text-emerald-600"><CheckCircle2 size={20} /></div>
                     <div className="text-xs uppercase tracking-[0.35em] font-black text-slate-400">Examinable</div>
@@ -431,7 +431,7 @@ export default function AdminSubjects(){
                   <div className="mt-4 text-3xl font-black text-slate-900">{stats.examinable}</div>
                   <div className="mt-1 text-sm text-slate-500">Exam subjects ready for assessment</div>
                 </div>
-                <div className="rounded-3xl bg-white p-5 shadow-sm border border-slate-100">
+                <div className="rounded-xl bg-white p-3 shadow-sm border border-slate-100">
                   <div className="flex items-center justify-between">
                     <div className="rounded-2xl bg-amber-100 p-3 text-amber-600"><HelpCircle size={20} /></div>
                     <div className="text-xs uppercase tracking-[0.35em] font-black text-slate-400">Non-Exam</div>
@@ -439,7 +439,7 @@ export default function AdminSubjects(){
                   <div className="mt-4 text-3xl font-black text-slate-900">{stats.unexaminable}</div>
                   <div className="mt-1 text-sm text-slate-500">Subjects outside the formal exam scope</div>
                 </div>
-                <div className="rounded-3xl bg-white p-5 shadow-sm border border-slate-100">
+                <div className="rounded-xl bg-white p-3 shadow-sm border border-slate-100">
                   <div className="flex items-center justify-between">
                     <div className="rounded-2xl bg-purple-100 p-3 text-purple-600"><Tags size={20} /></div>
                     <div className="text-xs uppercase tracking-[0.35em] font-black text-slate-400">Categories</div>
@@ -454,25 +454,25 @@ export default function AdminSubjects(){
           <div className="grid grid-cols-1 xl:grid-cols-12 gap-8">
             <div className="xl:col-span-8 space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <button className="group rounded-3xl border border-slate-200 bg-white p-6 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-xl">
-                  <div className="rounded-3xl bg-indigo-600/10 p-3 text-indigo-600 inline-flex"><Users size={20} /></div>
+                <button className="group rounded-xl border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-xl">
+                  <div className="rounded-lg bg-indigo-600/10 p-2 text-indigo-600 inline-flex"><Users size={18} /></div>
                   <div className="mt-4 text-slate-500 uppercase tracking-[0.35em] text-[11px] font-bold">Allocate Teachers</div>
                   <div className="mt-3 text-lg font-black text-slate-900">Assign staff to core subjects</div>
                 </button>
-                <button className="group rounded-3xl border border-slate-200 bg-white p-6 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-xl">
-                  <div className="rounded-3xl bg-blue-600/10 p-3 text-blue-600 inline-flex"><LayoutGrid size={20} /></div>
+                <button className="group rounded-xl border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-xl">
+                  <div className="rounded-lg bg-blue-600/10 p-2 text-blue-600 inline-flex"><LayoutGrid size={18} /></div>
                   <div className="mt-4 text-slate-500 uppercase tracking-[0.35em] text-[11px] font-bold">Allocate Classes</div>
                   <div className="mt-3 text-lg font-black text-slate-900">Map subjects to class schedules</div>
                 </button>
-                <button className="group rounded-3xl border border-slate-200 bg-white p-6 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-xl">
-                  <div className="rounded-3xl bg-emerald-600/10 p-3 text-emerald-600 inline-flex"><GraduationCap size={20} /></div>
+                <button className="group rounded-xl border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-xl">
+                  <div className="rounded-lg bg-emerald-600/10 p-2 text-emerald-600 inline-flex"><GraduationCap size={18} /></div>
                   <div className="mt-4 text-slate-500 uppercase tracking-[0.35em] text-[11px] font-bold">Grading Setup</div>
                   <div className="mt-3 text-lg font-black text-slate-900">Configure exam rules and bands</div>
                 </button>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
-                <div className="rounded-3xl bg-white p-6 shadow-soft border border-gray-100">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
+                <div className="rounded-xl bg-white p-4 shadow-soft border border-gray-100">
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-lg font-black">Subjects by Category</h3>
                     <span className="text-sm text-slate-400">Overview</span>
@@ -481,7 +481,7 @@ export default function AdminSubjects(){
                     <Doughnut data={categoriesChartData} options={{ plugins: { legend: { position: 'bottom' }, tooltip: { enabled: true } } }} />
                   </div>
                 </div>
-                <div className="rounded-3xl bg-white p-6 shadow-soft border border-gray-100">
+                <div className="rounded-xl bg-white p-4 shadow-soft border border-gray-100">
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-lg font-black">Top Subjects by Assigned Teachers</h3>
                     <span className="text-sm text-slate-400">Most staffed</span>
@@ -519,9 +519,9 @@ export default function AdminSubjects(){
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
                 {filteredSubjects.map(subject => (
-                  <div key={subject.id} className="group rounded-[26px] border border-slate-100 bg-white p-6 shadow-soft transition hover:-translate-y-0.5 hover:shadow-xl">
+                  <div key={subject.id} className="group rounded-xl border border-slate-100 bg-white p-4 shadow-soft transition hover:-translate-y-0.5 hover:shadow-xl">
                     <div className="flex items-center justify-between gap-3 mb-5">
                       <div className={`inline-flex h-12 w-12 items-center justify-center rounded-2xl ${getCategoryColor(subject.category)}`}>
                         {getCategoryIcon(subject.category)}
@@ -536,11 +536,11 @@ export default function AdminSubjects(){
                         <p className="mt-2 text-sm text-slate-500 uppercase tracking-[0.24em] font-semibold">{subject.code}</p>
                       </div>
                       <div className="grid grid-cols-2 gap-3 text-sm text-slate-500">
-                        <div className="rounded-3xl bg-slate-50 p-4">
+                        <div className="rounded-xl bg-slate-50 p-3">
                           <div className="text-[11px] font-black uppercase tracking-[0.28em] text-slate-400">Teachers</div>
                           <div className="mt-2 text-lg font-black text-slate-900">{getTeacherCount(subject)}</div>
                         </div>
-                        <div className="rounded-3xl bg-slate-50 p-4">
+                        <div className="rounded-xl bg-slate-50 p-3">
                           <div className="text-[11px] font-black uppercase tracking-[0.28em] text-slate-400">Classes</div>
                           <div className="mt-2 text-lg font-black text-slate-900">{getClassCount(subject)}</div>
                         </div>
@@ -568,7 +568,7 @@ export default function AdminSubjects(){
               </div>
 
               {filteredSubjects.length === 0 && !loading && (
-                <div className="rounded-3xl border border-dashed border-slate-200 bg-white p-12 text-center text-slate-500">
+                <div className="rounded-xl border border-dashed border-slate-200 bg-white p-4 text-center text-slate-500">
                   <p className="text-lg font-black">No subjects match this filter.</p>
                   <p className="mt-2 text-sm">Try switching categories or create a new subject to fill the directory.</p>
                 </div>
@@ -576,9 +576,9 @@ export default function AdminSubjects(){
             </div>
 
             <div className="xl:col-span-4">
-              <div className="rounded-3xl border border-slate-100 bg-white p-6 shadow-soft">
+              <div className="rounded-xl border border-slate-100 bg-white p-4 shadow-soft">
                 <div className="flex items-center gap-3">
-                  <div className="inline-flex h-12 w-12 items-center justify-center rounded-3xl bg-indigo-600/10 text-indigo-600"><Users size={22} /></div>
+                  <div className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-600/10 text-indigo-600"><Users size={20} /></div>
                   <div>
                     <p className="text-sm font-black text-slate-900">Need help setting up?</p>
                     <p className="mt-1 text-sm text-slate-500">Use these core tools to allocate teachers, assign classes, or configure grading rules from one place.</p>
