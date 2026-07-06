@@ -309,6 +309,8 @@ def me(request):
                     'school__id', 'school__name', 'school__code', 'school__is_active', 'school__address',
                     'school__motto', 'school__aim', 'school__logo', 'school__social_links', 'school__homepage',
                     'school__is_trial', 'school__trial_expires_at', 'school__trial_student_limit', 'school__feature_flags',
+                    'school__is_suspended', 'school__suspension_notice', 'school__suspension_until', 'school__access_restrictions',
+                    'school__is_suspended', 'school__suspension_notice', 'school__suspension_until', 'school__access_restrictions',
                     'student__admission_no',
                 )
                 .get(id=uid)
@@ -1966,6 +1968,38 @@ def _normalize_domain(raw: str) -> str:
     return normalized_domain
 
 
+def _coerce_access_restrictions(value):
+    if isinstance(value, dict):
+        payload = value
+    elif isinstance(value, str):
+        try:
+            payload = json.loads(value)
+        except Exception:
+            payload = {}
+    else:
+        payload = {}
+
+    if not isinstance(payload, dict):
+        payload = {}
+
+    pages = payload.get('pages') if isinstance(payload.get('pages'), list) else []
+    features = payload.get('features') if isinstance(payload.get('features'), list) else []
+
+    def _clean_list(items):
+        cleaned = []
+        for item in items or []:
+            if isinstance(item, str):
+                value = item.strip().lower()
+                if value:
+                    cleaned.append(value)
+        return cleaned
+
+    return {
+        'pages': _clean_list(pages),
+        'features': _clean_list(features),
+    }
+
+
 def _default_domain_for_school(school) -> str:
     base = _normalize_domain(getattr(settings, 'TENANT_BASE_DOMAIN', '') or '')
     if not base:
@@ -2343,6 +2377,10 @@ def superadmin_schools(request):
                 'trial_expires_at': s.trial_expires_at,
                 'trial_student_limit': s.trial_student_limit,
                 'feature_flags': s.feature_flags,
+                'is_suspended': bool(getattr(s, 'is_suspended', False)),
+                'suspension_notice': getattr(s, 'suspension_notice', '') or '',
+                'suspension_until': getattr(s, 'suspension_until', None),
+                'access_restrictions': getattr(s, 'access_restrictions', {}) or {},
                 'enable_fee_reset': bool(getattr(s, 'enable_fee_reset', False)),
                 'domains': domains,
                 'primary_domain': primary,
@@ -2379,6 +2417,8 @@ def superadmin_schools(request):
     except Exception:
         feature_flags = {}
 
+    access_restrictions = _coerce_access_restrictions(data.get('access_restrictions'))
+
     try:
         with transaction.atomic():
             school = School.objects.create(
@@ -2393,6 +2433,10 @@ def superadmin_schools(request):
                 is_trial=is_trial,
                 trial_student_limit=trial_student_limit,
                 feature_flags=feature_flags,
+                is_suspended=bool(data.get('is_suspended')) if data.get('is_suspended') is not None else False,
+                suspension_notice=str(data.get('suspension_notice') or '').strip(),
+                suspension_until=parse_datetime(str(data.get('suspension_until') or '')) if str(data.get('suspension_until') or '').strip() else None,
+                access_restrictions=access_restrictions,
                 enable_fee_reset=bool(data.get('enable_fee_reset')) if data.get('enable_fee_reset') is not None else False,
             )
             if normalized_domain or getattr(settings, 'TENANT_BASE_DOMAIN', None):
@@ -2945,6 +2989,10 @@ def superadmin_school_detail(request, id: int):
             'trial_expires_at': school.trial_expires_at,
             'trial_student_limit': school.trial_student_limit,
             'feature_flags': school.feature_flags,
+            'is_suspended': bool(getattr(school, 'is_suspended', False)),
+            'suspension_notice': getattr(school, 'suspension_notice', '') or '',
+            'suspension_until': getattr(school, 'suspension_until', None),
+            'access_restrictions': getattr(school, 'access_restrictions', {}) or {},
             'enable_fee_reset': bool(getattr(school, 'enable_fee_reset', False)),
             'domains': domains,
         })
@@ -2979,6 +3027,26 @@ def superadmin_school_detail(request, id: int):
             update_fields.append('enable_fee_reset')
         except Exception:
             return Response({"detail": "Invalid enable_fee_reset"}, status=400)
+    if 'is_suspended' in data and data.get('is_suspended') is not None:
+        school.is_suspended = bool(data.get('is_suspended'))
+        update_fields.append('is_suspended')
+    if 'suspension_notice' in data:
+        school.suspension_notice = str(data.get('suspension_notice') or '').strip()
+        update_fields.append('suspension_notice')
+    if 'suspension_until' in data:
+        raw = data.get('suspension_until')
+        if raw in (None, '', 'null'):
+            school.suspension_until = None
+        else:
+            try:
+                school.suspension_until = parse_datetime(str(raw))
+            except Exception:
+                return Response({"detail": "Invalid suspension_until"}, status=400)
+        update_fields.append('suspension_until')
+    if 'access_restrictions' in data:
+        restrictions = _coerce_access_restrictions(data.get('access_restrictions'))
+        school.access_restrictions = restrictions
+        update_fields.append('access_restrictions')
     if 'is_active' in data and data.get('is_active') is not None:
         school.is_active = bool(data.get('is_active'))
         update_fields.append('is_active')

@@ -1,8 +1,8 @@
-# EDU-TRACK School Management System (CBC-ready)
+# Genay Technologies School Management System (CBC-ready)
 
 ## Vendor (Company) Contact
 
-- **Company:** EDUTRACK
+- **Company:** Genay Technologies
 - **Email:** edutrack46@gmail.com
 - **Phone:** 0796031071
 
@@ -23,7 +23,7 @@ See README.md in each subfolder for setup. Start with docker-compose up after fi
 - **With sample data**: Render with any templating engine that supports `{{ }}` (e.g., Django Templates, Handlebars, Nunjucks). Use `sample_data.json` to populate fields.
 
 ### Django integration (backend/)
-1. Place the two HTML files under your Django templates directory (or add `EDU-TRACK/templates/` to `TEMPLATES['DIRS']`).
+1. Place the two HTML files under your Django templates directory (or add `Genay Technologies/templates/` to `TEMPLATES['DIRS']`).
 2. In a view, build a context dict and render:
 
 ```python

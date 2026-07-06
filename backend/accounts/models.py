@@ -20,6 +20,11 @@ class School(models.Model):
     trial_expires_at = models.DateTimeField(null=True, blank=True)
     trial_student_limit = models.PositiveSmallIntegerField(default=100)
     feature_flags = models.JSONField(default=dict, blank=True)  # e.g., {"pos": false, "sms": false}
+    # School access controls
+    is_suspended = models.BooleanField(default=False, db_index=True)
+    suspension_notice = models.TextField(blank=True, default='')
+    suspension_until = models.DateTimeField(null=True, blank=True)
+    access_restrictions = models.JSONField(default=dict, blank=True)  # e.g., {"pages": ["fees"], "features": ["messages"]}
     # Highly destructive admin actions (disabled/hidden by default)
     enable_fee_reset = models.BooleanField(default=False, db_index=True)
 
