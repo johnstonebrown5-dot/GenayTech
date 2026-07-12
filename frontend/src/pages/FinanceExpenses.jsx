@@ -156,6 +156,22 @@ export default function FinanceExpenses() {
         }catch{}
     }
 
+    const displayRows = useMemo(() => {
+        const expenseRows = (expenses || []).map(e => ({
+            ...e,
+            kind: 'expense',
+            payeeName: e.payee || e.payeeName || '-',
+            categoryName: (categories || []).find(c => c.id === e.categoryId || c.id === e.category)?.name || '-',
+        }));
+        const payslipRows = includePayslips ? (payslips || []).map(p => ({
+            ...p,
+            kind: 'payslip',
+            payeeName: p.staff_name || p.staffName || '-',
+            categoryName: 'Staff Payroll',
+        })) : [];
+        return [...expenseRows, ...payslipRows];
+    }, [expenses, categories, payslips, includePayslips]);
+
     const filteredRows = useMemo(() => {
         let rows = displayRows;
         

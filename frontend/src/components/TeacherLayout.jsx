@@ -377,16 +377,18 @@ export default function TeacherLayout({ children }){
           <div className="md:hidden text-sm font-semibold text-gray-800 truncate max-w-[70vw] text-center">
             {activePageLabel}
           </div>
-          <div className="hidden md:inline-flex items-center gap-2 px-2.5 py-1 rounded-full border border-gray-200 bg-white/80 shadow-sm text-xs md:text-sm text-gray-700 truncate">
+          <div className="hidden md:flex items-center gap-3">
             {schoolLogo ? (
-              <img src={schoolLogo} alt="School logo" className="h-5 w-5 md:h-5 object-contain rounded" />
+              <img src={schoolLogo} alt="School logo" className="h-6 w-6 object-contain" />
             ) : null}
-            <span className="truncate max-w-[42vw] md:max-w-[50vw] font-medium">{schoolName || ''}</span>
-            {currentTerm && currentYear && (
-              <span className="text-[10px] md:text-xs px-1.5 py-0.5 rounded-full bg-indigo-100 text-indigo-700 font-semibold whitespace-nowrap">
-                Term {currentTerm.number} {currentYear.label?.split('/')?.[1] || currentYear.label}
-              </span>
-            )}
+            <div className="flex flex-col items-start">
+              <span className="text-gray-900 text-sm font-bold tracking-tight truncate max-w-[42vw] md:max-w-[50vw]">{schoolName || ''}</span>
+              {currentTerm && currentYear && (
+                <span className="text-xs font-medium text-gray-500">
+                  Term {currentTerm.number} {currentYear.label?.split('/')?.[1] || currentYear.label}
+                </span>
+              )}
+            </div>
           </div>
         </div>
         <div className="ml-auto flex items-center gap-2 md:gap-3">

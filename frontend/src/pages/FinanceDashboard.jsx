@@ -333,22 +333,6 @@ export default function FinanceDashboard() {
         }
     }
 
-    if (loading) {
-        return (
-            <div className="flex items-center justify-center py-12">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-            </div>
-        );
-    }
-
-    if (stats?.error) {
-        return (
-            <div className="text-red-600 bg-red-50 border border-red-200 rounded-lg p-4">
-                Failed to load dashboard data. Please try refreshing the page.
-            </div>
-        );
-    }
-
     const collectionRate = Math.max(0, Math.min(100, Number(stats?.collectionRate || 0)));
     const netPosition = Number(stats?.totalRevenue || 0) - Number(stats?.totalExpenses || 0);
 
@@ -399,6 +383,22 @@ export default function FinanceDashboard() {
             hoverOffset: 4
         }]
     }), [collectionRate]);
+
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center py-12">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            </div>
+        );
+    }
+
+    if (stats?.error) {
+        return (
+            <div className="text-red-600 bg-red-50 border border-red-200 rounded-lg p-4">
+                Failed to load dashboard data. Please try refreshing the page.
+            </div>
+        );
+    }
 
     const chartOptions = {
         responsive: true,
@@ -538,9 +538,9 @@ export default function FinanceDashboard() {
                         </div>
 
                         <div className="relative z-10 mt-8 pt-6 border-t border-white/10 flex items-center gap-3">
-                            <button className="flex-1 h-12 rounded-2xl bg-white text-emerald-600 font-black text-xs uppercase tracking-widest hover:bg-emerald-50 transition-all shadow-lg active:scale-95 flex items-center justify-center gap-2">
+                            <Link to="/finance/fees" className="flex-1 h-12 rounded-2xl bg-white text-emerald-600 font-black text-xs uppercase tracking-widest hover:bg-emerald-50 transition-all shadow-lg active:scale-95 flex items-center justify-center gap-2">
                                 <Plus size={18} /> Record Fee
-                            </button>
+                            </Link>
                             <Link to="/finance/expenses" className="flex-1 h-12 rounded-2xl bg-emerald-900/20 text-white border border-white/20 font-black text-xs uppercase tracking-widest hover:bg-emerald-900/30 transition-all active:scale-95 flex items-center justify-center gap-2">
                                 <DollarSign size={18} /> New Expense
                             </Link>
@@ -631,7 +631,7 @@ export default function FinanceDashboard() {
                     </div>
 
                     {/* Quick Link Card */}
-                    <div className="bg-emerald-50 rounded-[2rem] border border-emerald-100 shadow-sm p-6 flex flex-col justify-between group cursor-pointer hover:bg-emerald-100 transition-all border-dashed">
+                    <Link to="/finance/reports" className="bg-emerald-50 rounded-[2rem] border border-emerald-100 shadow-sm p-6 flex flex-col justify-between group cursor-pointer hover:bg-emerald-100 transition-all border-dashed">
                         <div className="flex items-center justify-between">
                             <div className="w-12 h-12 rounded-2xl bg-white text-emerald-600 flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform">
                                 <FileText size={24} />
@@ -642,7 +642,7 @@ export default function FinanceDashboard() {
                             <h3 className="text-base font-black text-emerald-900 tracking-tight">View Reports</h3>
                             <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest">Full analytics directory</p>
                         </div>
-                    </div>
+                    </Link>
                 </div>
 
                 <div className="grid grid-cols-1 xl:grid-cols-12 gap-8">

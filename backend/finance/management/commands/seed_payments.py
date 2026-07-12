@@ -171,8 +171,12 @@ class Command(BaseCommand):
                 total_invoices_created += 1
 
                 # Create payments for this invoice
-                # Random number of payments (0 to payments_per_invoice + 1)
-                num_payments = random.randint(0, payments_per_invoice + 1)
+                # For the first invoice of each student, ensure at least 1 payment
+                if i == 0:
+                    num_payments = random.randint(1, payments_per_invoice + 1)
+                else:
+                    # Random number of payments (0 to payments_per_invoice + 1)
+                    num_payments = random.randint(0, payments_per_invoice + 1)
                 
                 if num_payments > 0:
                     # Decide payment strategy

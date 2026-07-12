@@ -259,26 +259,20 @@ export default function AdminLayout({ children }){
             <div className="hidden sm:flex items-center gap-2 min-w-0"></div>
           </div>
 
-          {/* Center: school chip (scrollable on small) */}
+          {/* Center: school name and term (modern, no background) */}
           <div className="flex-1 flex items-center justify-center overflow-x-auto sm:overflow-visible px-1 sm:px-3">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-3">
               {schoolLogo ? (
-                <div className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-gray-50/90 to-white/80 border border-gray-200 rounded-full shadow-sm">
-                  <img src={schoolLogo} alt="School logo" className="h-5 w-5 object-contain rounded" />
-                  <span className="sm:hidden text-gray-800 text-sm font-medium truncate max-w-[10rem]">{schoolName || ''}</span>
-                  <span className="hidden sm:inline text-gray-900 text-sm font-semibold tracking-tight">{schoolName || ''}</span>
-                </div>
-              ) : (
-                <>
-                  <span className="sm:hidden text-gray-700 truncate max-w-[10rem]">{schoolName || ''}</span>
-                  <span className="hidden sm:inline text-gray-900 font-semibold">{schoolName || ''}</span>
-                </>
-              )}
-              {currentTerm && currentYear && (
-                <div className="px-2.5 py-1 bg-brand-50/80 text-brand-700 rounded-full text-[11px] sm:text-xs font-medium border border-brand-200 whitespace-nowrap shadow-sm">
-                  Term {currentTerm.number} {currentYear.label.split('/')[1] || currentYear.label}
-                </div>
-              )}
+                <img src={schoolLogo} alt="School logo" className="h-6 w-6 object-contain" />
+              ) : null}
+              <div className="flex flex-col sm:flex-row sm:items-center sm:gap-2">
+                <span className="text-gray-900 text-sm sm:text-base font-bold tracking-tight">{schoolName || ''}</span>
+                {currentTerm && currentYear && (
+                  <span className="text-xs sm:text-sm font-medium text-gray-500">
+                    Term {currentTerm.number} {currentYear.label.split('/')[1] || currentYear.label}
+                  </span>
+                )}
+              </div>
             </div>
           </div>
 
